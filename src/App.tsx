@@ -524,10 +524,12 @@ function WalletCard({ record, onOpen, onZoom, onEdit }: { record: EventRecord; o
         {poster ? <img src={poster.src} alt={record.title} /> : <span>{record.title.slice(0, 3)}</span>}
       </button>
       <button className="wallet-main" type="button" onClick={() => onOpen(record)}>
-        <span className={`status-pill ${statusClass(record.status)}`}>{statusLabels[record.status]}</span>
-        <span className="wallet-kind">{categoryLabels[record.category]}</span>
+        <span className="wallet-meta-line">
+          <span className="wallet-kind">{categoryLabels[record.category]}</span>
+          <span className={`status-pill ${statusClass(record.status)}`}>{statusLabels[record.status]}</span>
+        </span>
         <h3>{record.title}</h3>
-        <p>{record.artists.join(" / ") || "艺人待补"}</p>
+        <p className="wallet-artist">{record.artists.join(" / ") || "艺人待补"}</p>
         <dl className="wallet-facts">
           <dt>日期</dt>
           <dd>{formatDateCn(record.date, record.time)}</dd>
@@ -772,6 +774,7 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
       : topRows(records.map(formatVenueLabel).filter(Boolean), 24),
     [mapMode, records],
   );
+  const maxRowCount = Math.max(1, ...rows.map(([, count]) => count));
   const mapRef = useRef<HTMLDivElement | null>(null);
   const activeProvider = settings.map.provider === "none" && settings.map.amapKey.trim() ? "amap" : settings.map.provider;
   const [mapState, setMapState] = useState(activeProvider === "amap" ? "地图准备中" : "未启用真实地图");
@@ -860,7 +863,10 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
           <h2>{mapMode === "city" ? "常去城市" : "常去场馆"}</h2>
         </header>
         {rows.map(([label, count]) => (
-          <p key={label}><span>{label}</span><b>{count}</b></p>
+          <p key={label} style={{ "--venue-ratio": `${Math.max(8, (count / maxRowCount) * 100)}%` } as CSSProperties}>
+            <span>{label}</span>
+            <b>{count}</b>
+          </p>
         ))}
       </div>
     </section>

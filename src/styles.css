@@ -3167,23 +3167,24 @@ body {
 }
 
 .wallet-list {
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 18px;
   width: 100%;
 }
 
 .wallet-card {
   position: relative;
   display: grid;
-  grid-template-columns: 116px minmax(0, 1fr);
-  gap: 12px;
-  min-height: 178px;
-  padding: 12px;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 16px;
+  min-height: 196px;
+  padding: 14px;
   color: var(--ink);
   background:
     linear-gradient(135deg, rgba(255, 253, 245, 0.94), rgba(255, 253, 245, 0.78)),
     linear-gradient(135deg, color-mix(in srgb, var(--tone-a), #ffffff 60%), color-mix(in srgb, var(--tone-b), #ffffff 54%));
   box-shadow: 6px 6px 0 rgba(17, 19, 24, 0.12);
+  isolation: isolate;
 }
 
 .wallet-card::after {
@@ -3216,15 +3217,19 @@ body {
   z-index: 1;
   display: grid;
   align-content: start;
-  gap: 5px;
-  padding: 4px 44px 4px 0;
+  gap: 7px;
+  min-width: 0;
+  padding: 2px 34px 4px 0;
   color: var(--ink);
+  overflow: hidden;
 }
 
-.wallet-main .status-pill {
-  position: absolute;
-  top: 2px;
-  right: 0;
+.wallet-meta-line {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .wallet-kind {
@@ -3240,19 +3245,30 @@ body {
   font-weight: 950;
 }
 
-.wallet-main h3 {
-  max-width: 100%;
-  margin: 4px 0 0;
-  color: var(--ink);
-  font-size: 17px;
-  line-height: 1.22;
+.wallet-meta-line .status-pill {
+  flex: 0 0 auto;
 }
 
-.wallet-main p {
+.wallet-main h3 {
+  max-width: 100%;
   margin: 0;
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 850;
+  color: var(--ink);
+  font-size: 18px;
+  line-height: 1.2;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.wallet-artist {
+  margin: 0;
+  color: #0b6960;
+  font-size: 13px;
+  font-weight: 950;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .wallet-facts {
@@ -3265,8 +3281,8 @@ body {
 .wallet-facts dt,
 .wallet-facts dd {
   margin: 0;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 12.5px;
+  line-height: 1.4;
 }
 
 .wallet-facts dt {
@@ -3287,6 +3303,7 @@ body {
   margin-top: 3px;
   color: var(--muted);
   font-size: 12px;
+  font-weight: 950;
 }
 
 .wallet-card .card-actions {
@@ -3502,6 +3519,13 @@ body {
   font-weight: 950;
 }
 
+.amap-marker-label {
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
 .amap-memory-label b {
   display: inline-grid;
   min-width: 18px;
@@ -3541,6 +3565,57 @@ body {
   margin: 0;
 }
 
+.venue-list p {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  min-height: 38px;
+  margin: 0 0 8px;
+  padding: 8px 10px;
+  border: 1px solid rgba(17, 19, 24, 0.08);
+  border-radius: 9px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.55);
+}
+
+.venue-list p::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--venue-ratio, 0%);
+  background: linear-gradient(90deg, rgba(223, 255, 79, 0.76), rgba(101, 223, 207, 0.26));
+}
+
+.venue-list p span,
+.venue-list p b {
+  position: relative;
+  z-index: 1;
+}
+
+.venue-list p span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 900;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.venue-list p b {
+  display: inline-grid;
+  min-width: 26px;
+  min-height: 24px;
+  place-items: center;
+  border-radius: 999px;
+  color: #fffdf5;
+  background: #111318;
+  font-size: 12px;
+  font-weight: 950;
+}
+
 .sync-guide-panel {
   align-content: start;
   min-height: 260px;
@@ -3566,7 +3641,7 @@ body {
 
 @media (max-width: 980px) {
   .wallet-list {
-    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
   }
 
   .venue-view {
@@ -3579,14 +3654,18 @@ body {
 }
 
 @media (max-width: 760px) {
+  .wallet-list {
+    grid-template-columns: 1fr;
+  }
+
   .wallet-card {
-    grid-template-columns: 92px minmax(0, 1fr);
-    min-height: 142px;
-    padding: 8px;
+    grid-template-columns: 104px minmax(0, 1fr);
+    min-height: 156px;
+    padding: 10px;
   }
 
   .wallet-card .wallet-main {
-    padding-right: 34px;
+    padding: 0;
   }
 
   .wallet-main h3 {
@@ -3599,7 +3678,7 @@ body {
 
   .wallet-facts dt,
   .wallet-facts dd,
-  .wallet-main p,
+  .wallet-artist,
   .wallet-main strong {
     font-size: 11px;
   }
