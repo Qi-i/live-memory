@@ -174,10 +174,17 @@ export default function App() {
 
       <main className="workspace">
         <header className="hero">
-          <div>
+          <div className="hero-copy">
             <p>{new Date().toLocaleDateString("zh-CN", { month: "long", day: "numeric", weekday: "short" })}</p>
             <h1>{title}</h1>
+            <span className="hero-subtitle">把票根、海报、座位图和现场高光照片收进一本会呼吸的演出相册。</span>
+            <div className="hero-metrics">
+              <strong>{records.length}<span>场记录</span></strong>
+              <strong>{records.filter((record) => record.status === "watched").length}<span>已看</span></strong>
+              <strong>{new Set(records.map((record) => record.city).filter(Boolean)).size}<span>城市</span></strong>
+            </div>
           </div>
+          <HeroPosterWall records={records} onOpen={setSelected} />
           <div className="hero-actions">
             <span className="sync-pill">
               <Cloud size={16} />
@@ -262,6 +269,32 @@ function RouteButton({ active, icon, label, onClick }: { active: boolean; icon: 
       {icon}
       <span>{label}</span>
     </button>
+  );
+}
+
+function HeroPosterWall({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
+  const picks = records.filter((record) => primaryMedia(record)).slice(0, 7);
+  if (!picks.length) {
+    return (
+      <div className="hero-poster-wall is-empty" aria-hidden="true">
+        <span>LIVE</span>
+        <span>MEMORY</span>
+        <span>TICKET</span>
+      </div>
+    );
+  }
+  return (
+    <div className="hero-poster-wall" aria-label="演出海报精选">
+      {picks.map((record, index) => {
+        const media = primaryMedia(record);
+        return (
+          <button className={`hero-poster hero-poster-${index + 1}`} key={record.id} type="button" onClick={() => onOpen(record)}>
+            {media && <img src={media.src} alt={record.title} />}
+            <span>{record.city || categoryLabels[record.category]}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
