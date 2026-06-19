@@ -16,20 +16,27 @@
 
 ### 环境变量
 
-纯本地版不需要任何 GitHub Secret。要让公开部署连接 Supabase，可在 `Settings > Secrets and variables > Actions` 配置仓库变量，再在 workflow 的 build step 显式映射为 `VITE_*`。
+公开部署需要配置 Live Memory 账号项目，才能提供账号登录、找回密码和文字备份。在 `Settings > Secrets and variables > Actions > Variables` 添加：
+
+```text
+VITE_ACCOUNT_SUPABASE_URL
+VITE_ACCOUNT_SUPABASE_ANON_KEY
+```
+
+部署工作流会把这两项映射到构建环境。用户个人 Supabase 由用户在应用设置页填写，不需要放入仓库变量。
 
 注意：所有 `VITE_*` 最终都会进入前端 bundle。这里只能放 Supabase URL 和 anon/publishable key，不能放 `service_role`、数据库密码、R2 Secret 或 COS Secret。
 
-更简单也更私密的做法，是部署后在应用“设置”页填写 Supabase 参数；它们只保存在当前浏览器 localStorage，不进入 GitHub 构建日志。
+个人项目地址和公开连接密钥保存在用户自己的浏览器设置中，也可通过 Live Memory 账号资料恢复。
 
 ### 公开站点与私人数据
 
-GitHub Pages 公开的是同一个静态应用。用户在设置页填入自己的 Supabase 参数并登录后，数据才会进入对应的 Supabase 项目和当前用户目录。
+GitHub Pages 发布同一套静态应用。账号文字备份进入账号项目，完整档案进入用户自己的 Supabase 项目。
 
 - 开源仓库和 Pages 站点可以共享。
 - 个人记录、票根、座位图和现场照片不应进入仓库。
-- 多人共用同一个 Supabase 项目时，RLS 会隔离普通用户；项目管理员仍然拥有后台管理能力。
-- 想要最大化隐私时，每个人应连接自己的 Supabase 项目。
+- 账号项目只保存账号资料和不含图片的文字备份。
+- 每个人可连接自己的 Supabase 项目保存完整档案。
 
 ### 站点地址
 

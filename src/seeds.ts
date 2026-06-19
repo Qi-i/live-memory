@@ -96,7 +96,7 @@ export const seedRecords: EventRecord[] = [
     importConfidence: 1,
     tags: ["示例", "演唱会"],
     setlist: ["开场曲", "返场曲"],
-    note: "这是一条公开演示记录。你的真实票根、座位图和现场照片不会进入 GitHub 仓库。",
+    note: "散场后把最喜欢的一首歌、舞台瞬间和同行人的名字记在这里。",
     colors: ["#101418", "#65dfcf"],
     poster: demoPoster("ECHO TOUR", "CONCERT", "#101418", "#65dfcf"),
   }),

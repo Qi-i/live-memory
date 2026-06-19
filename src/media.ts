@@ -38,6 +38,14 @@ export async function fileToMedia(recordId: string, kind: MediaKind, file: File)
   };
 }
 
+export async function fileToAvatar(file: File) {
+  if (!["image/jpeg", "image/png", "image/webp"].includes(file.type)) throw new Error("请选择 JPG、PNG 或 WebP 图片");
+  if (file.size > 10 * 1024 * 1024) throw new Error("头像图片不能超过 10MB");
+  const result = await compressImage(file, 320, 0.84);
+  if (result.size > 420 * 1024) throw new Error("头像处理后仍然过大，请换一张图片");
+  return result.src;
+}
+
 export async function compressImage(file: File, maxEdge = 1800, quality = 0.88) {
   const src = await readAsDataUrl(file);
   const image = await loadImage(src);

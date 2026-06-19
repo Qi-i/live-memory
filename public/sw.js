@@ -1,4 +1,4 @@
-const CACHE_NAME = "live-memory-v3";
+const CACHE_NAME = "live-memory-v4";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg"];
 
 self.addEventListener("install", (event) => {

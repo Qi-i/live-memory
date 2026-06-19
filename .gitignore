@@ -1,6 +1,7 @@
 node_modules/
 .npm-cache/
 dist/
+dist-test/
 .env
 .env.local
 .DS_Store

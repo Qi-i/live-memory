@@ -61,6 +61,7 @@ export interface EventRecord {
   colors: [string, string];
   createdAt: string;
   updatedAt: string;
+  deletedAt?: string;
 }
 
 export interface ImportDraft {
@@ -93,8 +94,8 @@ export interface MapConfig {
 export interface SupabaseConfig {
   url: string;
   anonKey: string;
-  email: string;
   mediaBucket: string;
+  syncMedia: boolean;
 }
 
 export interface AccountProfile {
@@ -102,6 +103,13 @@ export interface AccountProfile {
   nickname: string;
   avatarUrl: string;
   recoveryEmail: string;
+}
+
+export interface AccountBackupConfig {
+  enabled: boolean;
+  autoBackup: boolean;
+  intervalHours: number;
+  lastBackupAt?: string;
 }
 
 export type StorageMode = "local" | "supabase";
@@ -112,6 +120,7 @@ export interface AppSettings {
   storageMode: StorageMode;
   onboardingComplete: boolean;
   account: AccountProfile;
+  accountBackup: AccountBackupConfig;
   map: MapConfig;
   supabase: SupabaseConfig;
   lastSyncAt?: string;
@@ -199,8 +208,8 @@ export const sourceLabels: Record<SourceChannel, string> = {
 };
 
 export const storageModeLabels: Record<StorageMode, string> = {
-  local: "当前浏览器",
-  supabase: "Supabase 云同步",
+  local: "账号文字备份",
+  supabase: "Supabase 完整同步",
 };
 
 export const defaultSettings: AppSettings = {
@@ -214,6 +223,11 @@ export const defaultSettings: AppSettings = {
     avatarUrl: "",
     recoveryEmail: "",
   },
+  accountBackup: {
+    enabled: true,
+    autoBackup: true,
+    intervalHours: 24,
+  },
   map: {
     provider: "none",
     amapKey: "",
@@ -223,10 +237,33 @@ export const defaultSettings: AppSettings = {
   supabase: {
     url: import.meta.env.VITE_SUPABASE_URL || "",
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || "",
-    email: "",
     mediaBucket: import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "echo-media",
+    syncMedia: true,
   },
 };
+
+export function normalizeUsername(value: string) {
+  return value.trim().toLowerCase();
+}
+
+export function validateUsername(value: string) {
+  const username = normalizeUsername(value);
+  if (!/^[a-z0-9]{4,32}$/.test(username)) {
+    throw new Error("用户名需为 4-32 位英文字母或数字");
+  }
+  return username;
+}
+
+export function validatePassword(value: string) {
+  if (value.length < 8) throw new Error("密码至少需要 8 位");
+  return value;
+}
+
+export function validateRecoveryEmail(value: string) {
+  const email = value.trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error("请填写有效的邮箱地址");
+  return email;
+}
 
 export function createId(prefix = "record") {
   const value = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;

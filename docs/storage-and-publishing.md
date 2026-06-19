@@ -4,15 +4,16 @@
 
 GitHub 适合发布开源代码和演示应用，不适合保存用户的票根、海报、座位图和现场照片。个人数据采用“元数据在数据库、图片在对象存储、本地保留完整备份”的结构。
 
-## 当前默认方案
+## 保存方案
 
 - 应用代码：GitHub + GitHub Pages
-- 个人元数据：Supabase Database
-- 个人图片：Supabase Storage，当前项目默认桶为 `echo-media`
+- 账号文字备份：账号项目 `echo_text_backups`
+- 个人完整数据：用户自己的 Supabase Database
+- 个人图片：用户自己的 Supabase Storage，默认空间为 `echo-media`
 - 本地离线：IndexedDB
 - 灾备：应用内完整 JSON 导出
 
-GitHub Pages 上共享的是测试入口和前端界面，不是共享数据集。真正的个人数据边界由 Supabase Auth 用户、RLS 和私有 Storage 路径共同决定。
+GitHub Pages 提供应用入口和演示记录。个人档案由账号、用户 ID 和私人图片路径分别隔离。
 
 ## 为什么不把图片放进 GitHub
 

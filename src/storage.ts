@@ -129,12 +129,13 @@ export function writeSettings(settings: AppSettings) {
 }
 
 export function storageHealth(records: EventRecord[], settings: AppSettings): StorageHealth {
-  const media = records.flatMap((record) => record.media);
+  const activeRecords = records.filter((record) => !record.deletedAt);
+  const media = activeRecords.flatMap((record) => record.media);
   return {
-    localRecords: records.length,
+    localRecords: activeRecords.length,
     mediaAssets: media.length,
     localOnlyMedia: media.filter((asset) => asset.src.startsWith("data:") && !asset.storagePath).length,
-    remoteMedia: media.filter((asset) => Boolean(asset.storagePath) || asset.src.startsWith("http")).length,
+    remoteMedia: media.filter((asset) => Boolean(asset.storagePath)).length,
     lastSyncAt: settings.lastSyncAt,
   };
 }
@@ -252,19 +253,21 @@ export function normalizeRecord(record: EventRecord): EventRecord {
     colors: [record.colors?.[0] || "#101418", record.colors?.[1] || "#dfff4f"],
     createdAt: record.createdAt || timestamp,
     updatedAt: timestamp,
+    deletedAt: record.deletedAt || undefined,
   };
 }
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
-  const supabase = { ...defaultSettings.supabase, ...(value.supabase || {}) };
+  const legacySupabase = (value.supabase || {}) as Partial<AppSettings["supabase"]> & { email?: string };
+  const supabase = { ...defaultSettings.supabase, ...legacySupabase };
   // v2.0 initially shipped with a bucket default that did not match the SQL migration.
   if (supabase.mediaBucket === "private-data") supabase.mediaBucket = "echo-media";
   const account = {
     ...defaultSettings.account,
     ...(value.account || {}),
-    recoveryEmail: value.account?.recoveryEmail || supabase.email || defaultSettings.account.recoveryEmail,
+    recoveryEmail: value.account?.recoveryEmail || legacySupabase.email || defaultSettings.account.recoveryEmail,
   };
-  supabase.email = account.recoveryEmail;
+  delete (supabase as typeof supabase & { email?: string }).email;
   const savedView = value.defaultView as string | undefined;
   const defaultView = savedView === "masonry" ? "poster" : value.defaultView || defaultSettings.defaultView;
   const posterColumns = Math.min(6, Math.max(2, Number(value.posterColumns || defaultSettings.posterColumns)));
@@ -277,6 +280,7 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
     storageMode,
     onboardingComplete: Boolean(value.onboardingComplete),
     account,
+    accountBackup: { ...defaultSettings.accountBackup, ...(value.accountBackup || {}) },
     map: { ...defaultSettings.map, ...(value.map || {}) },
     supabase,
   };

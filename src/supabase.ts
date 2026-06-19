@@ -1,7 +1,15 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { AppSettings, EventRecord, MediaAsset } from "./domain";
+import {
+  AppSettings,
+  EventRecord,
+  MediaAsset,
+  validatePassword,
+  validateRecoveryEmail,
+  validateUsername,
+} from "./domain";
 import { dataUrlToBlob, nowIso } from "./media";
 import { normalizeRecord } from "./storage";
+import { mergeTextBackup, withoutLocalMedia } from "./syncModel";
 
 function mediaBucket(settings: AppSettings) {
   return settings.supabase.mediaBucket || import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "echo-media";
@@ -11,6 +19,9 @@ export interface SyncResult {
   records: EventRecord[];
   message: string;
 }
+
+const accountUrl = import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "";
+const accountAnonKey = import.meta.env.VITE_ACCOUNT_SUPABASE_ANON_KEY || "";
 
 export interface UserProfileBinding {
   displayName: string;
@@ -31,12 +42,31 @@ export function hasSupabaseConfig(settings: AppSettings) {
   return Boolean(settings.supabase.url && settings.supabase.anonKey);
 }
 
+export function hasAccountCloudConfig(settings?: AppSettings) {
+  void settings;
+  return Boolean(accountUrl && accountAnonKey);
+}
+
 export function makeSupabaseClient(settings: AppSettings) {
-  if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase URL 和 anon key");
+  if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
   return createClient(settings.supabase.url, settings.supabase.anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
+    },
+  });
+}
+
+function makeAccountClient(settings: AppSettings) {
+  void settings;
+  const url = accountUrl;
+  const key = accountAnonKey;
+  if (!url || !key) throw new Error("账号服务暂时不可用，请稍后再试");
+  return createClient(url, key, {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      storageKey: accountUrl ? "live-memory-account-session" : undefined,
     },
   });
 }
@@ -52,9 +82,9 @@ function currentAppUrl() {
 }
 
 export async function signInWithPassword(settings: AppSettings, password: string) {
-  const client = makeSupabaseClient(settings);
+  const client = makeAccountClient(settings);
   const email = authEmailForSettings(settings);
-  if (!password) throw new Error("请填写密码");
+  validatePassword(password);
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (!error) return "登录成功";
 
@@ -65,12 +95,48 @@ export async function signInWithPassword(settings: AppSettings, password: string
       data: accountMetadata(settings),
     },
   });
-  if (signUp.error) throw signUp.error;
-  return "已创建/发送验证。若项目开启邮箱验证，请先完成邮件确认。";
+  if (signUp.error) {
+    if (/already|registered|exists|invalid login/i.test(signUp.error.message)) throw new Error("用户名、邮箱或密码不正确");
+    throw signUp.error;
+  }
+  if (!signUp.data.session && signUp.data.user?.identities?.length === 0) throw new Error("用户名、邮箱或密码不正确");
+  return "账号已创建";
+}
+
+export async function signInStorageWithPassword(settings: AppSettings, password: string) {
+  const client = makeSupabaseClient(settings);
+  const email = storageEmailForSettings(settings);
+  validatePassword(password);
+  const { error } = await client.auth.signInWithPassword({ email, password });
+  if (!error) return "个人云端已连接";
+  const signUp = await client.auth.signUp({ email, password, options: { data: accountMetadata(settings) } });
+  if (signUp.error) {
+    if (/already|registered|exists|invalid login/i.test(signUp.error.message)) throw new Error("个人云端密码不正确");
+    throw signUp.error;
+  }
+  if (!signUp.data.session && signUp.data.user?.identities?.length === 0) throw new Error("个人云端密码不正确");
+  return "个人云端账号已创建";
+}
+
+export async function requestPasswordReset(settings: AppSettings) {
+  const email = validateRecoveryEmail(settings.account.recoveryEmail);
+  if (!email) throw new Error("请先填写账号邮箱");
+  const client = makeAccountClient(settings);
+  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: currentAppUrl() });
+  if (error) throw error;
+  return "找回邮件已发送";
+}
+
+export async function updateAccountPassword(settings: AppSettings, password: string) {
+  validatePassword(password);
+  const client = makeAccountClient(settings);
+  const { error } = await client.auth.updateUser({ password });
+  if (error) throw error;
+  return "密码已更新";
 }
 
 export async function signInWithGithub(settings: AppSettings) {
-  const client = makeSupabaseClient(settings);
+  const client = makeAccountClient(settings);
   const { error } = await client.auth.signInWithOAuth({
     provider: "github",
     options: {
@@ -82,28 +148,34 @@ export async function signInWithGithub(settings: AppSettings) {
 }
 
 export async function signOut(settings: AppSettings) {
-  const client = makeSupabaseClient(settings);
+  const client = makeAccountClient(settings);
   await client.auth.signOut();
 }
 
 export async function currentUser(settings: AppSettings) {
-  const client = makeSupabaseClient(settings);
+  const client = makeAccountClient(settings);
   const { data } = await client.auth.getUser();
   return data.user || null;
 }
 
 export async function saveUserProfileBinding(settings: AppSettings): Promise<UserProfileBinding> {
-  const client = makeSupabaseClient(settings);
+  const client = makeAccountClient(settings);
   const user = await requireUser(client);
+  const username = validateUsername(settings.account.username);
+  const recoveryEmail = validateRecoveryEmail(settings.account.recoveryEmail);
+  if (recoveryEmail && user.email !== recoveryEmail) {
+    const updated = await client.auth.updateUser({ email: recoveryEmail });
+    if (updated.error) throw updated.error;
+  }
   const github = githubIdentity(user);
   const displayName = settings.account.nickname || github.displayName || user.email || "";
   const row = {
     user_id: user.id,
     display_name: displayName || null,
-    username: settings.account.username || null,
+    username,
     nickname: settings.account.nickname || null,
     avatar_url: settings.account.avatarUrl || null,
-    recovery_email: settings.account.recoveryEmail || null,
+    recovery_email: recoveryEmail || null,
     github_username: github.username || null,
     github_user_id: github.userId || null,
     linked_supabase_url: settings.supabase.url || null,
@@ -123,7 +195,7 @@ export async function saveUserProfileBinding(settings: AppSettings): Promise<Use
 }
 
 export async function loadUserProfileBinding(settings: AppSettings): Promise<UserProfileBinding | null> {
-  const client = makeSupabaseClient(settings);
+  const client = makeAccountClient(settings);
   const user = await requireUser(client);
   const { data, error } = await client
     .from("echo_user_profiles")
@@ -134,29 +206,80 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
   return data ? profileFromRow(data) : null;
 }
 
+export async function pushTextBackupToAccount(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
+  const client = makeAccountClient(settings);
+  const user = await requireUser(client, "请先登录 Live Memory 账号");
+  const rows = records.map((record) => {
+    const payload = withoutLocalMedia(record);
+    return {
+      id: payload.id,
+      user_id: user.id,
+      payload,
+      updated_at: payload.updatedAt,
+      deleted_at: payload.deletedAt || null,
+    };
+  });
+  if (rows.length) {
+    const { error } = await client.from("echo_text_backups").upsert(rows, { onConflict: "user_id,id" });
+    if (error) throwTextBackupError(error);
+  }
+  return { records, message: `已备份 ${rows.filter((row) => !row.deleted_at).length} 条文字记录` };
+}
+
+export async function pullTextBackupFromAccount(settings: AppSettings, localRecords: EventRecord[]): Promise<SyncResult> {
+  const client = makeAccountClient(settings);
+  const user = await requireUser(client, "请先登录 Live Memory 账号");
+  const { data, error } = await client
+    .from("echo_text_backups")
+    .select("payload, updated_at, deleted_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  if (error) throwTextBackupError(error);
+  const cloudRecords = (data || []).map((row) => normalizeRecord({
+    ...(row.payload as EventRecord),
+    updatedAt: String(row.updated_at || (row.payload as EventRecord).updatedAt),
+    deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
+  }));
+  const records = mergeTextBackup(localRecords, cloudRecords);
+  return { records, message: `已恢复 ${cloudRecords.filter((record) => !record.deletedAt).length} 条文字记录` };
+}
+
+export async function purgeTextBackupFromAccount(settings: AppSettings, recordId: string) {
+  if (!hasAccountCloudConfig(settings)) return;
+  const client = makeAccountClient(settings);
+  const user = await requireUser(client, "请先登录 Live Memory 账号");
+  const { error } = await client.from("echo_text_backups").delete().eq("user_id", user.id).eq("id", recordId);
+  if (error) throwTextBackupError(error);
+}
+
 export async function pushRecordsToSupabase(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
   const client = makeSupabaseClient(settings);
-  const user = await requireUser(client);
+  const user = await requireUser(client, "请先连接个人 Supabase");
   const uploadedRecords: EventRecord[] = [];
 
   for (const record of records) {
     const bucket = mediaBucket(settings);
-    const media = await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, user.id, record.id, asset, bucket)));
+    const media = record.deletedAt || !settings.supabase.syncMedia
+      ? record.media
+      : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, user.id, record.id, asset, bucket)));
     const next = normalizeRecord({ ...record, media, updatedAt: nowIso() });
+    const cloudPayload = next.deletedAt
+      ? normalizeRecord({ ...next, media: next.media.filter((asset) => asset.storagePath) })
+      : settings.supabase.syncMedia ? next : withoutLocalMedia(next);
     uploadedRecords.push(next);
     const { error } = await client.from("echo_records").upsert(
       {
         id: next.id,
         user_id: user.id,
-        payload: next,
+        payload: cloudPayload,
         updated_at: next.updatedAt,
-        deleted_at: null,
+        deleted_at: next.deletedAt || null,
       },
       { onConflict: "user_id,id" },
     );
     if (error) throw error;
 
-    const mediaRows = media.map((asset) => ({
+    const mediaRows = settings.supabase.syncMedia && !record.deletedAt ? media.map((asset) => ({
       id: asset.id,
       user_id: user.id,
       record_id: record.id,
@@ -173,41 +296,62 @@ export async function pushRecordsToSupabase(settings: AppSettings, records: Even
       },
       updated_at: asset.updatedAt,
       deleted_at: null,
-    }));
+    })) : [];
     if (mediaRows.length) {
       const mediaUpsert = await client.from("echo_media_assets").upsert(mediaRows, { onConflict: "user_id,id" });
       if (mediaUpsert.error) throw mediaUpsert.error;
     }
   }
 
-  return { records: uploadedRecords, message: `已推送 ${uploadedRecords.length} 条记录和图片引用` };
+  return {
+    records: uploadedRecords,
+    message: settings.supabase.syncMedia
+      ? `已同步 ${uploadedRecords.filter((record) => !record.deletedAt).length} 条记录和图片`
+      : `已同步 ${uploadedRecords.filter((record) => !record.deletedAt).length} 条文字记录`,
+  };
 }
 
-export async function pullRecordsFromSupabase(settings: AppSettings): Promise<SyncResult> {
+export async function pullRecordsFromSupabase(settings: AppSettings, localRecords: EventRecord[] = []): Promise<SyncResult> {
   const client = makeSupabaseClient(settings);
-  const user = await requireUser(client);
+  const user = await requireUser(client, "请先连接个人 Supabase");
   const { data, error } = await client
     .from("echo_records")
-    .select("payload, updated_at")
+    .select("payload, updated_at, deleted_at")
     .eq("user_id", user.id)
-    .is("deleted_at", null)
     .order("updated_at", { ascending: false });
   if (error) throw error;
 
   const records = await Promise.all(
     (data || []).map(async (row) => {
-      const record = normalizeRecord(row.payload as EventRecord);
+      const record = normalizeRecord({
+        ...(row.payload as EventRecord),
+        deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
+      });
+      if (!settings.supabase.syncMedia) return withoutLocalMedia(record);
       const media = await Promise.all(record.media.map((asset) => signMediaIfNeeded(client, asset, mediaBucket(settings))));
       return normalizeRecord({ ...record, media });
     }),
   );
-  return { records, message: `已拉取 ${records.length} 条我的记录` };
+  const merged = settings.supabase.syncMedia ? records : mergeTextBackup(localRecords, records);
+  return { records: merged, message: `已恢复 ${records.filter((record) => !record.deletedAt).length} 条记录` };
 }
 
-async function requireUser(client: SupabaseClient) {
+export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {
+  if (!hasSupabaseConfig(settings)) return;
+  const client = makeSupabaseClient(settings);
+  const user = await requireUser(client, "请先连接个人 Supabase");
+  const listed = await client.storage.from(mediaBucket(settings)).list(`${user.id}/${recordId}`);
+  if (!listed.error && listed.data?.length) {
+    await client.storage.from(mediaBucket(settings)).remove(listed.data.map((item) => `${user.id}/${recordId}/${item.name}`));
+  }
+  const { error } = await client.from("echo_records").delete().eq("user_id", user.id).eq("id", recordId);
+  if (error) throw error;
+}
+
+async function requireUser(client: SupabaseClient, message = "请先登录账号") {
   const { data, error } = await client.auth.getUser();
   if (error) throw error;
-  if (!data.user) throw new Error("请先登录 Supabase 账号");
+  if (!data.user) throw new Error(message);
   return data.user;
 }
 
@@ -243,26 +387,22 @@ function profileFromRow(row: Record<string, unknown>): UserProfileBinding {
 function accountMetadata(settings: AppSettings) {
   const account = settings.account;
   return {
-    username: normalizeUsername(account.username),
+    username: validateUsername(account.username),
     nickname: account.nickname.trim(),
-    avatar_url: account.avatarUrl.trim(),
-    recovery_email: account.recoveryEmail.trim(),
-    name: account.nickname.trim() || normalizeUsername(account.username),
+    name: account.nickname.trim() || validateUsername(account.username),
   };
 }
 
 function authEmailForSettings(settings: AppSettings) {
-  const recoveryEmail = settings.account.recoveryEmail.trim() || settings.supabase.email.trim();
+  const recoveryEmail = validateRecoveryEmail(settings.account.recoveryEmail);
   if (recoveryEmail) return recoveryEmail;
-  const username = normalizeUsername(settings.account.username);
-  if (!username) throw new Error("请填写用户名，或填写邮箱作为登录账号");
+  const username = validateUsername(settings.account.username);
   return `${username}@users.live-memory.local`;
 }
 
-function normalizeUsername(value: string) {
-  const username = value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
-  if (value.trim() && username.length < 3) throw new Error("用户名至少需要 3 个英文字母、数字、下划线或短横线");
-  return username;
+function storageEmailForSettings(settings: AppSettings) {
+  const username = validateUsername(settings.account.username);
+  return `${username}@storage.live-memory.local`;
 }
 
 function pickString(...values: unknown[]) {
@@ -272,8 +412,15 @@ function pickString(...values: unknown[]) {
 
 function throwProfileError(error: unknown): never {
   const code = (error as { code?: string }).code;
-  if (code === "42P01") throw new Error("请先在 Supabase SQL Editor 执行 supabase/migrations/002_account_profiles.sql");
-  if (code === "42703") throw new Error("请先在 Supabase SQL Editor 执行 supabase/migrations/003_account_identity_fields.sql");
+  if (code === "23505") throw new Error("这个用户名已被使用，请换一个用户名");
+  if (code === "42P01") throw new Error("账号资料暂不可用，请稍后再试");
+  if (code === "42703") throw new Error("账号资料需要更新，请稍后再试");
+  throw error;
+}
+
+function throwTextBackupError(error: unknown): never {
+  const code = (error as { code?: string }).code;
+  if (code === "42P01") throw new Error("文字备份暂不可用，请稍后再试");
   throw error;
 }
 

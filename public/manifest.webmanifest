@@ -1,7 +1,7 @@
 {
   "name": "回响册 - Live Memory",
   "short_name": "回响册",
-  "description": "本地优先、可同步的个人演出票根和现场记忆档案",
+  "description": "保存演出海报、票根、座位图和现场照片的私人记忆档案",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
