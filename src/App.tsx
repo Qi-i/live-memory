@@ -50,6 +50,7 @@ import {
   primaryMedia,
   sourceLabels,
   splitTextList,
+  storageModeLabels,
   statusLabels,
   viewLabels,
 } from "./domain";
@@ -194,7 +195,7 @@ export default function App() {
           <div className="hero-actions">
             <span className="sync-pill">
               <Cloud size={16} />
-              {hasSupabaseConfig(settings) ? "私人同步已配置" : "本地优先"}
+              {storageLocationLabel(settings)}
             </span>
             <label className="search">
               <Search size={18} />
@@ -852,6 +853,14 @@ function SettingsView({
       alive = false;
     };
   }, [settings.supabase.url, settings.supabase.anonKey]);
+  const syncSelected = draft.storageMode === "supabase";
+  const syncReady = syncSelected && hasSupabaseConfig(draft);
+
+  function chooseStorageMode(storageMode: AppSettings["storageMode"]) {
+    const next = { ...draft, storageMode };
+    setDraft(next);
+    void onSave(next);
+  }
 
   async function run(label: string, action: () => Promise<void>) {
     setBusy(true);
@@ -879,6 +888,25 @@ function SettingsView({
         </div>
       </div>
 
+      <div className="panel storage-location-panel wide">
+        <div className="storage-location-copy">
+          <h2>数据保存位置</h2>
+          <p className="hint">选择演出记录和图片要放在哪里。当前浏览器适合单设备使用；我的 Supabase 适合电脑和手机同步。</p>
+        </div>
+        <div className="storage-choice-grid">
+          <button className={draft.storageMode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("local")}>
+            <span>01</span>
+            <strong>{storageModeLabels.local}</strong>
+            <em>只保存在这台设备；换设备时用 JSON 备份迁移。</em>
+          </button>
+          <button className={draft.storageMode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("supabase")}>
+            <span>02</span>
+            <strong>{storageModeLabels.supabase}</strong>
+            <em>{hasSupabaseConfig(draft) ? "登录后可在不同设备之间同步。" : "需要在下方填写 URL 和 anon key。"}</em>
+          </button>
+        </div>
+      </div>
+
       <div className="panel">
         <h2>发布与默认视图</h2>
         <label className="field">
@@ -901,31 +929,31 @@ function SettingsView({
 
       <div className="panel">
         <h2>Supabase 私人同步</h2>
-        <p className="hint">共享的是这个测试站点，不是共享数据库视图。当前账号只能推送和拉取自己的记录；图片保存在私有桶的个人目录下。</p>
+        <p className="hint">{syncSelected ? "当前保存位置选择为我的 Supabase。共享的是测试站点，不是共享数据库视图。" : "当前保存位置是当前浏览器。要跨设备同步，请先在上方选择我的 Supabase。"}</p>
         <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
         <label className="field">anon public key<input value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
         <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
         <label className="field">邮箱<input value={draft.supabase.email} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, email: event.target.value } })} placeholder="you@example.com" /></label>
         <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Supabase Auth 密码" /></label>
         <div className="button-row">
-          <button className="button primary" disabled={busy} type="button" onClick={() => run("已登录", async () => { await onSave(draft); const message = await signInWithPassword(draft, password); flash(message); const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>
+          <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("已登录", async () => { await onSave(draft); const message = await signInWithPassword(draft, password); flash(message); const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>
             {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
             登录/注册
           </button>
-          <button className="button ghost" disabled={busy} type="button" onClick={() => run("前往 GitHub 授权", async () => { await onSave(draft); const message = await signInWithGithub(draft); flash(message); })}>
+          <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("前往 GitHub 授权", async () => { await onSave(draft); const message = await signInWithGithub(draft); flash(message); })}>
             <Github size={18} />
             GitHub 登录
           </button>
           <button className="button ghost" type="button" onClick={() => run("已退出", async () => { await signOut(draft); setUserLabel("未登录"); })}>退出</button>
-          <button className="button ghost" type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
+          <button className="button ghost" disabled={!syncReady} type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
         </div>
         <p className="hint">当前状态：{userLabel}</p>
         <div className="button-row">
-          <button className="button primary" disabled={busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+          <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
             <Upload size={18} />
             推送我的数据
           </button>
-          <button className="button ghost" disabled={busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+          <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
             <Download size={18} />
             拉取我的数据
           </button>
@@ -959,6 +987,13 @@ function userDisplayName(user: Awaited<ReturnType<typeof currentUser>>) {
     .map((key) => metadata?.[key])
     .find((value): value is string => typeof value === "string" && value.trim().length > 0);
   return user.email || handle || "已登录";
+}
+
+function storageLocationLabel(settings: AppSettings) {
+  if (settings.storageMode === "supabase") {
+    return hasSupabaseConfig(settings) ? "保存：我的 Supabase" : "保存位置待配置";
+  }
+  return "保存：当前浏览器";
 }
 
 function DetailDrawer({

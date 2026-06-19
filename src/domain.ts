@@ -97,9 +97,12 @@ export interface SupabaseConfig {
   mediaBucket: string;
 }
 
+export type StorageMode = "local" | "supabase";
+
 export interface AppSettings {
   defaultView: ArchiveView;
   posterColumns: number;
+  storageMode: StorageMode;
   map: MapConfig;
   supabase: SupabaseConfig;
   lastSyncAt?: string;
@@ -186,9 +189,15 @@ export const sourceLabels: Record<SourceChannel, string> = {
   other: "其他",
 };
 
+export const storageModeLabels: Record<StorageMode, string> = {
+  local: "当前浏览器",
+  supabase: "我的 Supabase",
+};
+
 export const defaultSettings: AppSettings = {
   defaultView: "poster",
   posterColumns: 4,
+  storageMode: "local",
   map: {
     provider: "none",
     amapKey: "",

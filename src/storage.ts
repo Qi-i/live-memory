@@ -262,11 +262,13 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
   const savedView = value.defaultView as string | undefined;
   const defaultView = savedView === "masonry" ? "poster" : value.defaultView || defaultSettings.defaultView;
   const posterColumns = Math.min(6, Math.max(2, Number(value.posterColumns || defaultSettings.posterColumns)));
+  const storageMode = value.storageMode || (supabase.url && supabase.anonKey ? "supabase" : defaultSettings.storageMode);
   return {
     ...defaultSettings,
     ...value,
     defaultView,
     posterColumns,
+    storageMode,
     map: { ...defaultSettings.map, ...(value.map || {}) },
     supabase,
   };
