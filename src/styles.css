@@ -3043,6 +3043,42 @@ body {
     #fffdf5;
 }
 
+.supabase-explain-card,
+.supabase-guide-panel {
+  display: grid;
+  gap: 8px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(17, 19, 24, 0.08);
+  border-radius: 10px;
+  background: rgba(101, 223, 207, 0.12);
+}
+
+.supabase-explain-card strong,
+.supabase-guide-panel strong {
+  color: var(--ink);
+  font-size: 14px;
+  font-weight: 950;
+}
+
+.supabase-explain-card p,
+.supabase-guide-panel p,
+.supabase-guide-panel ol {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.6;
+}
+
+.supabase-guide-panel ol {
+  padding-left: 20px;
+}
+
+.supabase-guide-panel li + li {
+  margin-top: 4px;
+}
+
 .settings-content-grid {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
@@ -3078,6 +3114,34 @@ body {
 .settings-page .button {
   min-height: 42px;
   border-radius: 10px;
+}
+
+.inline-toggle {
+  display: inline-flex;
+  width: fit-content;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+  padding: 0 11px;
+  border: 1px solid rgba(17, 19, 24, 0.1);
+  border-radius: 999px;
+  color: var(--ink);
+  background: rgba(255, 253, 245, 0.9);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.inline-toggle svg {
+  transition: transform 0.18s ease;
+}
+
+.subtle-fields {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px dashed rgba(17, 19, 24, 0.12);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.42);
 }
 
 .settings-health-panel {

@@ -200,7 +200,7 @@ export const sourceLabels: Record<SourceChannel, string> = {
 
 export const storageModeLabels: Record<StorageMode, string> = {
   local: "当前浏览器",
-  supabase: "我的 Supabase",
+  supabase: "Supabase 云同步",
 };
 
 export const defaultSettings: AppSettings = {

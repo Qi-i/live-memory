@@ -349,7 +349,7 @@ function FirstRunGuide({
       if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
       if (!draft.account.username.trim()) throw new Error("请先填写用户名");
       if (!password) throw new Error("请设置或输入密码");
-      if (!hasSupabaseConfig(draft)) throw new Error("请先填写 Supabase Project URL 和 anon key，或先选择本地保存");
+      if (!hasSupabaseConfig(draft)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥，或先选择本地保存");
       const next = {
         ...draft,
         storageMode: "supabase" as const,
@@ -370,7 +370,7 @@ function FirstRunGuide({
         <div className="onboarding-copy">
           <span>首次使用</span>
           <h2 id="first-run-title">先决定：这本演出档案放在哪里</h2>
-          <p>不懂技术也没关系。你只有两个选择：先只存在这台设备，或者登录后把数据同步到自己的 Supabase。GitHub 页面只提供应用，不保存你的票根和照片。</p>
+          <p>不懂技术也没关系。你只有两个选择：先只存在这台设备，或者登录后把数据同步到自己的云端空间。GitHub 页面只提供应用，不保存你的票根和照片。</p>
         </div>
 
         <div className="onboarding-choice-row">
@@ -382,7 +382,7 @@ function FirstRunGuide({
           <button className={mode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("supabase")}>
             <span>02</span>
             <strong>登录并同步</strong>
-            <em>适合电脑和手机都要更新。需要一个 Supabase 项目，普通用户之间互相看不到。</em>
+            <em>适合电脑和手机都要更新。Supabase 会保存你的账号、记录和图片，登录后只有你自己能看到。</em>
           </button>
         </div>
 
@@ -401,11 +401,11 @@ function FirstRunGuide({
         {mode === "supabase" && (
           <div className="onboarding-supabase">
             <strong>同步需要填写这三项</strong>
-            <p>它们来自你的 Supabase 项目设置。URL 和 anon key 可以放在浏览器里；不要填 service_role、数据库密码或任何 Secret。</p>
+            <p>它们来自你的 Supabase 项目设置页面。只复制“项目地址”和写着 anon 或 publishable 的公开连接密钥，不要复制数据库密码。</p>
             <div className="field-stack">
-              <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
-              <label className="field">anon public key<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
-              <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
+              <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
+              <label className="field">公开连接密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="复制 anon 或 publishable key" /></label>
+              <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="默认 echo-media" /></label>
             </div>
           </div>
         )}
@@ -950,7 +950,7 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
       }
       const key = settings.map.amapKey.trim();
       if (!key) {
-        setMapState("缺少高德 Web Key");
+        setMapState("请先在设置里填写高德地图密钥");
         return;
       }
       if (!mapRef.current) return;
@@ -1004,7 +1004,7 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
             <div className="map-fallback">
               <MapIcon size={28} />
               <h2>全国足迹</h2>
-              <p>{settings.map.provider === "baidu" ? "百度地图配置位已保留；当前版本先启用高德真实底图。" : "在设置里选择高德地图并保存 Web Key 后，这里会加载真实底图。"}</p>
+              <p>{settings.map.provider === "baidu" ? "百度地图入口已预留；当前版本先支持高德真实底图。" : "在设置里选择高德地图并保存密钥后，这里会加载真实底图。"}</p>
               <div className="city-cloud">
                 {rows.map(([label, count]) => (
                   <span key={label} style={{ "--size": `${Math.min(2.2, 1 + count / 4)}rem` } as CSSProperties}>
@@ -1239,6 +1239,8 @@ function SettingsView({
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
   const [userLabel, setUserLabel] = useState("未登录");
+  const [showCloudMore, setShowCloudMore] = useState(false);
+  const [showMapMore, setShowMapMore] = useState(false);
   useEffect(() => setDraft(settings), [settings]);
   useEffect(() => {
     let alive = true;
@@ -1291,7 +1293,7 @@ function SettingsView({
         <div>
           <span>Settings</span>
           <h2>私人档案设置</h2>
-          <p>公开站点只保留 3 条演示记录。你的完整演出档案只存在于当前浏览器、自己的 Supabase 或你导出的备份文件。</p>
+          <p>公开页面只放 3 条示例。你的真实票根、座位图和现场照片只会保存在这台设备，或上传到你自己登录的云端空间。</p>
         </div>
         <strong>{storageLocationLabel(draft)}</strong>
       </header>
@@ -1302,7 +1304,7 @@ function SettingsView({
             <span>账号</span>
             <h2>我的身份</h2>
           </div>
-          <p>这些内容只用于展示和登录引导。密码交给 Supabase Auth，不写入应用数据库。</p>
+          <p>头像和昵称会显示在页面上。密码只用于登录，不会写进演出记录里。</p>
         </header>
         <div className="account-settings-grid">
           <div className="account-preview-card">
@@ -1342,9 +1344,15 @@ function SettingsView({
           <button className={draft.storageMode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("supabase")}>
             <span>02</span>
             <strong>{storageModeLabels.supabase}</strong>
-            <em>{hasSupabaseConfig(draft) ? "登录后可在不同设备之间同步。" : "需要在下方填写 URL 和 anon key。"}</em>
+            <em>Supabase 是给个人应用用的云端资料库。登录后，你的记录和图片可以在电脑、手机之间同步，别人不会看到。</em>
           </button>
         </div>
+        {syncSelected && (
+          <div className="supabase-explain-card">
+            <strong>简单理解 Supabase</strong>
+            <p>它像一个你自己管理的私人云盘和账号系统：演出信息放在资料库，海报和票根图片放在图片空间。回响册只连接你的项目，不会把个人记录提交到 GitHub。</p>
+          </div>
+        )}
       </section>
 
       <div className="settings-content-grid">
@@ -1353,20 +1361,33 @@ function SettingsView({
             <header className="panel-heading">
               <div>
                 <span>同步</span>
-                <h2>我的 Supabase</h2>
+                <h2>连接我的云端</h2>
               </div>
-              <p>每个登录用户只读写自己的记录和图片。</p>
+              <p>填好一次，以后就可以把当前浏览器里的记录上传到自己的账号。</p>
             </header>
-            <div className="sync-guide-steps">
-              <span>1 填项目 URL 和 anon key</span>
-              <span>2 登录账号</span>
-              <span>3 推送或拉取自己的数据</span>
+            <div className="supabase-guide-panel">
+              <strong>怎么填写</strong>
+              <ol>
+                <li>打开 Supabase，新建一个项目。</li>
+                <li>在项目设置里找到 API 页面，复制“项目地址”和“公开连接密钥”。</li>
+                <li>回到这里粘贴，输入账号密码登录。</li>
+                <li>点“上传到我的云端”，把当前 25 条记录变成私人云端记录。</li>
+              </ol>
             </div>
             <div className="field-stack">
-              <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
-              <label className="field">anon public key<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
-              <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
+              <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
+              <label className="field">公开连接密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="复制 API 页面里的 anon 或 publishable key" /></label>
             </div>
+            <button className="inline-toggle" type="button" onClick={() => setShowCloudMore((value) => !value)}>
+              <ChevronDown size={16} />
+              {showCloudMore ? "收起更多同步设置" : "更多同步设置"}
+            </button>
+            {showCloudMore && (
+              <div className="field-stack subtle-fields">
+                <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="默认 echo-media" /></label>
+                <p className="plain-hint">一般保持默认即可。只有你在 Supabase 里改过图片空间名称时，才需要修改这里。</p>
+              </div>
+            )}
             <div className="button-row">
               <button className="button primary" disabled={!syncReady || busy || !password} type="button" onClick={() => run("已登录", async () => { const next = { ...draft, supabase: { ...draft.supabase, email: draft.account.recoveryEmail } }; await onSave(next); const message = await signInWithPassword(next, password); flash(message); const user = await currentUser(next); setUserLabel(userDisplayName(user)); })}>
                 {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
@@ -1382,28 +1403,28 @@ function SettingsView({
             <p className="hint">登录状态：{userLabel}</p>
             <section className="account-link-box">
               <div>
-                <strong>网站账号绑定</strong>
-                <p>账号密码由 Supabase Auth 保管。这里把当前账号与 GitHub 标识、Supabase 项目和常用地图 Key 绑定到私有表，换设备后可读取。</p>
+                <strong>保存同步资料</strong>
+                <p>把你的昵称、用户名和当前云端连接信息保存到账号里。换设备后，登录同一账号就能恢复这些设置。</p>
               </div>
               <div className="button-row">
                 <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("账号绑定已保存", async () => { const next = { ...draft, supabase: { ...draft.supabase, email: draft.account.recoveryEmail } }; await onSave(next); const profile = await saveUserProfileBinding(next); setUserLabel(profile.nickname || profile.displayName || profile.githubUsername || userLabel); })}>
                   <ShieldCheck size={18} />
-                  保存账号绑定
+                  保存同步资料
                 </button>
                 <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已读取账号绑定", async () => { const profile = await loadUserProfileBinding(draft); if (!profile) throw new Error("这个账号还没有保存过绑定"); const account = { ...draft.account, username: profile.username || draft.account.username, nickname: profile.nickname || profile.displayName || draft.account.nickname, avatarUrl: profile.avatarUrl || draft.account.avatarUrl, recoveryEmail: profile.recoveryEmail || draft.account.recoveryEmail }; const next = { ...draft, account, supabase: { ...draft.supabase, url: profile.supabaseUrl || draft.supabase.url, anonKey: profile.supabaseAnonKey || draft.supabase.anonKey, mediaBucket: profile.mediaBucket || draft.supabase.mediaBucket, email: account.recoveryEmail }, map: { ...draft.map, amapKey: profile.amapKey || draft.map.amapKey } }; setDraft(next); await onSave(next); setUserLabel(profile.nickname || profile.displayName || profile.githubUsername || userLabel); })}>
                   <Download size={18} />
-                  读取账号绑定
+                  恢复同步资料
                 </button>
               </div>
             </section>
             <div className="button-row">
               <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
                 <Upload size={18} />
-                推送我的数据
+                上传到我的云端
               </button>
-              <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+              <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已从云端恢复", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
                 <Download size={18} />
-                拉取我的数据
+                从云端恢复到本机
               </button>
             </div>
           </section>
@@ -1414,12 +1435,12 @@ function SettingsView({
                 <span>同步</span>
                 <h2>当前为单设备保存</h2>
               </div>
-              <p>需要电脑和手机同步时，再切换到我的 Supabase。</p>
+              <p>需要电脑和手机同步时，再开启云端同步。</p>
             </header>
             <div className="sync-guide-steps">
               <span>本机可离线使用</span>
               <span>导出 JSON 可迁移</span>
-              <span>Supabase 后续开启</span>
+              <span>想同步时再开启云端</span>
             </div>
             <button className="button primary" type="button" onClick={() => chooseStorageMode("supabase")}>
               <Cloud size={18} />
@@ -1458,20 +1479,29 @@ function SettingsView({
             <header className="panel-heading">
               <div>
                 <span>地图</span>
-                <h2>底图接口</h2>
+                <h2>足迹地图</h2>
               </div>
+              <p>不需要真实地图时保持关闭，页面会显示城市和场馆统计。</p>
             </header>
-            <label className="field">地图提供方<select value={draft.map.provider} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, provider: event.target.value as AppSettings["map"]["provider"] } })}><option value="none">暂不加载</option><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
-            <label className="field">高德 Web Key<input type="password" value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} placeholder="只保存在你的浏览器设置里" /></label>
-            <label className="field">高德 securityJsCode<input type="password" value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} placeholder="如控制台要求安全密钥则填写" /></label>
-            <label className="field">百度 JSAPI GL AK<input type="password" value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} /></label>
-            <p className="hint">地图 Key 不会提交到 GitHub；但浏览器调用地图服务时，服务商仍能在请求中识别这个 Web Key。</p>
+            <label className="field">地图来源<select value={draft.map.provider} onChange={(event) => { setShowMapMore(false); setDraft({ ...draft, map: { ...draft.map, provider: event.target.value as AppSettings["map"]["provider"] } }); }}><option value="none">关闭真实地图</option><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
+            {draft.map.provider === "none" && <p className="hint">当前不会加载地图服务，也不需要填写任何地图密钥。</p>}
+            {draft.map.provider === "amap" && (
+              <>
+                <label className="field">高德地图密钥<input type="password" value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} placeholder="从高德开放平台复制 Web 服务 Key" /></label>
+                <button className="inline-toggle" type="button" onClick={() => setShowMapMore((value) => !value)}>
+                  <ChevronDown size={16} />
+                  {showMapMore ? "收起高德高级设置" : "高德高级设置"}
+                </button>
+                {showMapMore && <label className="field">安全密钥<input type="password" value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} placeholder="只有控制台要求时才填写" /></label>}
+              </>
+            )}
+            {draft.map.provider === "baidu" && <label className="field">百度地图密钥<input type="password" value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} placeholder="从百度地图开放平台复制浏览器端 AK" /></label>}
+            {draft.map.provider !== "none" && <p className="hint">地图密钥只保存在你的浏览器设置里，不会提交到 GitHub。</p>}
             <div className="button-row">
-              <button className="button primary" type="button" onClick={() => onSave({ ...draft, map: { ...draft.map, provider: "amap" } })}>
+              <button className="button primary" type="button" onClick={() => onSave(draft)}>
                 <MapIcon size={18} />
-                启用高德并保存
+                保存地图设置
               </button>
-              <button className="button ghost" type="button" onClick={() => onSave(draft)}>保存地图设置</button>
             </div>
           </div>
         </section>
@@ -1481,13 +1511,13 @@ function SettingsView({
         <header className="panel-heading">
           <div>
             <span>检查</span>
-            <h2>存储健康</h2>
+            <h2>保存状态</h2>
           </div>
         </header>
         <InfoLine label="本地记录" value={`${health.localRecords} 条`} />
         <InfoLine label="图片附件" value={`${health.mediaAssets} 个`} />
         <InfoLine label="未上传图片" value={`${health.localOnlyMedia} 个`} />
-        <InfoLine label="远程图片" value={`${health.remoteMedia} 个`} />
+        <InfoLine label="云端图片" value={`${health.remoteMedia} 个`} />
         <InfoLine label="最近同步" value={health.lastSyncAt ? new Date(health.lastSyncAt).toLocaleString("zh-CN") : "尚未同步"} />
       </section>
     </section>
@@ -1510,7 +1540,7 @@ function accountLabel(settings: AppSettings) {
 
 function storageLocationLabel(settings: AppSettings) {
   if (settings.storageMode === "supabase") {
-    return hasSupabaseConfig(settings) ? "保存：我的 Supabase" : "保存位置待配置";
+    return hasSupabaseConfig(settings) ? "保存：Supabase 云同步" : "保存位置待配置";
   }
   return "保存：当前浏览器";
 }
