@@ -45,7 +45,7 @@ GitHub Pages 是静态站点托管，适合 HTML/CSS/JS；GitHub 仓库对大文
 
 ```text
 GitHub Pages
-  只放应用代码、图标、示例数据
+  只放应用代码、图标、3 条泛化演示记录
 
 Supabase Database
   echo_records: 演出记录 JSON

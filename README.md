@@ -12,7 +12,7 @@
 
 **在线地址：** <https://qi-i.github.io/live-memory/>
 
-> 当前版本为个人可用的 Beta。共享的是这个 GitHub Pages 测试应用，个人票根、座位图和现场照片不会进入公共库。无 Supabase 时可以完全本地使用；启用 Supabase 后，每个登录用户只同步自己的数据。
+> 当前版本为个人可用的 Beta。共享的是这个 GitHub Pages 测试应用，公开包只内置 3 条泛化演示记录；个人票根、座位图和现场照片不会进入公共库。无 Supabase 时可以完全本地使用；启用 Supabase 后，每个登录用户只同步自己的数据。
 
 ## 主要能力
 
@@ -107,7 +107,7 @@ Vite 使用相对资源路径，因此既能部署在根域名，也能部署在
 ## 数据和隐私
 
 - GitHub Pages 发布的是同一个前端应用壳，所有人看到的是同一套界面和示例能力，不是同一个共享相册。
-- GitHub 只保存源代码、示例资源和文档，不保存你的个人票根与现场照片。
+- GitHub 只保存源代码、3 条演示记录和文档，不保存你的个人票根与现场照片。
 - 浏览器数据默认保存在当前设备 IndexedDB。
 - 启用同步后，元数据进入 Supabase Postgres，图片进入私有 Storage；记录都带有当前 Supabase 用户的 `user_id`。
 - 图片路径采用 `userId/recordId/mediaId.ext`，RLS 只允许所属用户访问。

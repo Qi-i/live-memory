@@ -875,24 +875,24 @@ function SettingsView({
   }
 
   return (
-    <section className="settings-grid">
-      <div className="panel privacy-panel wide">
+    <section className="settings-page">
+      <header className="settings-topline">
         <div>
-          <h2>共享测试，私人数据</h2>
-          <p>GitHub Pages 只发布同一个应用壳。每个人登录后，记录和图片都会写入自己的 Supabase 用户空间，不会进入公共档案库。</p>
+          <span>Settings</span>
+          <h2>私人档案设置</h2>
+          <p>公开站点只保留 3 条演示记录。你的完整演出档案只存在于当前浏览器、自己的 Supabase 或你导出的备份文件。</p>
         </div>
-        <div className="privacy-steps">
-          <span><b>共享</b>代码、界面、示例数据</span>
-          <span><b>独立</b>票根、座位、照片、备注</span>
-          <span><b>隔离</b>RLS 按用户 ID 控制读写</span>
-        </div>
-      </div>
+        <strong>{storageLocationLabel(draft)}</strong>
+      </header>
 
-      <div className="panel storage-location-panel wide">
-        <div className="storage-location-copy">
-          <h2>数据保存位置</h2>
-          <p className="hint">选择演出记录和图片要放在哪里。当前浏览器适合单设备使用；我的 Supabase 适合电脑和手机同步。</p>
-        </div>
+      <section className="panel storage-location-panel">
+        <header className="panel-heading">
+          <div>
+            <span>保存</span>
+            <h2>数据保存位置</h2>
+          </div>
+          <p>先选位置，再决定是否登录同步。</p>
+        </header>
         <div className="storage-choice-grid">
           <button className={draft.storageMode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("local")}>
             <span>01</span>
@@ -905,77 +905,103 @@ function SettingsView({
             <em>{hasSupabaseConfig(draft) ? "登录后可在不同设备之间同步。" : "需要在下方填写 URL 和 anon key。"}</em>
           </button>
         </div>
+      </section>
+
+      <div className="settings-content-grid">
+        <section className="panel sync-settings-panel">
+          <header className="panel-heading">
+            <div>
+              <span>同步</span>
+              <h2>我的 Supabase</h2>
+            </div>
+            <p>{syncSelected ? "用于电脑和手机同步。" : "未选择云端保存。"}</p>
+          </header>
+          <div className="field-stack">
+            <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
+            <label className="field">anon public key<input value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
+            <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
+            <label className="field">邮箱<input value={draft.supabase.email} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, email: event.target.value } })} placeholder="you@example.com" /></label>
+            <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Supabase Auth 密码" /></label>
+          </div>
+          <div className="button-row">
+            <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("已登录", async () => { await onSave(draft); const message = await signInWithPassword(draft, password); flash(message); const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>
+              {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
+              登录/注册
+            </button>
+            <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("前往 GitHub 授权", async () => { await onSave(draft); const message = await signInWithGithub(draft); flash(message); })}>
+              <Github size={18} />
+              GitHub 登录
+            </button>
+            <button className="button ghost" type="button" onClick={() => run("已退出", async () => { await signOut(draft); setUserLabel("未登录"); })}>退出</button>
+            <button className="button ghost" disabled={!syncReady} type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
+          </div>
+          <p className="hint">登录状态：{userLabel}</p>
+          <div className="button-row">
+            <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+              <Upload size={18} />
+              推送我的数据
+            </button>
+            <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+              <Download size={18} />
+              拉取我的数据
+            </button>
+          </div>
+        </section>
+
+        <section className="settings-side-stack">
+          <div className="panel">
+            <header className="panel-heading">
+              <div>
+                <span>显示</span>
+                <h2>默认视图</h2>
+              </div>
+            </header>
+            <label className="field">
+              默认视图
+              <select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as ArchiveView })}>
+                {(Object.keys(viewLabels) as ArchiveView[]).map((item) => <option key={item} value={item}>{viewLabels[item]}</option>)}
+              </select>
+            </label>
+            <label className="field">
+              海报每行
+              <select value={draft.posterColumns} onChange={(event) => setDraft({ ...draft, posterColumns: Number(event.target.value) })}>
+                {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 张</option>)}
+              </select>
+            </label>
+            <button className="button primary" type="button" onClick={() => onSave(draft)}>
+              <Check size={18} />
+              保存显示设置
+            </button>
+          </div>
+
+          <div className="panel">
+            <header className="panel-heading">
+              <div>
+                <span>地图</span>
+                <h2>底图接口</h2>
+              </div>
+            </header>
+            <label className="field">地图提供方<select value={draft.map.provider} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, provider: event.target.value as AppSettings["map"]["provider"] } })}><option value="none">暂不加载</option><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
+            <label className="field">高德 Web Key<input value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} /></label>
+            <label className="field">高德 securityJsCode<input value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} /></label>
+            <label className="field">百度 JSAPI GL AK<input value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} /></label>
+          </div>
+        </section>
       </div>
 
-      <div className="panel">
-        <h2>发布与默认视图</h2>
-        <label className="field">
-          默认视图
-          <select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as ArchiveView })}>
-            {(Object.keys(viewLabels) as ArchiveView[]).map((item) => <option key={item} value={item}>{viewLabels[item]}</option>)}
-          </select>
-        </label>
-        <label className="field">
-          海报每行
-          <select value={draft.posterColumns} onChange={(event) => setDraft({ ...draft, posterColumns: Number(event.target.value) })}>
-            {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 张</option>)}
-          </select>
-        </label>
-        <button className="button primary" type="button" onClick={() => onSave(draft)}>
-          <Check size={18} />
-          保存设置
-        </button>
-      </div>
-
-      <div className="panel">
-        <h2>Supabase 私人同步</h2>
-        <p className="hint">{syncSelected ? "当前保存位置选择为我的 Supabase。共享的是测试站点，不是共享数据库视图。" : "当前保存位置是当前浏览器。要跨设备同步，请先在上方选择我的 Supabase。"}</p>
-        <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
-        <label className="field">anon public key<input value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
-        <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
-        <label className="field">邮箱<input value={draft.supabase.email} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, email: event.target.value } })} placeholder="you@example.com" /></label>
-        <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Supabase Auth 密码" /></label>
-        <div className="button-row">
-          <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("已登录", async () => { await onSave(draft); const message = await signInWithPassword(draft, password); flash(message); const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>
-            {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-            登录/注册
-          </button>
-          <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("前往 GitHub 授权", async () => { await onSave(draft); const message = await signInWithGithub(draft); flash(message); })}>
-            <Github size={18} />
-            GitHub 登录
-          </button>
-          <button className="button ghost" type="button" onClick={() => run("已退出", async () => { await signOut(draft); setUserLabel("未登录"); })}>退出</button>
-          <button className="button ghost" disabled={!syncReady} type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
-        </div>
-        <p className="hint">当前状态：{userLabel}</p>
-        <div className="button-row">
-          <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
-            <Upload size={18} />
-            推送我的数据
-          </button>
-          <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
-            <Download size={18} />
-            拉取我的数据
-          </button>
-        </div>
-      </div>
-
-      <div className="panel">
-        <h2>真实地图底图</h2>
-        <label className="field">地图提供方<select value={draft.map.provider} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, provider: event.target.value as AppSettings["map"]["provider"] } })}><option value="none">暂不加载</option><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
-        <label className="field">高德 Web Key<input value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} /></label>
-        <label className="field">高德 securityJsCode<input value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} /></label>
-        <label className="field">百度 JSAPI GL AK<input value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} /></label>
-      </div>
-
-      <div className="panel health">
-        <h2>存储健康检查</h2>
+      <section className="panel health settings-health-panel">
+        <header className="panel-heading">
+          <div>
+            <span>检查</span>
+            <h2>存储健康</h2>
+          </div>
+        </header>
         <InfoLine label="本地记录" value={`${health.localRecords} 条`} />
         <InfoLine label="图片附件" value={`${health.mediaAssets} 个`} />
         <InfoLine label="未上传图片" value={`${health.localOnlyMedia} 个`} />
         <InfoLine label="远程图片" value={`${health.remoteMedia} 个`} />
         <InfoLine label="最近同步" value={health.lastSyncAt ? new Date(health.lastSyncAt).toLocaleString("zh-CN") : "尚未同步"} />
-      </div>
+      </section>
     </section>
   );
 }

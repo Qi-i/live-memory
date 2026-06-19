@@ -27,7 +27,7 @@ flowchart LR
   O --> S
 ```
 
-应用启动时先读取 `echo-archive-v2`。如果当前库为空且尚未迁移，会读取旧 IndexedDB `echo-archive-local/events`，再尝试旧 localStorage 数据；两者都没有时才载入示例档案。
+应用启动时先读取 `echo-archive-v2`。如果当前库为空且尚未迁移，会读取旧 IndexedDB `echo-archive-local/events`，再尝试旧 localStorage 数据；两者都没有时才载入 3 条泛化演示档案。
 
 ## 核心模型
 
