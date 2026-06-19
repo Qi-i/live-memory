@@ -4,7 +4,7 @@ import { dataUrlToBlob, nowIso } from "./media";
 import { normalizeRecord } from "./storage";
 
 function mediaBucket(settings: AppSettings) {
-  return settings.supabase.mediaBucket || import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "private-data";
+  return settings.supabase.mediaBucket || import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "echo-media";
 }
 
 export interface SyncResult {
@@ -67,7 +67,7 @@ export async function pushRecordsToSupabase(settings: AppSettings, records: Even
         updated_at: next.updatedAt,
         deleted_at: null,
       },
-      { onConflict: "id" },
+      { onConflict: "user_id,id" },
     );
     if (error) throw error;
 
@@ -90,7 +90,7 @@ export async function pushRecordsToSupabase(settings: AppSettings, records: Even
       deleted_at: null,
     }));
     if (mediaRows.length) {
-      const mediaUpsert = await client.from("echo_media_assets").upsert(mediaRows, { onConflict: "id" });
+      const mediaUpsert = await client.from("echo_media_assets").upsert(mediaRows, { onConflict: "user_id,id" });
       if (mediaUpsert.error) throw mediaUpsert.error;
     }
   }

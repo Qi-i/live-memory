@@ -256,10 +256,13 @@ export function normalizeRecord(record: EventRecord): EventRecord {
 }
 
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
+  const supabase = { ...defaultSettings.supabase, ...(value.supabase || {}) };
+  // v2.0 initially shipped with a bucket default that did not match the SQL migration.
+  if (supabase.mediaBucket === "private-data") supabase.mediaBucket = "echo-media";
   return {
     ...defaultSettings,
     ...value,
     map: { ...defaultSettings.map, ...(value.map || {}) },
-    supabase: { ...defaultSettings.supabase, ...(value.supabase || {}) },
+    supabase,
   };
 }

@@ -2088,6 +2088,15 @@ body {
 }
 
 @media (max-width: 1180px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .rail {
+    position: static;
+    min-height: auto;
+  }
+
   .hero {
     grid-template-columns: 1fr;
   }
@@ -2102,8 +2111,44 @@ body {
 }
 
 @media (max-width: 760px) {
+  body {
+    overflow-x: hidden;
+  }
+
   .app {
+    grid-template-columns: minmax(0, 1fr);
     padding: 10px;
+    gap: 12px;
+  }
+
+  .rail {
+    position: static;
+    min-width: 0;
+    min-height: auto;
+    padding: 12px;
+  }
+
+  .brand-mark {
+    width: 48px;
+    height: 48px;
+    font-size: 24px;
+  }
+
+  .rail nav {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 12px;
+  }
+
+  .route {
+    min-width: 0;
+    min-height: 44px;
+    padding: 0;
+  }
+
+  .workspace {
+    min-width: 0;
+    overflow: hidden;
   }
 
   .hero {

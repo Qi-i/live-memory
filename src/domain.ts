@@ -199,7 +199,7 @@ export const defaultSettings: AppSettings = {
     url: import.meta.env.VITE_SUPABASE_URL || "",
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || "",
     email: "",
-    mediaBucket: import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "private-data",
+    mediaBucket: import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "echo-media",
   },
 };
 
