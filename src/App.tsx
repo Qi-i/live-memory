@@ -69,8 +69,10 @@ import {
 import {
   currentUser,
   hasSupabaseConfig,
+  loadUserProfileBinding,
   pullRecordsFromSupabase,
   pushRecordsToSupabase,
+  saveUserProfileBinding,
   signInWithGithub,
   signInWithPassword,
   signOut,
@@ -523,23 +525,25 @@ function WalletCard({ record, onOpen, onZoom, onEdit }: { record: EventRecord; o
       <button className="cover-button" type="button" onClick={() => (poster ? onZoom(poster) : onOpen(record))}>
         {poster ? <img src={poster.src} alt={record.title} /> : <span>{record.title.slice(0, 3)}</span>}
       </button>
-      <button className="wallet-main" type="button" onClick={() => onOpen(record)}>
-        <span className="wallet-meta-line">
-          <span className="wallet-kind">{categoryLabels[record.category]}</span>
-          <span className={`status-pill ${statusClass(record.status)}`}>{statusLabels[record.status]}</span>
-        </span>
-        <h3>{record.title}</h3>
-        <p className="wallet-artist">{record.artists.join(" / ") || "艺人待补"}</p>
-        <dl className="wallet-facts">
-          <dt>日期</dt>
-          <dd>{formatDateCn(record.date, record.time)}</dd>
-          <dt>场馆</dt>
-          <dd>{record.city || "城市待补"} · {record.venue || "场馆待补"}</dd>
-          <dt>票座</dt>
-          <dd>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"} · {record.seat || "座位待补"}</dd>
-        </dl>
-        <strong>{formatRelativeDay(record.date)}</strong>
-      </button>
+      <div className="wallet-main">
+        <button className="wallet-open" type="button" onClick={() => onOpen(record)}>
+          <span className="wallet-meta-line">
+            <span className="wallet-kind">{categoryLabels[record.category]}</span>
+            <span className={`status-pill ${statusClass(record.status)}`}>{statusLabels[record.status]}</span>
+          </span>
+          <h3>{record.title}</h3>
+          <p className="wallet-artist">{record.artists.join(" / ") || "艺人待补"}</p>
+          <dl className="wallet-facts">
+            <dt>日期</dt>
+            <dd>{formatDateCn(record.date, record.time)}</dd>
+            <dt>场馆</dt>
+            <dd>{record.city || "城市待补"} · {record.venue || "场馆待补"}</dd>
+            <dt>票座</dt>
+            <dd>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"} · {record.seat || "座位待补"}</dd>
+          </dl>
+          <strong>{formatRelativeDay(record.date)}</strong>
+        </button>
+      </div>
       <div className="card-actions">
         <IconButton label="打开" onClick={() => onOpen(record)} icon={<Eye />} />
         <IconButton label="编辑" onClick={() => onEdit(record)} icon={<Pencil />} />
@@ -1188,6 +1192,22 @@ function SettingsView({
               <button className="button ghost" disabled={!syncReady} type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
             </div>
             <p className="hint">登录状态：{userLabel}</p>
+            <section className="account-link-box">
+              <div>
+                <strong>网站账号绑定</strong>
+                <p>账号密码由 Supabase Auth 保管。这里把当前账号与 GitHub 标识、Supabase 项目和常用地图 Key 绑定到私有表，换设备后可读取。</p>
+              </div>
+              <div className="button-row">
+                <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("账号绑定已保存", async () => { await onSave(draft); const profile = await saveUserProfileBinding(draft); setUserLabel(profile.displayName || profile.githubUsername || userLabel); })}>
+                  <ShieldCheck size={18} />
+                  保存账号绑定
+                </button>
+                <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已读取账号绑定", async () => { const profile = await loadUserProfileBinding(draft); if (!profile) throw new Error("这个账号还没有保存过绑定"); const next = { ...draft, supabase: { ...draft.supabase, url: profile.supabaseUrl || draft.supabase.url, anonKey: profile.supabaseAnonKey || draft.supabase.anonKey, mediaBucket: profile.mediaBucket || draft.supabase.mediaBucket }, map: { ...draft.map, amapKey: profile.amapKey || draft.map.amapKey } }; setDraft(next); await onSave(next); setUserLabel(profile.displayName || profile.githubUsername || userLabel); })}>
+                  <Download size={18} />
+                  读取账号绑定
+                </button>
+              </div>
+            </section>
             <div className="button-row">
               <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
                 <Upload size={18} />

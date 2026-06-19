@@ -12,6 +12,17 @@ export interface SyncResult {
   message: string;
 }
 
+export interface UserProfileBinding {
+  displayName: string;
+  githubUsername: string;
+  githubUserId: string;
+  supabaseUrl: string;
+  supabaseAnonKey: string;
+  mediaBucket: string;
+  amapKey: string;
+  updatedAt?: string;
+}
+
 export function hasSupabaseConfig(settings: AppSettings) {
   return Boolean(settings.supabase.url && settings.supabase.anonKey);
 }
@@ -69,6 +80,44 @@ export async function currentUser(settings: AppSettings) {
   const client = makeSupabaseClient(settings);
   const { data } = await client.auth.getUser();
   return data.user || null;
+}
+
+export async function saveUserProfileBinding(settings: AppSettings): Promise<UserProfileBinding> {
+  const client = makeSupabaseClient(settings);
+  const user = await requireUser(client);
+  const github = githubIdentity(user);
+  const displayName = github.displayName || user.email || "";
+  const row = {
+    user_id: user.id,
+    display_name: displayName || null,
+    github_username: github.username || null,
+    github_user_id: github.userId || null,
+    linked_supabase_url: settings.supabase.url || null,
+    linked_supabase_anon_key: settings.supabase.anonKey || null,
+    linked_supabase_media_bucket: mediaBucket(settings),
+    amap_key: settings.map.amapKey || null,
+    updated_at: nowIso(),
+  };
+
+  const { data, error } = await client
+    .from("echo_user_profiles")
+    .upsert(row, { onConflict: "user_id" })
+    .select("display_name, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
+    .single();
+  if (error) throwProfileError(error);
+  return profileFromRow(data);
+}
+
+export async function loadUserProfileBinding(settings: AppSettings): Promise<UserProfileBinding | null> {
+  const client = makeSupabaseClient(settings);
+  const user = await requireUser(client);
+  const { data, error } = await client
+    .from("echo_user_profiles")
+    .select("display_name, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (error) throwProfileError(error);
+  return data ? profileFromRow(data) : null;
 }
 
 export async function pushRecordsToSupabase(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
@@ -146,6 +195,42 @@ async function requireUser(client: SupabaseClient) {
   if (error) throw error;
   if (!data.user) throw new Error("请先登录 Supabase 账号");
   return data.user;
+}
+
+function githubIdentity(user: Awaited<ReturnType<typeof requireUser>>) {
+  const metadata = user.user_metadata as Record<string, unknown> | undefined;
+  const identities = (user as { identities?: Array<{ provider?: string; id?: string; identity_data?: Record<string, unknown> }> }).identities || [];
+  const github = identities.find((identity) => identity.provider === "github");
+  const identityData = github?.identity_data;
+  return {
+    displayName: pickString(metadata?.name, metadata?.full_name, identityData?.name, identityData?.full_name, metadata?.user_name, identityData?.user_name),
+    username: pickString(metadata?.user_name, metadata?.preferred_username, identityData?.user_name, identityData?.preferred_username),
+    userId: pickString(metadata?.provider_id, identityData?.provider_id, github?.id),
+  };
+}
+
+function profileFromRow(row: Record<string, unknown>): UserProfileBinding {
+  return {
+    displayName: pickString(row.display_name),
+    githubUsername: pickString(row.github_username),
+    githubUserId: pickString(row.github_user_id),
+    supabaseUrl: pickString(row.linked_supabase_url),
+    supabaseAnonKey: pickString(row.linked_supabase_anon_key),
+    mediaBucket: pickString(row.linked_supabase_media_bucket) || "echo-media",
+    amapKey: pickString(row.amap_key),
+    updatedAt: pickString(row.updated_at),
+  };
+}
+
+function pickString(...values: unknown[]) {
+  const value = values.find((item): item is string => typeof item === "string" && item.trim().length > 0);
+  return value?.trim() || "";
+}
+
+function throwProfileError(error: unknown): never {
+  const code = (error as { code?: string }).code;
+  if (code === "42P01") throw new Error("请先在 Supabase SQL Editor 执行 supabase/migrations/002_account_profiles.sql");
+  throw error;
 }
 
 async function uploadMediaIfNeeded(client: SupabaseClient, userId: string, recordId: string, asset: MediaAsset, bucket: string): Promise<MediaAsset> {

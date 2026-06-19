@@ -10,14 +10,15 @@
 
 ```text
 supabase/migrations/001_echo_archive.sql
+supabase/migrations/002_account_profiles.sql
 ```
 
 执行成功后应看到：
 
-- `Table Editor` 中有 `echo_records`、`echo_media_assets`。
+- `Table Editor` 中有 `echo_records`、`echo_media_assets`、`echo_user_profiles`。
 - `Storage` 中有私有 bucket `echo-media`。
-- 两张表都已启用 RLS。
-- `storage.objects` 与两张业务表均有 owner 策略。
+- 三张表都已启用 RLS。
+- `storage.objects` 与三张业务表均有 owner 策略。
 
 不要把 bucket 改为 Public。票根、座位和现场照片可能包含个人信息，私有 bucket 才会在读取时执行访问控制。
 
@@ -43,6 +44,19 @@ anon/publishable key 可以出现在前端；真正的数据边界来自 RLS。`
 在 `Authentication > Providers` 保留 Email。若开启“确认邮箱”，首次注册后要先点击确认邮件，再回到应用登录。
 
 当前 UI 的“登录/注册”逻辑会先尝试登录；账号不存在时再注册。建议个人使用时创建一个强密码，并为 Supabase 账号开启多因素认证。
+
+回响册的“网站账号”使用 Supabase Auth。密码只由 Supabase Auth 保存和校验，应用自己的 `echo_user_profiles` 表不会保存密码，只保存当前登录用户的显示名、GitHub 标识、绑定的 Supabase URL/anon key、媒体桶和常用地图 Key。
+
+### 保存自己的账号绑定
+
+1. 在应用 `设置 > 数据保存位置` 选择“我的 Supabase”。
+2. 填写 Project URL、anon/public key、媒体桶和邮箱密码。
+3. 点击“登录/注册”。
+4. 如需把当前账号和 GitHub 绑定，点击“GitHub 登录”完成授权后回到应用。
+5. 点击“保存账号绑定”。这会在 `echo_user_profiles` 中写入一行 `user_id = 当前登录用户` 的私有配置。
+6. 换设备后，先填同一个 Supabase 项目的 URL 和 anon key，登录同一账号，再点击“读取账号绑定”。
+
+不要在 `echo_user_profiles` 或任何前端配置里保存 `service_role`、数据库密码、对象存储 Secret、GitHub OAuth Client Secret。它们属于服务端密钥。
 
 ### 可选：GitHub 登录
 

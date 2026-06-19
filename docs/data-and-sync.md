@@ -10,10 +10,13 @@
 
 回响册的公开站点只是共享应用入口，不是共享数据空间。登录后，所有云端读写都绑定到当前 Supabase Auth 用户。
 
+如果要做“打开公开网站，输入回响册账号密码，然后自动读取自己的绑定配置”，公开站点需要预先连接一个中心 Supabase 项目。这个项目提供 Supabase Auth 登录和 `echo_user_profiles` 私有绑定表；真正的演出记录既可以继续放在同一个 Supabase 项目并由 RLS 隔离，也可以在读取绑定后切换到用户自己的 Supabase 项目。
+
 | 数据 | 位置 | 可见性 |
 | --- | --- | --- |
 | 演出字段和媒体引用 | `echo_records.payload` | 当前登录用户 |
 | 图片索引 | `echo_media_assets` | 当前登录用户 |
+| 账号绑定资料 | `echo_user_profiles` | 当前登录用户 |
 | 图片文件 | `echo-media/userId/recordId/mediaId.ext` | 私有、RLS 控制 |
 | Supabase 会话 | 浏览器本地 Auth storage | 当前浏览器 |
 
@@ -22,6 +25,8 @@
 ## 账号隔离模型
 
 - 每条演出记录都保存 `user_id`。
+- 每个网站账号对应 Supabase Auth 中的一个用户。邮箱密码由 Supabase Auth 管理，应用表不保存密码。
+- `echo_user_profiles` 只保存当前用户自己的显示名、GitHub 标识和客户端绑定配置。
 - `echo_records` 与 `echo_media_assets` 的 RLS 只允许 `auth.uid() = user_id` 的用户读写。
 - Storage bucket 是私有的，文件路径第一段必须是当前用户 ID。
 - GitHub OAuth 只是 Supabase Auth 的登录方式；GitHub 不保存演出数据。
