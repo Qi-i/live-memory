@@ -99,13 +99,13 @@ export interface SupabaseConfig {
 
 export interface AppSettings {
   defaultView: ArchiveView;
+  posterColumns: number;
   map: MapConfig;
   supabase: SupabaseConfig;
   lastSyncAt?: string;
 }
 
 export type ArchiveView =
-  | "masonry"
   | "poster"
   | "wallet"
   | "ticket"
@@ -164,7 +164,6 @@ export const mediaKindLabels: Record<MediaKind, string> = {
 };
 
 export const viewLabels: Record<ArchiveView, string> = {
-  masonry: "瀑布流",
   poster: "海报",
   wallet: "票夹",
   ticket: "纪念票根",
@@ -188,7 +187,8 @@ export const sourceLabels: Record<SourceChannel, string> = {
 };
 
 export const defaultSettings: AppSettings = {
-  defaultView: "wallet",
+  defaultView: "poster",
+  posterColumns: 4,
   map: {
     provider: "none",
     amapKey: "",

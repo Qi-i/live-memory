@@ -14,7 +14,6 @@ import {
   Heart,
   ImagePlus,
   Import,
-  LayoutGrid,
   List,
   Loader2,
   Map as MapIcon,
@@ -30,7 +29,7 @@ import {
   Upload,
   X,
 } from "lucide-react";
-import { CSSProperties, Dispatch, FormEvent, ReactNode, SetStateAction, useEffect, useMemo, useState } from "react";
+import { CSSProperties, Dispatch, FormEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppSettings,
   ArchiveView,
@@ -93,7 +92,7 @@ export default function App() {
   const [records, setRecords] = useState<EventRecord[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [route, setRoute] = useState<Route>("archive");
-  const [view, setView] = useState<ArchiveView>("wallet");
+  const [view, setView] = useState<ArchiveView>("poster");
   const [sort, setSort] = useState<SortMode>("smart");
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [selected, setSelected] = useState<EventRecord | null>(null);
@@ -145,6 +144,11 @@ export default function App() {
     setSettings(saved);
     setView(saved.defaultView);
     flash("设置已保存");
+  }
+
+  function updatePosterColumns(posterColumns: number) {
+    const saved = writeSettings({ ...settings, posterColumns });
+    setSettings(saved);
   }
 
   async function replaceRecords(next: EventRecord[], message: string) {
@@ -221,9 +225,11 @@ export default function App() {
               setView={setView}
               sort={sort}
               setSort={setSort}
+              posterColumns={settings.posterColumns}
+              setPosterColumns={updatePosterColumns}
             />
             <CountBar count={filteredRecords.length} sort={sort} />
-            <ArchiveViewRenderer records={filteredRecords} view={view} onOpen={setSelected} onZoom={setZoomMedia} onEdit={setEditing} />
+            <ArchiveViewRenderer records={filteredRecords} view={view} posterColumns={settings.posterColumns} onOpen={setSelected} onZoom={setZoomMedia} onEdit={setEditing} />
           </>
         )}
         {route === "timeline" && (
@@ -308,6 +314,8 @@ function FilterBar({
   setView,
   sort,
   setSort,
+  posterColumns,
+  setPosterColumns,
 }: {
   filters: Filters;
   setFilters: Dispatch<SetStateAction<Filters>>;
@@ -316,17 +324,35 @@ function FilterBar({
   setView: (value: ArchiveView) => void;
   sort: SortMode;
   setSort: (value: SortMode) => void;
+  posterColumns: number;
+  setPosterColumns: (value: number) => void;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const activeCount = filters.categories.length + filters.statuses.length + filters.years.length + filters.cities.length + filters.artists.length + filters.tags.length;
+  const clearFilters = () => setFilters((current) => ({ ...emptyFilters, query: current.query }));
   return (
     <section className="toolbar">
-      <div className="filter-clusters">
+      <div className="toolbar-compact">
+        <div>
+          <span className="toolbar-kicker">筛选</span>
+          <strong>{activeCount ? `${activeCount} 组条件生效` : "未展开高级筛选"}</strong>
+        </div>
+        <div className="toolbar-compact-actions">
+          {activeCount > 0 && <button className="button ghost compact-button" type="button" onClick={clearFilters}>清空</button>}
+          <button className="button primary compact-button" type="button" onClick={() => setExpanded((value) => !value)}>
+            <Filter size={16} />
+            {expanded ? "收起" : "筛选"}
+          </button>
+        </div>
+      </div>
+      <div className={`filter-clusters ${expanded ? "is-open" : ""}`}>
         <MultiSelect label="类型" values={filters.categories} options={facets.categories} labels={categoryLabels} onChange={(categories) => setFilters((current) => ({ ...current, categories }))} />
         <MultiSelect label="状态" values={filters.statuses} options={facets.statuses} labels={statusLabels} onChange={(statuses) => setFilters((current) => ({ ...current, statuses }))} />
         <ChipGroup label="年份" values={filters.years} options={facets.years} onChange={(years) => setFilters((current) => ({ ...current, years }))} />
         <ChipGroup label="城市" values={filters.cities} options={facets.cities} onChange={(cities) => setFilters((current) => ({ ...current, cities }))} />
         <ChipGroup label="艺人" values={filters.artists} options={facets.artists} onChange={(artists) => setFilters((current) => ({ ...current, artists }))} />
       </div>
-      <div className="toolbar-row">
+      <div className={`toolbar-row ${view === "poster" ? "has-columns" : ""}`}>
         <label className="select-wrap">
           <span>排序</span>
           <select value={sort} onChange={(event) => setSort(event.target.value as SortMode)}>
@@ -337,6 +363,14 @@ function FilterBar({
             <option value="updated-desc">最近编辑</option>
           </select>
         </label>
+        {view === "poster" && (
+          <label className="select-wrap compact-select">
+            <span>每行</span>
+            <select value={posterColumns} onChange={(event) => setPosterColumns(Number(event.target.value))}>
+              {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 张</option>)}
+            </select>
+          </label>
+        )}
         <div className="view-switch" aria-label="展示方式">
           {(Object.keys(viewLabels) as ArchiveView[]).map((item) => (
             <button className={view === item ? "is-active" : ""} key={item} type="button" onClick={() => setView(item)}>
@@ -418,12 +452,14 @@ function CountBar({ count, sort }: { count: number; sort: SortMode }) {
 function ArchiveViewRenderer({
   records,
   view,
+  posterColumns,
   onOpen,
   onZoom,
   onEdit,
 }: {
   records: EventRecord[];
   view: ArchiveView;
+  posterColumns: number;
   onOpen: (record: EventRecord) => void;
   onZoom: (asset: MediaAsset) => void;
   onEdit: (record: EventRecord) => void;
@@ -436,8 +472,12 @@ function ArchiveViewRenderer({
   if (view === "venue") return <VenueView records={records} />;
   if (view === "list") return <ListView records={records} onOpen={onOpen} />;
   if (view === "ticket") return <TicketView records={records} onOpen={onOpen} />;
+  const gridStyle = {
+    "--poster-columns": posterColumns,
+    "--poster-mobile-columns": Math.min(3, posterColumns),
+  } as CSSProperties;
   return (
-    <section className={view === "masonry" ? "masonry-grid" : view === "poster" ? "poster-grid" : "wallet-list"}>
+    <section className={view === "poster" ? "poster-grid" : "wallet-list"} style={view === "poster" ? gridStyle : undefined}>
       {records.map((record, index) =>
         view === "wallet" ? (
           <WalletCard record={record} key={record.id} onOpen={onOpen} onZoom={onZoom} onEdit={onEdit} />
@@ -452,7 +492,7 @@ function ArchiveViewRenderer({
 function PosterCard({ record, index, compact, onOpen, onZoom }: { record: EventRecord; index: number; compact: boolean; onOpen: (record: EventRecord) => void; onZoom: (asset: MediaAsset) => void }) {
   const poster = primaryMedia(record);
   return (
-    <article className="poster-card" onClick={() => onOpen(record)}>
+    <article className={`poster-card ${compact ? "is-compact" : ""}`} onClick={() => onOpen(record)}>
       <button className="rank" type="button" aria-label={`第 ${index + 1} 条`}>
         #{String(index + 1).padStart(2, "0")}
       </button>
@@ -534,7 +574,9 @@ function TicketView({ records, onOpen }: { records: EventRecord[]; onOpen: (reco
 
 function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   const priced = [...records].sort((a, b) => (b.price || 0) - (a.price || 0));
-  const average = Math.round(priced.reduce((sum, item) => sum + (item.price || 0), 0) / Math.max(1, priced.filter((item) => item.price).length));
+  const filledPrices = priced.filter((item) => item.price);
+  const average = Math.round(priced.reduce((sum, item) => sum + (item.price || 0), 0) / Math.max(1, filledPrices.length));
+  const maxPrice = Math.max(1, ...priced.map((item) => item.price || 0));
   return (
     <section className="price-board">
       <div className="metric-strip">
@@ -547,18 +589,17 @@ function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (recor
         <div className="price-head">
           <span>排序</span>
           <span>演出</span>
-          <span>日期</span>
-          <span>场馆</span>
-          <span>票价</span>
+          <span>票价进度</span>
           <span>座位</span>
         </div>
         {priced.map((record, index) => (
           <button className="price-row" key={record.id} type="button" onClick={() => onOpen(record)}>
             <span className="price-index">{String(index + 1).padStart(2, "0")}</span>
-            <span className="price-title">{record.title}<em>{record.artists.join(" / ")}</em></span>
-            <span>{record.date}</span>
-            <span>{record.city} · {record.venue}</span>
-            <strong>{record.price ? `¥${record.price}` : record.publicPriceRange || "待补"}</strong>
+            <span className="price-title">{record.title}<em>{record.artists.join(" / ") || "艺人待补"} · {record.date} · {record.city}</em></span>
+            <span className="price-meter" style={{ "--price-ratio": `${Math.max(6, Math.round(((record.price || 0) / maxPrice) * 100))}%` } as CSSProperties}>
+              <i />
+              <strong>{record.price ? `¥${record.price}` : record.publicPriceRange || "待补"}</strong>
+            </span>
             <span>{record.seat || "座位待补"}</span>
           </button>
         ))}
@@ -568,26 +609,60 @@ function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (recor
 }
 
 function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
+  const ordered = useMemo(() => [...records].sort((a, b) => b.date.localeCompare(a.date)), [records]);
+  const years = useMemo(() => unique(ordered.map((record) => record.date.slice(0, 4))).sort((a, b) => b.localeCompare(a)), [ordered]);
+  const [yearIndex, setYearIndex] = useState(0);
+  const yearRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  function jumpToYear(index: number) {
+    const nextIndex = Math.min(years.length - 1, Math.max(0, index));
+    setYearIndex(nextIndex);
+    yearRefs.current[years[nextIndex]]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
   return (
-    <div className="timeline">
-      {records.map((record) => {
-        const poster = primaryMedia(record);
-        return (
-          <button className="timeline-item" key={record.id} type="button" onClick={() => onOpen(record)}>
-            <time>
-              <span>{record.date.slice(0, 4)}</span>
-              <strong>{record.date.slice(5).replace("-", ".")}</strong>
-            </time>
-            <div className="timeline-thumb">{poster ? <img src={poster.src} alt="" /> : <Ticket />}</div>
-            <div>
-              <span className="badge">{categoryLabels[record.category]}</span>
-              <h3>{record.title}</h3>
-              <p>{record.artists.join(" / ")} · {record.city} · {record.venue}</p>
-              <small>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"} · {record.seat || "座位待补"}</small>
-            </div>
-          </button>
-        );
-      })}
+    <div className="timeline-shell">
+      <aside className="timeline-rail" aria-label="年份快速定位">
+        <strong>{years[yearIndex] || "时间"}</strong>
+        <input
+          aria-label="拖动定位年份"
+          max={Math.max(0, years.length - 1)}
+          min={0}
+          onChange={(event) => jumpToYear(Number(event.target.value))}
+          type="range"
+          value={yearIndex}
+        />
+        <div>
+          {years.map((year, index) => (
+            <button className={index === yearIndex ? "is-active" : ""} key={year} type="button" onClick={() => jumpToYear(index)}>
+              {year}
+            </button>
+          ))}
+        </div>
+      </aside>
+      <div className="timeline">
+        {years.map((year) => (
+          <div className="timeline-year" key={year} ref={(node) => { yearRefs.current[year] = node; }}>
+            <h2>{year}</h2>
+            {ordered.filter((record) => record.date.startsWith(year)).map((record) => {
+              const poster = primaryMedia(record);
+              return (
+                <button className="timeline-item" key={record.id} type="button" onClick={() => onOpen(record)}>
+                  <time>
+                    <span>{record.date.slice(0, 4)}</span>
+                    <strong>{record.date.slice(5).replace("-", ".")}</strong>
+                  </time>
+                  <div className="timeline-thumb">{poster ? <img src={poster.src} alt="" /> : <Ticket />}</div>
+                  <div>
+                    <span className="badge">{categoryLabels[record.category]}</span>
+                    <h3>{record.title}</h3>
+                    <p>{record.artists.join(" / ")} · {record.city} · {record.venue}</p>
+                    <small>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"} · {record.seat || "座位待补"}</small>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
@@ -810,6 +885,12 @@ function SettingsView({
           默认视图
           <select value={draft.defaultView} onChange={(event) => setDraft({ ...draft, defaultView: event.target.value as ArchiveView })}>
             {(Object.keys(viewLabels) as ArchiveView[]).map((item) => <option key={item} value={item}>{viewLabels[item]}</option>)}
+          </select>
+        </label>
+        <label className="field">
+          海报每行
+          <select value={draft.posterColumns} onChange={(event) => setDraft({ ...draft, posterColumns: Number(event.target.value) })}>
+            {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 张</option>)}
           </select>
         </label>
         <button className="button primary" type="button" onClick={() => onSave(draft)}>
@@ -1154,7 +1235,6 @@ function EmptyState() {
 
 function viewIcon(view: ArchiveView) {
   const icons: Record<ArchiveView, ReactNode> = {
-    masonry: <LayoutGrid />,
     poster: <ImagePlus />,
     wallet: <Archive />,
     ticket: <Ticket />,

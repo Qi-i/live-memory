@@ -259,9 +259,14 @@ function normalizeSettings(value: Partial<AppSettings>): AppSettings {
   const supabase = { ...defaultSettings.supabase, ...(value.supabase || {}) };
   // v2.0 initially shipped with a bucket default that did not match the SQL migration.
   if (supabase.mediaBucket === "private-data") supabase.mediaBucket = "echo-media";
+  const savedView = value.defaultView as string | undefined;
+  const defaultView = savedView === "masonry" ? "poster" : value.defaultView || defaultSettings.defaultView;
+  const posterColumns = Math.min(6, Math.max(2, Number(value.posterColumns || defaultSettings.posterColumns)));
   return {
     ...defaultSettings,
     ...value,
+    defaultView,
+    posterColumns,
     map: { ...defaultSettings.map, ...(value.map || {}) },
     supabase,
   };
