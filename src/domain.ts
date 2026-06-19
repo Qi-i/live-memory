@@ -97,12 +97,21 @@ export interface SupabaseConfig {
   mediaBucket: string;
 }
 
+export interface AccountProfile {
+  username: string;
+  nickname: string;
+  avatarUrl: string;
+  recoveryEmail: string;
+}
+
 export type StorageMode = "local" | "supabase";
 
 export interface AppSettings {
   defaultView: ArchiveView;
   posterColumns: number;
   storageMode: StorageMode;
+  onboardingComplete: boolean;
+  account: AccountProfile;
   map: MapConfig;
   supabase: SupabaseConfig;
   lastSyncAt?: string;
@@ -198,6 +207,13 @@ export const defaultSettings: AppSettings = {
   defaultView: "poster",
   posterColumns: 4,
   storageMode: "local",
+  onboardingComplete: false,
+  account: {
+    username: "",
+    nickname: "",
+    avatarUrl: "",
+    recoveryEmail: "",
+  },
   map: {
     provider: "none",
     amapKey: "",

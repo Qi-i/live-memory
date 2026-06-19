@@ -11,6 +11,7 @@
 ```text
 supabase/migrations/001_echo_archive.sql
 supabase/migrations/002_account_profiles.sql
+supabase/migrations/003_account_identity_fields.sql
 ```
 
 执行成功后应看到：
@@ -45,16 +46,46 @@ anon/publishable key 可以出现在前端；真正的数据边界来自 RLS。`
 
 当前 UI 的“登录/注册”逻辑会先尝试登录；账号不存在时再注册。建议个人使用时创建一个强密码，并为 Supabase 账号开启多因素认证。
 
-回响册的“网站账号”使用 Supabase Auth。密码只由 Supabase Auth 保存和校验，应用自己的 `echo_user_profiles` 表不会保存密码，只保存当前登录用户的显示名、GitHub 标识、绑定的 Supabase URL/anon key、媒体桶和常用地图 Key。
+回响册的“网站账号”使用 Supabase Auth。密码只由 Supabase Auth 保存和校验，应用自己的 `echo_user_profiles` 表不会保存密码，只保存当前登录用户的昵称、用户名、头像、GitHub 标识、绑定的 Supabase URL/anon key、媒体桶和常用地图 Key。
+
+### 第一次打开应用怎么选
+
+如果你完全不懂 Supabase，先记住两句话：
+
+- **本地保存**：最简单。数据只在当前浏览器里，适合先试用；换电脑或换手机前要导出 JSON 备份。
+- **登录并同步**：适合电脑和手机都要用。你需要一个 Supabase 项目，登录后每个人只看到自己的数据。
+
+首次引导会让你填写：
+
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| 头像 | 否 | 只用于页面展示，可以先不填 |
+| 昵称 | 是 | 页面右上角显示的名字 |
+| 用户名 | 是 | 用来识别账号，建议英文、数字、下划线 |
+| 密码 | 同步时必填 | 交给 Supabase Auth 保存，应用表里不会保存 |
+| 邮箱 | 否 | 填了可用于邮件确认和找回密码；不填则用用户名生成内部登录标识，无法邮件找回 |
+
+如果你的 Supabase 项目开启了邮箱确认，建议填写真实邮箱；否则注册后会收不到确认邮件。
+
+如果选择“登录并同步”，还要填写 Supabase 的三项公开连接参数：
+
+| 字段 | 在哪里找 | 安全说明 |
+| --- | --- | --- |
+| Project URL | Supabase `Project Settings > API` | 可以放到前端 |
+| anon public key | Supabase `Project Settings > API` | 可以放到前端，权限由 RLS 限制 |
+| 媒体桶 | 默认 `echo-media` | 必须和 SQL 创建的 bucket 一致 |
+
+不要填写 `service_role`、数据库密码、GitHub OAuth Client Secret、对象存储 Secret。它们不是给浏览器用的。
 
 ### 保存自己的账号绑定
 
 1. 在应用 `设置 > 数据保存位置` 选择“我的 Supabase”。
-2. 填写 Project URL、anon/public key、媒体桶和邮箱密码。
-3. 点击“登录/注册”。
-4. 如需把当前账号和 GitHub 绑定，点击“GitHub 登录”完成授权后回到应用。
-5. 点击“保存账号绑定”。这会在 `echo_user_profiles` 中写入一行 `user_id = 当前登录用户` 的私有配置。
-6. 换设备后，先填同一个 Supabase 项目的 URL 和 anon key，登录同一账号，再点击“读取账号绑定”。
+2. 填写昵称、用户名、密码；邮箱可选，但建议填写。
+3. 填写 Project URL、anon/public key 和媒体桶。
+4. 点击“登录/注册”。
+5. 如需把当前账号和 GitHub 绑定，点击“GitHub 登录”完成授权后回到应用。
+6. 点击“保存账号绑定”。这会在 `echo_user_profiles` 中写入一行 `user_id = 当前登录用户` 的私有配置。
+7. 换设备后，先填同一个 Supabase 项目的 URL 和 anon key，登录同一账号，再点击“读取账号绑定”。
 
 不要在 `echo_user_profiles` 或任何前端配置里保存 `service_role`、数据库密码、对象存储 Secret、GitHub OAuth Client Secret。它们属于服务端密钥。
 

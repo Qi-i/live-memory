@@ -80,7 +80,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 ## 配置 Supabase
 
 1. 创建 Supabase 项目。
-2. 在 SQL Editor 中按顺序完整执行 [`001_echo_archive.sql`](./supabase/migrations/001_echo_archive.sql) 和 [`002_account_profiles.sql`](./supabase/migrations/002_account_profiles.sql)。
+2. 在 SQL Editor 中按顺序完整执行 [`001_echo_archive.sql`](./supabase/migrations/001_echo_archive.sql)、[`002_account_profiles.sql`](./supabase/migrations/002_account_profiles.sql) 和 [`003_account_identity_fields.sql`](./supabase/migrations/003_account_identity_fields.sql)。
 3. 在 Authentication 中确认邮箱登录策略；如需 GitHub 登录，在 Supabase Auth Provider 中启用 GitHub OAuth。
 4. 将 Project URL 与 anon/publishable key 填入 `.env.local`，或直接在应用“设置”页填写。
 5. 注册并登录后，先推送本地数据，再在第二台设备使用同一 Supabase 用户登录并拉取。
@@ -89,7 +89,7 @@ SQL 会创建：
 
 - `echo_records`：演出记录及完整 JSON payload。
 - `echo_media_assets`：图片索引、类型、尺寸与存储路径。
-- `echo_user_profiles`：当前登录账号的显示名、GitHub 标识和客户端连接配置。
+- `echo_user_profiles`：当前登录账号的昵称、用户名、头像、GitHub 标识和客户端连接配置。
 - `echo-media`：默认私有 Storage bucket。
 - 以 `auth.uid()` 为边界的数据库与图片 RLS 策略。
 
@@ -109,7 +109,7 @@ Vite 使用相对资源路径，因此既能部署在根域名，也能部署在
 
 - GitHub Pages 发布的是同一个前端应用壳，所有人看到的是同一套界面和示例能力，不是同一个共享相册。
 - GitHub 只保存源代码、3 条演示记录和文档，不保存你的个人票根与现场照片。
-- 网站账号密码由 Supabase Auth 处理；`echo_user_profiles` 只保存当前用户自己的绑定资料，不保存密码。
+- 网站账号密码由 Supabase Auth 处理；`echo_user_profiles` 只保存当前用户自己的昵称、用户名、头像和绑定资料，不保存密码。
 - 浏览器数据默认保存在当前设备 IndexedDB。
 - 启用同步后，元数据进入 Supabase Postgres，图片进入私有 Storage；记录都带有当前 Supabase 用户的 `user_id`。
 - 图片路径采用 `userId/recordId/mediaId.ext`，RLS 只允许所属用户访问。

@@ -25,8 +25,9 @@
 ## 账号隔离模型
 
 - 每条演出记录都保存 `user_id`。
-- 每个网站账号对应 Supabase Auth 中的一个用户。邮箱密码由 Supabase Auth 管理，应用表不保存密码。
-- `echo_user_profiles` 只保存当前用户自己的显示名、GitHub 标识和客户端绑定配置。
+- 每个网站账号对应 Supabase Auth 中的一个用户。密码由 Supabase Auth 管理，应用表不保存密码。
+- `echo_user_profiles` 只保存当前用户自己的昵称、用户名、头像、GitHub 标识和客户端绑定配置。
+- 邮箱是可选资料；填写后可用于 Supabase 邮件确认和找回密码，不填写时应用会用用户名生成内部登录标识。
 - `echo_records` 与 `echo_media_assets` 的 RLS 只允许 `auth.uid() = user_id` 的用户读写。
 - Storage bucket 是私有的，文件路径第一段必须是当前用户 ID。
 - GitHub OAuth 只是 Supabase Auth 的登录方式；GitHub 不保存演出数据。

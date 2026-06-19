@@ -14,6 +14,10 @@ export interface SyncResult {
 
 export interface UserProfileBinding {
   displayName: string;
+  username: string;
+  nickname: string;
+  avatarUrl: string;
+  recoveryEmail: string;
   githubUsername: string;
   githubUserId: string;
   supabaseUrl: string;
@@ -49,12 +53,18 @@ function currentAppUrl() {
 
 export async function signInWithPassword(settings: AppSettings, password: string) {
   const client = makeSupabaseClient(settings);
-  const email = settings.supabase.email.trim();
-  if (!email || !password) throw new Error("请填写邮箱和密码");
+  const email = authEmailForSettings(settings);
+  if (!password) throw new Error("请填写密码");
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (!error) return "登录成功";
 
-  const signUp = await client.auth.signUp({ email, password });
+  const signUp = await client.auth.signUp({
+    email,
+    password,
+    options: {
+      data: accountMetadata(settings),
+    },
+  });
   if (signUp.error) throw signUp.error;
   return "已创建/发送验证。若项目开启邮箱验证，请先完成邮件确认。";
 }
@@ -86,10 +96,14 @@ export async function saveUserProfileBinding(settings: AppSettings): Promise<Use
   const client = makeSupabaseClient(settings);
   const user = await requireUser(client);
   const github = githubIdentity(user);
-  const displayName = github.displayName || user.email || "";
+  const displayName = settings.account.nickname || github.displayName || user.email || "";
   const row = {
     user_id: user.id,
     display_name: displayName || null,
+    username: settings.account.username || null,
+    nickname: settings.account.nickname || null,
+    avatar_url: settings.account.avatarUrl || null,
+    recovery_email: settings.account.recoveryEmail || null,
     github_username: github.username || null,
     github_user_id: github.userId || null,
     linked_supabase_url: settings.supabase.url || null,
@@ -102,7 +116,7 @@ export async function saveUserProfileBinding(settings: AppSettings): Promise<Use
   const { data, error } = await client
     .from("echo_user_profiles")
     .upsert(row, { onConflict: "user_id" })
-    .select("display_name, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
+    .select("display_name, username, nickname, avatar_url, recovery_email, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
     .single();
   if (error) throwProfileError(error);
   return profileFromRow(data);
@@ -113,7 +127,7 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
   const user = await requireUser(client);
   const { data, error } = await client
     .from("echo_user_profiles")
-    .select("display_name, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
+    .select("display_name, username, nickname, avatar_url, recovery_email, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
     .eq("user_id", user.id)
     .maybeSingle();
   if (error) throwProfileError(error);
@@ -203,7 +217,7 @@ function githubIdentity(user: Awaited<ReturnType<typeof requireUser>>) {
   const github = identities.find((identity) => identity.provider === "github");
   const identityData = github?.identity_data;
   return {
-    displayName: pickString(metadata?.name, metadata?.full_name, identityData?.name, identityData?.full_name, metadata?.user_name, identityData?.user_name),
+    displayName: pickString(metadata?.nickname, metadata?.name, metadata?.full_name, identityData?.name, identityData?.full_name, metadata?.user_name, identityData?.user_name),
     username: pickString(metadata?.user_name, metadata?.preferred_username, identityData?.user_name, identityData?.preferred_username),
     userId: pickString(metadata?.provider_id, identityData?.provider_id, github?.id),
   };
@@ -212,6 +226,10 @@ function githubIdentity(user: Awaited<ReturnType<typeof requireUser>>) {
 function profileFromRow(row: Record<string, unknown>): UserProfileBinding {
   return {
     displayName: pickString(row.display_name),
+    username: pickString(row.username),
+    nickname: pickString(row.nickname),
+    avatarUrl: pickString(row.avatar_url),
+    recoveryEmail: pickString(row.recovery_email),
     githubUsername: pickString(row.github_username),
     githubUserId: pickString(row.github_user_id),
     supabaseUrl: pickString(row.linked_supabase_url),
@@ -222,6 +240,31 @@ function profileFromRow(row: Record<string, unknown>): UserProfileBinding {
   };
 }
 
+function accountMetadata(settings: AppSettings) {
+  const account = settings.account;
+  return {
+    username: normalizeUsername(account.username),
+    nickname: account.nickname.trim(),
+    avatar_url: account.avatarUrl.trim(),
+    recovery_email: account.recoveryEmail.trim(),
+    name: account.nickname.trim() || normalizeUsername(account.username),
+  };
+}
+
+function authEmailForSettings(settings: AppSettings) {
+  const recoveryEmail = settings.account.recoveryEmail.trim() || settings.supabase.email.trim();
+  if (recoveryEmail) return recoveryEmail;
+  const username = normalizeUsername(settings.account.username);
+  if (!username) throw new Error("请填写用户名，或填写邮箱作为登录账号");
+  return `${username}@users.live-memory.local`;
+}
+
+function normalizeUsername(value: string) {
+  const username = value.trim().toLowerCase().replace(/[^a-z0-9_-]/g, "");
+  if (value.trim() && username.length < 3) throw new Error("用户名至少需要 3 个英文字母、数字、下划线或短横线");
+  return username;
+}
+
 function pickString(...values: unknown[]) {
   const value = values.find((item): item is string => typeof item === "string" && item.trim().length > 0);
   return value?.trim() || "";
@@ -230,6 +273,7 @@ function pickString(...values: unknown[]) {
 function throwProfileError(error: unknown): never {
   const code = (error as { code?: string }).code;
   if (code === "42P01") throw new Error("请先在 Supabase SQL Editor 执行 supabase/migrations/002_account_profiles.sql");
+  if (code === "42703") throw new Error("请先在 Supabase SQL Editor 执行 supabase/migrations/003_account_identity_fields.sql");
   throw error;
 }
 
