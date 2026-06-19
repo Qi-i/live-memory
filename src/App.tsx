@@ -702,6 +702,8 @@ type MapPoint = {
   count: number;
 };
 
+type VenueMapMode = "city" | "venue";
+
 declare global {
   interface Window {
     AMap?: AMapNamespace;
@@ -762,8 +764,14 @@ function CalendarView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
 }
 
 function VenueView({ records, settings }: { records: EventRecord[]; settings: AppSettings }) {
-  const cities = topRows(records.map((record) => record.city).filter(Boolean), 20);
-  const venues = topRows(records.map((record) => `${record.city} · ${record.venue}`).filter(Boolean), 20);
+  const [mapMode, setMapMode] = useState<VenueMapMode>("city");
+  const modeLabel = mapMode === "city" ? "城市" : "场馆";
+  const rows = useMemo(
+    () => mapMode === "city"
+      ? topRows(records.map((record) => record.city).filter(Boolean), 24)
+      : topRows(records.map(formatVenueLabel).filter(Boolean), 24),
+    [mapMode, records],
+  );
   const mapRef = useRef<HTMLDivElement | null>(null);
   const activeProvider = settings.map.provider === "none" && settings.map.amapKey.trim() ? "amap" : settings.map.provider;
   const [mapState, setMapState] = useState(activeProvider === "amap" ? "地图准备中" : "未启用真实地图");
@@ -787,7 +795,7 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
         setMapState("正在加载高德地图");
         const AMap = await loadAmap(key, settings.map.amapSecurityCode.trim());
         if (cancelled || !mapRef.current) return;
-        const points = await resolveMapPoints(AMap, records);
+        const points = await resolveMapPoints(AMap, records, mapMode);
         if (cancelled || !mapRef.current) return;
         map = new AMap.Map(mapRef.current, {
           center: [104.195397, 35.86166],
@@ -807,7 +815,7 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
           map.add(markers);
           map.setFitView(markers, false, [72, 72, 72, 72]);
         }
-        setMapState(markers.length ? `已显示 ${markers.length} 个城市/场馆点位` : "没有可定位的城市或场馆");
+        setMapState(markers.length ? `已按${modeLabel}显示 ${markers.length} 个点位` : `没有可定位的${modeLabel}`);
       } catch (error) {
         setMapState(error instanceof Error ? error.message : "地图加载失败");
       }
@@ -818,11 +826,16 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
       cancelled = true;
       map?.destroy();
     };
-  }, [activeProvider, records, settings.map.amapKey, settings.map.amapSecurityCode]);
+  }, [activeProvider, mapMode, modeLabel, records, settings.map.amapKey, settings.map.amapSecurityCode]);
 
   return (
     <section className="venue-view">
       <div className="map-stage">
+        <div className="venue-mode-bar" aria-label="地图整理方式">
+          <span>整理方式</span>
+          <button className={mapMode === "city" ? "is-active" : ""} type="button" onClick={() => setMapMode("city")}>城市</button>
+          <button className={mapMode === "venue" ? "is-active" : ""} type="button" onClick={() => setMapMode("venue")}>场馆</button>
+        </div>
         <div className="map-canvas" ref={mapRef}>
           {activeProvider !== "amap" && (
             <div className="map-fallback">
@@ -830,9 +843,9 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
               <h2>全国足迹</h2>
               <p>{settings.map.provider === "baidu" ? "百度地图配置位已保留；当前版本先启用高德真实底图。" : "在设置里选择高德地图并保存 Web Key 后，这里会加载真实底图。"}</p>
               <div className="city-cloud">
-                {cities.map(([city, count]) => (
-                  <span key={city} style={{ "--size": `${Math.min(2.2, 1 + count / 4)}rem` } as CSSProperties}>
-                    {city}<b>{count}</b>
+                {rows.map(([label, count]) => (
+                  <span key={label} style={{ "--size": `${Math.min(2.2, 1 + count / 4)}rem` } as CSSProperties}>
+                    {label}<b>{count}</b>
                   </span>
                 ))}
               </div>
@@ -842,9 +855,12 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
         <p className="map-status">{mapState}</p>
       </div>
       <div className="panel venue-list">
-        <h2>常去场馆</h2>
-        {venues.map(([venue, count]) => (
-          <p key={venue}><span>{venue}</span><b>{count}</b></p>
+        <header className="venue-list-head">
+          <span>按{modeLabel}</span>
+          <h2>{mapMode === "city" ? "常去城市" : "常去场馆"}</h2>
+        </header>
+        {rows.map(([label, count]) => (
+          <p key={label}><span>{label}</span><b>{count}</b></p>
         ))}
       </div>
     </section>
@@ -874,22 +890,22 @@ function loadAmap(key: string, securityCode: string) {
   return window.__liveMemoryAmapPromise;
 }
 
-async function resolveMapPoints(AMap: AMapNamespace, records: EventRecord[]) {
+async function resolveMapPoints(AMap: AMapNamespace, records: EventRecord[], mode: VenueMapMode) {
   const grouped = new Map<string, { title: string; count: number; address: string; fallback?: [number, number] }>();
   for (const record of records) {
-    const title = record.city || record.venue || "未知";
+    const title = mode === "city" ? record.city : formatVenueLabel(record);
     if (!title) continue;
-    const key = `${record.city}|${record.venue}`;
+    const key = mode === "city" ? record.city : `${record.city}|${record.venue || record.address}`;
     const current = grouped.get(key);
     if (current) {
       current.count += 1;
       continue;
     }
-    const fallback = cityLngLat(record.city);
+    const fallback = mode === "city" ? cityLngLat(record.city) : record.coordinates ? [record.coordinates.lng, record.coordinates.lat] as [number, number] : cityLngLat(record.city);
     grouped.set(key, {
       title,
       count: 1,
-      address: [record.city, record.address, record.venue].filter(Boolean).join(" "),
+      address: mode === "city" ? record.city : [record.city, record.address, record.venue].filter(Boolean).join(" "),
       fallback,
     });
   }
@@ -901,6 +917,12 @@ async function resolveMapPoints(AMap: AMapNamespace, records: EventRecord[]) {
     points.push({ title: item.title, count: item.count, lng: resolved[0], lat: resolved[1] });
   }
   return points;
+}
+
+function formatVenueLabel(record: EventRecord) {
+  const venue = record.venue?.trim();
+  if (!venue) return record.city?.trim() || "";
+  return record.city ? `${record.city} · ${venue}` : venue;
 }
 
 function geocodeAddress(geocoder: AMapGeocoder, address: string) {

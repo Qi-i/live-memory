@@ -3406,6 +3406,45 @@ body {
   box-shadow: var(--shadow);
 }
 
+.venue-mode-bar {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  z-index: 4;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px;
+  border: 1px solid rgba(17, 19, 24, 0.12);
+  border-radius: 999px;
+  background: rgba(255, 253, 245, 0.92);
+  box-shadow: 0 10px 24px rgba(17, 19, 24, 0.14);
+  backdrop-filter: blur(10px);
+}
+
+.venue-mode-bar span {
+  padding: 0 8px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.venue-mode-bar button {
+  min-height: 30px;
+  padding: 0 13px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--ink);
+  background: transparent;
+  font-size: 13px;
+  font-weight: 950;
+}
+
+.venue-mode-bar button.is-active {
+  background: var(--lime);
+  box-shadow: 0 5px 12px rgba(17, 19, 24, 0.14);
+}
+
 .map-canvas {
   position: relative;
   width: 100%;
@@ -3475,6 +3514,31 @@ body {
 
 .venue-list {
   min-height: 520px;
+}
+
+.venue-list-head {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.venue-list-head span {
+  display: inline-flex;
+  min-height: 24px;
+  align-items: center;
+  padding: 0 9px;
+  border-radius: 999px;
+  color: #0b6960;
+  background: rgba(101, 223, 207, 0.2);
+  font-size: 12px;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.venue-list-head h2 {
+  margin: 0;
 }
 
 .sync-guide-panel {
@@ -3575,6 +3639,11 @@ body {
   .map-canvas,
   .map-fallback {
     min-height: 360px;
+  }
+
+  .venue-mode-bar {
+    top: 18px;
+    left: 18px;
   }
 
   .sync-guide-steps {
