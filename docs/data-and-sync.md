@@ -8,6 +8,8 @@
 
 ## 云端数据
 
+回响册的公开站点只是共享应用入口，不是共享数据空间。登录后，所有云端读写都绑定到当前 Supabase Auth 用户。
+
 | 数据 | 位置 | 可见性 |
 | --- | --- | --- |
 | 演出字段和媒体引用 | `echo_records.payload` | 当前登录用户 |
@@ -16,6 +18,14 @@
 | Supabase 会话 | 浏览器本地 Auth storage | 当前浏览器 |
 
 记录和媒体表使用 `(user_id, id)` 复合主键，避免不同用户导入相同示例记录时互相冲突。
+
+## 账号隔离模型
+
+- 每条演出记录都保存 `user_id`。
+- `echo_records` 与 `echo_media_assets` 的 RLS 只允许 `auth.uid() = user_id` 的用户读写。
+- Storage bucket 是私有的，文件路径第一段必须是当前用户 ID。
+- GitHub OAuth 只是 Supabase Auth 的登录方式；GitHub 不保存演出数据。
+- 如果多人共用同一个 Supabase 项目，普通用户之间仍然互相不可见；项目拥有者在 Supabase 后台拥有管理权限。
 
 ## 推送
 

@@ -878,6 +878,49 @@ a {
   font-size: 28px;
 }
 
+.privacy-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.78fr);
+  gap: 18px;
+  align-items: end;
+  color: #fffdf2;
+  background:
+    linear-gradient(135deg, rgba(223, 255, 79, 0.18), transparent 36%),
+    linear-gradient(90deg, #0b1013, #182429);
+}
+
+.privacy-panel p {
+  max-width: 760px;
+  margin: 0;
+  color: rgba(255, 253, 242, 0.72);
+  font-weight: 850;
+  line-height: 1.7;
+}
+
+.privacy-steps {
+  display: grid;
+  gap: 10px;
+}
+
+.privacy-steps span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 46px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 253, 242, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 253, 242, 0.08);
+  color: rgba(255, 253, 242, 0.78);
+  font-weight: 900;
+}
+
+.privacy-steps b {
+  color: var(--lime);
+  font-size: 18px;
+}
+
 .bar-row {
   display: grid;
   grid-template-columns: 110px minmax(0, 1fr) 36px;
@@ -1511,6 +1554,15 @@ a {
   .backup-grid,
   .venue-view {
     grid-template-columns: 1fr;
+  }
+
+  .privacy-panel {
+    grid-template-columns: 1fr;
+  }
+
+  .privacy-steps span {
+    align-items: flex-start;
+    flex-direction: column;
   }
 
   .metric {

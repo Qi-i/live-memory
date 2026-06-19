@@ -26,6 +26,16 @@ export function makeSupabaseClient(settings: AppSettings) {
   });
 }
 
+function currentAppUrl() {
+  const url = new URL(window.location.href);
+  url.hash = "";
+  url.search = "";
+  if (!url.pathname.endsWith("/")) {
+    url.pathname = url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1);
+  }
+  return url.toString();
+}
+
 export async function signInWithPassword(settings: AppSettings, password: string) {
   const client = makeSupabaseClient(settings);
   const email = settings.supabase.email.trim();
@@ -36,6 +46,18 @@ export async function signInWithPassword(settings: AppSettings, password: string
   const signUp = await client.auth.signUp({ email, password });
   if (signUp.error) throw signUp.error;
   return "已创建/发送验证。若项目开启邮箱验证，请先完成邮件确认。";
+}
+
+export async function signInWithGithub(settings: AppSettings) {
+  const client = makeSupabaseClient(settings);
+  const { error } = await client.auth.signInWithOAuth({
+    provider: "github",
+    options: {
+      redirectTo: currentAppUrl(),
+    },
+  });
+  if (error) throw error;
+  return "正在跳转到 GitHub 授权";
 }
 
 export async function signOut(settings: AppSettings) {
@@ -116,7 +138,7 @@ export async function pullRecordsFromSupabase(settings: AppSettings): Promise<Sy
       return normalizeRecord({ ...record, media });
     }),
   );
-  return { records, message: `已从云端拉取 ${records.length} 条记录` };
+  return { records, message: `已拉取 ${records.length} 条我的记录` };
 }
 
 async function requireUser(client: SupabaseClient) {

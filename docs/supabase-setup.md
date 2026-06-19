@@ -44,13 +44,27 @@ anon/publishable key 可以出现在前端；真正的数据边界来自 RLS。`
 
 当前 UI 的“登录/注册”逻辑会先尝试登录；账号不存在时再注册。建议个人使用时创建一个强密码，并为 Supabase 账号开启多因素认证。
 
+### 可选：GitHub 登录
+
+GitHub 登录仍然是 Supabase Auth 的一种登录方式。它不会把演出记录保存到 GitHub，也不会让不同 GitHub 用户看到彼此的数据。
+
+1. 在 Supabase `Authentication > Sign In / Providers > GitHub` 复制 Callback URL，格式通常是 `https://<project-ref>.supabase.co/auth/v1/callback`。
+2. 在 GitHub `Settings > Developer settings > OAuth Apps` 注册一个 OAuth App。
+3. `Homepage URL` 填回响册站点，例如 `https://qi-i.github.io/live-memory/`。
+4. `Authorization callback URL` 填 Supabase 提供的 Callback URL。
+5. 把 GitHub OAuth App 的 Client ID 和 Client Secret 填回 Supabase 的 GitHub Provider 并保存。
+6. 在 Supabase `Authentication > URL Configuration` 中，将回响册站点地址加入允许跳转地址；本地调试可额外加入 `http://127.0.0.1:5173/`。
+
+配置完成后，应用设置页的“GitHub 登录”按钮会跳转到 GitHub 授权，再回到当前回响册站点。
+
 ## 5. 第一次同步
 
 1. 先在“备份”页导出 JSON。
-2. 在“设置”页填写 URL、key、邮箱和密码。
-3. 登录成功后点击“推送到云端”。
-4. 打开 Supabase Table Editor 和 Storage，确认记录与图片已出现。
-5. 在另一台设备打开应用，用同一账号登录，点击“从云端拉取”。
+2. 在“设置”页填写 URL、key 和媒体桶。
+3. 用邮箱密码或 GitHub 登录。
+4. 登录成功后点击“推送我的数据”。
+5. 打开 Supabase Table Editor 和 Storage，确认记录与图片已出现。
+6. 在另一台设备打开应用，用同一账号登录，点击“拉取我的数据”。
 
 ## 健康检查
 
@@ -72,7 +86,7 @@ anon/publishable key 可以出现在前端；真正的数据边界来自 RLS。`
 
 ### 图片链接过一段时间失效
 
-私有图片使用短期签名 URL。重新“从云端拉取”会生成新地址；正式的后台同步版本应在图片加载失败时自动续签。
+私有图片使用短期签名 URL。重新“拉取我的数据”会生成新地址；正式的后台同步版本应在图片加载失败时自动续签。
 
 ### 免费空间不够
 

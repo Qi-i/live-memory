@@ -12,7 +12,7 @@
 
 **在线地址：** <https://qi-i.github.io/live-memory/>
 
-> 当前版本为个人可用的 Beta。无 Supabase 时可以完全本地使用；启用 Supabase 后可进行私人跨设备同步。
+> 当前版本为个人可用的 Beta。共享的是这个 GitHub Pages 测试应用，个人票根、座位图和现场照片不会进入公共库。无 Supabase 时可以完全本地使用；启用 Supabase 后，每个登录用户只同步自己的数据。
 
 ## 主要能力
 
@@ -22,7 +22,7 @@
 - 类型、状态、年份、城市、艺人多选筛选，配合搜索和多种排序。
 - 大麦公开链接、普通文本、多张图片和 JSON 备份批量导入。
 - IndexedDB 本地优先保存；断网仍可查看和编辑。
-- Supabase Auth、Database、私有 Storage 与 RLS，实现每位用户数据隔离。
+- Supabase Auth、Database、私有 Storage 与 RLS，实现每位用户数据隔离；可用邮箱密码或 Supabase GitHub OAuth 登录。
 - JSON 完整备份与 CSV 元数据导出，数据不被平台锁死。
 - 响应式桌面/手机布局和可安装 PWA。
 
@@ -81,9 +81,9 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 1. 创建 Supabase 项目。
 2. 在 SQL Editor 中完整执行 [`001_echo_archive.sql`](./supabase/migrations/001_echo_archive.sql)。
-3. 在 Authentication 中确认邮箱登录策略。
+3. 在 Authentication 中确认邮箱登录策略；如需 GitHub 登录，在 Supabase Auth Provider 中启用 GitHub OAuth。
 4. 将 Project URL 与 anon/publishable key 填入 `.env.local`，或直接在应用“设置”页填写。
-5. 注册并登录后，先推送本地数据，再在第二台设备登录并拉取。
+5. 注册并登录后，先推送本地数据，再在第二台设备使用同一 Supabase 用户登录并拉取。
 
 SQL 会创建：
 
@@ -106,12 +106,23 @@ Vite 使用相对资源路径，因此既能部署在根域名，也能部署在
 
 ## 数据和隐私
 
+- GitHub Pages 发布的是同一个前端应用壳，所有人看到的是同一套界面和示例能力，不是同一个共享相册。
 - GitHub 只保存源代码、示例资源和文档，不保存你的个人票根与现场照片。
 - 浏览器数据默认保存在当前设备 IndexedDB。
-- 启用同步后，元数据进入 Supabase Postgres，图片进入私有 Storage。
+- 启用同步后，元数据进入 Supabase Postgres，图片进入私有 Storage；记录都带有当前 Supabase 用户的 `user_id`。
 - 图片路径采用 `userId/recordId/mediaId.ext`，RLS 只允许所属用户访问。
 - 私有图片通过短期签名 URL 展示；`service_role` key 永远不进入前端。
 - 完整 JSON 备份可能包含图片 data URL，属于敏感文件，不应提交到 Git。
+
+### 多人使用时的边界
+
+| 模式 | 谁能看到数据 | 适合场景 |
+| --- | --- | --- |
+| 本地模式 | 当前浏览器 | 单设备试用、完全离线 |
+| 自带 Supabase | Supabase 项目拥有者本人和当前登录用户 | 每个人管理自己的私人档案 |
+| 统一托管 Supabase | 普通用户之间互相不可见；项目管理员有后台管理权限 | 小范围测试或未来托管服务 |
+
+如果你不希望任何管理员接触个人数据，请选择“自带 Supabase”模式：每个人连接自己的项目，应用只作为开源前端使用。
 
 更多说明见 [数据与同步](./docs/data-and-sync.md) 和 [存储与发布策略](./docs/storage-and-publishing.md)。
 
