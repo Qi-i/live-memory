@@ -86,7 +86,7 @@ const emptyFilters: Filters = {
   tags: [],
 };
 
-type Route = "archive" | "timeline" | "stats" | "backup" | "settings";
+type Route = "archive" | "stats" | "backup" | "settings";
 type SortMode = "smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc";
 
 export default function App() {
@@ -158,7 +158,7 @@ export default function App() {
     flash(message);
   }
 
-  const title = route === "archive" ? "档案" : route === "timeline" ? "时间线" : route === "stats" ? "统计" : route === "backup" ? "备份" : "设置";
+  const title = route === "archive" ? "档案" : route === "stats" ? "统计" : route === "backup" ? "备份" : "设置";
 
   return (
     <div className="app">
@@ -172,7 +172,6 @@ export default function App() {
         </button>
         <nav aria-label="主导航">
           <RouteButton active={route === "archive"} icon={<Archive />} label="档案" onClick={() => setRoute("archive")} />
-          <RouteButton active={route === "timeline"} icon={<Ticket />} label="时间线" onClick={() => setRoute("timeline")} />
           <RouteButton active={route === "stats"} icon={<Sparkles />} label="统计" onClick={() => setRoute("stats")} />
           <RouteButton active={route === "backup"} icon={<ShieldCheck />} label="备份" onClick={() => setRoute("backup")} />
           <RouteButton active={route === "settings"} icon={<Settings />} label="设置" onClick={() => setRoute("settings")} />
@@ -230,13 +229,8 @@ export default function App() {
               setPosterColumns={updatePosterColumns}
             />
             <CountBar count={filteredRecords.length} sort={sort} />
-            <ArchiveViewRenderer records={filteredRecords} view={view} posterColumns={settings.posterColumns} onOpen={setSelected} onZoom={setZoomMedia} onEdit={setEditing} />
+            <ArchiveViewRenderer records={filteredRecords} view={view} posterColumns={settings.posterColumns} settings={settings} onOpen={setSelected} onZoom={setZoomMedia} onEdit={setEditing} />
           </>
-        )}
-        {route === "timeline" && (
-          <section className="panel edge-panel">
-            <TimelineView records={filteredRecords} onOpen={setSelected} />
-          </section>
         )}
         {route === "stats" && <StatsView records={filteredRecords} allRecords={records} />}
         {route === "backup" && <BackupView records={records} onReplace={replaceRecords} />}
@@ -454,6 +448,7 @@ function ArchiveViewRenderer({
   records,
   view,
   posterColumns,
+  settings,
   onOpen,
   onZoom,
   onEdit,
@@ -461,6 +456,7 @@ function ArchiveViewRenderer({
   records: EventRecord[];
   view: ArchiveView;
   posterColumns: number;
+  settings: AppSettings;
   onOpen: (record: EventRecord) => void;
   onZoom: (asset: MediaAsset) => void;
   onEdit: (record: EventRecord) => void;
@@ -470,7 +466,7 @@ function ArchiveViewRenderer({
   if (view === "timeline") return <TimelineView records={records} onOpen={onOpen} />;
   if (view === "summary") return <SummaryView records={records} />;
   if (view === "calendar") return <CalendarView records={records} onOpen={onOpen} />;
-  if (view === "venue") return <VenueView records={records} />;
+  if (view === "venue") return <VenueView records={records} settings={settings} />;
   if (view === "list") return <ListView records={records} onOpen={onOpen} />;
   if (view === "ticket") return <TicketView records={records} onOpen={onOpen} />;
   const gridStyle = {
@@ -528,13 +524,18 @@ function WalletCard({ record, onOpen, onZoom, onEdit }: { record: EventRecord; o
         {poster ? <img src={poster.src} alt={record.title} /> : <span>{record.title.slice(0, 3)}</span>}
       </button>
       <button className="wallet-main" type="button" onClick={() => onOpen(record)}>
-        <span className="badge">{statusLabels[record.status]}</span>
+        <span className={`status-pill ${statusClass(record.status)}`}>{statusLabels[record.status]}</span>
+        <span className="wallet-kind">{categoryLabels[record.category]}</span>
         <h3>{record.title}</h3>
         <p>{record.artists.join(" / ") || "艺人待补"}</p>
-        <InfoLine label="日期" value={formatDateCn(record.date, record.time)} />
-        <InfoLine label="场馆" value={`${record.city || "城市待补"} | ${record.venue || "场馆待补"}`} />
-        <InfoLine label="票价" value={record.price ? `${record.price.toFixed(2)} CNY` : record.publicPriceRange || "未填票价"} />
-        <InfoLine label="座位" value={record.seat || "座位待补"} />
+        <dl className="wallet-facts">
+          <dt>日期</dt>
+          <dd>{formatDateCn(record.date, record.time)}</dd>
+          <dt>场馆</dt>
+          <dd>{record.city || "城市待补"} · {record.venue || "场馆待补"}</dd>
+          <dt>票座</dt>
+          <dd>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"} · {record.seat || "座位待补"}</dd>
+        </dl>
         <strong>{formatRelativeDay(record.date)}</strong>
       </button>
       <div className="card-actions">
@@ -653,7 +654,7 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
                   </time>
                   <div className="timeline-thumb">{poster ? <img src={poster.src} alt="" /> : <Ticket />}</div>
                   <div>
-                    <span className="badge">{categoryLabels[record.category]}</span>
+                    <span className="timeline-type">{categoryLabels[record.category]}</span>
                     <h3>{record.title}</h3>
                     <p>{record.artists.join(" / ")} · {record.city} · {record.venue}</p>
                     <small>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"} · {record.seat || "座位待补"}</small>
@@ -666,6 +667,47 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
       </div>
     </div>
   );
+}
+
+type AMapNamespace = {
+  Map: new (element: HTMLElement, options: Record<string, unknown>) => AMapInstance;
+  Marker: new (options: Record<string, unknown>) => unknown;
+  Geocoder?: new (options: Record<string, unknown>) => AMapGeocoder;
+  Pixel?: new (x: number, y: number) => unknown;
+};
+
+type AMapInstance = {
+  add: (items: unknown[]) => void;
+  setFitView: (items?: unknown[], immediately?: boolean, padding?: number[]) => void;
+  destroy: () => void;
+};
+
+type AMapGeocoder = {
+  getLocation: (address: string, callback: (status: string, result: AMapGeocoderResult) => void) => void;
+};
+
+type AMapGeocoderResult = {
+  geocodes?: Array<{
+    location?: {
+      lng: number;
+      lat: number;
+    };
+  }>;
+};
+
+type MapPoint = {
+  lng: number;
+  lat: number;
+  title: string;
+  count: number;
+};
+
+declare global {
+  interface Window {
+    AMap?: AMapNamespace;
+    _AMapSecurityConfig?: { securityJsCode?: string };
+    __liveMemoryAmapPromise?: Promise<AMapNamespace>;
+  }
 }
 
 function SummaryView({ records }: { records: EventRecord[] }) {
@@ -719,22 +761,85 @@ function CalendarView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
   );
 }
 
-function VenueView({ records }: { records: EventRecord[] }) {
+function VenueView({ records, settings }: { records: EventRecord[]; settings: AppSettings }) {
   const cities = topRows(records.map((record) => record.city).filter(Boolean), 20);
   const venues = topRows(records.map((record) => `${record.city} · ${record.venue}`).filter(Boolean), 20);
+  const mapRef = useRef<HTMLDivElement | null>(null);
+  const activeProvider = settings.map.provider === "none" && settings.map.amapKey.trim() ? "amap" : settings.map.provider;
+  const [mapState, setMapState] = useState(activeProvider === "amap" ? "地图准备中" : "未启用真实地图");
+
+  useEffect(() => {
+    let cancelled = false;
+    let map: AMapInstance | null = null;
+
+    async function drawMap() {
+      if (activeProvider !== "amap") {
+        setMapState("选择高德地图并保存后加载真实底图");
+        return;
+      }
+      const key = settings.map.amapKey.trim();
+      if (!key) {
+        setMapState("缺少高德 Web Key");
+        return;
+      }
+      if (!mapRef.current) return;
+      try {
+        setMapState("正在加载高德地图");
+        const AMap = await loadAmap(key, settings.map.amapSecurityCode.trim());
+        if (cancelled || !mapRef.current) return;
+        const points = await resolveMapPoints(AMap, records);
+        if (cancelled || !mapRef.current) return;
+        map = new AMap.Map(mapRef.current, {
+          center: [104.195397, 35.86166],
+          zoom: 4.2,
+          mapStyle: "amap://styles/normal",
+          resizeEnable: true,
+        });
+        const markers = points.map((point) => new AMap.Marker({
+          position: [point.lng, point.lat],
+          title: `${point.title} · ${point.count} 场`,
+          label: {
+            content: `<span class="amap-memory-label">${point.title}<b>${point.count}</b></span>`,
+            direction: "top",
+          },
+        }));
+        if (markers.length) {
+          map.add(markers);
+          map.setFitView(markers, false, [72, 72, 72, 72]);
+        }
+        setMapState(markers.length ? `已显示 ${markers.length} 个城市/场馆点位` : "没有可定位的城市或场馆");
+      } catch (error) {
+        setMapState(error instanceof Error ? error.message : "地图加载失败");
+      }
+    }
+
+    void drawMap();
+    return () => {
+      cancelled = true;
+      map?.destroy();
+    };
+  }, [activeProvider, records, settings.map.amapKey, settings.map.amapSecurityCode]);
+
   return (
     <section className="venue-view">
       <div className="map-stage">
-        <MapIcon size={28} />
-        <h2>全国足迹</h2>
-        <p>已预留高德/百度地图适配器。填写地图 Key 后可在这里加载真实底图；未配置时显示稳定的城市和场馆足迹。</p>
-        <div className="city-cloud">
-          {cities.map(([city, count]) => (
-            <span key={city} style={{ "--size": `${Math.min(2.2, 1 + count / 4)}rem` } as CSSProperties}>
-              {city}<b>{count}</b>
-            </span>
-          ))}
+        <div className="map-canvas" ref={mapRef}>
+          {activeProvider !== "amap" && (
+            <div className="map-fallback">
+              <MapIcon size={28} />
+              <h2>全国足迹</h2>
+              <p>{settings.map.provider === "baidu" ? "百度地图配置位已保留；当前版本先启用高德真实底图。" : "在设置里选择高德地图并保存 Web Key 后，这里会加载真实底图。"}</p>
+              <div className="city-cloud">
+                {cities.map(([city, count]) => (
+                  <span key={city} style={{ "--size": `${Math.min(2.2, 1 + count / 4)}rem` } as CSSProperties}>
+                    {city}<b>{count}</b>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+        <p className="map-status">{mapState}</p>
       </div>
       <div className="panel venue-list">
         <h2>常去场馆</h2>
@@ -744,6 +849,119 @@ function VenueView({ records }: { records: EventRecord[] }) {
       </div>
     </section>
   );
+}
+
+function loadAmap(key: string, securityCode: string) {
+  if (typeof window === "undefined") return Promise.reject(new Error("当前环境不能加载地图"));
+  if (window.AMap?.Map) return Promise.resolve(window.AMap);
+  if (securityCode) window._AMapSecurityConfig = { securityJsCode: securityCode };
+  if (window.__liveMemoryAmapPromise) return window.__liveMemoryAmapPromise;
+  window.__liveMemoryAmapPromise = new Promise<AMapNamespace>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.dataset.liveMemoryAmap = "true";
+    script.async = true;
+    script.src = `https://webapi.amap.com/maps?v=2.0&key=${encodeURIComponent(key)}&plugin=AMap.Geocoder`;
+    script.onload = () => {
+      if (window.AMap?.Map) resolve(window.AMap);
+      else reject(new Error("高德地图脚本已加载，但地图对象不可用"));
+    };
+    script.onerror = () => reject(new Error("高德地图加载失败，请检查 Key、服务绑定和网络"));
+    document.head.appendChild(script);
+  }).catch((error) => {
+    window.__liveMemoryAmapPromise = undefined;
+    throw error;
+  });
+  return window.__liveMemoryAmapPromise;
+}
+
+async function resolveMapPoints(AMap: AMapNamespace, records: EventRecord[]) {
+  const grouped = new Map<string, { title: string; count: number; address: string; fallback?: [number, number] }>();
+  for (const record of records) {
+    const title = record.city || record.venue || "未知";
+    if (!title) continue;
+    const key = `${record.city}|${record.venue}`;
+    const current = grouped.get(key);
+    if (current) {
+      current.count += 1;
+      continue;
+    }
+    const fallback = cityLngLat(record.city);
+    grouped.set(key, {
+      title,
+      count: 1,
+      address: [record.city, record.address, record.venue].filter(Boolean).join(" "),
+      fallback,
+    });
+  }
+  const points: MapPoint[] = [];
+  const geocoder = AMap.Geocoder ? new AMap.Geocoder({ city: "全国" }) : null;
+  for (const item of Array.from(grouped.values()).slice(0, 80)) {
+    const resolved = item.fallback || (geocoder ? await geocodeAddress(geocoder, item.address) : undefined);
+    if (!resolved) continue;
+    points.push({ title: item.title, count: item.count, lng: resolved[0], lat: resolved[1] });
+  }
+  return points;
+}
+
+function geocodeAddress(geocoder: AMapGeocoder, address: string) {
+  return new Promise<[number, number] | undefined>((resolve) => {
+    if (!address.trim()) {
+      resolve(undefined);
+      return;
+    }
+    geocoder.getLocation(address, (status, result) => {
+      const location = status === "complete" ? result.geocodes?.[0]?.location : undefined;
+      resolve(location ? [location.lng, location.lat] : undefined);
+    });
+  });
+}
+
+function cityLngLat(city: string): [number, number] | undefined {
+  const normalized = city.replace(/市$/, "").trim();
+  const centers: Record<string, [number, number]> = {
+    北京: [116.4074, 39.9042],
+    上海: [121.4737, 31.2304],
+    广州: [113.2644, 23.1291],
+    深圳: [114.0579, 22.5431],
+    杭州: [120.1551, 30.2741],
+    南京: [118.7969, 32.0603],
+    苏州: [120.5853, 31.2989],
+    成都: [104.0665, 30.5723],
+    重庆: [106.5516, 29.563],
+    武汉: [114.3055, 30.5928],
+    郑州: [113.6254, 34.7466],
+    洛阳: [112.454, 34.6197],
+    西安: [108.9398, 34.3416],
+    长沙: [112.9388, 28.2282],
+    厦门: [118.0894, 24.4798],
+    福州: [119.2965, 26.0745],
+    青岛: [120.3826, 36.0671],
+    济南: [117.1201, 36.6512],
+    天津: [117.2009, 39.0842],
+    沈阳: [123.4315, 41.8057],
+    大连: [121.6147, 38.914],
+    哈尔滨: [126.6424, 45.756],
+    合肥: [117.2272, 31.8206],
+    南昌: [115.8582, 28.6829],
+    昆明: [102.8329, 24.8801],
+    贵阳: [106.6302, 26.647],
+    南宁: [108.3669, 22.817],
+    海口: [110.1983, 20.044],
+    三亚: [109.5119, 18.2528],
+    乌鲁木齐: [87.6168, 43.8256],
+    呼和浩特: [111.7492, 40.8426],
+    银川: [106.2309, 38.4872],
+    兰州: [103.8343, 36.0611],
+    西宁: [101.7782, 36.6171],
+    拉萨: [91.1322, 29.6604],
+    太原: [112.5489, 37.8706],
+    石家庄: [114.5149, 38.0428],
+    宁波: [121.5503, 29.8746],
+    温州: [120.6994, 27.9943],
+    无锡: [120.3124, 31.4909],
+    常州: [119.9737, 31.8107],
+  };
+  return centers[normalized];
 }
 
 function ListView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
@@ -908,45 +1126,71 @@ function SettingsView({
       </section>
 
       <div className="settings-content-grid">
-        <section className="panel sync-settings-panel">
-          <header className="panel-heading">
-            <div>
-              <span>同步</span>
-              <h2>我的 Supabase</h2>
+        {syncSelected ? (
+          <section className="panel sync-settings-panel">
+            <header className="panel-heading">
+              <div>
+                <span>同步</span>
+                <h2>我的 Supabase</h2>
+              </div>
+              <p>每个登录用户只读写自己的记录和图片。</p>
+            </header>
+            <div className="sync-guide-steps">
+              <span>1 填项目 URL 和 anon key</span>
+              <span>2 登录账号</span>
+              <span>3 推送或拉取自己的数据</span>
             </div>
-            <p>{syncSelected ? "用于电脑和手机同步。" : "未选择云端保存。"}</p>
-          </header>
-          <div className="field-stack">
-            <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
-            <label className="field">anon public key<input value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
-            <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
-            <label className="field">邮箱<input value={draft.supabase.email} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, email: event.target.value } })} placeholder="you@example.com" /></label>
-            <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Supabase Auth 密码" /></label>
-          </div>
-          <div className="button-row">
-            <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("已登录", async () => { await onSave(draft); const message = await signInWithPassword(draft, password); flash(message); const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>
-              {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-              登录/注册
+            <div className="field-stack">
+              <label className="field">Project URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value } })} placeholder="https://xxxx.supabase.co" /></label>
+              <label className="field">anon public key<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value } })} placeholder="eyJ..." /></label>
+              <label className="field">媒体桶<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
+              <label className="field">邮箱<input value={draft.supabase.email} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, email: event.target.value } })} placeholder="you@example.com" /></label>
+              <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Supabase Auth 密码" /></label>
+            </div>
+            <div className="button-row">
+              <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("已登录", async () => { await onSave(draft); const message = await signInWithPassword(draft, password); flash(message); const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>
+                {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
+                登录/注册
+              </button>
+              <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("前往 GitHub 授权", async () => { await onSave(draft); const message = await signInWithGithub(draft); flash(message); })}>
+                <Github size={18} />
+                GitHub 登录
+              </button>
+              <button className="button ghost" type="button" onClick={() => run("已退出", async () => { await signOut(draft); setUserLabel("未登录"); })}>退出</button>
+              <button className="button ghost" disabled={!syncReady} type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
+            </div>
+            <p className="hint">登录状态：{userLabel}</p>
+            <div className="button-row">
+              <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+                <Upload size={18} />
+                推送我的数据
+              </button>
+              <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+                <Download size={18} />
+                拉取我的数据
+              </button>
+            </div>
+          </section>
+        ) : (
+          <section className="panel sync-guide-panel">
+            <header className="panel-heading">
+              <div>
+                <span>同步</span>
+                <h2>当前为单设备保存</h2>
+              </div>
+              <p>需要电脑和手机同步时，再切换到我的 Supabase。</p>
+            </header>
+            <div className="sync-guide-steps">
+              <span>本机可离线使用</span>
+              <span>导出 JSON 可迁移</span>
+              <span>Supabase 后续开启</span>
+            </div>
+            <button className="button primary" type="button" onClick={() => chooseStorageMode("supabase")}>
+              <Cloud size={18} />
+              开启私人同步设置
             </button>
-            <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("前往 GitHub 授权", async () => { await onSave(draft); const message = await signInWithGithub(draft); flash(message); })}>
-              <Github size={18} />
-              GitHub 登录
-            </button>
-            <button className="button ghost" type="button" onClick={() => run("已退出", async () => { await signOut(draft); setUserLabel("未登录"); })}>退出</button>
-            <button className="button ghost" disabled={!syncReady} type="button" onClick={() => run("已检查", async () => { const user = await currentUser(draft); setUserLabel(userDisplayName(user)); })}>检查登录</button>
-          </div>
-          <p className="hint">登录状态：{userLabel}</p>
-          <div className="button-row">
-            <button className="button primary" disabled={!syncReady || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
-              <Upload size={18} />
-              推送我的数据
-            </button>
-            <button className="button ghost" disabled={!syncReady || busy} type="button" onClick={() => run("已拉取我的数据", async () => { const result = await pullRecordsFromSupabase(draft); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
-              <Download size={18} />
-              拉取我的数据
-            </button>
-          </div>
-        </section>
+          </section>
+        )}
 
         <section className="settings-side-stack">
           <div className="panel">
@@ -982,9 +1226,17 @@ function SettingsView({
               </div>
             </header>
             <label className="field">地图提供方<select value={draft.map.provider} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, provider: event.target.value as AppSettings["map"]["provider"] } })}><option value="none">暂不加载</option><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
-            <label className="field">高德 Web Key<input value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} /></label>
-            <label className="field">高德 securityJsCode<input value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} /></label>
-            <label className="field">百度 JSAPI GL AK<input value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} /></label>
+            <label className="field">高德 Web Key<input type="password" value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} placeholder="只保存在你的浏览器设置里" /></label>
+            <label className="field">高德 securityJsCode<input type="password" value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} placeholder="如控制台要求安全密钥则填写" /></label>
+            <label className="field">百度 JSAPI GL AK<input type="password" value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} /></label>
+            <p className="hint">地图 Key 不会提交到 GitHub；但浏览器调用地图服务时，服务商仍能在请求中识别这个 Web Key。</p>
+            <div className="button-row">
+              <button className="button primary" type="button" onClick={() => onSave({ ...draft, map: { ...draft.map, provider: "amap" } })}>
+                <MapIcon size={18} />
+                启用高德并保存
+              </button>
+              <button className="button ghost" type="button" onClick={() => onSave(draft)}>保存地图设置</button>
+            </div>
           </div>
         </section>
       </div>
@@ -1020,6 +1272,10 @@ function storageLocationLabel(settings: AppSettings) {
     return hasSupabaseConfig(settings) ? "保存：我的 Supabase" : "保存位置待配置";
   }
   return "保存：当前浏览器";
+}
+
+function statusClass(status: EventStatus) {
+  return `status-${status}`;
 }
 
 function DetailDrawer({
