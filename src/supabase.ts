@@ -307,6 +307,72 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
   return data ? profileFromRow(data) : null;
 }
 
+export interface PostLoginSyncResult {
+  settings: AppSettings;
+  records: EventRecord[];
+  message: string;
+}
+
+export async function syncAfterLogin(
+  settings: AppSettings,
+  localRecords: EventRecord[],
+): Promise<PostLoginSyncResult> {
+  const messages: string[] = [];
+
+  // 1. Profile: pull if exists, push if new
+  let nextSettings = settings;
+  const profile = await loadUserProfileBinding(settings).catch(() => null);
+  if (profile) {
+    nextSettings = {
+      ...settings,
+      account: {
+        ...settings.account,
+        username: profile.username || settings.account.username,
+        nickname: profile.nickname || profile.displayName || settings.account.nickname,
+        avatarUrl: profile.avatarUrl || settings.account.avatarUrl,
+        recoveryEmail: profile.recoveryEmail || settings.account.recoveryEmail,
+      },
+      supabase: {
+        ...settings.supabase,
+        url: profile.supabaseUrl || settings.supabase.url,
+        anonKey: profile.supabaseAnonKey || settings.supabase.anonKey,
+        mediaBucket: profile.mediaBucket || settings.supabase.mediaBucket,
+        ownerKey: "",
+      },
+      map: { ...settings.map, amapKey: profile.amapKey || settings.map.amapKey },
+    };
+    messages.push("资料已恢复");
+  } else {
+    await saveUserProfileBinding(nextSettings).catch(() => undefined);
+    messages.push("资料已上传");
+  }
+
+  // 2. Text records: pull if cloud has data, push if cloud is empty
+  let nextRecords = localRecords;
+  try {
+    const pullResult = await pullTextBackupFromAccount(nextSettings, localRecords);
+    const cloudCount = pullResult.records.filter((r) => !r.deletedAt).length;
+    if (cloudCount > 0) {
+      nextRecords = pullResult.records;
+      messages.push(`已恢复 ${cloudCount} 条记录`);
+    } else if (localRecords.filter((r) => !r.deletedAt).length > 0) {
+      await pushTextBackupToAccount(nextSettings, localRecords);
+      messages.push(`已上传 ${localRecords.filter((r) => !r.deletedAt).length} 条记录`);
+    }
+  } catch {
+    // Text backup tables may not exist yet; push local data as fallback
+    if (localRecords.filter((r) => !r.deletedAt).length > 0) {
+      await pushTextBackupToAccount(nextSettings, localRecords).catch(() => undefined);
+    }
+  }
+
+  return {
+    settings: nextSettings,
+    records: nextRecords,
+    message: messages.join("，") || "同步完成",
+  };
+}
+
 export async function pushTextBackupToAccount(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
   const client = makeAccountClient(settings);
   const user = await requireUser(client, "请先登录 Live Memory 账号，再使用账号文字备份");

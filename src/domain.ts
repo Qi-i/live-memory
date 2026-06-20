@@ -107,8 +107,6 @@ export interface AccountProfile {
 }
 
 export interface AccountBackupConfig {
-  enabled: boolean;
-  autoBackup: boolean;
   intervalHours: number;
   lastBackupAt?: string;
 }
@@ -209,7 +207,7 @@ export const sourceLabels: Record<SourceChannel, string> = {
 };
 
 export const storageModeLabels: Record<StorageMode, string> = {
-  local: "账号文字备份",
+  local: "保存在当前设备",
   supabase: "Supabase 完整同步",
 };
 
@@ -225,8 +223,6 @@ export const defaultSettings: AppSettings = {
     recoveryEmail: "",
   },
   accountBackup: {
-    enabled: true,
-    autoBackup: true,
     intervalHours: 24,
   },
   map: {

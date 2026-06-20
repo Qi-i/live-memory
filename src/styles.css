@@ -868,6 +868,7 @@ a {
 .summary-grid,
 .settings-grid,
 .backup-grid,
+.settings-data-grid,
 .venue-view {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1422,6 +1423,14 @@ a {
   align-items: stretch;
 }
 
+.settings-data-grid {
+  align-items: stretch;
+}
+
+.settings-data-grid .import-file {
+  min-height: 180px;
+}
+
 .import-file {
   display: grid;
   place-items: center;
@@ -1523,6 +1532,7 @@ a {
   .summary-grid,
   .settings-grid,
   .backup-grid,
+  .settings-data-grid,
   .venue-view {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1622,6 +1632,7 @@ a {
   .summary-grid,
   .settings-grid,
   .backup-grid,
+  .settings-data-grid,
   .venue-view {
     grid-template-columns: 1fr;
   }
@@ -4135,7 +4146,8 @@ body {
   font-size: 12px;
 }
 
-.backup-grid .recycle-panel {
+.backup-grid .recycle-panel,
+.settings-data-grid .recycle-panel {
   grid-column: 1 / -1;
 }
 
