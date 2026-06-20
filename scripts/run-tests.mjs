@@ -71,8 +71,12 @@ try {
     supabase.friendlySupabaseErrorMessage({ name: "AuthSessionMissingError", message: "Auth session missing!" }),
     /请先登录 Live Memory 账号/,
   );
+  assert.match(
+    supabase.friendlySupabaseErrorMessage({ message: "email rate limit exceeded" }),
+    /账号邮件请求过于频繁/,
+  );
 
-  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state, cloud upload guard, friendly auth errors.");
+  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state, cloud upload guard, friendly auth errors, friendly email-rate errors.");
 } finally {
   await server.close();
 }

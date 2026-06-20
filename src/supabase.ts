@@ -105,6 +105,7 @@ export async function signInWithPassword(settings: AppSettings, password: string
     },
   });
   if (signUp.error) {
+    if (isEmailRateLimit(signUp.error)) throw new Error("账号邮件请求过于频繁，请稍后再试。个人 Supabase 连接不需要账号邮件。");
     if (/already|registered|exists|invalid login/i.test(signUp.error.message)) throw new Error("用户名、邮箱或密码不正确");
     throw signUp.error;
   }
@@ -431,6 +432,7 @@ async function requireUser(client: SupabaseClient, message = "请先登录账号
 
 export function friendlySupabaseErrorMessage(error: unknown, fallback = "操作失败") {
   if (isAuthSessionMissing(error)) return "请先登录 Live Memory 账号，或关闭账号文字备份后再试";
+  if (isEmailRateLimit(error)) return "账号邮件请求过于频繁，请稍后再试。连接个人 Supabase 不需要账号邮件。";
   return error instanceof Error ? error.message : fallback;
 }
 
@@ -438,6 +440,11 @@ function isAuthSessionMissing(error: unknown) {
   const name = String((error as { name?: string }).name || "");
   const message = String((error as { message?: string }).message || "");
   return /AuthSessionMissing|Auth session missing|session missing/i.test(`${name} ${message}`);
+}
+
+function isEmailRateLimit(error: unknown) {
+  const message = String((error as { message?: string }).message || "");
+  return /email rate limit|rate limit exceeded|too many/i.test(message);
 }
 
 function githubIdentity(user: Awaited<ReturnType<typeof requireUser>>) {
