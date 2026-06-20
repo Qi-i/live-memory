@@ -53,7 +53,6 @@ import {
   primaryMedia,
   sourceLabels,
   splitTextList,
-  storageModeLabels,
   statusLabels,
   validatePassword,
   validateRecoveryEmail,
@@ -395,8 +394,8 @@ export default function App() {
 function AccountChip({ settings, onClick }: { settings: AppSettings; onClick: () => void }) {
   const label = accountLabel(settings);
   const storageLabel = settings.storageMode === "supabase"
-    ? hasPersonalCloudConnection(settings) ? "完整云同步" : "云端待连接"
-    : hasAccountCloudConfig(settings) && settings.accountBackup.enabled ? "文字云备份" : "当前设备";
+    ? hasPersonalCloudConnection(settings) ? "云同步已连接" : "云端待连接"
+    : hasAccountCloudConfig(settings) && settings.accountBackup.enabled ? "文字备份中" : "仅当前设备";
   return (
     <button className="account-chip" type="button" onClick={onClick}>
       <AccountAvatar settings={settings} />
@@ -525,7 +524,7 @@ function FirstRunGuide({
           </button>
           <button className={mode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("supabase")}>
             <span>02</span>
-            <strong>个人云端完整同步</strong>
+            <strong>Supabase 完整同步</strong>
             <em>{accountAvailable ? "登录账号后连接你的 Supabase，文字和图片可跨设备同步。" : "连接你自己的 Supabase 项目，文字和图片均可跨设备同步。"}</em>
           </button>
         </div>
@@ -1554,6 +1553,44 @@ function SettingsView({
     await onSave(next);
   }
 
+  async function handleConnectCloud() {
+    validateUsername(draft.account.username);
+    const connected = accountSignedIn
+      ? await signInStorageWithAccount(draft)
+      : await signInStorageWithPassword(draft, cloudPassword);
+    setDraft(connected.settings);
+    setCloudPassword("");
+    setShowCloudReconnect(false);
+    await onSave(connected.settings);
+    flash(connected.message);
+  }
+
+  async function handleUploadToCloud() {
+    const result = await pushRecordsToSupabase(draft, records);
+    setRecords(result.records);
+    await onSave({ ...draft, lastSyncAt: nowIso() });
+  }
+
+  async function handleRestoreFromCloud() {
+    const result = await pullRecordsFromSupabase(draft, records);
+    await replaceAllRecords(result.records);
+    setRecords(result.records);
+    await onSave({ ...draft, lastSyncAt: nowIso() });
+  }
+
+  async function handleBackupTextNow() {
+    await pushTextBackupToAccount(draft, records);
+    const next = { ...draft, accountBackup: { ...draft.accountBackup, lastBackupAt: nowIso() } };
+    setDraft(next);
+    await onSave(next);
+  }
+
+  async function handleRestoreText() {
+    const result = await pullTextBackupFromAccount(draft, records);
+    await replaceAllRecords(result.records);
+    setRecords(result.records);
+  }
+
   return (
     <section className="settings-page">
       <section className="panel account-settings-panel">
@@ -1708,7 +1745,7 @@ function SettingsView({
                   <label className="field">档案密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，请记住此密码" /></label>
                 )}
                 <div className="button-row">
-                  <button className="button primary" disabled={!syncReady || busy || needsCloudPassword && !cloudPassword} type="button" onClick={() => run("", async () => { validateUsername(draft.account.username); const connected = accountSignedIn ? await signInStorageWithAccount(draft) : await signInStorageWithPassword(draft, cloudPassword); setDraft(connected.settings); setCloudPassword(""); setShowCloudReconnect(false); await onSave(connected.settings); flash(connected.message); })}>
+                  <button className="button primary" disabled={!syncReady || busy || needsCloudPassword && !cloudPassword} type="button" onClick={() => run("", handleConnectCloud)}>
                     {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
                     {syncConnected ? "重新连接个人云端" : "连接个人云端"}
                   </button>
@@ -1726,11 +1763,11 @@ function SettingsView({
               </>
             )}
             <div className="button-row">
-              <button className="button primary" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("我的云端数据已更新", async () => { const result = await pushRecordsToSupabase(draft, records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+              <button className="button primary" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("我的云端数据已更新", handleUploadToCloud)}>
                 <Upload size={18} />
                 上传到我的云端
               </button>
-              <button className="button ghost" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("已从云端恢复", async () => { const result = await pullRecordsFromSupabase(draft, records); await replaceAllRecords(result.records); setRecords(result.records); await onSave({ ...draft, lastSyncAt: nowIso() }); })}>
+              <button className="button ghost" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("已从云端恢复", handleRestoreFromCloud)}>
                 <Download size={18} />
                 从云端恢复到本机
               </button>
@@ -1751,8 +1788,8 @@ function SettingsView({
                 <label className="toggle-row"><input type="checkbox" checked={draft.accountBackup.autoBackup} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, autoBackup: event.target.checked } })} /><span><strong>自动备份</strong><small>记录变更后，按设定间隔自动更新文字备份。</small></span></label>
                 {draft.accountBackup.autoBackup && <label className="field">自动备份间隔<select value={draft.accountBackup.intervalHours} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, intervalHours: Number(event.target.value) } })}><option value={1}>每小时</option><option value={6}>每 6 小时</option><option value={24}>每天</option><option value={168}>每周</option></select></label>}
                 <div className="button-row">
-                  <button className="button primary" disabled={busy || !hasAccountCloudConfig(draft)} type="button" onClick={() => run("文字备份已更新", async () => { await pushTextBackupToAccount(draft, records); const next = { ...draft, accountBackup: { ...draft.accountBackup, lastBackupAt: nowIso() } }; setDraft(next); await onSave(next); })}><Upload size={18} />立即备份文字</button>
-                  <button className="button ghost" disabled={busy || !hasAccountCloudConfig(draft)} type="button" onClick={() => run("文字记录已恢复", async () => { const result = await pullTextBackupFromAccount(draft, records); await replaceAllRecords(result.records); setRecords(result.records); })}><Download size={18} />恢复文字记录</button>
+                  <button className="button primary" disabled={busy || !hasAccountCloudConfig(draft)} type="button" onClick={() => run("文字备份已更新", handleBackupTextNow)}><Upload size={18} />立即备份文字</button>
+                  <button className="button ghost" disabled={busy || !hasAccountCloudConfig(draft)} type="button" onClick={() => run("文字记录已恢复", handleRestoreText)}><Download size={18} />恢复文字记录</button>
                   <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存备份设置</button>
                 </div>
                 <p className="plain-hint">最近备份：{draft.accountBackup.lastBackupAt ? new Date(draft.accountBackup.lastBackupAt).toLocaleString("zh-CN") : "尚未备份"}</p>
@@ -1864,9 +1901,9 @@ function accountLabel(settings: AppSettings) {
 
 function storageLocationLabel(settings: AppSettings) {
   if (settings.storageMode === "supabase") {
-    return hasPersonalCloudConnection(settings) ? "保存：完整云同步" : "个人云端待连接";
+    return hasPersonalCloudConnection(settings) ? "云同步已连接" : "云端待连接";
   }
-  return settings.accountBackup.enabled ? "保存：账号文字备份" : "保存：当前设备";
+  return settings.accountBackup.enabled ? "设备 + 文字备份" : "仅当前设备";
 }
 
 function cleanUsernameInput(value: string) {
