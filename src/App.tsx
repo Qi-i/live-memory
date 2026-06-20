@@ -469,8 +469,8 @@ function FirstRunGuide({
           <span>首次使用</span>
           <h2 id="first-run-title">{accountAvailable ? "登录或创建 Live Memory 账号" : "建立你的演出档案"}</h2>
           <p>{accountAvailable
-            ? "账号保存个人资料和演出文字备份。图片可以继续留在当前设备，也可以同步到你的个人 Supabase。"
-            : "先设置档案名称，再选择保存在当前设备，或连接你的个人 Supabase。"}</p>
+            ? "账号保存个人资料和演出文字备份。票根、海报和照片可留在设备，也可同步到个人云端。"
+            : "先设置档案名称，再选择保存在当前设备，或连接个人云端。"}</p>
         </div>
 
         <div className="onboarding-choice-row">
@@ -489,7 +489,7 @@ function FirstRunGuide({
         <div className="onboarding-form">
           <div className="account-preview">
             <AccountAvatar settings={draft} />
-            <p>{accountAvailable ? "头像和昵称会显示在账号入口，用户名用于登录和识别你的档案。" : "头像和昵称会显示在页面入口，用户名用于识别你的档案。"}</p>
+            <p>{accountAvailable ? "头像和昵称显示在账号入口；用户名用于登录。" : "头像和昵称显示在页面入口；用户名用于识别档案。"}</p>
           </div>
           <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
           <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
@@ -502,7 +502,7 @@ function FirstRunGuide({
         {mode === "supabase" && (
           <div className="onboarding-supabase">
             <strong>连接你的个人 Supabase</strong>
-            <p>先在 Supabase 创建项目，再复制项目地址和公开连接密钥。连接时不会发送邮件，找回邮箱只属于 Live Memory 账号。</p>
+            <p>先在 Supabase 创建项目，再复制项目地址和公开连接密钥。找回邮箱只属于 Live Memory 账号。</p>
             <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 创建项目</a>
             <div className="field-stack">
               <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
@@ -512,7 +512,7 @@ function FirstRunGuide({
           </div>
         )}
 
-        {accountAvailable && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱仅用于找回 Live Memory 密码。登录已有账号时，请填写注册时使用的同一邮箱。" : "新账号可以不填邮箱；已有账号如设置过邮箱，请填写同一邮箱再登录。"}</p>}
+        {accountAvailable && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱仅用于找回 Live Memory 密码。登录已有账号时，请填写注册时使用的同一邮箱。" : "新账号可以不填邮箱；已有账号如设置过找回邮箱，请填写同一邮箱再登录。"}</p>}
 
         <div className="onboarding-actions">
           <button className="button ghost" type="button" disabled={busy} onClick={() => complete("local")}>{accountAvailable ? "使用文字备份" : "保存在当前设备"}</button>
@@ -1459,7 +1459,7 @@ function SettingsView({
             <span>账号</span>
             <h2>{accountAvailable ? "Live Memory 账号" : "个人档案"}</h2>
           </div>
-          <p>{accountAvailable ? "登录后可同步账号资料和演出文字备份。" : "设置在页面中显示的昵称、用户名和头像。"}</p>
+          <p>{accountAvailable ? "同步账号资料和演出文字备份。" : "设置页面中显示的昵称、用户名和头像。"}</p>
         </header>
         <div className="account-settings-grid">
           <div className="account-preview-card">
@@ -1477,7 +1477,7 @@ function SettingsView({
         </div>
         {accountAvailable ? (
           <>
-            <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；忘记密码时需要邮箱接收找回邮件。"}</p>
+            <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；需要找回密码时再补充邮箱。"}</p>
             <div className="button-row">
               <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", async () => { const next = { ...draft, account: { ...draft.account, username: validateUsername(draft.account.username), recoveryEmail: validateRecoveryEmail(draft.account.recoveryEmail) } }; validatePassword(password); await onSave(next); const message = await signInWithPassword(next, password); const user = await currentUser(next); if (user) await saveUserProfileBinding(next); setUserLabel(userDisplayName(user)); flash(message); })}>
                 {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
@@ -1499,7 +1499,7 @@ function SettingsView({
           <>
             <div className="supabase-explain-card">
               <strong>账号资料保存在当前设备</strong>
-              <p>昵称、头像和页面偏好会保留在这个浏览器。完整跨设备同步可在下方连接你的个人 Supabase。</p>
+              <p>昵称、头像和页面偏好会保留在这个浏览器。需要跨设备查看图片时，可连接个人 Supabase。</p>
             </div>
             <div className="button-row">
               <button className="button primary" type="button" onClick={() => onSave(draft)}><Check size={18} />保存资料</button>
@@ -1514,7 +1514,7 @@ function SettingsView({
             <span>保存</span>
             <h2>数据保存位置</h2>
           </div>
-          <p>选择演出文字和图片的备份方式。</p>
+          <p>选择演出文字和图片的保存方式。</p>
         </header>
         <div className="storage-choice-grid">
           <button className={draft.storageMode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("local")}>
@@ -1525,13 +1525,13 @@ function SettingsView({
           <button className={draft.storageMode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("supabase")}>
             <span>02</span>
             <strong>{storageModeLabels.supabase}</strong>
-            <em>连接你自己的 Supabase，可同步演出文字，并按需同步图片，不使用邮件注册。</em>
+            <em>连接你自己的 Supabase，同步演出文字，并按需同步图片。</em>
           </button>
         </div>
         {syncSelected && (
           <div className="supabase-explain-card">
             <strong>Supabase 是什么</strong>
-            <p>Supabase 提供个人数据库和图片空间。创建项目后，把项目地址与公开连接密钥填入下方，即可保存完整云端档案。</p>
+            <p>Supabase 提供个人数据库和图片空间。创建项目后，把项目地址与公开连接密钥填入下方，即可保存完整档案。</p>
             <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 控制台</a>
           </div>
         )}
@@ -1545,7 +1545,7 @@ function SettingsView({
                 <span>同步</span>
                 <h2>连接个人 Supabase</h2>
               </div>
-              <p>连接后可同步演出资料，并自行决定是否上传图片。</p>
+              <p>连接后可同步演出资料，并选择是否上传图片。</p>
             </header>
             <div className="supabase-guide-panel">
               <strong>四步完成连接</strong>
@@ -1564,7 +1564,7 @@ function SettingsView({
               <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
               <label className="field">公开连接密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value, ownerKey: "" } })} placeholder="复制 API 页面里的 anon 或 publishable key" /></label>
             </div>
-            <p className="plain-hint">个人云端密码只用来生成同步钥匙，不会发送到 Supabase 邮箱系统。换设备时输入同一用户名、同一密码和同一个 Supabase 项目即可恢复。</p>
+            <p className="plain-hint">个人云端密码用于打开你的档案。换设备时输入同一用户名、同一密码和同一个 Supabase 项目即可恢复。</p>
             <button className="inline-toggle" type="button" onClick={() => setShowCloudMore((value) => !value)}>
               <ChevronDown size={16} />
               {showCloudMore ? "收起更多同步设置" : "更多同步设置"}

@@ -8,9 +8,9 @@
 
 ![回响册桌面端演示档案](./docs/images/archive-demo.svg)
 
-## 直接使用
+## 怎么使用
 
-打开公开地址即可使用，无需下载：
+大多数用户直接打开公开地址即可使用，不需要下载文件：
 
 **<https://qi-i.github.io/live-memory/>**
 
@@ -22,6 +22,16 @@
 | Supabase 完整同步 | 同步 | 可选择同步 | 电脑和手机查看同一套完整档案 |
 
 公开站点内置 3 条演示记录。每位用户的档案保存在自己的浏览器、Live Memory 账号或个人 Supabase 中，不会写入 GitHub 仓库。
+
+| 你想做什么 | 使用方式 |
+| --- | --- |
+| 只记录自己的演出 | 打开公开地址，在页面中登录并开始使用 |
+| 电脑和手机同步文字 | 使用 Live Memory 账号的文字备份 |
+| 电脑和手机同步图片 | 在设置页连接自己的 Supabase |
+| 修改代码或本地开发 | 克隆仓库并运行 `npm install`、`npm run dev` |
+| 发布自己的站点 | Fork 仓库，配置 GitHub Pages 和账号项目 |
+
+当前没有必须下载的 Release 安装包。需要离线保存数据时，请在应用的 `备份` 页面导出 JSON。
 
 ## 功能
 
@@ -68,7 +78,9 @@ npm run preview
 
 ## 配置账号服务
 
-维护公开站点时，需要为 Live Memory 账号和文字备份配置一个 Supabase 项目。复制 `.env.example` 为 `.env.local`：
+只有维护自己的公开站点时才需要这一节。普通用户直接使用公开地址时，不需要配置这些变量。
+
+Live Memory 账号项目用于登录、找回密码和文字备份；用户个人演出档案仍由用户自己的 Supabase 或当前设备保存。复制 `.env.example` 为 `.env.local`：
 
 ```dotenv
 VITE_ACCOUNT_SUPABASE_URL=https://YOUR_ACCOUNT_PROJECT.supabase.co
@@ -99,7 +111,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 4. [`004_account_backup_and_validation.sql`](./supabase/migrations/004_account_backup_and_validation.sql)
 5. [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
 
-这些文件会建立演出记录、媒体索引、账号资料、文字备份、私有图片空间和用户访问规则。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
+这些文件会建立演出记录、媒体索引、账号资料、文字备份、私有图片空间和用户访问规则。普通用户只需要在个人 Supabase 中运行这些 SQL；站点维护者还需要把账号项目变量写入 GitHub Pages。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
 
 ## 把现有记录迁入私人云端
 
@@ -110,7 +122,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 3. 导入完成后确认档案页显示 25 条个人记录；3 条示例可以移入回收站。
 4. 在 `设置 > 数据保存位置` 选择 `Supabase 完整同步`。
 5. 按页面教程创建个人 Supabase，填写项目地址和公开连接密钥。
-6. 输入 Live Memory 用户名和个人云端密码，点击 `连接个人云端`。个人云端密码只用于生成同步钥匙，不会触发 Supabase 邮件。
+6. 输入 Live Memory 用户名和个人云端密码，点击 `连接个人云端`。个人云端密码只用于打开你的私人档案。
 7. 决定是否开启 `同步图片`，再点击 `上传到我的云端`。
 8. 在 Supabase `Table Editor > echo_passkey_records` 确认有 25 条记录；开启图片同步时，再到 `Storage > echo-media` 检查图片目录。
 

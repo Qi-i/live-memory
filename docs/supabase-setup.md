@@ -1,6 +1,13 @@
 # Supabase 配置指南
 
-Supabase 为 Live Memory 提供数据库、登录和私人图片空间。配置分为两种：站点维护者建立“账号项目”，普通用户建立“个人档案项目”。
+Supabase 在回响册里有两种用途：
+
+| 角色 | 需要做什么 | 保存什么 |
+| --- | --- | --- |
+| 普通用户 | 建立自己的个人档案项目 | 演出记录、票根、座位图和照片 |
+| 站点维护者 | 建立 Live Memory 账号项目 | 登录、找回密码、账号资料和文字备份 |
+
+只使用公开站点时，先看“普通用户”一节。只有 Fork 仓库并发布自己的站点时，才需要配置“站点维护者”一节。
 
 ## 普通用户：建立个人档案项目
 
@@ -41,7 +48,7 @@ supabase/migrations/005_passkey_cloud_sync.sql
 
 ### 4. 连接个人云端
 
-个人档案项目不需要开启 Supabase 邮件注册。Live Memory 会根据“用户名 + 个人云端密码 + Supabase 项目地址”生成同步钥匙，用它读取和写入自己的记录。
+个人档案项目不需要设置邮件登录。回响册会根据“用户名 + 个人云端密码 + Supabase 项目地址”生成同步钥匙，用它读取和写入自己的记录。
 
 回到 Live Memory：
 
@@ -69,11 +76,11 @@ GitHub 仓库只包含 3 条演示记录。导入的 25 条记录先进入当前
 
 ## 站点维护者：建立账号项目
 
-账号项目承载 Live Memory 登录、账号资料、密码找回和文字备份。
+账号项目承载 Live Memory 登录、账号资料、密码找回和文字备份。普通用户不需要自己配置这一节。
 
 1. 创建独立 Supabase 项目。
 2. 运行五个 migration。
-3. 在 `Authentication > Providers > Email` 开启邮箱登录，并关闭 `Confirm email`，让未填写邮箱的账号也能正常使用。
+3. 在 `Authentication > Providers > Email` 开启邮箱登录；如允许用户不填写找回邮箱，请关闭邮件确认。
 4. 在 `Authentication > URL Configuration` 设置站点 URL，并加入生产与本地跳转地址。
 5. 在密码找回邮件模板中将产品名改为 `Live Memory`。
 6. 在项目的 Auth 设置中将最短密码长度设为 8。
@@ -108,7 +115,7 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 两者用途不同：
 
 - 找回邮箱：接收 Live Memory 密码找回邮件。
-- 个人 Supabase：保存演出记录与图片，使用内部数据空间登录标识。
+- 个人 Supabase：保存演出记录与图片，使用同步钥匙识别自己的档案。
 
 修改个人 Supabase 项目不会改变 Live Memory 找回邮箱。更换找回邮箱也不会自动修改个人档案项目。
 
@@ -124,11 +131,11 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 ### `Auth session missing`
 
-这是旧版个人云端连接方式的提示。更新到最新页面后，先运行 `005_passkey_cloud_sync.sql`，再重新点击“连接个人云端”。新版个人云端不会创建 Supabase 邮件账号。
+更新到最新页面后，先运行 `005_passkey_cloud_sync.sql`，再重新点击“连接个人云端”。如果是在“账号文字备份”中看到这个提示，请先登录 Live Memory 账号。
 
 ### `email rate limit exceeded`
 
-个人档案项目不需要 Supabase 邮件注册。运行 `005_passkey_cloud_sync.sql` 并使用最新版页面后，连接个人云端不会发送邮件。
+个人档案项目只需要数据表和图片空间。运行 `005_passkey_cloud_sync.sql` 并使用最新版页面后，再重新连接个人云端。
 
 ### `Bucket not found`
 
