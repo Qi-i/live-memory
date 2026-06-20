@@ -489,7 +489,8 @@ function FirstRunGuide({
       };
       let message = "档案已创建";
       if (useAccountLogin) {
-        message = await signInWithPassword(next, password);
+        const signInResult = await signInWithPassword(next, password);
+        message = signInResult.message;
         const user = await currentUser(next);
         if (user) await saveUserProfileBinding(next);
       }
@@ -509,30 +510,30 @@ function FirstRunGuide({
     <div className="onboarding-backdrop">
       <section className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="first-run-title">
         <div className="onboarding-copy">
-          <span>首次使用</span>
-          <h2 id="first-run-title">{accountAvailable ? "登录或创建 Live Memory 账号" : "建立你的演出档案"}</h2>
+          <span>欢迎使用</span>
+          <h2 id="first-run-title">{accountAvailable ? "登录或创建你的账号" : "开始记录你的现场回忆"}</h2>
           <p>{accountAvailable
-            ? "账号保存个人资料和演出文字备份。票根、海报和照片可留在设备，也可同步到个人云端。"
-            : "先设置档案名称，再选择保存在当前设备，或连接个人云端。"}</p>
+            ? "创建账号后可跨设备同步演出文字。票根、海报和现场照片可额外同步到个人云端。"
+            : "设置你的昵称和用户名，选择演出记录的保存方式。"}</p>
         </div>
 
         <div className="onboarding-choice-row">
           <button className={mode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("local")}>
             <span>01</span>
-            <strong>{accountAvailable ? "文字云备份" : "当前设备"}</strong>
-            <em>{accountAvailable ? "演出信息随账号同步，票根、海报和现场照片保留在当前设备。" : "演出文字和图片保存在这台设备，可随时导出完整备份。"}</em>
+            <strong>{accountAvailable ? "设备保存 + 文字备份" : "保存在当前设备"}</strong>
+            <em>{accountAvailable ? "演出信息随账号备份，图片保留在这台设备。" : "所有数据保存在这台设备的浏览器中，可随时导出 JSON 备份。"}</em>
           </button>
           <button className={mode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("supabase")}>
             <span>02</span>
-            <strong>完整云同步</strong>
-            <em>{accountAvailable ? "登录账号后连接你自己的 Supabase，演出文字和图片可跨设备查看。" : "设置档案密码连接 Supabase，演出文字和图片可跨设备查看。"}</em>
+            <strong>个人云端完整同步</strong>
+            <em>{accountAvailable ? "登录账号后连接你的 Supabase，文字和图片可跨设备同步。" : "连接你自己的 Supabase 项目，文字和图片均可跨设备同步。"}</em>
           </button>
         </div>
 
         <div className="onboarding-form">
           <div className="account-preview">
             <AccountAvatar settings={draft} />
-            <p>{accountAvailable ? "头像和昵称显示在账号入口；用户名用于登录。" : "头像和昵称显示在页面入口；用户名用于识别档案。"}</p>
+            <p>{accountAvailable ? "头像和昵称显示在页面右上角；用户名用于登录账号。" : "头像和昵称显示在页面右上角；用户名用于标识你的档案。"}</p>
           </div>
           <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
           <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
@@ -545,23 +546,23 @@ function FirstRunGuide({
         {mode === "supabase" && (
           <div className="onboarding-supabase">
             <strong>连接你的个人 Supabase</strong>
-            <p>先在 Supabase 创建项目，再复制项目地址和公开连接密钥。找回邮箱只属于 Live Memory 账号。</p>
-            <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 创建项目</a>
+            <p>Supabase 是你的私人数据库，免费提供。先在 Supabase 创建项目，再从项目设置页面复制 URL 和 anon 公开密钥填入下方。</p>
+            <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 控制台</a>
             <div className="field-stack">
-              <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
-              <label className="field">公开连接密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value, ownerKey: "" } })} placeholder="复制 anon 或 publishable key" /></label>
+              <label className="field">项目 URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
+              <label className="field">anon 公开密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value, ownerKey: "" } })} placeholder="在 Settings → API 页面复制" /></label>
               <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="默认 echo-media" /></label>
             </div>
           </div>
         )}
 
-        {accountAvailable && mode === "local" && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱仅用于找回 Live Memory 密码。登录已有账号时，请填写注册时使用的同一邮箱。" : "新账号可以不填邮箱；已有账号如设置过找回邮箱，请填写同一邮箱再登录。"}</p>}
+        {accountAvailable && mode === "local" && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱仅用于重置 Live Memory 密码，不会影响其他功能。" : "不填邮箱也能使用；但忘记密码后将无法找回账号。"}</p>}
 
         <div className="onboarding-actions">
-          <button className="button ghost" type="button" disabled={busy} onClick={() => complete("local")}>{accountAvailable && mode === "local" ? "使用文字备份" : "保存在当前设备"}</button>
+          <button className="button ghost" type="button" disabled={busy} onClick={() => complete("local")}>{accountAvailable && mode === "local" ? "仅启用文字备份" : "保存在当前设备"}</button>
           <button className="button primary" type="button" disabled={busy || (accountAvailable && !password) || (mode === "supabase" && (!syncReady || (!accountAvailable && !password)))} onClick={() => complete(mode)}>
             {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-            {mode === "supabase" ? "连接个人云端" : (accountAvailable ? "登录 / 创建并进入" : "建立档案并进入")}
+            {mode === "supabase" ? "连接并进入" : (accountAvailable ? "登录并进入" : "开始使用")}
           </button>
         </div>
       </section>
@@ -1509,6 +1510,50 @@ function SettingsView({
     }
   }
 
+  async function handleAccountLogin() {
+    const next = {
+      ...draft,
+      account: {
+        ...draft.account,
+        username: validateUsername(draft.account.username),
+        recoveryEmail: validateRecoveryEmail(draft.account.recoveryEmail),
+      },
+    };
+    validatePassword(password);
+    await onSave(next);
+    const result = await signInWithPassword(next, password);
+    const user = await currentUser(next);
+    if (user) await saveUserProfileBinding(next);
+    setUserLabel(userDisplayName(user));
+    setAccountSignedIn(Boolean(user));
+    flash(result.message);
+  }
+
+  async function handleRestoreProfile() {
+    const profile = await loadUserProfileBinding(draft);
+    if (!profile) throw new Error("账号中还没有资料备份");
+    const next = {
+      ...draft,
+      account: {
+        ...draft.account,
+        username: profile.username || draft.account.username,
+        nickname: profile.nickname || profile.displayName || draft.account.nickname,
+        avatarUrl: profile.avatarUrl || draft.account.avatarUrl,
+        recoveryEmail: profile.recoveryEmail || draft.account.recoveryEmail,
+      },
+      supabase: {
+        ...draft.supabase,
+        url: profile.supabaseUrl || draft.supabase.url,
+        anonKey: profile.supabaseAnonKey || draft.supabase.anonKey,
+        mediaBucket: profile.mediaBucket || draft.supabase.mediaBucket,
+        ownerKey: "",
+      },
+      map: { ...draft.map, amapKey: profile.amapKey || draft.map.amapKey },
+    };
+    setDraft(next);
+    await onSave(next);
+  }
+
   return (
     <section className="settings-page">
       <section className="panel account-settings-panel">
@@ -1517,7 +1562,7 @@ function SettingsView({
             <span>账号</span>
             <h2>{accountAvailable ? "Live Memory 账号" : "个人档案"}</h2>
           </div>
-          <p>{accountAvailable ? "同步账号资料和演出文字备份。" : "设置页面中显示的昵称、用户名和头像。"}</p>
+          <p>{accountAvailable ? "管理账号信息，登录后自动备份演出文字。" : "设置页面中显示的昵称、用户名和头像。"}</p>
         </header>
         <div className="account-settings-grid">
           <div className="account-preview-card">
@@ -1537,7 +1582,7 @@ function SettingsView({
           <>
             <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；需要找回密码时再补充邮箱。"}</p>
             <div className="button-row">
-              <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", async () => { const next = { ...draft, account: { ...draft.account, username: validateUsername(draft.account.username), recoveryEmail: validateRecoveryEmail(draft.account.recoveryEmail) } }; validatePassword(password); await onSave(next); const message = await signInWithPassword(next, password); const user = await currentUser(next); if (user) await saveUserProfileBinding(next); setUserLabel(userDisplayName(user)); setAccountSignedIn(Boolean(user)); flash(message); })}>
+              <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", handleAccountLogin)}>
                 {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
                 登录 / 创建账号
               </button>
@@ -1546,18 +1591,18 @@ function SettingsView({
               <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await onSave(draft); await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
               <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
             </div>
-            <p className="plain-hint">账号状态：{userLabel}</p>
+            <p className="plain-hint">账号状态：{accountSignedIn ? `已登录（${userLabel}）` : "未登录"}</p>
             <div className="button-row">
               <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存资料</button>
-              <button className="button ghost" disabled={busy} type="button" onClick={() => run("资料已保存到账号", async () => { await onSave(draft); await saveUserProfileBinding(draft); })}><Upload size={18} />备份账号资料</button>
-              <button className="button ghost" disabled={busy} type="button" onClick={() => run("账号资料已恢复", async () => { const profile = await loadUserProfileBinding(draft); if (!profile) throw new Error("账号中还没有资料备份"); const next = { ...draft, account: { ...draft.account, username: profile.username || draft.account.username, nickname: profile.nickname || profile.displayName || draft.account.nickname, avatarUrl: profile.avatarUrl || draft.account.avatarUrl, recoveryEmail: profile.recoveryEmail || draft.account.recoveryEmail }, supabase: { ...draft.supabase, url: profile.supabaseUrl || draft.supabase.url, anonKey: profile.supabaseAnonKey || draft.supabase.anonKey, mediaBucket: profile.mediaBucket || draft.supabase.mediaBucket, ownerKey: "" }, map: { ...draft.map, amapKey: profile.amapKey || draft.map.amapKey } }; setDraft(next); await onSave(next); })}><Download size={18} />恢复账号资料</button>
+              <button className="button ghost" disabled={busy} type="button" onClick={() => run("资料已保存到账号", async () => { await onSave(draft); await saveUserProfileBinding(draft); })}><Upload size={18} />备份资料到账号</button>
+              <button className="button ghost" disabled={busy} type="button" onClick={() => run("账号资料已恢复", handleRestoreProfile)}><Download size={18} />从账号恢复资料</button>
             </div>
           </>
         ) : (
           <>
             <div className="supabase-explain-card">
-              <strong>账号资料保存在当前设备</strong>
-              <p>昵称、头像和页面偏好会保留在这个浏览器。需要跨设备查看图片时，可连接个人 Supabase。</p>
+              <strong>资料仅保存在当前浏览器</strong>
+              <p>昵称、头像和页面偏好不会离开这台设备。如需跨设备同步，需部署 Live Memory 账号服务（Supabase）。</p>
             </div>
             <div className="button-row">
               <button className="button primary" type="button" onClick={() => onSave(draft)}><Check size={18} />保存资料</button>
@@ -1572,24 +1617,24 @@ function SettingsView({
             <span>保存</span>
             <h2>数据保存位置</h2>
           </div>
-          <p>选择演出文字和图片的保存方式。</p>
+          <p>选择你的演出记录保存在哪里。</p>
         </header>
         <div className="storage-choice-grid">
           <button className={draft.storageMode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("local")}>
             <span>01</span>
-            <strong>{accountAvailable ? storageModeLabels.local : "当前设备"}</strong>
-            <em>{accountAvailable ? "演出文字随 Live Memory 账号同步，图片保留在当前设备。" : "演出文字和图片保存在当前设备，可随时导出完整备份。"}</em>
+            <strong>{accountAvailable ? "设备保存 + 文字备份" : "保存在当前设备"}</strong>
+            <em>{accountAvailable ? "演出文字随 Live Memory 账号备份，图片保留在当前设备。" : "所有数据保存在浏览器本地，可随时导出 JSON 备份。"}</em>
           </button>
           <button className={draft.storageMode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("supabase")}>
             <span>02</span>
-            <strong>{storageModeLabels.supabase}</strong>
-            <em>连接你自己的 Supabase，同步演出文字，并按需同步图片。</em>
+            <strong>Supabase 完整同步</strong>
+            <em>连接你自己的 Supabase 项目，文字和图片均可跨设备同步。</em>
           </button>
         </div>
         {syncSelected && (
           <div className="supabase-explain-card">
-            <strong>Supabase 是什么</strong>
-            <p>Supabase 提供个人数据库和图片空间。创建项目后，把项目地址与公开连接密钥填入下方，即可保存完整档案。</p>
+            <strong>什么是 Supabase？</strong>
+            <p>Supabase 是免费的云数据库服务，为你提供独立的数据库和图片存储空间。创建项目后，将项目 URL 和 anon 公开密钥填入下方即可连接。</p>
             <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 控制台</a>
           </div>
         )}
@@ -1603,15 +1648,15 @@ function SettingsView({
                 <span>同步</span>
                 <h2>连接个人 Supabase</h2>
               </div>
-              <p>连接后可同步演出资料，并选择是否上传图片。</p>
+              <p>填入你的 Supabase 项目信息，将演出资料同步到个人云端。</p>
             </header>
             <div className="supabase-guide-panel">
-              <strong>四步完成连接</strong>
+              <strong>设置步骤</strong>
               <ol>
                 <li>在 Supabase 创建一个新项目。</li>
-                <li>在 SQL Editor 运行个人云端初始化 SQL。</li>
-                <li>从项目 API 页面复制项目地址和公开连接密钥。</li>
-                <li>连接成功后，把当前档案上传到你的云端。</li>
+                <li>在项目的 SQL Editor 中运行初始化脚本（见仓库文档）。</li>
+                <li>从 Settings → API 页面复制项目 URL 和 anon 公开密钥。</li>
+                <li>填入下方字段，点击"连接个人云端"完成连接。</li>
               </ol>
               <div className="button-row">
                 <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />前往 Supabase</a>
@@ -1619,34 +1664,34 @@ function SettingsView({
               </div>
             </div>
             <div className="field-stack">
-              <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => updateSupabaseConfig({ url: event.target.value }, true)} placeholder="https://xxxx.supabase.co" /></label>
-              <label className="field">公开连接密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => updateSupabaseConfig({ anonKey: event.target.value }, true)} placeholder="复制 API 页面里的 anon 或 publishable key" /></label>
+              <label className="field">项目 URL<input value={draft.supabase.url} onChange={(event) => updateSupabaseConfig({ url: event.target.value }, true)} placeholder="https://xxxx.supabase.co" /></label>
+              <label className="field">anon 公开密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => updateSupabaseConfig({ anonKey: event.target.value }, true)} placeholder="在 Settings → API 页面复制" /></label>
             </div>
-            <p className="plain-hint">{accountSignedIn ? "你已经登录 Live Memory 账号，连接个人 Supabase 时不需要再输入密码。" : "还没有登录账号时，可以先用档案密码连接个人 Supabase。请记住这个密码，换设备恢复时还会用到。"}</p>
+            <p className="plain-hint">{accountSignedIn ? "你已登录账号，连接个人云端时会自动生成密钥，无需额外输入密码。" : "未登录账号时，需要设置一个档案密码来保护个人云端。请牢记密码，换设备恢复时会用到。"}</p>
             <button className="inline-toggle" type="button" onClick={() => setShowCloudMore((value) => !value)}>
               <ChevronDown size={16} />
-              {showCloudMore ? "收起更多同步设置" : "更多同步设置"}
+              {showCloudMore ? "收起高级设置" : "高级设置"}
             </button>
             {showCloudMore && (
               <div className="field-stack subtle-fields">
                 <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => updateSupabaseConfig({ mediaBucket: event.target.value })} placeholder="默认 echo-media" /></label>
-                <p className="plain-hint">图片空间名称默认是 echo-media，修改过云端名称时再调整。</p>
+                <p className="plain-hint">对应 Supabase 中的 Storage Bucket 名称，仅在手动修改过桶名时需要调整。</p>
               </div>
             )}
             <label className="toggle-row">
               <input type="checkbox" checked={draft.supabase.syncMedia} onChange={(event) => updateSupabaseConfig({ syncMedia: event.target.checked })} />
-              <span><strong>同步图片</strong><small>{draft.supabase.syncMedia ? "海报、票根、座位图和现场照片会上传到个人图片空间。" : "只同步演出文字，图片继续保存在当前设备。"}</small></span>
+              <span><strong>同步图片</strong><small>{draft.supabase.syncMedia ? "海报、票根、座位图和现场照片将上传到你的 Supabase 图片空间。" : "仅同步演出文字记录，图片保留在当前设备。"}</small></span>
             </label>
             {accountAvailable && (
               <>
                 <label className="toggle-row">
                   <input type="checkbox" checked={draft.accountBackup.enabled} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, enabled: event.target.checked } })} />
-                  <span><strong>同时备份文字到账号</strong><small>个人云端之外，再保留一份不含图片的小体积文字备份。</small></span>
+                  <span><strong>额外备份文字到账号</strong><small>在个人云端之外，再保留一份不含图片的轻量文字备份。</small></span>
                 </label>
                 {draft.accountBackup.enabled && (
                   <label className="toggle-row">
                     <input type="checkbox" checked={draft.accountBackup.autoBackup} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, autoBackup: event.target.checked } })} />
-                    <span><strong>自动更新文字备份</strong><small>档案变更后按设定间隔更新。</small></span>
+                    <span><strong>自动更新文字备份</strong><small>记录变更后按设定间隔自动备份。</small></span>
                   </label>
                 )}
                 {draft.accountBackup.enabled && draft.accountBackup.autoBackup && <label className="field">自动备份间隔<select value={draft.accountBackup.intervalHours} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, intervalHours: Number(event.target.value) } })}><option value={1}>每小时</option><option value={6}>每 6 小时</option><option value={24}>每天</option><option value={168}>每周</option></select></label>}
@@ -1656,11 +1701,11 @@ function SettingsView({
               <>
                 {accountSignedIn ? (
                   <div className="supabase-explain-card">
-                    <strong>使用已登录账号连接</strong>
-                    <p>连接钥匙会由当前 Live Memory 账号生成，不会要求你再次输入账号密码。</p>
+                    <strong>使用当前账号连接</strong>
+                    <p>同步密钥会基于当前登录的账号自动生成，不需要额外输入密码。</p>
                   </div>
                 ) : (
-                  <label className="field">档案密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>
+                  <label className="field">档案密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，请记住此密码" /></label>
                 )}
                 <div className="button-row">
                   <button className="button primary" disabled={!syncReady || busy || needsCloudPassword && !cloudPassword} type="button" onClick={() => run("", async () => { validateUsername(draft.account.username); const connected = accountSignedIn ? await signInStorageWithAccount(draft) : await signInStorageWithPassword(draft, cloudPassword); setDraft(connected.settings); setCloudPassword(""); setShowCloudReconnect(false); await onSave(connected.settings); flash(connected.message); })}>
@@ -1673,7 +1718,7 @@ function SettingsView({
               </>
             ) : (
               <>
-                <p className="plain-hint">个人云端已连接。普通设置会直接保存；只有更换项目、用户名或密码时才需要重新连接。</p>
+                <p className="plain-hint">个人云端已连接，数据可随时同步。更换项目、用户名或密码时才需要重新连接。</p>
                 <div className="button-row">
                   <button className="button ghost" type="button" onClick={() => setShowCloudReconnect(true)}><ShieldCheck size={18} />重新连接</button>
                   <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存连接设置</button>
@@ -1698,12 +1743,12 @@ function SettingsView({
                 <span>备份</span>
                 <h2>账号文字备份</h2>
               </div>
-              <p>跨设备同步演出名称、日期、场馆、艺人、票价、座位、标签和备注，图片留在当前设备。</p>
+              <p>将演出信息（名称、日期、场馆、艺人、票价、座位、标签和备注）备份到 Live Memory 账号，图片留在当前设备。</p>
             </header>
-            <label className="toggle-row"><input type="checkbox" checked={draft.accountBackup.enabled} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, enabled: event.target.checked } })} /><span><strong>启用文字备份</strong><small>图片不会上传，完整图片请定期导出 JSON 备份。</small></span></label>
+            <label className="toggle-row"><input type="checkbox" checked={draft.accountBackup.enabled} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, enabled: event.target.checked } })} /><span><strong>启用文字备份</strong><small>图片不包含在备份中，完整备份请在"备份"页面导出 JSON。</small></span></label>
             {draft.accountBackup.enabled && (
               <>
-                <label className="toggle-row"><input type="checkbox" checked={draft.accountBackup.autoBackup} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, autoBackup: event.target.checked } })} /><span><strong>自动备份</strong><small>档案有改动时，按设定间隔在后台更新文字备份。</small></span></label>
+                <label className="toggle-row"><input type="checkbox" checked={draft.accountBackup.autoBackup} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, autoBackup: event.target.checked } })} /><span><strong>自动备份</strong><small>记录变更后，按设定间隔自动更新文字备份。</small></span></label>
                 {draft.accountBackup.autoBackup && <label className="field">自动备份间隔<select value={draft.accountBackup.intervalHours} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, intervalHours: Number(event.target.value) } })}><option value={1}>每小时</option><option value={6}>每 6 小时</option><option value={24}>每天</option><option value={168}>每周</option></select></label>}
                 <div className="button-row">
                   <button className="button primary" disabled={busy || !hasAccountCloudConfig(draft)} type="button" onClick={() => run("文字备份已更新", async () => { await pushTextBackupToAccount(draft, records); const next = { ...draft, accountBackup: { ...draft.accountBackup, lastBackupAt: nowIso() } }; setDraft(next); await onSave(next); })}><Upload size={18} />立即备份文字</button>
@@ -1719,9 +1764,9 @@ function SettingsView({
             <header className="panel-heading">
               <div>
                 <span>备份</span>
-                <h2>当前设备备份</h2>
+                <h2>本地备份</h2>
               </div>
-              <p>演出文字与图片保存在当前浏览器。使用备份页导出完整 JSON，可迁移到其他设备或长期保存。</p>
+              <p>所有演出记录保存在当前浏览器中。请在"备份"页面定期导出 JSON 文件，以防浏览器数据丢失。</p>
             </header>
           </section>
         )}

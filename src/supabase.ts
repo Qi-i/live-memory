@@ -88,14 +88,32 @@ function currentAppUrl() {
   return url.toString();
 }
 
-export async function signInWithPassword(settings: AppSettings, password: string) {
+export interface AccountSignInResult {
+  message: string;
+  isNewAccount: boolean;
+}
+
+export async function signInWithPassword(settings: AppSettings, password: string): Promise<AccountSignInResult> {
   const client = makeAccountClient(settings);
   const email = authEmailForSettings(settings);
   validatePassword(password);
   const existing = await client.auth.getUser();
-  if (existing.data.user) return "账号已登录";
+  if (existing.data.user) return { message: "账号已登录", isNewAccount: false };
+
   const { error } = await client.auth.signInWithPassword({ email, password });
-  if (!error) return "登录成功";
+  if (!error) return { message: "登录成功", isNewAccount: false };
+
+  // Login failed — only attempt sign-up when the error looks like "no such account".
+  // If the account exists but the password is wrong, tell the user directly.
+  const loginMessage = (error.message || "").toLowerCase();
+  const isNotFound = /not found|not exist|unknown user|no user|user not/i.test(loginMessage);
+
+  if (!isNotFound) {
+    if (isEmailRateLimit(error)) {
+      throw new Error("账号邮件请求过于频繁，请稍后再试。个人 Supabase 连接不需要账号邮件。");
+    }
+    throw new Error("密码不正确，请检查后重试");
+  }
 
   const signUp = await client.auth.signUp({
     email,
@@ -106,11 +124,12 @@ export async function signInWithPassword(settings: AppSettings, password: string
   });
   if (signUp.error) {
     if (isEmailRateLimit(signUp.error)) throw new Error("账号邮件请求过于频繁，请稍后再试。个人 Supabase 连接不需要账号邮件。");
-    if (/already|registered|exists|invalid login/i.test(signUp.error.message)) throw new Error("用户名、邮箱或密码不正确");
+    if (/already|registered|exists/i.test(signUp.error.message)) throw new Error("密码不正确，请检查后重试");
+    if (/invalid login/i.test(signUp.error.message)) throw new Error("用户名、邮箱或密码不正确");
     throw signUp.error;
   }
   if (!signUp.data.session && signUp.data.user?.identities?.length === 0) throw new Error("用户名、邮箱或密码不正确");
-  return "账号已创建";
+  return { message: "账号已创建", isNewAccount: true };
 }
 
 export async function signInStorageWithPassword(settings: AppSettings, password: string) {
