@@ -22,6 +22,7 @@ export interface SyncResult {
 
 const accountUrl = import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "";
 const accountAnonKey = import.meta.env.VITE_ACCOUNT_SUPABASE_ANON_KEY || "";
+const ownerHeader = "x-live-memory-owner-key";
 
 export interface UserProfileBinding {
   displayName: string;
@@ -42,6 +43,10 @@ export function hasSupabaseConfig(settings: AppSettings) {
   return Boolean(settings.supabase.url && settings.supabase.anonKey);
 }
 
+export function hasPersonalCloudConnection(settings: AppSettings) {
+  return Boolean(hasSupabaseConfig(settings) && settings.supabase.ownerKey);
+}
+
 export function hasAccountCloudConfig(settings?: AppSettings) {
   void settings;
   return Boolean(accountUrl && accountAnonKey);
@@ -49,11 +54,13 @@ export function hasAccountCloudConfig(settings?: AppSettings) {
 
 export function makeSupabaseClient(settings: AppSettings) {
   if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
+  const headers = settings.supabase.ownerKey ? { [ownerHeader]: settings.supabase.ownerKey } : undefined;
   return createClient(settings.supabase.url, settings.supabase.anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
     },
+    global: headers ? { headers } : undefined,
   });
 }
 
@@ -106,23 +113,69 @@ export async function signInWithPassword(settings: AppSettings, password: string
 }
 
 export async function signInStorageWithPassword(settings: AppSettings, password: string) {
-  const client = makeSupabaseClient(settings);
-  const email = storageEmailForSettings(settings);
+  if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
   validatePassword(password);
-  const { error } = await client.auth.signInWithPassword({ email, password });
-  if (!error) return "个人云端已连接";
-  const signUp = await client.auth.signUp({ email, password, options: { data: accountMetadata(settings) } });
-  if (signUp.error) {
-    if (/already|registered|exists|invalid login/i.test(signUp.error.message)) throw new Error("个人云端密码不正确");
-    throw signUp.error;
+  const ownerKey = await deriveStorageOwnerKey(settings, password);
+  const next = { ...settings, supabase: { ...settings.supabase, ownerKey } };
+  const client = makeSupabaseClient(next);
+  const probe = await client
+    .from("echo_passkey_records")
+    .select("id")
+    .eq("owner_key", ownerKey)
+    .limit(1);
+  if (probe.error) throwPersonalCloudError(probe.error);
+  return { settings: next, message: "个人云端已连接" };
+}
+
+export async function deriveStorageOwnerKey(settings: AppSettings, password: string) {
+  const username = validateUsername(settings.account.username);
+  const endpoint = settings.supabase.url.trim().replace(/\/+$/, "").toLowerCase();
+  const encoder = new TextEncoder();
+  const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const bits = await crypto.subtle.deriveBits(
+    {
+      name: "PBKDF2",
+      hash: "SHA-256",
+      salt: encoder.encode(`live-memory:v2:${endpoint}:${username}`),
+      iterations: 150000,
+    },
+    key,
+    256,
+  );
+  return Array.from(new Uint8Array(bits), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
+function requireOwnerKey(settings: AppSettings) {
+  const ownerKey = settings.supabase.ownerKey?.trim();
+  if (!ownerKey) throw new Error("请先连接个人云端");
+  return ownerKey;
+}
+
+function passkeyRecordTable(settings: AppSettings) {
+  requireOwnerKey(settings);
+  return "echo_passkey_records";
+}
+
+function passkeyMediaTable(settings: AppSettings) {
+  requireOwnerKey(settings);
+  return "echo_passkey_media_assets";
+}
+
+function throwPersonalCloudError(error: unknown): never {
+  const code = (error as { code?: string }).code;
+  const message = String((error as { message?: string }).message || "");
+  if (code === "42P01" || /does not exist/i.test(message)) {
+    throw new Error("个人云端需要更新：请在 Supabase 的 SQL Editor 运行 005_passkey_cloud_sync.sql");
   }
-  if (!signUp.data.session && signUp.data.user?.identities?.length === 0) throw new Error("个人云端密码不正确");
-  return "个人云端账号已创建";
+  if (code === "42501" || /permission denied/i.test(message)) {
+    throw new Error("个人云端访问规则未生效：请重新运行最新的 Supabase 初始化 SQL");
+  }
+  throw error;
 }
 
 export async function requestPasswordReset(settings: AppSettings) {
   const email = validateRecoveryEmail(settings.account.recoveryEmail);
-  if (!email) throw new Error("请先填写账号邮箱");
+  if (!email) throw new Error("请先填写找回邮箱");
   const client = makeAccountClient(settings);
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: currentAppUrl() });
   if (error) throw error;
@@ -255,35 +308,50 @@ export async function purgeTextBackupFromAccount(settings: AppSettings, recordId
 }
 
 export async function pushRecordsToSupabase(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
+  if (!settings.supabase.ownerKey) throw new Error("请先连接个人云端");
+  return pushRecordsToPasskeySupabase(settings, records);
+}
+
+export async function pullRecordsFromSupabase(settings: AppSettings, localRecords: EventRecord[] = []): Promise<SyncResult> {
+  if (!settings.supabase.ownerKey) throw new Error("请先连接个人云端");
+  return pullRecordsFromPasskeySupabase(settings, localRecords);
+}
+
+export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {
+  if (!settings.supabase.ownerKey) return;
+  await purgePasskeyRecordFromSupabase(settings, recordId);
+}
+
+async function pushRecordsToPasskeySupabase(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
+  const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
-  const user = await requireUser(client, "请先连接个人 Supabase");
   const uploadedRecords: EventRecord[] = [];
 
   for (const record of records) {
     const bucket = mediaBucket(settings);
     const media = record.deletedAt || !settings.supabase.syncMedia
       ? record.media
-      : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, user.id, record.id, asset, bucket)));
+      : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket)));
     const next = normalizeRecord({ ...record, media, updatedAt: nowIso() });
     const cloudPayload = next.deletedAt
       ? normalizeRecord({ ...next, media: next.media.filter((asset) => asset.storagePath) })
       : settings.supabase.syncMedia ? next : withoutLocalMedia(next);
     uploadedRecords.push(next);
-    const { error } = await client.from("echo_records").upsert(
+    const { error } = await client.from(passkeyRecordTable(settings)).upsert(
       {
         id: next.id,
-        user_id: user.id,
+        owner_key: ownerKey,
         payload: cloudPayload,
         updated_at: next.updatedAt,
         deleted_at: next.deletedAt || null,
       },
-      { onConflict: "user_id,id" },
+      { onConflict: "owner_key,id" },
     );
-    if (error) throw error;
+    if (error) throwPersonalCloudError(error);
 
     const mediaRows = settings.supabase.syncMedia && !record.deletedAt ? media.map((asset) => ({
       id: asset.id,
-      user_id: user.id,
+      owner_key: ownerKey,
       record_id: record.id,
       kind: asset.kind,
       storage_path: asset.storagePath || null,
@@ -300,8 +368,8 @@ export async function pushRecordsToSupabase(settings: AppSettings, records: Even
       deleted_at: null,
     })) : [];
     if (mediaRows.length) {
-      const mediaUpsert = await client.from("echo_media_assets").upsert(mediaRows, { onConflict: "user_id,id" });
-      if (mediaUpsert.error) throw mediaUpsert.error;
+      const mediaUpsert = await client.from(passkeyMediaTable(settings)).upsert(mediaRows, { onConflict: "owner_key,id" });
+      if (mediaUpsert.error) throwPersonalCloudError(mediaUpsert.error);
     }
   }
 
@@ -313,15 +381,15 @@ export async function pushRecordsToSupabase(settings: AppSettings, records: Even
   };
 }
 
-export async function pullRecordsFromSupabase(settings: AppSettings, localRecords: EventRecord[] = []): Promise<SyncResult> {
+async function pullRecordsFromPasskeySupabase(settings: AppSettings, localRecords: EventRecord[] = []): Promise<SyncResult> {
+  const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
-  const user = await requireUser(client, "请先连接个人 Supabase");
   const { data, error } = await client
-    .from("echo_records")
+    .from(passkeyRecordTable(settings))
     .select("payload, updated_at, deleted_at")
-    .eq("user_id", user.id)
+    .eq("owner_key", ownerKey)
     .order("updated_at", { ascending: false });
-  if (error) throw error;
+  if (error) throwPersonalCloudError(error);
 
   const records = await Promise.all(
     (data || []).map(async (row) => {
@@ -338,16 +406,15 @@ export async function pullRecordsFromSupabase(settings: AppSettings, localRecord
   return { records: merged, message: `已恢复 ${records.filter((record) => !record.deletedAt).length} 条记录` };
 }
 
-export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {
-  if (!hasSupabaseConfig(settings)) return;
+async function purgePasskeyRecordFromSupabase(settings: AppSettings, recordId: string) {
+  const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
-  const user = await requireUser(client, "请先连接个人 Supabase");
-  const listed = await client.storage.from(mediaBucket(settings)).list(`${user.id}/${recordId}`);
+  const listed = await client.storage.from(mediaBucket(settings)).list(`${ownerKey}/${recordId}`);
   if (!listed.error && listed.data?.length) {
-    await client.storage.from(mediaBucket(settings)).remove(listed.data.map((item) => `${user.id}/${recordId}/${item.name}`));
+    await client.storage.from(mediaBucket(settings)).remove(listed.data.map((item) => `${ownerKey}/${recordId}/${item.name}`));
   }
-  const { error } = await client.from("echo_records").delete().eq("user_id", user.id).eq("id", recordId);
-  if (error) throw error;
+  const { error } = await client.from(passkeyRecordTable(settings)).delete().eq("owner_key", ownerKey).eq("id", recordId);
+  if (error) throwPersonalCloudError(error);
 }
 
 async function requireUser(client: SupabaseClient, message = "请先登录账号") {
@@ -400,11 +467,6 @@ function authEmailForSettings(settings: AppSettings) {
   if (recoveryEmail) return recoveryEmail;
   const username = validateUsername(settings.account.username);
   return `${username}@users.live-memory.local`;
-}
-
-function storageEmailForSettings(settings: AppSettings) {
-  const username = validateUsername(settings.account.username);
-  return `${username}@storage.live-memory.local`;
 }
 
 function pickString(...values: unknown[]) {

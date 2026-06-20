@@ -13,6 +13,6 @@ comment on column public.echo_user_profiles.username is
 comment on column public.echo_user_profiles.nickname is
   'Display nickname shown in the app header and account card.';
 comment on column public.echo_user_profiles.avatar_url is
-  'Optional user-provided avatar URL for display only.';
+  'Optional compressed avatar image or private image reference for display.';
 comment on column public.echo_user_profiles.recovery_email is
   'Optional email for account recovery guidance. Do not use this column as a secret.';

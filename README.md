@@ -21,7 +21,7 @@
 | 账号文字备份 | 随账号同步 | 留在当前设备 | 图片较多、希望节省云端空间 |
 | Supabase 完整同步 | 同步 | 可选择同步 | 电脑和手机查看同一套完整档案 |
 
-公开站点内置 3 条演示记录。每位用户的档案保存在自己的浏览器和账号空间中，不会写入 GitHub 仓库。
+公开站点内置 3 条演示记录。每位用户的档案保存在自己的浏览器、Live Memory 账号或个人 Supabase 中，不会写入 GitHub 仓库。
 
 ## 功能
 
@@ -31,7 +31,7 @@
 - 类型、状态、年份、城市、艺人、标签多选筛选和多种排序。
 - 大麦公开链接、文本、多张图片、JSON 备份批量导入。
 - Live Memory 账号资料、文字云备份和自动备份。
-- 用户自带 Supabase 完整同步，图片上传可独立关闭。
+- 用户自带 Supabase 完整同步，使用个人云端密码连接，图片上传可独立关闭。
 - 删除二次确认、回收站恢复和永久删除确认。
 - JSON 完整备份、JSON 文字备份和 CSV 导出。
 - 响应式桌面/手机界面与 PWA 安装。
@@ -97,8 +97,9 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 2. [`002_account_profiles.sql`](./supabase/migrations/002_account_profiles.sql)
 3. [`003_account_identity_fields.sql`](./supabase/migrations/003_account_identity_fields.sql)
 4. [`004_account_backup_and_validation.sql`](./supabase/migrations/004_account_backup_and_validation.sql)
+5. [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
 
-四个文件会建立演出记录、媒体索引、账号资料、文字备份、私有图片空间和用户访问规则。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
+这些文件会建立演出记录、媒体索引、账号资料、文字备份、私有图片空间和用户访问规则。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
 
 ## 把现有记录迁入私人云端
 
@@ -109,9 +110,9 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 3. 导入完成后确认档案页显示 25 条个人记录；3 条示例可以移入回收站。
 4. 在 `设置 > 数据保存位置` 选择 `Supabase 完整同步`。
 5. 按页面教程创建个人 Supabase，填写项目地址和公开连接密钥。
-6. 输入 Live Memory 用户名和密码，点击 `连接个人云端`。
+6. 输入 Live Memory 用户名和个人云端密码，点击 `连接个人云端`。个人云端密码只用于生成同步钥匙，不会触发 Supabase 邮件。
 7. 决定是否开启 `同步图片`，再点击 `上传到我的云端`。
-8. 在 Supabase `Table Editor > echo_records` 确认有 25 条记录；开启图片同步时，再到 `Storage > echo-media` 检查图片目录。
+8. 在 Supabase `Table Editor > echo_passkey_records` 确认有 25 条记录；开启图片同步时，再到 `Storage > echo-media` 检查图片目录。
 
 导入公开站点只会把数据写入当前浏览器。完成第 7 步后，记录才会进入你自己的私人 Supabase；它们不会进入 GitHub 页面或仓库。
 
@@ -131,10 +132,10 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 - 源代码、图标、文档和 3 条演示记录进入 GitHub。
 - 演出记录先写入浏览器 IndexedDB。
 - 文字备份写入账号项目的 `echo_text_backups`。
-- 完整同步写入用户个人项目的 `echo_records` 和 `echo_media_assets`。
+- 完整同步写入用户个人项目的 `echo_passkey_records` 和 `echo_passkey_media_assets`。
 - 图片仅在开启图片同步后进入私有 `echo-media` 空间。
 - 回收站使用 `deletedAt` 和云端 `deleted_at` 保留可恢复删除状态。
-- 每张云端表都按当前用户 ID 限制访问。
+- 账号表按当前用户 ID 限制访问，个人完整档案按同步钥匙限制访问。
 
 完整 JSON 可能包含票根、二维码、订单信息和现场照片，请保存在私人设备或可信存储中。
 
@@ -144,7 +145,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 src/
   domain.ts             数据模型、输入规则与默认设置
   storage.ts            IndexedDB、降级存储和旧数据迁移
-  supabase.ts           账号、文字备份、完整同步和图片上传
+  supabase.ts           账号、文字备份、个人云端同步和图片上传
   syncModel.ts          文字备份裁剪与本地图片合并规则
   media.ts              图片压缩、头像处理和下载
   importers.ts          公开链接与文本导入

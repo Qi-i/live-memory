@@ -1,5 +1,19 @@
 # 更新记录
 
+## 2.1.2 - 2026-06-20
+
+### 修复
+
+- 个人 Supabase 完整同步改为同步钥匙模式，不再创建个人 Supabase 邮件账号。
+- 连接个人云端后才允许上传和恢复，避免 `Auth session missing` 这类底层提示。
+- 新增 `005_passkey_cloud_sync.sql`，为免邮件同步建立数据表、RLS 和图片空间访问规则。
+- 账号密码与个人云端密码分开，找回邮箱只用于 Live Memory 密码找回。
+
+### 文档
+
+- 更新 Supabase 设置教程、数据同步说明和 GitHub Pages 发布说明。
+- 将个人完整同步表名更新为 `echo_passkey_records` 与 `echo_passkey_media_assets`。
+
 ## 2.1.1 - 2026-06-20
 
 ### 调整

@@ -12,6 +12,9 @@ create index if not exists echo_text_backups_user_updated_idx
 
 alter table public.echo_text_backups enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.echo_text_backups to authenticated;
+
 drop policy if exists "echo text backup owner read" on public.echo_text_backups;
 drop policy if exists "echo text backup owner insert" on public.echo_text_backups;
 drop policy if exists "echo text backup owner update" on public.echo_text_backups;

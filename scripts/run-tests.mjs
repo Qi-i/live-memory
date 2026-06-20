@@ -11,6 +11,7 @@ const server = await createServer({
 try {
   const domain = await server.ssrLoadModule("/src/domain.ts");
   const syncModel = await server.ssrLoadModule("/src/syncModel.ts");
+  const supabase = await server.ssrLoadModule("/src/supabase.ts");
 
   assert.equal(domain.validateUsername("Qi2026"), "qi2026");
   assert.throws(() => domain.validateUsername("abc"));
@@ -55,7 +56,18 @@ try {
   const trashed = { ...cloudRecord, deletedAt: "2026-06-20T01:00:00.000Z", updatedAt: "2026-06-20T01:00:00.000Z" };
   assert.equal(syncModel.mergeTextBackup([baseRecord], [trashed])[0].deletedAt, trashed.deletedAt);
 
-  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state.");
+  await assert.rejects(
+    () => supabase.pushRecordsToSupabase({
+      ...domain.defaultSettings,
+      onboardingComplete: true,
+      storageMode: "supabase",
+      account: { username: "qi2026", nickname: "Qi", avatarUrl: "", recoveryEmail: "" },
+      supabase: { url: "https://example.supabase.co", anonKey: "anon", mediaBucket: "echo-media", syncMedia: false, ownerKey: "" },
+    }, [baseRecord]),
+    /请先连接个人云端/,
+  );
+
+  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state, cloud upload guard.");
 } finally {
   await server.close();
 }

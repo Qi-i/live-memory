@@ -36,6 +36,10 @@ on conflict (id) do nothing;
 alter table public.echo_records enable row level security;
 alter table public.echo_media_assets enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.echo_records to authenticated;
+grant select, insert, update, delete on table public.echo_media_assets to authenticated;
+
 drop policy if exists "echo records owner read" on public.echo_records;
 drop policy if exists "echo records owner insert" on public.echo_records;
 drop policy if exists "echo records owner update" on public.echo_records;

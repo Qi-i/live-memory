@@ -8,7 +8,7 @@
 2. **图片优先**：海报、票根、座位图和现场照片是独立媒体资产，不只是一个封面 URL。
 3. **数据可带走**：JSON 是完整备份出口，CSV 是便于分析的元数据出口。
 4. **前端不持有服务端密钥**：浏览器只使用 anon/publishable key，授权交给 RLS。
-5. **共享应用、隔离数据**：GitHub Pages 只共享前端壳，演出记录按 Supabase 用户 ID 私有保存。
+5. **共享应用、隔离数据**：GitHub Pages 只共享前端壳，账号数据按用户 ID 隔离，个人档案按同步钥匙隔离。
 6. **展示层可替换**：Web、小程序或未来桌面端复用同一份领域模型和云端 schema。
 
 ## 运行时数据流
@@ -52,7 +52,7 @@ flowchart LR
 | `src/storage.ts` | IndexedDB CRUD、localStorage 降级、旧版迁移 |
 | `src/media.ts` | 浏览器图片压缩、data URL/Blob 转换与下载 |
 | `src/importers.ts` | 公开链接和文本解析，输出可编辑 `ImportDraft` |
-| `src/supabase.ts` | 账号登录、文字备份、完整同步、图片上传与签名 URL |
+| `src/supabase.ts` | 账号登录、文字备份、个人云端同步、图片上传与签名链接 |
 | `src/storageProviders.ts` | 对象存储抽象与后续供应商扩展点 |
 | `src/App.tsx` | 路由状态、筛选、各视图、详情、编辑和设置 |
 | `src/styles.css` | 设计 token、组件状态和响应式规则 |
@@ -61,7 +61,7 @@ flowchart LR
 
 - **账号文字备份**：移除媒体数组后写入 `echo_text_backups`，可手动或定时执行。
 - **文字恢复**：按 `updatedAt` 合并云端与本地记录，本地图片始终保留。
-- **完整上传**：按设置决定是否上传 data URL 图片，再 upsert 记录和媒体索引。
+- **完整上传**：使用个人云端同步钥匙写入记录；按设置决定是否上传 data URL 图片，再 upsert 媒体索引。
 - **完整恢复**：开启图片同步时恢复签名图片；关闭时只合并文字。
 - **删除同步**：回收站记录通过 `deletedAt/deleted_at` 同步，永久删除会清理个人项目记录和图片目录。
 

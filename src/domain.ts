@@ -96,6 +96,7 @@ export interface SupabaseConfig {
   anonKey: string;
   mediaBucket: string;
   syncMedia: boolean;
+  ownerKey: string;
 }
 
 export interface AccountProfile {
@@ -239,6 +240,7 @@ export const defaultSettings: AppSettings = {
     anonKey: import.meta.env.VITE_SUPABASE_ANON_KEY || "",
     mediaBucket: import.meta.env.VITE_SUPABASE_MEDIA_BUCKET || "echo-media",
     syncMedia: true,
+    ownerKey: "",
   },
 };
 

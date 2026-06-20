@@ -18,6 +18,9 @@ comment on column public.echo_user_profiles.linked_supabase_anon_key is
 
 alter table public.echo_user_profiles enable row level security;
 
+grant usage on schema public to authenticated;
+grant select, insert, update, delete on table public.echo_user_profiles to authenticated;
+
 drop policy if exists "echo profile owner read" on public.echo_user_profiles;
 drop policy if exists "echo profile owner insert" on public.echo_user_profiles;
 drop policy if exists "echo profile owner update" on public.echo_user_profiles;
