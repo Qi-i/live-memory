@@ -89,6 +89,7 @@ import {
   signInStorageWithAccount,
   signInStorageWithPassword,
   signOut,
+  signUpOnly,
   syncAfterLogin,
   updateAccountPassword,
 } from "./supabase";
@@ -441,9 +442,8 @@ function FirstRunGuide({
 }) {
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<StorageMode>(settings.storageMode);
+  const [mode, setMode] = useState<"login" | "register" | "skip">("login");
   const accountAvailable = hasAccountCloudConfig(draft);
-  const syncReady = hasSupabaseConfig(draft);
 
   function updateAccount(patch: Partial<AppSettings["account"]>) {
     const account = { ...draft.account, ...patch };
@@ -466,37 +466,38 @@ function FirstRunGuide({
     }
   }
 
-  function complete(modeToSave: StorageMode) {
+  function complete() {
     void run(async () => {
       if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
       const username = validateUsername(draft.account.username);
-      const useAccountLogin = accountAvailable;
-      if (useAccountLogin) validateRecoveryEmail(draft.account.recoveryEmail);
-      if (useAccountLogin) validatePassword(password);
-      if (modeToSave === "supabase" && !accountAvailable) validatePassword(password);
-      if (modeToSave === "supabase" && !hasSupabaseConfig(draft)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
-      let next = {
+
+      let next: AppSettings = {
         ...draft,
         account: { ...draft.account, username },
-        storageMode: modeToSave,
+        storageMode: "local",
         onboardingComplete: true,
       };
       let message = "档案已创建";
-      if (useAccountLogin) {
+
+      if (mode === "login") {
+        validatePassword(password);
         const signInResult = await signInWithPassword(next, password);
         const sync = await syncAfterLogin(next, records);
         next = sync.settings;
         message = `${signInResult.message}，${sync.message}`;
         await replaceAllRecords(sync.records);
         setRecords(sync.records);
+      } else if (mode === "register") {
+        validatePassword(password);
+        if (draft.account.recoveryEmail) validateRecoveryEmail(draft.account.recoveryEmail);
+        const signUpResult = await signUpOnly(next, password);
+        const sync = await syncAfterLogin(next, records);
+        next = sync.settings;
+        message = `${signUpResult.message}，${sync.message}`;
+        await replaceAllRecords(sync.records);
+        setRecords(sync.records);
       }
-      if (modeToSave === "supabase") {
-        const connected = accountAvailable
-          ? await signInStorageWithAccount(next)
-          : await signInStorageWithPassword(next, password);
-        next = connected.settings;
-        if (!useAccountLogin) message = connected.message;
-      }
+
       await onSave(next);
       flash(message);
     });
@@ -507,59 +508,65 @@ function FirstRunGuide({
       <section className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="first-run-title">
         <div className="onboarding-copy">
           <span>欢迎使用</span>
-          <h2 id="first-run-title">{accountAvailable ? "登录或创建你的账号" : "开始记录你的现场回忆"}</h2>
+          <h2 id="first-run-title">{accountAvailable ? "登录、注册或本地使用" : "开始记录你的现场回忆"}</h2>
           <p>{accountAvailable
-            ? "登录后，你的资料和演出记录会自动同步到云端。换新设备时，输入同一账号密码即可恢复。"
-            : "设置你的昵称和用户名，选择演出记录的保存方式。"}</p>
+            ? "登录已有账号同步数据，创建新账号开始云端记录，或先在本地体验。"
+            : "设置你的昵称和用户名，开始记录你的演出回忆。"}</p>
         </div>
 
-        <div className="onboarding-choice-row">
-          <button className={mode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("local")}>
-            <span>01</span>
-            <strong>{accountAvailable ? "设备保存 + 文字备份" : "保存在当前设备"}</strong>
-            <em>{accountAvailable ? "演出信息随账号备份，图片保留在这台设备。" : "所有数据保存在这台设备的浏览器中，可随时导出 JSON 备份。"}</em>
-          </button>
-          <button className={mode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("supabase")}>
-            <span>02</span>
-            <strong>Supabase 完整同步</strong>
-            <em>{accountAvailable ? "登录账号后连接你的 Supabase，文字和图片可跨设备同步。" : "连接你自己的 Supabase 项目，文字和图片均可跨设备同步。"}</em>
-          </button>
-        </div>
+        {accountAvailable && (
+          <div className="onboarding-choice-row">
+            <button className={`storage-choice${mode === "login" ? " is-active" : ""}`} type="button" onClick={() => { setMode("login"); setPassword(""); }}>
+              <span>01</span>
+              <strong>登录已有账号</strong>
+              <em>已有账号和密码？输入账号密码登录，自动同步数据。</em>
+            </button>
+            <button className={`storage-choice${mode === "register" ? " is-active" : ""}`} type="button" onClick={() => { setMode("register"); setPassword(""); }}>
+              <span>02</span>
+              <strong>创建新账号</strong>
+              <em>第一次使用？创建账号，数据自动同步到云端。</em>
+            </button>
+            <button className={`storage-choice${mode === "skip" ? " is-active" : ""}`} type="button" onClick={() => setMode("skip")}>
+              <span>03</span>
+              <strong>先在本地体验</strong>
+              <em>暂不注册，数据仅保存在当前设备浏览器中。</em>
+            </button>
+          </div>
+        )}
 
         <div className="onboarding-form">
           <div className="account-preview">
             <AccountAvatar settings={draft} />
-            <p>{accountAvailable ? "头像和昵称显示在页面右上角；用户名用于登录账号。" : "头像和昵称显示在页面右上角；用户名用于标识你的档案。"}</p>
+            <p>{mode === "skip" ? "昵称和头像显示在页面右上角。" : "用户名用于登录，昵称和头像显示在页面右上角。"}</p>
           </div>
           <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
           <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
           <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-          {accountAvailable && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
-          {accountAvailable && <label className="field">账号密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
-          {mode === "supabase" && !accountAvailable && <label className="field">档案密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
+          {mode === "register" && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
+          {(mode === "login" || mode === "register") && <label className="field">{mode === "login" ? "账号密码" : "设置密码"}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
         </div>
 
-        {mode === "supabase" && (
-          <div className="onboarding-supabase">
-            <strong>连接你的个人 Supabase</strong>
-            <p>Supabase 是你的私人数据库，免费提供。先在 Supabase 创建项目，再从项目设置页面复制 URL 和 anon 公开密钥填入下方。</p>
-            <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 控制台</a>
-            <div className="field-stack">
-              <label className="field">项目 URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
-              <label className="field">anon 公开密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value, ownerKey: "" } })} placeholder="在 Settings → API 页面复制" /></label>
-              <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="默认 echo-media" /></label>
-            </div>
-          </div>
-        )}
-
-        {accountAvailable && mode === "local" && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱仅用于重置 Live Memory 密码，不会影响其他功能。" : "不填邮箱也能使用；但忘记密码后将无法找回账号。"}</p>}
+        {accountAvailable && mode !== "skip" && <p className="plain-hint">{mode === "register" ? (draft.account.recoveryEmail ? "找回邮箱用于接收密码找回邮件。" : "不填邮箱也能使用；但忘记密码后将无法找回账号。") : "输入你注册时使用的账号和密码即可登录。"}</p>}
 
         <div className="onboarding-actions">
-          <button className="button ghost" type="button" disabled={busy} onClick={() => complete("local")}>{accountAvailable && mode === "local" ? "登录后进入" : "保存在当前设备"}</button>
-          <button className="button primary" type="button" disabled={busy || (accountAvailable && !password) || (mode === "supabase" && (!syncReady || (!accountAvailable && !password)))} onClick={() => complete(mode)}>
-            {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-            {mode === "supabase" ? "连接并进入" : (accountAvailable ? "登录并进入" : "开始使用")}
-          </button>
+          {mode === "skip" && (
+            <button className="button primary" type="button" disabled={busy} onClick={complete}>
+              {busy ? <Loader2 className="spin" /> : <Sparkles size={18} />}
+              开始使用
+            </button>
+          )}
+          {mode === "login" && (
+            <button className="button primary" type="button" disabled={busy || !password} onClick={complete}>
+              {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
+              登录
+            </button>
+          )}
+          {mode === "register" && (
+            <button className="button primary" type="button" disabled={busy || !password} onClick={complete}>
+              {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
+              创建账号
+            </button>
+          )}
         </div>
       </section>
     </div>

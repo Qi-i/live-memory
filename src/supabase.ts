@@ -132,6 +132,26 @@ export async function signInWithPassword(settings: AppSettings, password: string
   return { message: "账号已创建", isNewAccount: true };
 }
 
+export async function signUpOnly(settings: AppSettings, password: string): Promise<AccountSignInResult> {
+  const client = makeAccountClient(settings);
+  const email = authEmailForSettings(settings);
+  validatePassword(password);
+  const signUp = await client.auth.signUp({
+    email,
+    password,
+    options: { data: accountMetadata(settings) },
+  });
+  if (signUp.error) {
+    if (isEmailRateLimit(signUp.error)) throw new Error("账号邮件请求过于频繁，请稍后再试。");
+    if (/already|registered|exists/i.test(signUp.error.message)) throw new Error("该用户名已被注册，请直接登录。");
+    throw signUp.error;
+  }
+  if (!signUp.data.session && signUp.data.user?.identities?.length === 0) {
+    throw new Error("该用户名已被注册，请直接登录。");
+  }
+  return { message: "账号已创建", isNewAccount: true };
+}
+
 export async function signInStorageWithPassword(settings: AppSettings, password: string) {
   if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
   validatePassword(password);
