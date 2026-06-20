@@ -67,7 +67,12 @@ try {
     /请先连接个人云端/,
   );
 
-  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state, cloud upload guard.");
+  assert.match(
+    supabase.friendlySupabaseErrorMessage({ name: "AuthSessionMissingError", message: "Auth session missing!" }),
+    /请先登录 Live Memory 账号/,
+  );
+
+  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state, cloud upload guard, friendly auth errors.");
 } finally {
   await server.close();
 }

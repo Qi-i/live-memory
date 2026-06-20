@@ -1,7 +1,7 @@
 {
   "name": "live-memory",
   "private": true,
-  "version": "2.1.2",
+  "version": "2.1.3",
   "description": "以海报、票根、座位图和现场照片为核心的私人演出档案",
   "author": "Zhiqi Liu",
   "license": "MIT",

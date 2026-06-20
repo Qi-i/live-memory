@@ -74,6 +74,7 @@ import {
 } from "./storage";
 import {
   currentUser,
+  friendlySupabaseErrorMessage,
   hasAccountCloudConfig,
   hasPersonalCloudConnection,
   hasSupabaseConfig,
@@ -424,7 +425,7 @@ function FirstRunGuide({
     try {
       await action();
     } catch (error) {
-      flash(error instanceof Error ? error.message : "操作失败");
+      flash(friendlySupabaseErrorMessage(error, "操作失败"));
     } finally {
       setBusy(false);
     }
@@ -1435,7 +1436,7 @@ function SettingsView({
       await action();
       if (label) flash(label);
     } catch (error) {
-      flash(error instanceof Error ? error.message : "操作失败");
+      flash(friendlySupabaseErrorMessage(error, "操作失败"));
     } finally {
       setBusy(false);
     }

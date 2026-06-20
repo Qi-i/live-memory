@@ -209,7 +209,9 @@ export async function signOut(settings: AppSettings) {
 
 export async function currentUser(settings: AppSettings) {
   const client = makeAccountClient(settings);
-  const { data } = await client.auth.getUser();
+  const { data, error } = await client.auth.getUser();
+  if (error && isAuthSessionMissing(error)) return null;
+  if (error) throw error;
   return data.user || null;
 }
 
@@ -263,7 +265,7 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
 
 export async function pushTextBackupToAccount(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号");
+  const user = await requireUser(client, "请先登录 Live Memory 账号，再使用账号文字备份");
   const rows = records.map((record) => {
     const payload = withoutLocalMedia(record);
     return {
@@ -283,7 +285,7 @@ export async function pushTextBackupToAccount(settings: AppSettings, records: Ev
 
 export async function pullTextBackupFromAccount(settings: AppSettings, localRecords: EventRecord[]): Promise<SyncResult> {
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号");
+  const user = await requireUser(client, "请先登录 Live Memory 账号，再恢复账号文字备份");
   const { data, error } = await client
     .from("echo_text_backups")
     .select("payload, updated_at, deleted_at")
@@ -302,7 +304,7 @@ export async function pullTextBackupFromAccount(settings: AppSettings, localReco
 export async function purgeTextBackupFromAccount(settings: AppSettings, recordId: string) {
   if (!hasAccountCloudConfig(settings)) return;
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号");
+  const user = await requireUser(client, "请先登录 Live Memory 账号，再管理账号文字备份");
   const { error } = await client.from("echo_text_backups").delete().eq("user_id", user.id).eq("id", recordId);
   if (error) throwTextBackupError(error);
 }
@@ -419,9 +421,23 @@ async function purgePasskeyRecordFromSupabase(settings: AppSettings, recordId: s
 
 async function requireUser(client: SupabaseClient, message = "请先登录账号") {
   const { data, error } = await client.auth.getUser();
-  if (error) throw error;
+  if (error) {
+    if (isAuthSessionMissing(error)) throw new Error(message);
+    throw error;
+  }
   if (!data.user) throw new Error(message);
   return data.user;
+}
+
+export function friendlySupabaseErrorMessage(error: unknown, fallback = "操作失败") {
+  if (isAuthSessionMissing(error)) return "请先登录 Live Memory 账号，或关闭账号文字备份后再试";
+  return error instanceof Error ? error.message : fallback;
+}
+
+function isAuthSessionMissing(error: unknown) {
+  const name = String((error as { name?: string }).name || "");
+  const message = String((error as { message?: string }).message || "");
+  return /AuthSessionMissing|Auth session missing|session missing/i.test(`${name} ${message}`);
 }
 
 function githubIdentity(user: Awaited<ReturnType<typeof requireUser>>) {
@@ -484,6 +500,7 @@ function throwProfileError(error: unknown): never {
 
 function throwTextBackupError(error: unknown): never {
   const code = (error as { code?: string }).code;
+  if (isAuthSessionMissing(error)) throw new Error("请先登录 Live Memory 账号，再使用账号文字备份");
   if (code === "42P01") throw new Error("文字备份暂不可用，请稍后再试");
   throw error;
 }
