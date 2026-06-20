@@ -6,7 +6,4 @@ export default defineConfig({
   build: {
     sourcemap: false,
   },
-  optimizeDeps: {
-    noDiscovery: true,
-  },
 });

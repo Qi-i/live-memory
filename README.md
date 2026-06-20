@@ -6,7 +6,7 @@
 [![Live site](https://img.shields.io/badge/GitHub%20Pages-打开回响册-dfff4f?logo=github&labelColor=101418)](https://qi-i.github.io/live-memory/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-f36b8a.svg)](./LICENSE)
 
-![回响册桌面端档案视图](./docs/images/archive-desktop.png)
+![回响册桌面端演示档案](./docs/images/archive-demo.svg)
 
 ## 直接使用
 
@@ -14,7 +14,7 @@
 
 **<https://qi-i.github.io/live-memory/>**
 
-首次进入时创建 Live Memory 账号，并选择一种保存方式：
+首次进入时登录或创建 Live Memory 账号，并选择一种保存方式：
 
 | 保存方式 | 演出文字 | 图片 | 适用场景 |
 | --- | --- | --- | --- |
@@ -36,7 +36,7 @@
 - JSON 完整备份、JSON 文字备份和 CSV 导出。
 - 响应式桌面/手机界面与 PWA 安装。
 
-![回响册移动端档案视图](./docs/images/archive-mobile.png)
+![回响册移动端演示档案](./docs/images/archive-mobile-demo.svg)
 
 ## 本地运行
 
@@ -102,13 +102,18 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 ## 把现有记录迁入私人云端
 
-1. 在应用 `备份` 页导出一次完整 JSON。
-2. 在 `设置 > 数据保存位置` 选择 `Supabase 完整同步`。
-3. 填写项目地址和公开连接密钥。
-4. 输入 Live Memory 用户名和密码，点击 `连接个人云端`。
-5. 决定是否开启 `同步图片`。
-6. 点击 `上传到我的云端`。
-7. 在 Supabase `Table Editor > echo_records` 检查记录数量；开启图片同步时，再到 `Storage > echo-media` 检查图片。
+现有 25 条记录只在原来打开它们的浏览器中，不在 GitHub 仓库。按下面顺序迁移：
+
+1. 回到仍能看到 25 条记录的页面，在 `备份` 页导出 `完整 JSON`。
+2. 打开公开站点；如果页面只有 3 条示例记录，在 `导入` 中选择刚才导出的 JSON。
+3. 导入完成后确认档案页显示 25 条个人记录；3 条示例可以移入回收站。
+4. 在 `设置 > 数据保存位置` 选择 `Supabase 完整同步`。
+5. 按页面教程创建个人 Supabase，填写项目地址和公开连接密钥。
+6. 输入 Live Memory 用户名和密码，点击 `连接个人云端`。
+7. 决定是否开启 `同步图片`，再点击 `上传到我的云端`。
+8. 在 Supabase `Table Editor > echo_records` 确认有 25 条记录；开启图片同步时，再到 `Storage > echo-media` 检查图片目录。
+
+导入公开站点只会把数据写入当前浏览器。完成第 7 步后，记录才会进入你自己的私人 Supabase；它们不会进入 GitHub 页面或仓库。
 
 ## 发布到 GitHub Pages
 
@@ -116,7 +121,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 1. 打开 GitHub 仓库 `Settings > Pages`。
 2. 将 `Build and deployment > Source` 设为 `GitHub Actions`。
-3. 在 `Settings > Secrets and variables > Actions > Variables` 添加 `VITE_ACCOUNT_SUPABASE_URL` 和 `VITE_ACCOUNT_SUPABASE_ANON_KEY`。
+3. 在 `Settings > Secrets and variables > Actions > Variables` 添加 `VITE_ACCOUNT_SUPABASE_URL` 和 `VITE_ACCOUNT_SUPABASE_ANON_KEY`。工作流也兼容旧变量名 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`。
 4. 推送到 `main`，等待 `Deploy GitHub Pages` 完成。
 
 更多发布、缓存和 404 排查见 [部署指南](./docs/deployment.md)。

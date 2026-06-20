@@ -25,6 +25,8 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 部署工作流会把这两项映射到构建环境。用户个人 Supabase 由用户在应用设置页填写，不需要放入仓库变量。
 
+为兼容旧部署，工作流在找不到账号专用变量时会读取 `VITE_SUPABASE_URL` 和 `VITE_SUPABASE_ANON_KEY`。新部署应使用账号专用变量，避免把账号项目与用户个人档案项目混淆。
+
 注意：所有 `VITE_*` 最终都会进入前端 bundle。这里只能放 Supabase URL 和 anon/publishable key，不能放 `service_role`、数据库密码、R2 Secret 或 COS Secret。
 
 个人项目地址和公开连接密钥保存在用户自己的浏览器设置中，也可通过 Live Memory 账号资料恢复。

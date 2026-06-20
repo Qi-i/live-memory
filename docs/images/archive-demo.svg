@@ -1,0 +1,116 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="840" viewBox="0 0 1440 840" role="img" aria-labelledby="title desc">
+  <title id="title">回响册演示档案</title>
+  <desc id="desc">使用三条虚构演出记录展示回响册的海报档案界面</desc>
+  <defs>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M 32 0 L 0 0 0 32" fill="none" stroke="#dcded7" stroke-width="1"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="150%">
+      <feDropShadow dx="7" dy="9" stdDeviation="0" flood-color="#15191c" flood-opacity="0.14"/>
+    </filter>
+  </defs>
+  <rect width="1440" height="840" fill="#f7f5ee"/>
+  <rect width="1440" height="840" fill="url(#grid)" opacity="0.62"/>
+  <path d="M0 0h330L160 840H0z" fill="#e8ff68" opacity="0.35"/>
+  <path d="M1150 0h290v840H980z" fill="#91dff4" opacity="0.32"/>
+
+  <g filter="url(#shadow)">
+    <rect x="28" y="28" width="190" height="784" rx="8" fill="#fffef9" stroke="#dedfd8"/>
+    <rect x="48" y="52" width="48" height="48" rx="8" fill="#dfff4f"/>
+    <rect x="48" y="76" width="48" height="24" rx="0" fill="#68d9cc"/>
+    <text x="72" y="84" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="800" fill="#101418">演</text>
+    <text x="108" y="73" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="23" font-weight="800" fill="#101418">回响册</text>
+    <text x="108" y="94" font-family="Arial, sans-serif" font-size="12" font-weight="700" fill="#687077">Live memory</text>
+
+    <rect x="46" y="140" width="154" height="48" rx="7" fill="#dfff4f" stroke="#c3df3e"/>
+    <text x="70" y="171" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="16" font-weight="800" fill="#101418">档案</text>
+    <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="15" font-weight="700" fill="#3f474c">
+      <rect x="46" y="200" width="154" height="48" rx="7" fill="#fff" stroke="#dedfd8"/><text x="70" y="231">统计</text>
+      <rect x="46" y="260" width="154" height="48" rx="7" fill="#fff" stroke="#dedfd8"/><text x="70" y="291">备份</text>
+      <rect x="46" y="320" width="154" height="48" rx="7" fill="#fff" stroke="#dedfd8"/><text x="70" y="351">设置</text>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="246" y="28" width="1166" height="252" rx="8" fill="#fffef9" stroke="#d8dad5"/>
+    <path d="M855 28h557v252H730z" fill="#171b20"/>
+    <text x="274" y="62" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="800" fill="#169b87">演示档案</text>
+    <text x="274" y="119" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="54" font-weight="900" fill="#101418">档案</text>
+    <text x="274" y="150" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="17" font-weight="700" fill="#3e464c">把票根、海报、座位图和现场高光收进一本会呼吸的演出相册。</text>
+    <g font-family="Arial, 'Microsoft YaHei', sans-serif">
+      <rect x="274" y="172" width="86" height="66" rx="7" fill="#fff" stroke="#dedfd8"/><text x="290" y="205" font-size="28" font-weight="900">3</text><text x="290" y="226" font-size="12" fill="#687077">场记录</text>
+      <rect x="372" y="172" width="86" height="66" rx="7" fill="#fff" stroke="#dedfd8"/><text x="388" y="205" font-size="28" font-weight="900">2</text><text x="388" y="226" font-size="12" fill="#687077">已看</text>
+      <rect x="470" y="172" width="86" height="66" rx="7" fill="#fff" stroke="#dedfd8"/><text x="486" y="205" font-size="28" font-weight="900">3</text><text x="486" y="226" font-size="12" fill="#687077">座城市</text>
+    </g>
+
+    <g transform="translate(955 55) rotate(-7)">
+      <rect width="116" height="162" rx="7" fill="#243947" stroke="#dfff4f"/><text x="58" y="68" text-anchor="middle" font-family="Arial" font-size="20" font-weight="900" fill="#dfff4f">ECHO</text><text x="58" y="94" text-anchor="middle" font-family="Arial" font-size="20" font-weight="900" fill="#fff">TOUR</text><text x="58" y="142" text-anchor="middle" font-family="Arial" font-size="10" fill="#fff">CONCERT</text>
+    </g>
+    <g transform="translate(1065 66) rotate(2)">
+      <rect width="116" height="162" rx="7" fill="#fa6b8a" stroke="#fff"/><circle cx="58" cy="67" r="35" fill="#dfff4f"/><text x="58" y="64" text-anchor="middle" font-family="Arial" font-size="15" font-weight="900">SUMMER</text><text x="58" y="84" text-anchor="middle" font-family="Arial" font-size="15" font-weight="900">STAGE</text><text x="58" y="143" text-anchor="middle" font-family="Arial" font-size="10">FESTIVAL</text>
+    </g>
+    <g transform="translate(1176 50) rotate(8)">
+      <rect width="116" height="162" rx="7" fill="#5fd4c6" stroke="#fff"/><path d="M0 125L116 48V162H0z" fill="#101418"/><text x="58" y="45" text-anchor="middle" font-family="Arial" font-size="14" font-weight="900">MIDNIGHT</text><text x="58" y="65" text-anchor="middle" font-family="Arial" font-size="14" font-weight="900">ROOM</text><text x="58" y="145" text-anchor="middle" font-family="Arial" font-size="10" fill="#fff">LIVEHOUSE</text>
+    </g>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="246" y="304" width="1166" height="102" rx="8" fill="#fffef9" stroke="#dedfd8"/>
+    <text x="270" y="335" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="800" fill="#687077">视图与筛选</text>
+    <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" font-weight="700" fill="#3d454a">
+      <rect x="270" y="348" width="120" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="287" y="374">智能排序</text>
+      <rect x="402" y="348" width="92" height="40" rx="7" fill="#dfff4f" stroke="#c3df3e"/><text x="427" y="374" fill="#101418">海报</text>
+      <rect x="506" y="348" width="92" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="531" y="374">票夹</text>
+      <rect x="610" y="348" width="110" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="632" y="374">纪念票根</text>
+      <rect x="732" y="348" width="92" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="757" y="374">时间线</text>
+      <rect x="836" y="348" width="92" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="861" y="374">票价</text>
+      <rect x="940" y="348" width="92" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="965" y="374">汇总</text>
+      <rect x="1044" y="348" width="92" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="1069" y="374">日历</text>
+      <rect x="1148" y="348" width="116" height="40" rx="7" fill="#fff" stroke="#d8dad5"/><text x="1170" y="374">场馆/城市</text>
+      <rect x="1276" y="348" width="112" height="40" rx="7" fill="#101418"/><text x="1296" y="374" fill="#fff">3 条记录</text>
+    </g>
+  </g>
+
+  <g transform="translate(246 432)" filter="url(#shadow)">
+    <g>
+      <rect width="350" height="372" rx="8" fill="#fffef9" stroke="#d8dad5"/>
+      <rect x="14" y="14" width="174" height="250" rx="7" fill="#243947"/>
+      <path d="M14 198L188 72V264H14z" fill="#65dfcf"/>
+      <text x="101" y="92" text-anchor="middle" font-family="Arial" font-size="27" font-weight="900" fill="#dfff4f">ECHO</text><text x="101" y="124" text-anchor="middle" font-family="Arial" font-size="27" font-weight="900" fill="#fff">TOUR</text>
+      <rect x="204" y="18" width="56" height="24" rx="12" fill="#dfff4f"/><text x="232" y="35" text-anchor="middle" font-family="Arial, 'Microsoft YaHei'" font-size="12" font-weight="800">待看</text>
+      <text x="204" y="78" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="21" font-weight="900" fill="#101418">回声巡演</text>
+      <text x="204" y="108" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" fill="#687077">示例歌手</text>
+      <text x="204" y="160" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#3f474c">07.18 19:30</text>
+      <text x="204" y="188" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#687077">海风体育馆</text>
+      <rect x="14" y="280" width="322" height="1" fill="#dedfd8"/>
+      <text x="18" y="316" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="900">第一场演出，等开灯。</text>
+      <text x="18" y="346" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#687077">海报 · 票根 · 座位图</text>
+    </g>
+    <g transform="translate(370 0)">
+      <rect width="350" height="372" rx="8" fill="#fffef9" stroke="#d8dad5"/>
+      <rect x="14" y="14" width="174" height="250" rx="7" fill="#fa6b8a"/>
+      <circle cx="101" cy="119" r="57" fill="#dfff4f"/><text x="101" y="110" text-anchor="middle" font-family="Arial" font-size="19" font-weight="900">SUMMER</text><text x="101" y="136" text-anchor="middle" font-family="Arial" font-size="19" font-weight="900">STAGE</text>
+      <rect x="204" y="18" width="56" height="24" rx="12" fill="#65dfcf"/><text x="232" y="35" text-anchor="middle" font-family="Arial, 'Microsoft YaHei'" font-size="12" font-weight="800">已看</text>
+      <text x="204" y="78" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="21" font-weight="900" fill="#101418">夏日双日票</text>
+      <text x="204" y="108" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" fill="#687077">多艺人阵容</text>
+      <text x="204" y="160" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#3f474c">06.21 14:00</text>
+      <text x="204" y="188" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#687077">夏日音乐公园</text>
+      <rect x="14" y="280" width="322" height="1" fill="#dedfd8"/>
+      <text x="18" y="316" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="900">两天的歌，收成一页。</text>
+      <text x="18" y="346" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#687077">海报 · 阵容 · 现场照片</text>
+    </g>
+    <g transform="translate(740 0)">
+      <rect width="426" height="372" rx="8" fill="#fffef9" stroke="#d8dad5"/>
+      <rect x="14" y="14" width="174" height="250" rx="7" fill="#65dfcf"/>
+      <path d="M14 188L188 62V264H14z" fill="#101418"/><text x="101" y="86" text-anchor="middle" font-family="Arial" font-size="20" font-weight="900">MIDNIGHT</text><text x="101" y="112" text-anchor="middle" font-family="Arial" font-size="20" font-weight="900">ROOM</text>
+      <rect x="204" y="18" width="56" height="24" rx="12" fill="#65dfcf"/><text x="232" y="35" text-anchor="middle" font-family="Arial, 'Microsoft YaHei'" font-size="12" font-weight="800">已看</text>
+      <text x="204" y="78" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="21" font-weight="900" fill="#101418">午夜小场</text>
+      <text x="204" y="108" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="14" fill="#687077">示例乐队</text>
+      <text x="204" y="160" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" font-weight="700" fill="#3f474c">04.12 20:00</text>
+      <text x="204" y="188" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#687077">午夜 Livehouse</text>
+      <rect x="14" y="280" width="398" height="1" fill="#dedfd8"/>
+      <text x="18" y="316" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="18" font-weight="900">离舞台很近，也离记忆很近。</text>
+      <text x="18" y="346" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="13" fill="#687077">海报 · 票根 · 现场照片</text>
+    </g>
+  </g>
+</svg>

@@ -85,6 +85,8 @@ export async function signInWithPassword(settings: AppSettings, password: string
   const client = makeAccountClient(settings);
   const email = authEmailForSettings(settings);
   validatePassword(password);
+  const existing = await client.auth.getUser();
+  if (existing.data.user) return "账号已登录";
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (!error) return "登录成功";
 
