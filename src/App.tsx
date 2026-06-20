@@ -31,7 +31,7 @@ import {
   RotateCcw,
   X,
 } from "lucide-react";
-import { CSSProperties, Dispatch, FormEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
+import { CSSProperties, Dispatch, FormEvent, MouseEvent, ReactNode, SetStateAction, useEffect, useMemo, useRef, useState } from "react";
 import {
   AppSettings,
   ArchiveView,
@@ -86,9 +86,11 @@ import {
   pushTextBackupToAccount,
   pushRecordsToSupabase,
   requestPasswordReset,
+  refreshSignedMediaUrls,
   saveUserProfileBinding,
   signInWithGithub,
   signInWithPassword,
+  signInStorageWithAccount,
   signInStorageWithPassword,
   signOut,
   updateAccountPassword,
@@ -148,6 +150,13 @@ export default function App() {
   const facets = useMemo(() => buildFacets(activeRecords), [activeRecords]);
   const filteredRecords = useMemo(() => sortRecords(filterRecords(activeRecords, filters), sort), [activeRecords, filters, sort]);
   const health = useMemo(() => storageHealth(records, settings), [records, settings]);
+  const mediaRefreshKey = useMemo(() => {
+    if (!hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia) return "";
+    return records
+      .flatMap((record) => record.media.filter((asset) => asset.storagePath).map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`))
+      .join("|");
+  }, [records, settings]);
+  const lastMediaRefreshKey = useRef("");
 
   useEffect(() => {
     if (!settings.onboardingComplete || !settings.accountBackup.enabled || !settings.accountBackup.autoBackup) return;
@@ -168,6 +177,25 @@ export default function App() {
     }, 30000);
     return () => window.clearTimeout(timer);
   }, [records, settings]);
+
+  useEffect(() => {
+    if (!mediaRefreshKey || mediaRefreshKey === lastMediaRefreshKey.current) return;
+    if (!records.some((record) => record.media.some((asset) => asset.storagePath && !asset.src.startsWith("data:")))) return;
+    lastMediaRefreshKey.current = mediaRefreshKey;
+    let cancelled = false;
+    refreshSignedMediaUrls(settings, records)
+      .then(async (next) => {
+        if (cancelled) return;
+        const changed = JSON.stringify(next.map((record) => record.media.map((asset) => asset.src))) !== JSON.stringify(records.map((record) => record.media.map((asset) => asset.src)));
+        if (!changed) return;
+        await replaceAllRecords(next);
+        setRecords(next);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [mediaRefreshKey]);
 
   function flash(message: string) {
     setToast(message);
@@ -390,6 +418,19 @@ function AccountAvatar({ settings }: { settings: AppSettings }) {
   );
 }
 
+function MediaImage({ media, alt, onClick }: { media: MediaAsset; alt?: string; onClick?: (event: MouseEvent<HTMLImageElement | HTMLSpanElement>) => void }) {
+  const [failed, setFailed] = useState(false);
+  useEffect(() => setFailed(false), [media.src, media.storagePath]);
+  if (!media.src || failed) {
+    return (
+      <span className="media-fallback" onClick={onClick}>
+        {media.storagePath ? "云端图片待刷新" : "图片待补"}
+      </span>
+    );
+  }
+  return <img src={media.src} alt={alt || ""} loading="lazy" onClick={onClick} onError={() => setFailed(true)} />;
+}
+
 function FirstRunGuide({
   settings,
   onSave,
@@ -405,7 +446,6 @@ function FirstRunGuide({
 }) {
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
-  const [cloudPassword, setCloudPassword] = useState("");
   const [mode, setMode] = useState<StorageMode>(settings.storageMode);
   const accountAvailable = hasAccountCloudConfig(draft);
   const syncReady = hasSupabaseConfig(draft);
@@ -425,7 +465,7 @@ function FirstRunGuide({
     try {
       await action();
     } catch (error) {
-      flash(friendlySupabaseErrorMessage(error, "操作失败"));
+      flash(friendlySupabaseErrorMessage(error, "未完成，请检查页面设置"));
     } finally {
       setBusy(false);
     }
@@ -435,17 +475,17 @@ function FirstRunGuide({
     void run(async () => {
       if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
       const username = validateUsername(draft.account.username);
-      const useAccountLogin = accountAvailable && modeToSave === "local" && mode === "local";
+      const useAccountLogin = accountAvailable;
       if (useAccountLogin) validateRecoveryEmail(draft.account.recoveryEmail);
       if (useAccountLogin) validatePassword(password);
-      if (modeToSave === "supabase") validatePassword(accountAvailable ? cloudPassword : password);
+      if (modeToSave === "supabase" && !accountAvailable) validatePassword(password);
       if (modeToSave === "supabase" && !hasSupabaseConfig(draft)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
       let next = {
         ...draft,
         account: { ...draft.account, username },
         storageMode: modeToSave,
         onboardingComplete: true,
-        accountBackup: { ...draft.accountBackup, enabled: useAccountLogin },
+        accountBackup: { ...draft.accountBackup, enabled: useAccountLogin && modeToSave === "local" },
       };
       let message = "档案已创建";
       if (useAccountLogin) {
@@ -454,7 +494,9 @@ function FirstRunGuide({
         if (user) await saveUserProfileBinding(next);
       }
       if (modeToSave === "supabase") {
-        const connected = await signInStorageWithPassword(next, accountAvailable ? cloudPassword : password);
+        const connected = accountAvailable
+          ? await signInStorageWithAccount(next)
+          : await signInStorageWithPassword(next, password);
         next = connected.settings;
         message = connected.message;
       }
@@ -483,7 +525,7 @@ function FirstRunGuide({
           <button className={mode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => setMode("supabase")}>
             <span>02</span>
             <strong>完整云同步</strong>
-            <em>使用个人云端密码连接你的 Supabase，演出文字和图片可跨设备查看。</em>
+            <em>{accountAvailable ? "登录账号后连接你自己的 Supabase，演出文字和图片可跨设备查看。" : "设置档案密码连接 Supabase，演出文字和图片可跨设备查看。"}</em>
           </button>
         </div>
 
@@ -495,9 +537,9 @@ function FirstRunGuide({
           <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
           <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
           <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-          {accountAvailable && mode === "local" && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
-          {accountAvailable && mode === "local" && <label className="field">账号密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
-          {mode === "supabase" && <label className="field">个人云端密码<input type="password" value={accountAvailable ? cloudPassword : password} onChange={(event) => accountAvailable ? setCloudPassword(event.target.value) : setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
+          {accountAvailable && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
+          {accountAvailable && <label className="field">账号密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
+          {mode === "supabase" && !accountAvailable && <label className="field">档案密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
         </div>
 
         {mode === "supabase" && (
@@ -517,7 +559,7 @@ function FirstRunGuide({
 
         <div className="onboarding-actions">
           <button className="button ghost" type="button" disabled={busy} onClick={() => complete("local")}>{accountAvailable && mode === "local" ? "使用文字备份" : "保存在当前设备"}</button>
-          <button className="button primary" type="button" disabled={busy || (mode === "supabase" && (!syncReady || (accountAvailable ? !cloudPassword : !password)))} onClick={() => complete(mode)}>
+          <button className="button primary" type="button" disabled={busy || (accountAvailable && !password) || (mode === "supabase" && (!syncReady || (!accountAvailable && !password)))} onClick={() => complete(mode)}>
             {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
             {mode === "supabase" ? "连接个人云端" : (accountAvailable ? "登录 / 创建并进入" : "建立档案并进入")}
           </button>
@@ -553,7 +595,7 @@ function HeroPosterWall({ records, onOpen }: { records: EventRecord[]; onOpen: (
         const media = primaryMedia(record);
         return (
           <button className={`hero-poster hero-poster-${index + 1}`} key={record.id} type="button" onClick={() => onOpen(record)}>
-            {media && <img src={media.src} alt={record.title} />}
+            {media && <MediaImage media={media} alt={record.title} />}
             <span>{record.city || categoryLabels[record.category]}</span>
           </button>
         );
@@ -755,7 +797,7 @@ function PosterCard({ record, index, compact, onOpen, onZoom }: { record: EventR
         #{String(index + 1).padStart(2, "0")}
       </button>
       <div className="poster-frame" style={{ background: `linear-gradient(135deg, ${record.colors[0]}, ${record.colors[1]})` }}>
-        {poster ? <img src={poster.src} alt={record.title} onClick={(event) => { event.stopPropagation(); onZoom(poster); }} /> : <span>{record.title.slice(0, 4)}</span>}
+        {poster ? <MediaImage media={poster} alt={record.title} onClick={(event) => { event.stopPropagation(); onZoom(poster); }} /> : <span>{record.title.slice(0, 4)}</span>}
       </div>
       <div className="poster-info">
         <div className="meta-row">
@@ -782,7 +824,7 @@ function WalletCard({ record, onOpen, onZoom, onEdit }: { record: EventRecord; o
   return (
     <article className="wallet-card" style={{ "--tone-a": record.colors[0], "--tone-b": record.colors[1] } as CSSProperties}>
       <button className="cover-button" type="button" onClick={() => (poster ? onZoom(poster) : onOpen(record))}>
-        {poster ? <img src={poster.src} alt={record.title} /> : <span>{record.title.slice(0, 3)}</span>}
+        {poster ? <MediaImage media={poster} alt={record.title} /> : <span>{record.title.slice(0, 3)}</span>}
       </button>
       <div className="wallet-main">
         <button className="wallet-open" type="button" onClick={() => onOpen(record)}>
@@ -818,7 +860,7 @@ function TicketView({ records, onOpen }: { records: EventRecord[]; onOpen: (reco
         const poster = primaryMedia(record);
         return (
           <button className="memory-ticket" key={record.id} type="button" onClick={() => onOpen(record)}>
-            <div className="ticket-poster">{poster ? <img src={poster.src} alt={record.title} /> : <span>{record.title.slice(0, 2)}</span>}</div>
+            <div className="ticket-poster">{poster ? <MediaImage media={poster} alt={record.title} /> : <span>{record.title.slice(0, 2)}</span>}</div>
             <div className="ticket-copy">
               <span>{categoryLabels[record.category]}</span>
               <h3>{record.title}</h3>
@@ -917,7 +959,7 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
                     <span>{record.date.slice(0, 4)}</span>
                     <strong>{record.date.slice(5).replace("-", ".")}</strong>
                   </time>
-                  <div className="timeline-thumb">{poster ? <img src={poster.src} alt="" /> : <Ticket />}</div>
+                  <div className="timeline-thumb">{poster ? <MediaImage media={poster} alt="" /> : <Ticket />}</div>
                   <div>
                     <span className="timeline-type">{categoryLabels[record.category]}</span>
                     <h3>{record.title}</h3>
@@ -1384,6 +1426,7 @@ function SettingsView({
   const [password, setPassword] = useState("");
   const [cloudPassword, setCloudPassword] = useState("");
   const [userLabel, setUserLabel] = useState("未登录");
+  const [accountSignedIn, setAccountSignedIn] = useState(false);
   const [showCloudMore, setShowCloudMore] = useState(false);
   const [showCloudReconnect, setShowCloudReconnect] = useState(false);
   const [showMapMore, setShowMapMore] = useState(false);
@@ -1393,16 +1436,23 @@ function SettingsView({
     let alive = true;
     if (!hasAccountCloudConfig(settings)) {
       setUserLabel("未连接");
+      setAccountSignedIn(false);
       return () => {
         alive = false;
       };
     }
     currentUser(settings)
       .then((user) => {
-        if (alive) setUserLabel(userDisplayName(user));
+        if (alive) {
+          setUserLabel(userDisplayName(user));
+          setAccountSignedIn(Boolean(user));
+        }
       })
       .catch(() => {
-        if (alive) setUserLabel("未登录");
+        if (alive) {
+          setUserLabel("未登录");
+          setAccountSignedIn(false);
+        }
       });
     return () => {
       alive = false;
@@ -1411,7 +1461,8 @@ function SettingsView({
   const syncSelected = draft.storageMode === "supabase";
   const syncReady = syncSelected && hasSupabaseConfig(draft);
   const syncConnected = syncSelected && hasPersonalCloudConnection(draft);
-  const needsCloudPassword = syncSelected && (!syncConnected || showCloudReconnect);
+  const showCloudConnectPanel = syncSelected && (!syncConnected || showCloudReconnect);
+  const needsCloudPassword = showCloudConnectPanel && !accountSignedIn;
 
   function chooseStorageMode(storageMode: AppSettings["storageMode"]) {
     const next = { ...draft, storageMode };
@@ -1452,7 +1503,7 @@ function SettingsView({
       await action();
       if (label) flash(label);
     } catch (error) {
-      flash(friendlySupabaseErrorMessage(error, "操作失败"));
+      flash(friendlySupabaseErrorMessage(error, "未完成，请检查页面设置"));
     } finally {
       setBusy(false);
     }
@@ -1460,15 +1511,6 @@ function SettingsView({
 
   return (
     <section className="settings-page">
-      <header className="settings-topline">
-        <div>
-          <span>个人设置</span>
-          <h2>账号、保存与显示</h2>
-          <p>管理账号资料、备份方式、图片同步和页面偏好。</p>
-        </div>
-        <strong>{storageLocationLabel(draft)}</strong>
-      </header>
-
       <section className="panel account-settings-panel">
         <header className="panel-heading">
           <div>
@@ -1495,14 +1537,14 @@ function SettingsView({
           <>
             <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；需要找回密码时再补充邮箱。"}</p>
             <div className="button-row">
-              <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", async () => { const next = { ...draft, account: { ...draft.account, username: validateUsername(draft.account.username), recoveryEmail: validateRecoveryEmail(draft.account.recoveryEmail) } }; validatePassword(password); await onSave(next); const message = await signInWithPassword(next, password); const user = await currentUser(next); if (user) await saveUserProfileBinding(next); setUserLabel(userDisplayName(user)); flash(message); })}>
+              <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", async () => { const next = { ...draft, account: { ...draft.account, username: validateUsername(draft.account.username), recoveryEmail: validateRecoveryEmail(draft.account.recoveryEmail) } }; validatePassword(password); await onSave(next); const message = await signInWithPassword(next, password); const user = await currentUser(next); if (user) await saveUserProfileBinding(next); setUserLabel(userDisplayName(user)); setAccountSignedIn(Boolean(user)); flash(message); })}>
                 {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
                 登录 / 创建账号
               </button>
               <button className="button ghost" disabled={!draft.account.recoveryEmail || busy} type="button" onClick={() => run("找回邮件已发送", async () => { await requestPasswordReset(draft); })}>找回密码</button>
               <button className="button ghost" disabled={!password || busy} type="button" onClick={() => run("密码已更新", async () => { await updateAccountPassword(draft, password); })}>更新密码</button>
               <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await onSave(draft); await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
-              <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); })}>退出</button>
+              <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
             </div>
             <p className="plain-hint">账号状态：{userLabel}</p>
             <div className="button-row">
@@ -1567,9 +1609,9 @@ function SettingsView({
               <strong>四步完成连接</strong>
               <ol>
                 <li>在 Supabase 创建一个新项目。</li>
-                <li>从完整设置教程复制并运行 5 个数据库初始化文件。</li>
+                <li>在 SQL Editor 运行个人云端初始化 SQL。</li>
                 <li>从项目 API 页面复制项目地址和公开连接密钥。</li>
-                <li>输入个人云端密码，连接后上传当前档案。</li>
+                <li>连接成功后，把当前档案上传到你的云端。</li>
               </ol>
               <div className="button-row">
                 <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />前往 Supabase</a>
@@ -1580,7 +1622,7 @@ function SettingsView({
               <label className="field">Supabase 项目地址<input value={draft.supabase.url} onChange={(event) => updateSupabaseConfig({ url: event.target.value }, true)} placeholder="https://xxxx.supabase.co" /></label>
               <label className="field">公开连接密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => updateSupabaseConfig({ anonKey: event.target.value }, true)} placeholder="复制 API 页面里的 anon 或 publishable key" /></label>
             </div>
-            <p className="plain-hint">个人云端密码用于打开你的档案。连接成功后会保存连接钥匙；更换设备、项目地址、公开连接密钥或用户名时再输入一次。</p>
+            <p className="plain-hint">{accountSignedIn ? "你已经登录 Live Memory 账号，连接个人 Supabase 时不需要再输入密码。" : "还没有登录账号时，可以先用档案密码连接个人 Supabase。请记住这个密码，换设备恢复时还会用到。"}</p>
             <button className="inline-toggle" type="button" onClick={() => setShowCloudMore((value) => !value)}>
               <ChevronDown size={16} />
               {showCloudMore ? "收起更多同步设置" : "更多同步设置"}
@@ -1610,11 +1652,18 @@ function SettingsView({
                 {draft.accountBackup.enabled && draft.accountBackup.autoBackup && <label className="field">自动备份间隔<select value={draft.accountBackup.intervalHours} onChange={(event) => setDraft({ ...draft, accountBackup: { ...draft.accountBackup, intervalHours: Number(event.target.value) } })}><option value={1}>每小时</option><option value={6}>每 6 小时</option><option value={24}>每天</option><option value={168}>每周</option></select></label>}
               </>
             )}
-            {needsCloudPassword ? (
+            {showCloudConnectPanel ? (
               <>
-                <label className="field">个人云端密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>
+                {accountSignedIn ? (
+                  <div className="supabase-explain-card">
+                    <strong>使用已登录账号连接</strong>
+                    <p>连接钥匙会由当前 Live Memory 账号生成，不会要求你再次输入账号密码。</p>
+                  </div>
+                ) : (
+                  <label className="field">档案密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>
+                )}
                 <div className="button-row">
-                  <button className="button primary" disabled={!syncReady || busy || !cloudPassword} type="button" onClick={() => run("", async () => { validateUsername(draft.account.username); validatePassword(cloudPassword); const connected = await signInStorageWithPassword(draft, cloudPassword); setDraft(connected.settings); setCloudPassword(""); setShowCloudReconnect(false); await onSave(connected.settings); flash(connected.message); })}>
+                  <button className="button primary" disabled={!syncReady || busy || needsCloudPassword && !cloudPassword} type="button" onClick={() => run("", async () => { validateUsername(draft.account.username); const connected = accountSignedIn ? await signInStorageWithAccount(draft) : await signInStorageWithPassword(draft, cloudPassword); setDraft(connected.settings); setCloudPassword(""); setShowCloudReconnect(false); await onSave(connected.settings); flash(connected.message); })}>
                     {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
                     {syncConnected ? "重新连接个人云端" : "连接个人云端"}
                   </button>
@@ -1814,7 +1863,7 @@ function DetailDrawer({
         </header>
         <section className="detail-hero">
           <button className="detail-poster" type="button" onClick={() => poster && onZoom(poster)}>
-            {poster ? <img src={poster.src} alt={record.title} /> : <ImagePlus />}
+            {poster ? <MediaImage media={poster} alt={record.title} /> : <ImagePlus />}
           </button>
           <div>
             <span className="badge">{categoryLabels[record.category]} · {statusLabels[record.status]}</span>
@@ -1852,7 +1901,7 @@ function MediaSection({ title, items, onZoom }: { title: string; items: MediaAss
         <div className="media-grid">
           {items.map((item) => (
             <button key={item.id} type="button" onClick={() => onZoom(item)}>
-              <img src={item.src} alt={item.title || mediaKindLabels[item.kind]} />
+              <MediaImage media={item} alt={item.title || mediaKindLabels[item.kind]} />
             </button>
           ))}
         </div>

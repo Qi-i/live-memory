@@ -41,7 +41,7 @@
 - 类型、状态、年份、城市、艺人、标签多选筛选和多种排序。
 - 大麦公开链接、文本、多张图片、JSON 备份批量导入。
 - Live Memory 账号资料、文字云备份和自动备份。
-- 用户自带 Supabase 完整同步，使用个人云端密码连接，图片上传可独立关闭。
+- 用户自带 Supabase 完整同步；公开站点登录账号后可直接连接，图片上传可独立关闭。
 - 删除二次确认、回收站恢复和永久删除确认。
 - JSON 完整备份、JSON 文字备份和 CSV 导出。
 - 响应式桌面/手机界面与 PWA 安装。
@@ -103,15 +103,11 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 ## 初始化 Supabase
 
-在 Supabase `SQL Editor` 中按顺序运行：
+普通用户连接自己的个人 Supabase 时，只需要在个人项目的 `SQL Editor` 运行：
 
-1. [`001_echo_archive.sql`](./supabase/migrations/001_echo_archive.sql)
-2. [`002_account_profiles.sql`](./supabase/migrations/002_account_profiles.sql)
-3. [`003_account_identity_fields.sql`](./supabase/migrations/003_account_identity_fields.sql)
-4. [`004_account_backup_and_validation.sql`](./supabase/migrations/004_account_backup_and_validation.sql)
-5. [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
+- [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
 
-这些文件会建立演出记录、媒体索引、账号资料、文字备份、私有图片空间和用户访问规则。普通用户只需要在个人 Supabase 中运行这些 SQL；站点维护者还需要把账号项目变量写入 GitHub Pages。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
+这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 1-5 号 migration 并配置 GitHub Pages 变量。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
 
 ## 把现有记录迁入私人云端
 
@@ -122,7 +118,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 3. 导入完成后确认档案页显示 25 条个人记录；3 条示例可以移入回收站。
 4. 在 `设置 > 数据保存位置` 选择 `Supabase 完整同步`。
 5. 按页面教程创建个人 Supabase，填写项目地址和公开连接密钥。
-6. 输入 Live Memory 用户名和个人云端密码，点击 `连接个人云端`。个人云端密码只用于打开你的私人档案。
+6. 如果页面显示已登录账号，直接点击 `连接个人云端`；没有账号服务的自部署版本会要求设置档案密码。
 7. 决定是否开启 `同步图片`，再点击 `上传到我的云端`。
 8. 在 Supabase `Table Editor > echo_passkey_records` 确认有 25 条记录；开启图片同步时，再到 `Storage > echo-media` 检查图片目录。
 

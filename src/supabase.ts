@@ -117,6 +117,18 @@ export async function signInStorageWithPassword(settings: AppSettings, password:
   if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
   validatePassword(password);
   const ownerKey = await deriveStorageOwnerKey(settings, password);
+  return connectStorageWithOwnerKey(settings, ownerKey);
+}
+
+export async function signInStorageWithAccount(settings: AppSettings) {
+  if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
+  const client = makeAccountClient(settings);
+  const user = await requireUser(client, "请先登录 Live Memory 账号，再连接个人云端");
+  const ownerKey = await deriveStorageOwnerKeyFromSecret(settings, `account:${user.id}`, "account");
+  return connectStorageWithOwnerKey(settings, ownerKey);
+}
+
+async function connectStorageWithOwnerKey(settings: AppSettings, ownerKey: string) {
   const next = { ...settings, supabase: { ...settings.supabase, ownerKey } };
   const client = makeSupabaseClient(next);
   const probe = await client
@@ -129,15 +141,19 @@ export async function signInStorageWithPassword(settings: AppSettings, password:
 }
 
 export async function deriveStorageOwnerKey(settings: AppSettings, password: string) {
-  const username = validateUsername(settings.account.username);
+  return deriveStorageOwnerKeyFromSecret(settings, password);
+}
+
+async function deriveStorageOwnerKeyFromSecret(settings: AppSettings, secret: string, identity?: string) {
+  const ownerIdentity = identity || validateUsername(settings.account.username);
   const endpoint = settings.supabase.url.trim().replace(/\/+$/, "").toLowerCase();
   const encoder = new TextEncoder();
-  const key = await crypto.subtle.importKey("raw", encoder.encode(password), "PBKDF2", false, ["deriveBits"]);
+  const key = await crypto.subtle.importKey("raw", encoder.encode(secret), "PBKDF2", false, ["deriveBits"]);
   const bits = await crypto.subtle.deriveBits(
     {
       name: "PBKDF2",
       hash: "SHA-256",
-      salt: encoder.encode(`live-memory:v2:${endpoint}:${username}`),
+      salt: encoder.encode(`live-memory:v2:${endpoint}:${ownerIdentity}`),
       iterations: 150000,
     },
     key,
@@ -164,13 +180,21 @@ function passkeyMediaTable(settings: AppSettings) {
 
 function throwPersonalCloudError(error: unknown): never {
   const code = (error as { code?: string }).code;
+  const status = (error as { status?: number }).status;
   const message = String((error as { message?: string }).message || "");
-  if (code === "42P01" || /does not exist/i.test(message)) {
+  if (code === "42P01" || code === "PGRST205" || /does not exist|could not find the table|schema cache/i.test(message)) {
     throw new Error("个人云端需要更新：请在 Supabase 的 SQL Editor 运行 005_passkey_cloud_sync.sql");
   }
   if (code === "42501" || /permission denied/i.test(message)) {
     throw new Error("个人云端访问规则未生效：请重新运行最新的 Supabase 初始化 SQL");
   }
+  if (status === 401 || /invalid api key|jwt|apikey/i.test(message)) {
+    throw new Error("公开连接密钥不正确：请在 Supabase 的 API 页面复制 anon 或 publishable key");
+  }
+  if (/failed to fetch|network/i.test(message)) {
+    throw new Error("无法连接 Supabase：请检查项目地址是否正确，或稍后重试");
+  }
+  if (message) throw new Error(`个人云端连接失败：${message}`);
   throw error;
 }
 
@@ -320,6 +344,15 @@ export async function pullRecordsFromSupabase(settings: AppSettings, localRecord
   return pullRecordsFromPasskeySupabase(settings, localRecords);
 }
 
+export async function refreshSignedMediaUrls(settings: AppSettings, records: EventRecord[]) {
+  if (!settings.supabase.ownerKey || !settings.supabase.syncMedia) return records;
+  const client = makeSupabaseClient(settings);
+  return Promise.all(records.map(async (record) => {
+    const media = await Promise.all(record.media.map((asset) => signMediaIfNeeded(client, asset, mediaBucket(settings))));
+    return normalizeRecord({ ...record, media });
+  }));
+}
+
 export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {
   if (!settings.supabase.ownerKey) return;
   await purgePasskeyRecordFromSupabase(settings, recordId);
@@ -337,8 +370,8 @@ async function pushRecordsToPasskeySupabase(settings: AppSettings, records: Even
       : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket)));
     const next = normalizeRecord({ ...record, media, updatedAt: nowIso() });
     const cloudPayload = next.deletedAt
-      ? normalizeRecord({ ...next, media: next.media.filter((asset) => asset.storagePath) })
-      : settings.supabase.syncMedia ? next : withoutLocalMedia(next);
+      ? cloudRecordPayload({ ...next, media: next.media.filter((asset) => asset.storagePath) })
+      : settings.supabase.syncMedia ? cloudRecordPayload(next) : withoutLocalMedia(next);
     uploadedRecords.push(next);
     const { error } = await client.from(passkeyRecordTable(settings)).upsert(
       {
@@ -430,10 +463,16 @@ async function requireUser(client: SupabaseClient, message = "请先登录账号
   return data.user;
 }
 
-export function friendlySupabaseErrorMessage(error: unknown, fallback = "操作失败") {
+export function friendlySupabaseErrorMessage(error: unknown, fallback = "未完成，请检查页面设置") {
   if (isAuthSessionMissing(error)) return "请先登录 Live Memory 账号，或关闭账号文字备份后再试";
   if (isEmailRateLimit(error)) return "账号邮件请求过于频繁，请稍后再试。连接个人 Supabase 不需要账号邮件。";
-  return error instanceof Error ? error.message : fallback;
+  const message = String((error as { message?: string }).message || "");
+  if (message) return message;
+  const details = String((error as { details?: string }).details || "");
+  if (details) return details;
+  const code = String((error as { code?: string }).code || "");
+  if (code) return `${fallback}：${code}`;
+  return fallback;
 }
 
 function isAuthSessionMissing(error: unknown) {
@@ -522,19 +561,26 @@ async function uploadMediaIfNeeded(client: SupabaseClient, userId: string, recor
     contentType: blob.type || asset.mimeType || "image/jpeg",
   });
   if (upload.error) throw upload.error;
-  const signed = await client.storage.from(bucket).createSignedUrl(path, 60 * 60 * 24 * 7);
   return {
     ...asset,
-    src: signed.data?.signedUrl || asset.src,
     storagePath: path,
-    source: "supabase",
     updatedAt: nowIso(),
   };
 }
 
 async function signMediaIfNeeded(client: SupabaseClient, asset: MediaAsset, bucket: string): Promise<MediaAsset> {
+  if (asset.src.startsWith("data:")) return asset;
   if (!asset.storagePath) return asset;
   const signed = await client.storage.from(bucket).createSignedUrl(asset.storagePath, 60 * 60 * 24 * 7);
   if (signed.error || !signed.data?.signedUrl) return asset;
   return { ...asset, src: signed.data.signedUrl, source: "supabase" };
+}
+
+function cloudRecordPayload(record: EventRecord) {
+  return normalizeRecord({
+    ...record,
+    media: record.media.map((asset) => asset.storagePath
+      ? { ...asset, src: "", source: "supabase" as const }
+      : asset),
+  });
 }

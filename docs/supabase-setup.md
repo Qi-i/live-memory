@@ -21,19 +21,15 @@ Supabase 在回响册里有两种用途：
 
 ### 2. 建立数据表和图片空间
 
-在项目左侧打开 `SQL Editor`，点击 `New query`。按顺序打开仓库中的五个文件，复制完整内容并逐个运行：
+在项目左侧打开 `SQL Editor`，点击 `New query`。打开下面这个文件，复制完整内容并运行：
 
 ```text
-supabase/migrations/001_echo_archive.sql
-supabase/migrations/002_account_profiles.sql
-supabase/migrations/003_account_identity_fields.sql
-supabase/migrations/004_account_backup_and_validation.sql
 supabase/migrations/005_passkey_cloud_sync.sql
 ```
 
 完成后检查：
 
-- `Table Editor` 中有 `echo_passkey_records`、`echo_passkey_media_assets`、`echo_text_backups`。
+- `Table Editor` 中有 `echo_passkey_records`、`echo_passkey_media_assets`。
 - `Storage` 中有 `echo-media`，并且不是 Public。
 - 每张表的 RLS 状态为 Enabled。
 
@@ -48,7 +44,7 @@ supabase/migrations/005_passkey_cloud_sync.sql
 
 ### 4. 连接个人云端
 
-个人档案项目不需要设置邮件登录。回响册会根据“用户名 + 个人云端密码 + Supabase 项目地址”生成同步钥匙，用它读取和写入自己的记录。
+个人档案项目不需要设置邮件登录。公开站点中，如果你已经登录 Live Memory 账号，页面会用当前账号生成个人云端连接钥匙，不会再次要求输入密码。没有账号服务的自部署版本，才会用“用户名 + 档案密码 + Supabase 项目地址”生成连接钥匙。
 
 回到 Live Memory：
 
@@ -56,9 +52,9 @@ supabase/migrations/005_passkey_cloud_sync.sql
 2. 选择 `Supabase 完整同步`。
 3. 粘贴项目地址和公开连接密钥。
 4. 选择是否开启“同步图片”。
-5. 输入 Live Memory 用户名和个人云端密码，点击“连接个人云端”。
+5. 如果页面显示已登录账号，直接点击“连接个人云端”。如果页面要求档案密码，请输入一个自己记得住的密码。
 
-个人云端密码不是 Supabase 后台数据库密码，也不是 Live Memory 找回邮箱。换设备时输入同一用户名、同一密码和同一个 Supabase 项目，就能恢复同一份档案。
+档案密码不是 Supabase 后台数据库密码，也不是 Live Memory 找回邮箱。只有无账号服务的自部署版本才需要它；公开站点登录账号后不需要重复输入。
 
 ### 5. 上传现有档案
 
@@ -72,14 +68,14 @@ supabase/migrations/005_passkey_cloud_sync.sql
 
 GitHub 仓库只包含 3 条演示记录。导入的 25 条记录先进入当前浏览器，上传后进入你自己的 Supabase，其他账号无法读取。
 
-另一台设备恢复时，填写同一个项目地址和公开连接密钥，使用相同用户名和个人云端密码连接，再点击“从云端恢复到本机”。
+另一台设备恢复时，先登录同一个 Live Memory 账号，再填写同一个项目地址和公开连接密钥，点击“连接个人云端”，然后点击“从云端恢复到本机”。
 
 ## 站点维护者：建立账号项目
 
 账号项目承载 Live Memory 登录、账号资料、密码找回和文字备份。普通用户不需要自己配置这一节。
 
 1. 创建独立 Supabase 项目。
-2. 运行五个 migration。
+2. 按顺序运行五个 migration。
 3. 在 `Authentication > Providers > Email` 开启邮箱登录；如允许用户不填写找回邮箱，请关闭邮件确认。
 4. 在 `Authentication > URL Configuration` 设置站点 URL，并加入生产与本地跳转地址。
 5. 在密码找回邮件模板中将产品名改为 `Live Memory`。
@@ -123,7 +119,7 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 ### 提示数据表不存在
 
-重新按顺序运行五个 migration，确认每个查询都显示 Success。
+如果错误里出现 `PGRST205`、`Could not find the table` 或 `echo_passkey_records`，说明当前个人 Supabase 项目还没有成功建立同步表。个人档案项目重新运行 `005_passkey_cloud_sync.sql`。自部署账号项目重新按顺序运行五个 migration，确认每个查询都显示 Success。
 
 ### `new row violates row-level security policy`
 
@@ -131,7 +127,7 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 ### `Auth session missing`
 
-更新到最新页面后，先运行 `005_passkey_cloud_sync.sql`，再重新点击“连接个人云端”。如果是在“账号文字备份”中看到这个提示，请先登录 Live Memory 账号。
+更新到最新页面后，先在个人 Supabase 项目运行 `005_passkey_cloud_sync.sql`，再重新点击“连接个人云端”。如果是在“账号文字备份”中看到这个提示，请先登录 Live Memory 账号。
 
 ### `email rate limit exceeded`
 

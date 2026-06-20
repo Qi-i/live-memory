@@ -53,10 +53,21 @@ grant execute on function public.live_memory_owner_key() to anon, authenticated;
 grant select, insert, update, delete on table public.echo_passkey_records to anon, authenticated;
 grant select, insert, update, delete on table public.echo_passkey_media_assets to anon, authenticated;
 
-grant select, insert, update, delete on table public.echo_records to authenticated;
-grant select, insert, update, delete on table public.echo_media_assets to authenticated;
-grant select, insert, update, delete on table public.echo_user_profiles to authenticated;
-grant select, insert, update, delete on table public.echo_text_backups to authenticated;
+do $$
+begin
+  if to_regclass('public.echo_records') is not null then
+    grant select, insert, update, delete on table public.echo_records to authenticated;
+  end if;
+  if to_regclass('public.echo_media_assets') is not null then
+    grant select, insert, update, delete on table public.echo_media_assets to authenticated;
+  end if;
+  if to_regclass('public.echo_user_profiles') is not null then
+    grant select, insert, update, delete on table public.echo_user_profiles to authenticated;
+  end if;
+  if to_regclass('public.echo_text_backups') is not null then
+    grant select, insert, update, delete on table public.echo_text_backups to authenticated;
+  end if;
+end $$;
 
 drop policy if exists "echo passkey records owner read" on public.echo_passkey_records;
 drop policy if exists "echo passkey records owner insert" on public.echo_passkey_records;
@@ -152,6 +163,6 @@ using (
 );
 
 comment on table public.echo_passkey_records is
-  'Private Live Memory records addressed by a browser-generated sync key. This avoids personal Supabase email signups.';
+  'Private Live Memory records addressed by a browser-generated sync key.';
 comment on table public.echo_passkey_media_assets is
   'Private Live Memory media index addressed by the same sync key as echo_passkey_records.';
