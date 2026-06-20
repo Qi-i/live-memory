@@ -868,7 +868,6 @@ a {
 .summary-grid,
 .settings-grid,
 .backup-grid,
-.settings-data-grid,
 .venue-view {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1424,11 +1423,12 @@ a {
 }
 
 .settings-data-grid {
-  align-items: stretch;
+  display: grid;
+  gap: 16px;
 }
 
 .settings-data-grid .import-file {
-  min-height: 180px;
+  min-height: 160px;
 }
 
 .import-file {
@@ -1532,7 +1532,6 @@ a {
   .summary-grid,
   .settings-grid,
   .backup-grid,
-  .settings-data-grid,
   .venue-view {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -1632,7 +1631,6 @@ a {
   .summary-grid,
   .settings-grid,
   .backup-grid,
-  .settings-data-grid,
   .venue-view {
     grid-template-columns: 1fr;
   }
@@ -3090,16 +3088,18 @@ body {
   margin-top: 4px;
 }
 
-.settings-content-grid {
+.settings-masonry {
   display: grid;
   grid-template-columns: minmax(0, 1.15fr) minmax(320px, 0.85fr);
   gap: 16px;
   align-items: start;
 }
 
-.settings-side-stack {
+.settings-col-main,
+.settings-col-side {
   display: grid;
   gap: 16px;
+  align-content: start;
 }
 
 .field-stack {
@@ -3157,7 +3157,7 @@ body {
 
 .settings-health-panel {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -3200,7 +3200,7 @@ body {
     text-align: left;
   }
 
-  .settings-content-grid,
+  .settings-masonry,
   .storage-choice-grid,
   .field-stack,
   .settings-health-panel {
@@ -3693,7 +3693,6 @@ body {
 
 .sync-guide-panel {
   align-content: start;
-  min-height: 260px;
 }
 
 .sync-guide-steps {
@@ -4249,10 +4248,6 @@ body {
     grid-template-columns: 1fr;
   }
 
-  .settings-content-grid {
-    grid-template-columns: 1fr;
-  }
-
   .account-settings-grid,
   .onboarding-choice-row,
   .onboarding-form {
@@ -4351,10 +4346,7 @@ body {
   }
 }
 
-/* Stability fixes: keep settings width, media fallbacks, and wallet layout predictable. */
-.settings-page {
-  max-width: none;
-}
+/* Stability fixes: keep media fallbacks and wallet layout predictable. */
 
 .media-fallback {
   display: grid;

@@ -1498,190 +1498,251 @@ function SettingsView({
 
   return (
     <section className="settings-page">
-      <section className="panel account-settings-panel">
-        <header className="panel-heading">
-          <div>
-            <span>账号</span>
-            <h2>{accountAvailable ? "Live Memory 账号" : "个人档案"}</h2>
-          </div>
-          <p>{accountAvailable ? "管理账号信息，登录后资料和演出文字自动同步到云端。" : "设置页面中显示的昵称、用户名和头像。"}</p>
-        </header>
-        <div className="account-settings-grid">
-          <div className="account-preview-card">
-            <AccountAvatar settings={draft} />
-            <strong>{accountLabel(draft)}</strong>
-            <span>{draft.account.username ? `@${draft.account.username}` : "用户名待设置"}</span>
-          </div>
-          <div className="field-stack account-field-stack">
-            <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="页面显示名，例如 Qi" /></label>
-            <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
-            <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-            {accountAvailable && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
-            {accountAvailable && <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
-          </div>
-        </div>
-        {accountAvailable ? (
-          <>
-            <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；需要找回密码时再补充邮箱。"}</p>
-            <div className="button-row">
-              <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", handleAccountLogin)}>
-                {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-                登录 / 创建账号
-              </button>
-              <button className="button ghost" disabled={!draft.account.recoveryEmail || busy} type="button" onClick={() => run("找回邮件已发送", async () => { await requestPasswordReset(draft); })}>找回密码</button>
-              <button className="button ghost" disabled={!password || busy} type="button" onClick={() => run("密码已更新", async () => { await updateAccountPassword(draft, password); })}>更新密码</button>
-              <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await onSave(draft); await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
-              <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
-            </div>
-            <p className="plain-hint">账号状态：{accountSignedIn ? `已登录（${userLabel}）` : "未登录"}</p>
-          </>
-        ) : (
-          <>
-            <div className="supabase-explain-card">
-              <strong>资料仅保存在当前浏览器</strong>
-              <p>昵称、头像和页面偏好不会离开这台设备。如需跨设备同步，需部署 Live Memory 账号服务（Supabase）。</p>
-            </div>
-            <div className="button-row">
-              <button className="button primary" type="button" onClick={() => onSave(draft)}><Check size={18} />保存资料</button>
-            </div>
-          </>
-        )}
-      </section>
-
-      <section className="panel storage-location-panel">
-        <header className="panel-heading">
-          <div>
-            <span>保存</span>
-            <h2>数据保存位置</h2>
-          </div>
-          <p>选择你的演出记录保存在哪里。</p>
-        </header>
-        <div className="storage-choice-grid">
-          <button className={draft.storageMode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("local")}>
-            <span>01</span>
-            <strong>{accountAvailable ? "设备保存 + 文字备份" : "保存在当前设备"}</strong>
-            <em>{accountAvailable ? "演出文字随 Live Memory 账号备份，图片保留在当前设备。" : "所有数据保存在浏览器本地，可随时导出 JSON 备份。"}</em>
-          </button>
-          <button className={draft.storageMode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("supabase")}>
-            <span>02</span>
-            <strong>Supabase 完整同步</strong>
-            <em>连接你自己的 Supabase 项目，文字和图片均可跨设备同步。</em>
-          </button>
-        </div>
-        {syncSelected && (
-          <div className="supabase-explain-card">
-            <strong>什么是 Supabase？</strong>
-            <p>Supabase 是免费的云数据库服务，为你提供独立的数据库和图片存储空间。创建项目后，将项目 URL 和 anon 公开密钥填入下方即可连接。</p>
-            <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 控制台</a>
-          </div>
-        )}
-      </section>
-
-      <div className="settings-content-grid">
-        {syncSelected ? (
-          <section className="panel sync-settings-panel">
+      <div className="settings-masonry">
+        <div className="settings-col-main">
+          <section className="panel account-settings-panel">
             <header className="panel-heading">
               <div>
-                <span>同步</span>
-                <h2>连接个人 Supabase</h2>
+                <span>账号</span>
+                <h2>{accountAvailable ? "Live Memory 账号" : "个人档案"}</h2>
               </div>
-              <p>填入你的 Supabase 项目信息，将演出资料同步到个人云端。</p>
+              <p>{accountAvailable ? "管理账号信息，登录后资料和演出文字自动同步到云端。" : "设置页面中显示的昵称、用户名和头像。"}</p>
             </header>
-            <div className="supabase-guide-panel">
-              <strong>设置步骤</strong>
-              <ol>
-                <li>在 Supabase 创建一个新项目。</li>
-                <li>在项目的 SQL Editor 中运行初始化脚本（见仓库文档）。</li>
-                <li>从 Settings → API 页面复制项目 URL 和 anon 公开密钥。</li>
-                <li>填入下方字段，点击"连接个人云端"完成连接。</li>
-              </ol>
-              <div className="button-row">
-                <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />前往 Supabase</a>
-                <a className="source-link" href="https://github.com/Qi-i/live-memory/blob/main/docs/supabase-setup.md" target="_blank" rel="noreferrer"><BookOpen size={16} />查看完整设置教程</a>
+            <div className="account-settings-grid">
+              <div className="account-preview-card">
+                <AccountAvatar settings={draft} />
+                <strong>{accountLabel(draft)}</strong>
+                <span>{draft.account.username ? `@${draft.account.username}` : "用户名待设置"}</span>
+              </div>
+              <div className="field-stack account-field-stack">
+                <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="页面显示名，例如 Qi" /></label>
+                <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
+                <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
+                {accountAvailable && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
+                {accountAvailable && <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
               </div>
             </div>
-            <div className="field-stack">
-              <label className="field">项目 URL<input value={draft.supabase.url} onChange={(event) => updateSupabaseConfig({ url: event.target.value }, true)} placeholder="https://xxxx.supabase.co" /></label>
-              <label className="field">anon 公开密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => updateSupabaseConfig({ anonKey: event.target.value }, true)} placeholder="在 Settings → API 页面复制" /></label>
-            </div>
-            <p className="plain-hint">{accountSignedIn ? "你已登录账号，连接个人云端时会自动生成密钥，无需额外输入密码。" : "未登录账号时，需要设置一个档案密码来保护个人云端。请牢记密码，换设备恢复时会用到。"}</p>
-            <button className="inline-toggle" type="button" onClick={() => setShowCloudMore((value) => !value)}>
-              <ChevronDown size={16} />
-              {showCloudMore ? "收起高级设置" : "高级设置"}
-            </button>
-            {showCloudMore && (
-              <div className="field-stack subtle-fields">
-                <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => updateSupabaseConfig({ mediaBucket: event.target.value })} placeholder="默认 echo-media" /></label>
-                <p className="plain-hint">对应 Supabase 中的 Storage Bucket 名称，仅在手动修改过桶名时需要调整。</p>
-              </div>
-            )}
-            <label className="toggle-row">
-              <input type="checkbox" checked={draft.supabase.syncMedia} onChange={(event) => updateSupabaseConfig({ syncMedia: event.target.checked })} />
-              <span><strong>同步图片</strong><small>{draft.supabase.syncMedia ? "海报、票根、座位图和现场照片将上传到你的 Supabase 图片空间。" : "仅同步演出文字记录，图片保留在当前设备。"}</small></span>
-            </label>
-            {showCloudConnectPanel ? (
+            {accountAvailable ? (
               <>
-                {accountSignedIn ? (
-                  <div className="supabase-explain-card">
-                    <strong>使用当前账号连接</strong>
-                    <p>同步密钥会基于当前登录的账号自动生成，不需要额外输入密码。</p>
-                  </div>
-                ) : (
-                  <label className="field">档案密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，请记住此密码" /></label>
-                )}
+                <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；需要找回密码时再补充邮箱。"}</p>
                 <div className="button-row">
-                  <button className="button primary" disabled={!syncReady || busy || needsCloudPassword && !cloudPassword} type="button" onClick={() => run("", handleConnectCloud)}>
+                  <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", handleAccountLogin)}>
                     {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-                    {syncConnected ? "重新连接个人云端" : "连接个人云端"}
+                    登录 / 创建账号
                   </button>
-                  {syncConnected && <button className="button ghost" type="button" onClick={() => { setCloudPassword(""); setShowCloudReconnect(false); }}><X size={18} />取消重新连接</button>}
-                  <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存连接设置</button>
+                  <button className="button ghost" disabled={!draft.account.recoveryEmail || busy} type="button" onClick={() => run("找回邮件已发送", async () => { await requestPasswordReset(draft); })}>找回密码</button>
+                  <button className="button ghost" disabled={!password || busy} type="button" onClick={() => run("密码已更新", async () => { await updateAccountPassword(draft, password); })}>更新密码</button>
+                  <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await onSave(draft); await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
+                  <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
                 </div>
+                <p className="plain-hint">账号状态：{accountSignedIn ? `已登录（${userLabel}）` : "未登录"}</p>
               </>
             ) : (
               <>
-                <p className="plain-hint">个人云端已连接，数据可随时同步。更换项目、用户名或密码时才需要重新连接。</p>
+                <div className="supabase-explain-card">
+                  <strong>资料仅保存在当前浏览器</strong>
+                  <p>昵称、头像和页面偏好不会离开这台设备。如需跨设备同步，需部署 Live Memory 账号服务（Supabase）。</p>
+                </div>
                 <div className="button-row">
-                  <button className="button ghost" type="button" onClick={() => setShowCloudReconnect(true)}><ShieldCheck size={18} />重新连接</button>
-                  <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存连接设置</button>
+                  <button className="button primary" type="button" onClick={() => onSave(draft)}><Check size={18} />保存资料</button>
                 </div>
               </>
             )}
-            <div className="button-row">
-              <button className="button primary" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("我的云端数据已更新", handleUploadToCloud)}>
-                <Upload size={18} />
-                上传到我的云端
+          </section>
+
+          {syncSelected ? (
+            <section className="panel sync-settings-panel">
+              <header className="panel-heading">
+                <div>
+                  <span>同步</span>
+                  <h2>连接个人 Supabase</h2>
+                </div>
+                <p>填入你的 Supabase 项目信息，将演出资料同步到个人云端。</p>
+              </header>
+              <div className="supabase-guide-panel">
+                <strong>设置步骤</strong>
+                <ol>
+                  <li>在 Supabase 创建一个新项目。</li>
+                  <li>在项目的 SQL Editor 中运行初始化脚本（见仓库文档）。</li>
+                  <li>从 Settings → API 页面复制项目 URL 和 anon 公开密钥。</li>
+                  <li>填入下方字段，点击"连接个人云端"完成连接。</li>
+                </ol>
+                <div className="button-row">
+                  <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />前往 Supabase</a>
+                  <a className="source-link" href="https://github.com/Qi-i/live-memory/blob/main/docs/supabase-setup.md" target="_blank" rel="noreferrer"><BookOpen size={16} />查看完整设置教程</a>
+                </div>
+              </div>
+              <div className="field-stack">
+                <label className="field">项目 URL<input value={draft.supabase.url} onChange={(event) => updateSupabaseConfig({ url: event.target.value }, true)} placeholder="https://xxxx.supabase.co" /></label>
+                <label className="field">anon 公开密钥<input type="password" value={draft.supabase.anonKey} onChange={(event) => updateSupabaseConfig({ anonKey: event.target.value }, true)} placeholder="在 Settings → API 页面复制" /></label>
+              </div>
+              <p className="plain-hint">{accountSignedIn ? "你已登录账号，连接个人云端时会自动生成密钥，无需额外输入密码。" : "未登录账号时，需要设置一个档案密码来保护个人云端。请牢记密码，换设备恢复时会用到。"}</p>
+              <button className="inline-toggle" type="button" onClick={() => setShowCloudMore((value) => !value)}>
+                <ChevronDown size={16} />
+                {showCloudMore ? "收起高级设置" : "高级设置"}
               </button>
-              <button className="button ghost" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("已从云端恢复", handleRestoreFromCloud)}>
-                <Download size={18} />
-                从云端恢复到本机
+              {showCloudMore && (
+                <div className="field-stack subtle-fields">
+                  <label className="field">图片空间名称<input value={draft.supabase.mediaBucket} onChange={(event) => updateSupabaseConfig({ mediaBucket: event.target.value })} placeholder="默认 echo-media" /></label>
+                  <p className="plain-hint">对应 Supabase 中的 Storage Bucket 名称，仅在手动修改过桶名时需要调整。</p>
+                </div>
+              )}
+              <label className="toggle-row">
+                <input type="checkbox" checked={draft.supabase.syncMedia} onChange={(event) => updateSupabaseConfig({ syncMedia: event.target.checked })} />
+                <span><strong>同步图片</strong><small>{draft.supabase.syncMedia ? "海报、票根、座位图和现场照片将上传到你的 Supabase 图片空间。" : "仅同步演出文字记录，图片保留在当前设备。"}</small></span>
+              </label>
+              {showCloudConnectPanel ? (
+                <>
+                  {accountSignedIn ? (
+                    <div className="supabase-explain-card">
+                      <strong>使用当前账号连接</strong>
+                      <p>同步密钥会基于当前登录的账号自动生成，不需要额外输入密码。</p>
+                    </div>
+                  ) : (
+                    <label className="field">档案密码<input type="password" value={cloudPassword} onChange={(event) => setCloudPassword(event.target.value)} placeholder="至少 8 位，请记住此密码" /></label>
+                  )}
+                  <div className="button-row">
+                    <button className="button primary" disabled={!syncReady || busy || needsCloudPassword && !cloudPassword} type="button" onClick={() => run("", handleConnectCloud)}>
+                      {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
+                      {syncConnected ? "重新连接个人云端" : "连接个人云端"}
+                    </button>
+                    {syncConnected && <button className="button ghost" type="button" onClick={() => { setCloudPassword(""); setShowCloudReconnect(false); }}><X size={18} />取消重新连接</button>}
+                    <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存连接设置</button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <p className="plain-hint">个人云端已连接，数据可随时同步。更换项目、用户名或密码时才需要重新连接。</p>
+                  <div className="button-row">
+                    <button className="button ghost" type="button" onClick={() => setShowCloudReconnect(true)}><ShieldCheck size={18} />重新连接</button>
+                    <button className="button ghost" type="button" onClick={() => onSave(draft)}><Check size={18} />保存连接设置</button>
+                  </div>
+                </>
+              )}
+              <div className="button-row">
+                <button className="button primary" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("我的云端数据已更新", handleUploadToCloud)}>
+                  <Upload size={18} />
+                  上传到我的云端
+                </button>
+                <button className="button ghost" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("已从云端恢复", handleRestoreFromCloud)}>
+                  <Download size={18} />
+                  从云端恢复到本机
+                </button>
+              </div>
+            </section>
+          ) : accountAvailable ? (
+            <section className="panel sync-guide-panel">
+              <header className="panel-heading">
+                <div>
+                  <span>备份</span>
+                  <h2>自动文字备份</h2>
+                </div>
+                <p>登录账号后，演出文字记录会自动备份到 Live Memory 云端。换新设备时，输入同一账号密码即可恢复。</p>
+              </header>
+              <p className="plain-hint">最近备份：{draft.accountBackup.lastBackupAt ? new Date(draft.accountBackup.lastBackupAt).toLocaleString("zh-CN") : "登录后自动备份"}</p>
+            </section>
+          ) : (
+            <section className="panel sync-guide-panel">
+              <header className="panel-heading">
+                <div>
+                  <span>备份</span>
+                  <h2>本地保存</h2>
+                </div>
+                <p>所有演出记录保存在当前浏览器中。可在下方"数据管理"区域导出 JSON 文件作为手动备份。</p>
+              </header>
+            </section>
+          )}
+
+          <section className="settings-data-grid">
+            <div className="panel">
+              <header className="panel-heading">
+                <div>
+                  <span>导出</span>
+                  <h2>数据导出</h2>
+                </div>
+                <p>导出完整数据用于备份或迁移。JSON 包含图片，CSV 和文字备份仅含文字记录。</p>
+              </header>
+              <div className="button-row">
+                <button className="button primary" type="button" onClick={() => exportJson(records)}>
+                  <Download size={18} />
+                  导出 JSON
+                </button>
+                <button className="button ghost" type="button" onClick={() => exportCsv(records)}>
+                  <Download size={18} />
+                  导出 CSV
+                </button>
+                <button className="button ghost" type="button" onClick={() => exportTextJson(records)}>
+                  <Download size={18} />
+                  导出文字备份
+                </button>
+              </div>
+            </div>
+
+            <label className="panel import-file">
+              <Upload />
+              <strong>导入备份</strong>
+              <span>选择之前导出的 JSON 文件，恢复或迁移到新设备。</span>
+              <input type="file" accept="application/json" onChange={(event) => event.target.files?.[0] && void importJson(event.target.files[0])} />
+            </label>
+
+            <section className="panel recycle-panel">
+              <header className="panel-heading">
+                <div>
+                  <span>回收站</span>
+                  <h2>{trashRecords.length ? `${trashRecords.length} 条记录` : "回收站为空"}</h2>
+                </div>
+                <p>移入回收站的记录仍可恢复。永久删除后，文字和图片都无法找回。</p>
+              </header>
+              {trashRecords.length > 0 && (
+                <div className="recycle-list">
+                  {trashRecords.map((record) => (
+                    <article key={record.id}>
+                      <div>
+                        <strong>{record.title}</strong>
+                        <span>{record.date} · {record.artists.join(" / ") || "艺人待补"}</span>
+                      </div>
+                      <div className="button-row">
+                        <button className="button ghost compact" type="button" onClick={() => void onRestore(record)}><RotateCcw size={16} />恢复</button>
+                        <button className="button danger compact" type="button" onClick={() => onPermanentDelete(record)}><Trash2 size={16} />永久删除</button>
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              )}
+            </section>
+          </section>
+        </div>
+
+        <div className="settings-col-side">
+          <section className="panel storage-location-panel">
+            <header className="panel-heading">
+              <div>
+                <span>保存</span>
+                <h2>数据保存位置</h2>
+              </div>
+              <p>选择你的演出记录保存在哪里。</p>
+            </header>
+            <div className="storage-choice-grid">
+              <button className={draft.storageMode === "local" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("local")}>
+                <span>01</span>
+                <strong>{accountAvailable ? "设备保存 + 文字备份" : "保存在当前设备"}</strong>
+                <em>{accountAvailable ? "演出文字随 Live Memory 账号备份，图片保留在当前设备。" : "所有数据保存在浏览器本地，可随时导出 JSON 备份。"}</em>
+              </button>
+              <button className={draft.storageMode === "supabase" ? "storage-choice is-active" : "storage-choice"} type="button" onClick={() => chooseStorageMode("supabase")}>
+                <span>02</span>
+                <strong>Supabase 完整同步</strong>
+                <em>连接你自己的 Supabase 项目，文字和图片均可跨设备同步。</em>
               </button>
             </div>
-          </section>
-        ) : accountAvailable ? (
-          <section className="panel sync-guide-panel">
-            <header className="panel-heading">
-              <div>
-                <span>备份</span>
-                <h2>自动文字备份</h2>
+            {syncSelected && (
+              <div className="supabase-explain-card">
+                <strong>什么是 Supabase？</strong>
+                <p>Supabase 是免费的云数据库服务，为你提供独立的数据库和图片存储空间。创建项目后，将项目 URL 和 anon 公开密钥填入下方即可连接。</p>
+                <a className="source-link" href="https://supabase.com/dashboard/projects" target="_blank" rel="noreferrer"><ExternalLink size={16} />打开 Supabase 控制台</a>
               </div>
-              <p>登录账号后，演出文字记录会自动备份到 Live Memory 云端。换新设备时，输入同一账号密码即可恢复。</p>
-            </header>
-            <p className="plain-hint">最近备份：{draft.accountBackup.lastBackupAt ? new Date(draft.accountBackup.lastBackupAt).toLocaleString("zh-CN") : "登录后自动备份"}</p>
+            )}
           </section>
-        ) : (
-          <section className="panel sync-guide-panel">
-            <header className="panel-heading">
-              <div>
-                <span>备份</span>
-                <h2>本地保存</h2>
-              </div>
-              <p>所有演出记录保存在当前浏览器中。可在下方"数据管理"区域导出 JSON 文件作为手动备份。</p>
-            </header>
-          </section>
-        )}
 
-        <section className="settings-side-stack">
           <div className="panel">
             <header className="panel-heading">
               <div>
@@ -1736,83 +1797,24 @@ function SettingsView({
               </button>
             </div>
           </div>
-        </section>
-      </div>
 
-      <section className="settings-data-grid">
-        <div className="panel">
-          <header className="panel-heading">
-            <div>
-              <span>导出</span>
-              <h2>数据导出</h2>
-            </div>
-            <p>导出完整数据用于备份或迁移。JSON 包含图片，CSV 和文字备份仅含文字记录。</p>
-          </header>
-          <div className="button-row">
-            <button className="button primary" type="button" onClick={() => exportJson(records)}>
-              <Download size={18} />
-              导出 JSON
-            </button>
-            <button className="button ghost" type="button" onClick={() => exportCsv(records)}>
-              <Download size={18} />
-              导出 CSV
-            </button>
-            <button className="button ghost" type="button" onClick={() => exportTextJson(records)}>
-              <Download size={18} />
-              导出文字备份
-            </button>
-          </div>
+          <section className="panel health settings-health-panel">
+            <header className="panel-heading">
+              <div>
+                <span>检查</span>
+                <h2>保存状态</h2>
+              </div>
+            </header>
+            <InfoLine label="本地记录" value={`${health.localRecords} 条`} />
+            <InfoLine label="回收站" value={`${trashRecords.length} 条`} />
+            <InfoLine label="图片附件" value={`${health.mediaAssets} 个`} />
+            {syncSelected && draft.supabase.syncMedia && <InfoLine label="待上传图片" value={`${health.localOnlyMedia} 个`} />}
+            {syncSelected && draft.supabase.syncMedia && <InfoLine label="个人云端图片" value={`${health.remoteMedia} 个`} />}
+            <InfoLine label="最近文字备份" value={draft.accountBackup.lastBackupAt ? new Date(draft.accountBackup.lastBackupAt).toLocaleString("zh-CN") : "尚未备份"} />
+            {syncSelected && <InfoLine label="最近完整同步" value={health.lastSyncAt ? new Date(health.lastSyncAt).toLocaleString("zh-CN") : "尚未同步"} />}
+          </section>
         </div>
-
-        <label className="panel import-file">
-          <Upload />
-          <strong>导入备份</strong>
-          <span>选择之前导出的 JSON 文件，恢复或迁移到新设备。</span>
-          <input type="file" accept="application/json" onChange={(event) => event.target.files?.[0] && void importJson(event.target.files[0])} />
-        </label>
-
-        <section className="panel recycle-panel">
-          <header className="panel-heading">
-            <div>
-              <span>回收站</span>
-              <h2>{trashRecords.length ? `${trashRecords.length} 条记录` : "回收站为空"}</h2>
-            </div>
-            <p>移入回收站的记录仍可恢复。永久删除后，文字和图片都无法找回。</p>
-          </header>
-          {trashRecords.length > 0 && (
-            <div className="recycle-list">
-              {trashRecords.map((record) => (
-                <article key={record.id}>
-                  <div>
-                    <strong>{record.title}</strong>
-                    <span>{record.date} · {record.artists.join(" / ") || "艺人待补"}</span>
-                  </div>
-                  <div className="button-row">
-                    <button className="button ghost compact" type="button" onClick={() => void onRestore(record)}><RotateCcw size={16} />恢复</button>
-                    <button className="button danger compact" type="button" onClick={() => onPermanentDelete(record)}><Trash2 size={16} />永久删除</button>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      </section>
-
-      <section className="panel health settings-health-panel">
-        <header className="panel-heading">
-          <div>
-            <span>检查</span>
-            <h2>保存状态</h2>
-          </div>
-        </header>
-        <InfoLine label="本地记录" value={`${health.localRecords} 条`} />
-        <InfoLine label="回收站" value={`${trashRecords.length} 条`} />
-        <InfoLine label="图片附件" value={`${health.mediaAssets} 个`} />
-        {syncSelected && draft.supabase.syncMedia && <InfoLine label="待上传图片" value={`${health.localOnlyMedia} 个`} />}
-        {syncSelected && draft.supabase.syncMedia && <InfoLine label="个人云端图片" value={`${health.remoteMedia} 个`} />}
-        <InfoLine label="最近文字备份" value={draft.accountBackup.lastBackupAt ? new Date(draft.accountBackup.lastBackupAt).toLocaleString("zh-CN") : "尚未备份"} />
-        {syncSelected && <InfoLine label="最近完整同步" value={health.lastSyncAt ? new Date(health.lastSyncAt).toLocaleString("zh-CN") : "尚未同步"} />}
-      </section>
+      </div>
     </section>
   );
 }
