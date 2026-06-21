@@ -1512,6 +1512,7 @@ function SettingsView({
 
   async function handleUploadToCloud() {
     const result = await pushRecordsToSupabase(draft, records);
+    await replaceAllRecords(result.records);
     setRecords(result.records);
     await onSave({ ...draft, lastSyncAt: nowIso() });
   }
