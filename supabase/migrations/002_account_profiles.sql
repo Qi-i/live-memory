@@ -7,6 +7,7 @@ create table if not exists public.echo_user_profiles (
   linked_supabase_anon_key text,
   linked_supabase_media_bucket text not null default 'echo-media',
   amap_key text,
+  preferences jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
@@ -15,6 +16,8 @@ comment on table public.echo_user_profiles is
   'Private per-user account profile and client-side service bindings for Echo Archive.';
 comment on column public.echo_user_profiles.linked_supabase_anon_key is
   'Browser publishable/anon key only. Never store service_role, database passwords, or object storage secrets here.';
+comment on column public.echo_user_profiles.preferences is
+  'Private per-user display, map, backup and sync preferences restored after Live Memory login.';
 
 alter table public.echo_user_profiles enable row level security;
 

@@ -14,14 +14,14 @@
 
 **<https://qi-i.github.io/live-memory/>**
 
-首次进入时登录或创建 Live Memory 账号，并选择一种保存方式：
+首次进入时登录或创建 Live Memory 账号，并选择一种保存方式。账号会同步昵称、头像、显示偏好、个人 Supabase 连接配置和文字备份；登录密码只用于验证，不会明文保存到资料表。
 
 | 保存方式 | 演出文字 | 图片 | 适用场景 |
 | --- | --- | --- | --- |
 | 账号文字备份 | 随账号同步 | 留在当前设备 | 图片较多、希望节省云端空间 |
 | Supabase 完整同步 | 同步 | 可选择同步 | 电脑和手机查看同一套完整档案 |
 
-公开站点内置 3 条演示记录。每位用户的档案保存在自己的浏览器、Live Memory 账号或个人 Supabase 中，不会写入 GitHub 仓库。
+公开站点内置 3 条演示记录。每位用户的私人档案保存在自己的浏览器、Live Memory 账号或个人 Supabase 中，不会写入 GitHub 仓库。
 
 | 你想做什么 | 使用方式 |
 | --- | --- |
@@ -40,7 +40,7 @@
 - 海报、票根、座位图、现场精选照片分类管理与大图查看。
 - 类型、状态、年份、城市、艺人、标签多选筛选和多种排序。
 - 大麦公开链接、文本、多张图片、JSON 备份批量导入。
-- Live Memory 账号资料、文字云备份和自动备份。
+- Live Memory 账号资料、显示偏好、个人 Supabase 配置、文字云备份和自动备份。
 - 用户自带 Supabase 完整同步；公开站点登录账号后可直接连接，图片上传可独立关闭。
 - 删除二次确认、回收站恢复和永久删除确认。
 - JSON 完整备份、JSON 文字备份和 CSV 导出。
@@ -80,7 +80,7 @@ npm run preview
 
 只有维护自己的公开站点时才需要这一节。普通用户直接使用公开地址时，不需要配置这些变量。
 
-Live Memory 账号项目用于登录、找回密码和文字备份；用户个人演出档案仍由用户自己的 Supabase 或当前设备保存。复制 `.env.example` 为 `.env.local`：
+Live Memory 账号项目用于登录、找回密码、账号资料、显示偏好、个人 Supabase 配置和文字备份；用户个人演出档案仍由用户自己的 Supabase 或当前设备保存。复制 `.env.example` 为 `.env.local`：
 
 ```dotenv
 VITE_ACCOUNT_SUPABASE_URL=https://YOUR_ACCOUNT_PROJECT.supabase.co
@@ -93,7 +93,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 | 变量 | 用途 |
 | --- | --- |
-| `VITE_ACCOUNT_SUPABASE_URL` | Live Memory 账号、资料、密码找回和文字备份 |
+| `VITE_ACCOUNT_SUPABASE_URL` | Live Memory 账号、资料、偏好、密码找回和文字备份 |
 | `VITE_ACCOUNT_SUPABASE_ANON_KEY` | 账号项目的公开连接密钥 |
 | `VITE_SUPABASE_URL` | 可选的默认个人数据项目；通常由用户在设置页填写 |
 | `VITE_SUPABASE_ANON_KEY` | 默认个人数据项目的公开连接密钥 |
@@ -107,7 +107,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 - [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
 
-这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 1-5 号 migration 并配置 GitHub Pages 变量。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
+这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 1-6 号 migration 并配置 GitHub Pages 变量。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
 
 ## 把现有记录迁入私人云端
 
@@ -117,7 +117,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 2. 打开公开站点；如果页面只有 3 条示例记录，在 `导入` 中选择刚才导出的 JSON。
 3. 导入完成后确认档案页显示 25 条个人记录；3 条示例可以移入回收站。
 4. 在 `设置 > 数据保存位置` 选择 `Supabase 完整同步`。
-5. 按页面教程创建个人 Supabase，填写项目地址和公开连接密钥。
+5. 按页面教程创建个人 Supabase，首次填写项目地址和公开连接密钥；保存后会随 Live Memory 账号恢复到其他设备。
 6. 如果页面显示已登录账号，直接点击 `连接个人云端`；没有账号服务的自部署版本会要求设置档案密码。
 7. 决定是否开启 `同步图片`，再点击 `上传到我的云端`。
 8. 在 Supabase `Table Editor > echo_passkey_records` 确认有 25 条记录；开启图片同步时，再到 `Storage > echo-media` 检查图片目录。
@@ -139,6 +139,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 - 源代码、图标、文档和 3 条演示记录进入 GitHub。
 - 演出记录先写入浏览器 IndexedDB。
+- 账号资料、显示偏好和个人 Supabase 公开连接配置写入账号项目的 `echo_user_profiles`。
 - 文字备份写入账号项目的 `echo_text_backups`。
 - 完整同步写入用户个人项目的 `echo_passkey_records` 和 `echo_passkey_media_assets`。
 - 图片仅在开启图片同步后进入私有 `echo-media` 空间。

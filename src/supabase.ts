@@ -36,8 +36,22 @@ export interface UserProfileBinding {
   supabaseAnonKey: string;
   mediaBucket: string;
   amapKey: string;
+  preferences: AccountProfilePreferences;
   updatedAt?: string;
 }
+
+export interface AccountProfilePreferences {
+  schemaVersion: 1;
+  defaultView?: AppSettings["defaultView"];
+  posterColumns?: number;
+  storageMode?: AppSettings["storageMode"];
+  accountBackup?: Partial<Pick<AppSettings["accountBackup"], "intervalHours">>;
+  supabase?: Partial<Pick<AppSettings["supabase"], "syncMedia">>;
+  map?: Partial<AppSettings["map"]>;
+}
+
+const profileSelect = "display_name, username, nickname, avatar_url, recovery_email, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, preferences, updated_at";
+const legacyProfileSelect = "display_name, username, nickname, avatar_url, recovery_email, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at";
 
 export function hasSupabaseConfig(settings: AppSettings) {
   return Boolean(settings.supabase.url && settings.supabase.anonKey);
@@ -96,6 +110,7 @@ export interface AccountSignInResult {
 export async function signInWithPassword(settings: AppSettings, password: string): Promise<AccountSignInResult> {
   const client = makeAccountClient(settings);
   const email = authEmailForSettings(settings);
+  const recoveryEmail = validateRecoveryEmail(settings.account.recoveryEmail);
   validatePassword(password);
   const existing = await client.auth.getUser();
   if (existing.data.user) return { message: "账号已登录", isNewAccount: false };
@@ -110,8 +125,13 @@ export async function signInWithPassword(settings: AppSettings, password: string
     .maybeSingle();
   const profileExists = Boolean(profile);
 
-  const { error } = await client.auth.signInWithPassword({ email, password });
+  let { error } = await client.auth.signInWithPassword({ email, password });
   if (!error) return { message: "登录成功", isNewAccount: false };
+  if (recoveryEmail && recoveryEmail !== email) {
+    const legacy = await client.auth.signInWithPassword({ email: recoveryEmail, password });
+    if (!legacy.error) return { message: "登录成功", isNewAccount: false };
+    error = legacy.error;
+  }
 
   // Login failed — decide what to do based on profile existence and error message.
   const loginMessage = (error.message || "").toLowerCase();
@@ -266,7 +286,7 @@ function throwPersonalCloudError(error: unknown): never {
 
 export async function requestPasswordReset(settings: AppSettings) {
   const email = validateRecoveryEmail(settings.account.recoveryEmail);
-  if (!email) throw new Error("请先填写找回邮箱");
+  if (!email) throw new Error("请先填写备用邮箱");
   const client = makeAccountClient(settings);
   const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: currentAppUrl() });
   if (error) throw error;
@@ -339,10 +359,6 @@ export async function saveUserProfileBinding(settings: AppSettings): Promise<Use
   const user = await requireUser(client);
   const username = validateUsername(settings.account.username);
   const recoveryEmail = validateRecoveryEmail(settings.account.recoveryEmail);
-  if (recoveryEmail && user.email !== recoveryEmail) {
-    const updated = await client.auth.updateUser({ email: recoveryEmail });
-    if (updated.error) throw updated.error;
-  }
   const github = githubIdentity(user);
   const displayName = settings.account.nickname || github.displayName || user.email || "";
   const row = {
@@ -358,14 +374,26 @@ export async function saveUserProfileBinding(settings: AppSettings): Promise<Use
     linked_supabase_anon_key: settings.supabase.anonKey || null,
     linked_supabase_media_bucket: mediaBucket(settings),
     amap_key: settings.map.amapKey || null,
+    preferences: profilePreferencesFromSettings(settings),
     updated_at: nowIso(),
   };
 
   const { data, error } = await client
     .from("echo_user_profiles")
     .upsert(row, { onConflict: "user_id" })
-    .select("display_name, username, nickname, avatar_url, recovery_email, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
+    .select(profileSelect)
     .single();
+  if (error && isMissingPreferencesColumn(error)) {
+    const legacyRow = { ...row } as Record<string, unknown>;
+    delete legacyRow.preferences;
+    const legacy = await client
+      .from("echo_user_profiles")
+      .upsert(legacyRow, { onConflict: "user_id" })
+      .select(legacyProfileSelect)
+      .single();
+    if (legacy.error) throwProfileError(legacy.error);
+    return profileFromRow(legacy.data);
+  }
   if (error) throwProfileError(error);
   return profileFromRow(data);
 }
@@ -375,9 +403,18 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
   const user = await requireUser(client);
   const { data, error } = await client
     .from("echo_user_profiles")
-    .select("display_name, username, nickname, avatar_url, recovery_email, github_username, github_user_id, linked_supabase_url, linked_supabase_anon_key, linked_supabase_media_bucket, amap_key, updated_at")
+    .select(profileSelect)
     .eq("user_id", user.id)
     .maybeSingle();
+  if (error && isMissingPreferencesColumn(error)) {
+    const legacy = await client
+      .from("echo_user_profiles")
+      .select(legacyProfileSelect)
+      .eq("user_id", user.id)
+      .maybeSingle();
+    if (legacy.error) throwProfileError(legacy.error);
+    return legacy.data ? profileFromRow(legacy.data) : null;
+  }
   if (error) throwProfileError(error);
   return data ? profileFromRow(data) : null;
 }
@@ -398,31 +435,25 @@ export async function syncAfterLogin(
   let nextSettings = settings;
   const profile = await loadUserProfileBinding(settings).catch(() => null);
   if (profile) {
-    nextSettings = {
-      ...settings,
-      account: {
-        ...settings.account,
-        username: profile.username || settings.account.username,
-        nickname: profile.nickname || profile.displayName || settings.account.nickname,
-        avatarUrl: profile.avatarUrl || settings.account.avatarUrl,
-        recoveryEmail: profile.recoveryEmail || settings.account.recoveryEmail,
-      },
-      supabase: {
-        ...settings.supabase,
-        url: profile.supabaseUrl || settings.supabase.url,
-        anonKey: profile.supabaseAnonKey || settings.supabase.anonKey,
-        mediaBucket: profile.mediaBucket || settings.supabase.mediaBucket,
-        ownerKey: "",
-      },
-      map: { ...settings.map, amapKey: profile.amapKey || settings.map.amapKey },
-    };
+    nextSettings = settingsFromProfileBinding(settings, profile);
     messages.push("资料已恢复");
   } else {
     await saveUserProfileBinding(nextSettings).catch(() => undefined);
     messages.push("资料已上传");
   }
 
-  // 2. Text records: pull if cloud has data, push if cloud is empty
+  // 2. Personal Supabase: restore saved project settings, then reconnect using the Live Memory account.
+  if (nextSettings.storageMode === "supabase" && hasSupabaseConfig(nextSettings)) {
+    try {
+      const connected = await signInStorageWithAccount(nextSettings);
+      nextSettings = connected.settings;
+      messages.push("个人云端已连接");
+    } catch {
+      messages.push("个人云端配置已恢复");
+    }
+  }
+
+  // 3. Text records: pull if cloud has data, push if cloud is empty
   let nextRecords = localRecords;
   try {
     const pullResult = await pullTextBackupFromAccount(nextSettings, localRecords);
@@ -671,7 +702,98 @@ function profileFromRow(row: Record<string, unknown>): UserProfileBinding {
     supabaseAnonKey: pickString(row.linked_supabase_anon_key),
     mediaBucket: pickString(row.linked_supabase_media_bucket) || "echo-media",
     amapKey: pickString(row.amap_key),
+    preferences: normalizeProfilePreferences(row.preferences),
     updatedAt: pickString(row.updated_at),
+  };
+}
+
+function settingsFromProfileBinding(settings: AppSettings, profile: UserProfileBinding): AppSettings {
+  const preferences = profile.preferences;
+  const accountBackup = preferences.accountBackup || {};
+  const supabasePreferences = preferences.supabase || {};
+  const mapPreferences = preferences.map || {};
+  const hasLinkedSupabase = Boolean(profile.supabaseUrl && profile.supabaseAnonKey);
+  return {
+    ...settings,
+    defaultView: preferences.defaultView || settings.defaultView,
+    posterColumns: Math.min(6, Math.max(2, Number(preferences.posterColumns || settings.posterColumns || 4))),
+    storageMode: preferences.storageMode || (hasLinkedSupabase ? "supabase" : settings.storageMode),
+    account: {
+      ...settings.account,
+      username: profile.username || settings.account.username,
+      nickname: profile.nickname || profile.displayName || settings.account.nickname,
+      avatarUrl: profile.avatarUrl || settings.account.avatarUrl,
+      recoveryEmail: profile.recoveryEmail || settings.account.recoveryEmail,
+    },
+    accountBackup: {
+      ...settings.accountBackup,
+      ...(Number.isFinite(Number(accountBackup.intervalHours)) ? { intervalHours: Math.max(1, Number(accountBackup.intervalHours)) } : {}),
+    },
+    supabase: {
+      ...settings.supabase,
+      url: profile.supabaseUrl || settings.supabase.url,
+      anonKey: profile.supabaseAnonKey || settings.supabase.anonKey,
+      mediaBucket: profile.mediaBucket || settings.supabase.mediaBucket,
+      syncMedia: typeof supabasePreferences.syncMedia === "boolean" ? supabasePreferences.syncMedia : settings.supabase.syncMedia,
+      ownerKey: "",
+    },
+    map: {
+      ...settings.map,
+      provider: mapPreferences.provider || (profile.amapKey ? "amap" : settings.map.provider),
+      amapKey: mapPreferences.amapKey || profile.amapKey || settings.map.amapKey,
+      amapSecurityCode: mapPreferences.amapSecurityCode || settings.map.amapSecurityCode,
+      baiduAk: mapPreferences.baiduAk || settings.map.baiduAk,
+    },
+  };
+}
+
+function profilePreferencesFromSettings(settings: AppSettings): AccountProfilePreferences {
+  return {
+    schemaVersion: 1,
+    defaultView: settings.defaultView,
+    posterColumns: Math.min(6, Math.max(2, Number(settings.posterColumns || 4))),
+    storageMode: settings.storageMode,
+    accountBackup: {
+      intervalHours: Math.max(1, Number(settings.accountBackup.intervalHours || 24)),
+    },
+    supabase: {
+      syncMedia: settings.supabase.syncMedia,
+    },
+    map: {
+      provider: settings.map.provider,
+      amapKey: settings.map.amapKey,
+      amapSecurityCode: settings.map.amapSecurityCode,
+      baiduAk: settings.map.baiduAk,
+    },
+  };
+}
+
+function normalizeProfilePreferences(value: unknown): AccountProfilePreferences {
+  const raw = isRecord(value) ? value : {};
+  const accountBackup = isRecord(raw.accountBackup) ? raw.accountBackup : {};
+  const supabase = isRecord(raw.supabase) ? raw.supabase : {};
+  const map = isRecord(raw.map) ? raw.map : {};
+  const defaultView = pickArchiveView(raw.defaultView);
+  const posterColumns = Number(raw.posterColumns);
+  const storageMode = raw.storageMode === "local" || raw.storageMode === "supabase" ? raw.storageMode : undefined;
+  const mapProvider = map.provider === "amap" || map.provider === "baidu" || map.provider === "none" ? map.provider : undefined;
+  return {
+    schemaVersion: 1,
+    ...(defaultView ? { defaultView } : {}),
+    ...(Number.isFinite(posterColumns) ? { posterColumns: Math.min(6, Math.max(2, posterColumns)) } : {}),
+    ...(storageMode ? { storageMode } : {}),
+    accountBackup: {
+      ...(Number.isFinite(Number(accountBackup.intervalHours)) ? { intervalHours: Math.max(1, Number(accountBackup.intervalHours)) } : {}),
+    },
+    supabase: {
+      ...(typeof supabase.syncMedia === "boolean" ? { syncMedia: supabase.syncMedia } : {}),
+    },
+    map: {
+      ...(mapProvider ? { provider: mapProvider } : {}),
+      amapKey: pickString(map.amapKey),
+      amapSecurityCode: pickString(map.amapSecurityCode),
+      baiduAk: pickString(map.baiduAk),
+    },
   };
 }
 
@@ -692,6 +814,23 @@ function authEmailForSettings(settings: AppSettings) {
 function pickString(...values: unknown[]) {
   const value = values.find((item): item is string => typeof item === "string" && item.trim().length > 0);
   return value?.trim() || "";
+}
+
+function pickArchiveView(value: unknown): AppSettings["defaultView"] | undefined {
+  const view = String(value || "");
+  return view === "poster" || view === "wallet" || view === "ticket" || view === "timeline" || view === "price" || view === "summary" || view === "calendar" || view === "venue" || view === "list"
+    ? view
+    : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === "object" && !Array.isArray(value));
+}
+
+function isMissingPreferencesColumn(error: unknown) {
+  const code = (error as { code?: string }).code;
+  const message = String((error as { message?: string }).message || "");
+  return code === "42703" || /preferences.*does not exist|column.*preferences/i.test(message);
 }
 
 function throwProfileError(error: unknown): never {

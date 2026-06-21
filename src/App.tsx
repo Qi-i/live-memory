@@ -83,6 +83,7 @@ import {
   pushTextBackupToAccount,
   pushRecordsToSupabase,
   refreshSignedMediaUrls,
+  saveUserProfileBinding,
   signInWithGithub,
   signInWithPassword,
   signInStorageWithAccount,
@@ -199,6 +200,16 @@ export default function App() {
     window.setTimeout(() => setToast(""), 2600);
   }
 
+  async function saveAccountProfileQuietly(next: AppSettings) {
+    if (!hasAccountCloudConfig(next)) return;
+    try {
+      const user = await currentUser(next);
+      if (user) await saveUserProfileBinding(next);
+    } catch {
+      // Settings should remain saved locally even if profile sync is temporarily unavailable.
+    }
+  }
+
   async function persistRecord(record: EventRecord) {
     const saved = await saveRecord(record);
     setRecords((current) => sortRecords(current.filter((item) => item.id !== saved.id).concat(saved), "date-desc"));
@@ -236,12 +247,14 @@ export default function App() {
     const saved = writeSettings(next);
     setSettings(saved);
     setView(saved.defaultView);
+    void saveAccountProfileQuietly(saved);
     flash("设置已保存");
   }
 
   function updatePosterColumns(posterColumns: number) {
     const saved = writeSettings({ ...settings, posterColumns });
     setSettings(saved);
+    void saveAccountProfileQuietly(saved);
   }
 
   async function replaceRecords(next: EventRecord[], message: string) {
@@ -686,12 +699,15 @@ function FilterBar({
           </select>
         </label>
         {view === "poster" && (
-          <label className="select-wrap compact-select">
-            <span>每行</span>
-            <select value={posterColumns} onChange={(event) => setPosterColumns(Number(event.target.value))}>
-              {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 张</option>)}
-            </select>
-          </label>
+          <div className="column-density-control">
+            <label className="select-wrap compact-select">
+              <span>每行</span>
+              <select value={posterColumns} onChange={(event) => setPosterColumns(Number(event.target.value))}>
+                {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 张</option>)}
+              </select>
+            </label>
+            {posterColumns >= 5 && <p>手机端会继续压缩海报和文字，适合快速浏览。</p>}
+          </div>
         )}
         <div className="view-switch" aria-label="展示方式">
           {(Object.keys(viewLabels) as ArchiveView[]).map((item) => (
@@ -798,10 +814,10 @@ function ArchiveViewRenderer({
   if (view === "ticket") return <TicketView records={records} onOpen={onOpen} />;
   const gridStyle = {
     "--poster-columns": posterColumns,
-    "--poster-mobile-columns": Math.min(3, posterColumns),
+    "--poster-mobile-columns": posterColumns,
   } as CSSProperties;
   return (
-    <section className={view === "poster" ? "poster-grid" : "wallet-list"} style={view === "poster" ? gridStyle : undefined}>
+    <section className={view === "poster" ? `poster-grid poster-density-${posterColumns}` : "wallet-list"} style={view === "poster" ? gridStyle : undefined}>
       {records.map((record, index) =>
         view === "wallet" ? (
           <WalletCard record={record} key={record.id} onOpen={onOpen} onZoom={onZoom} onEdit={onEdit} />

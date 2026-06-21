@@ -20,8 +20,10 @@ flowchart LR
   N --> I[(IndexedDB)]
   I --> V[各档案视图]
   I --> B[JSON / CSV 备份]
+  I --> P0[账号资料与偏好]
   I --> T[账号文字备份]
   I --> S[个人完整同步]
+  P0 --> C
   T --> C[(账号项目)]
   S --> P[(个人 Postgres)]
   S --> O[(个人图片空间)]
@@ -59,6 +61,7 @@ flowchart LR
 
 ## 同步语义
 
+- **账号资料恢复**：登录后读取 `echo_user_profiles`，恢复昵称头像、显示偏好、地图设置和个人 Supabase 公开连接配置。
 - **账号文字备份**：移除媒体数组后写入 `echo_text_backups`，可手动或定时执行。
 - **文字恢复**：按 `updatedAt` 合并云端与本地记录，本地图片始终保留。
 - **完整上传**：使用个人云端同步钥匙写入记录；按设置决定是否上传 data URL 图片，再 upsert 媒体索引。

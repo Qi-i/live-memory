@@ -5,7 +5,7 @@ Supabase 在回响册里有两种用途：
 | 角色 | 需要做什么 | 保存什么 |
 | --- | --- | --- |
 | 普通用户 | 建立自己的个人档案项目 | 演出记录、票根、座位图和照片 |
-| 站点维护者 | 建立 Live Memory 账号项目 | 登录、找回密码、账号资料和文字备份 |
+| 站点维护者 | 建立 Live Memory 账号项目 | 登录、找回密码、账号资料、偏好、个人云端配置和文字备份 |
 
 只使用公开站点时，先看“普通用户”一节。只有 Fork 仓库并发布自己的站点时，才需要配置“站点维护者”一节。
 
@@ -54,7 +54,7 @@ supabase/migrations/005_passkey_cloud_sync.sql
 4. 选择是否开启“同步图片”。
 5. 如果页面显示已登录账号，直接点击“连接个人云端”。如果页面要求档案密码，请输入一个自己记得住的密码。
 
-档案密码不是 Supabase 后台数据库密码，也不是 Live Memory 找回邮箱。只有无账号服务的自部署版本才需要它；公开站点登录账号后不需要重复输入。
+档案密码不是 Supabase 后台数据库密码，也不是 Live Memory 备用邮箱。只有无账号服务的自部署版本才需要它；公开站点登录账号后不需要重复输入。项目地址、公开连接密钥、图片空间名称和同步偏好会保存到你的 Live Memory 账号，换设备登录同一个账号后会自动恢复。
 
 ### 5. 上传现有档案
 
@@ -68,19 +68,21 @@ supabase/migrations/005_passkey_cloud_sync.sql
 
 GitHub 仓库只包含 3 条演示记录。导入的 25 条记录先进入当前浏览器，上传后进入你自己的 Supabase，其他账号无法读取。
 
-另一台设备恢复时，先登录同一个 Live Memory 账号，再填写同一个项目地址和公开连接密钥，点击“连接个人云端”，然后点击“从云端恢复到本机”。
+另一台设备恢复时，先登录同一个 Live Memory 账号。页面会自动恢复昵称头像、显示偏好和个人 Supabase 项目配置；看到“个人云端已连接”后，点击“从云端恢复到本机”。如果项目配置为空，说明旧账号项目还没运行 `006_account_preferences.sql` 或之前没有保存过连接设置。
 
 ## 站点维护者：建立账号项目
 
-账号项目承载 Live Memory 登录、账号资料、密码找回和文字备份。普通用户不需要自己配置这一节。
+账号项目承载 Live Memory 登录、账号资料、显示偏好、个人云端配置、密码找回和文字备份。普通用户不需要自己配置这一节。
 
 1. 创建独立 Supabase 项目。
-2. 按顺序运行五个 migration。
-3. 在 `Authentication > Providers > Email` 开启邮箱登录；如允许用户不填写找回邮箱，请关闭邮件确认。
+2. 按顺序运行六个 migration。
+3. 在 `Authentication > Providers > Email` 开启邮箱登录；如允许用户不填写备用邮箱，请关闭邮件确认。
 4. 在 `Authentication > URL Configuration` 设置站点 URL，并加入生产与本地跳转地址。
 5. 在密码找回邮件模板中将产品名改为 `Live Memory`。
 6. 在项目的 Auth 设置中将最短密码长度设为 8。
 7. 将 Project URL 和 publishable key 写入部署环境的 `VITE_ACCOUNT_SUPABASE_URL`、`VITE_ACCOUNT_SUPABASE_ANON_KEY`。
+
+账号项目需要运行 `001_echo_archive.sql` 到 `006_account_preferences.sql`。个人档案项目只运行 `005_passkey_cloud_sync.sql`，两类项目不要混用。
 
 ### GitHub Pages Variables
 
@@ -106,20 +108,24 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 5. 把 GitHub Client ID 和 Client Secret 填回 Supabase GitHub Provider。
 6. Client Secret 只留在 Supabase 后台。
 
-## 找回邮箱与个人 Supabase
+## 备用邮箱与个人 Supabase
 
 两者用途不同：
 
-- 找回邮箱：接收 Live Memory 密码找回邮件。
+- 备用邮箱：用于 Live Memory 账号找回。
 - 个人 Supabase：保存演出记录与图片，使用同步钥匙识别自己的档案。
 
-修改个人 Supabase 项目不会改变 Live Memory 找回邮箱。更换找回邮箱也不会自动修改个人档案项目。
+修改个人 Supabase 项目不会改变 Live Memory 备用邮箱。更换备用邮箱也不会自动修改个人档案项目。Live Memory 账号密码不会明文保存；它只用于登录账号。
 
 ## 常见问题
 
 ### 提示数据表不存在
 
-如果错误里出现 `PGRST205`、`Could not find the table` 或 `echo_passkey_records`，说明当前个人 Supabase 项目还没有成功建立同步表。个人档案项目重新运行 `005_passkey_cloud_sync.sql`。自部署账号项目重新按顺序运行五个 migration，确认每个查询都显示 Success。
+如果错误里出现 `PGRST205`、`Could not find the table` 或 `echo_passkey_records`，说明当前个人 Supabase 项目还没有成功建立同步表。个人档案项目重新运行 `005_passkey_cloud_sync.sql`。自部署账号项目重新按顺序运行六个 migration，确认每个查询都显示 Success。
+
+### 登录后没有恢复个人 Supabase 配置
+
+自部署账号项目请确认已经运行 `006_account_preferences.sql`。公开站点用户只需在一台设备上登录账号、填写个人 Supabase 并保存连接设置，之后其他设备登录同一账号就会自动带回项目地址、公开连接密钥、图片空间名称和显示偏好。
 
 ### `new row violates row-level security policy`
 
@@ -143,4 +149,4 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 ### 找回密码收不到邮件
 
-找回邮件由账号项目发送，与个人 Supabase 项目无关。检查注册时填写的找回邮箱、垃圾邮件目录和账号项目的 Auth 邮件日志。
+找回邮件由账号项目发送，与个人 Supabase 项目无关。检查注册时填写的备用邮箱、垃圾邮件目录和账号项目的 Auth 邮件日志。
