@@ -82,8 +82,6 @@ import {
   purgeTextBackupFromAccount,
   pushTextBackupToAccount,
   pushRecordsToSupabase,
-  requestPasswordReset,
-  requestPasswordResetByUsername,
   refreshSignedMediaUrls,
   signInWithGithub,
   signInWithPassword,
@@ -451,8 +449,6 @@ function FirstRunGuide({
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "register" | "skip">("login");
-  const [showReset, setShowReset] = useState(false);
-  const [resetUsername, setResetUsername] = useState("");
   const accountAvailable = hasAccountCloudConfig(draft);
 
   function updateAccount(patch: Partial<AppSettings["account"]>) {
@@ -527,17 +523,17 @@ function FirstRunGuide({
 
         {accountAvailable && (
           <div className="onboarding-choice-row">
-            <button className={`storage-choice${mode === "login" ? " is-active" : ""}`} type="button" onClick={() => { setMode("login"); setPassword(""); setShowReset(false); }}>
+            <button className={`storage-choice${mode === "login" ? " is-active" : ""}`} type="button" onClick={() => { setMode("login"); setPassword(""); }}>
               <span>01</span>
               <strong>登录已有账号</strong>
               <em>输入用户名和密码登录，自动同步云端数据。</em>
             </button>
-            <button className={`storage-choice${mode === "register" ? " is-active" : ""}`} type="button" onClick={() => { setMode("register"); setPassword(""); setShowReset(false); }}>
+            <button className={`storage-choice${mode === "register" ? " is-active" : ""}`} type="button" onClick={() => { setMode("register"); setPassword(""); }}>
               <span>02</span>
               <strong>创建新账号</strong>
               <em>第一次使用？创建账号，数据自动同步到云端。</em>
             </button>
-            <button className={`storage-choice${mode === "skip" ? " is-active" : ""}`} type="button" onClick={() => { setMode("skip"); setShowReset(false); }}>
+            <button className={`storage-choice${mode === "skip" ? " is-active" : ""}`} type="button" onClick={() => { setMode("skip"); }}>
               <span>03</span>
               <strong>先在本地体验</strong>
               <em>暂不注册，数据仅保存在当前设备浏览器中。</em>
@@ -561,7 +557,7 @@ function FirstRunGuide({
             <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
             <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
             <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-            <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回密码" /></label>
+            <label className="field">备用邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="仅作为账号备注标识" /></label>
             <label className="field">设置密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>
           </div>
         )}
@@ -570,24 +566,7 @@ function FirstRunGuide({
           <p className="plain-hint">使用默认昵称和头像开始，后续可在设置中修改个人信息和同步配置。</p>
         )}
 
-        {mode === "login" && (
-          <div className="onboarding-forgot">
-            {!showReset ? (
-              <button className="button-link" type="button" onClick={() => setShowReset(true)}>忘记密码？</button>
-            ) : (
-              <div className="onboarding-reset-row">
-                <input value={resetUsername} onChange={(event) => setResetUsername(event.target.value)} placeholder="输入你的用户名" autoCapitalize="none" />
-                <button className="button ghost" type="button" disabled={busy || !resetUsername.trim()} onClick={() => void run(async () => {
-                  const msg = await requestPasswordResetByUsername(resetUsername);
-                  flash(msg);
-                  setShowReset(false);
-                })}>发送重置邮件</button>
-              </div>
-            )}
-          </div>
-        )}
-
-        {accountAvailable && mode === "register" && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱用于接收密码找回邮件。" : "不填邮箱也能使用；但忘记密码后将无法找回账号。"}</p>}
+        {accountAvailable && mode === "register" && <p className="plain-hint">{draft.account.recoveryEmail ? "备用邮箱仅作为账号备注标识，当前不支持邮件发送。" : "建议记住密码，忘记密码后需要联系管理员重置。"}</p>}
 
         <div className="onboarding-actions">
           {mode === "skip" && (
@@ -1566,19 +1545,18 @@ function SettingsView({
                 <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="页面显示名，例如 Qi" /></label>
                 <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
                 <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-                {accountAvailable && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
+                {accountAvailable && <label className="field">备用邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="仅作为账号备注标识" /></label>}
                 {accountAvailable && <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
               </div>
             </div>
             {accountAvailable ? (
               <>
-                <p className="hint">{draft.account.recoveryEmail ? "找回邮箱用于接收 Live Memory 密码找回邮件。" : "不填写邮箱也能登录；需要找回密码时再补充邮箱。"}</p>
+                <p className="hint">{draft.account.recoveryEmail ? "备用邮箱仅作为账号备注标识，当前不支持邮件发送。" : "建议记住密码，忘记密码后需要联系管理员重置。"}</p>
                 <div className="button-row">
                   <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", handleAccountLogin)}>
                     {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
                     登录 / 创建账号
                   </button>
-                  <button className="button ghost" disabled={!draft.account.recoveryEmail || busy} type="button" onClick={() => run("找回邮件已发送", async () => { await requestPasswordReset(draft); })}>找回密码</button>
                   <button className="button ghost" disabled={!password || busy} type="button" onClick={() => run("密码已更新", async () => { await updateAccountPassword(draft, password); })}>更新密码</button>
                   <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await onSave(draft); await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
                   <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
