@@ -100,35 +100,58 @@ export async function signInWithPassword(settings: AppSettings, password: string
   const existing = await client.auth.getUser();
   if (existing.data.user) return { message: "账号已登录", isNewAccount: false };
 
+  const username = validateUsername(settings.account.username);
+
+  // Pre-check: does this username have a profile record?
+  const { data: profile } = await client
+    .from("echo_user_profiles")
+    .select("username")
+    .eq("username", username.toLowerCase())
+    .maybeSingle();
+  const profileExists = Boolean(profile);
+
   const { error } = await client.auth.signInWithPassword({ email, password });
   if (!error) return { message: "登录成功", isNewAccount: false };
 
-  // Login failed — only attempt sign-up when the error looks like "no such account".
-  // If the account exists but the password is wrong, tell the user directly.
+  // Login failed — decide what to do based on profile existence and error message.
   const loginMessage = (error.message || "").toLowerCase();
   const isNotFound = /not found|not exist|unknown user|no user|user not/i.test(loginMessage);
 
-  if (!isNotFound) {
-    if (isEmailRateLimit(error)) {
-      throw new Error("账号邮件请求过于频繁，请稍后再试。个人 Supabase 连接不需要账号邮件。");
-    }
-    throw new Error("密码不正确，请检查后重试");
+  if (profileExists) {
+    // Account exists in our records — must be a wrong password.
+    throw new Error("密码错误，请检查后重试");
   }
 
+  if (!isNotFound) {
+    // Generic error (e.g. "Invalid login credentials") and no profile found.
+    // The account likely doesn't exist in Supabase Auth — auto-register.
+    return autoRegister(client, email, password, settings);
+  }
+
+  // Explicit "not found" from Supabase — auto-register.
+  return autoRegister(client, email, password, settings);
+}
+
+async function autoRegister(
+  client: SupabaseClient,
+  email: string,
+  password: string,
+  settings: AppSettings,
+): Promise<AccountSignInResult> {
   const signUp = await client.auth.signUp({
     email,
     password,
-    options: {
-      data: accountMetadata(settings),
-    },
+    options: { data: accountMetadata(settings) },
   });
   if (signUp.error) {
-    if (isEmailRateLimit(signUp.error)) throw new Error("账号邮件请求过于频繁，请稍后再试。个人 Supabase 连接不需要账号邮件。");
-    if (/already|registered|exists/i.test(signUp.error.message)) throw new Error("密码不正确，请检查后重试");
-    if (/invalid login/i.test(signUp.error.message)) throw new Error("用户名、邮箱或密码不正确");
+    if (isEmailRateLimit(signUp.error)) throw new Error("账号服务暂时不可用，请稍后再试。");
+    if (/already|registered|exists/i.test(signUp.error.message)) throw new Error("密码错误，请检查后重试");
     throw signUp.error;
   }
-  if (!signUp.data.session && signUp.data.user?.identities?.length === 0) throw new Error("用户名、邮箱或密码不正确");
+  if (!signUp.data.session) {
+    if (signUp.data.user?.identities?.length === 0) throw new Error("密码错误，请检查后重试");
+    throw new Error("注册需要关闭邮箱验证：请在 Supabase 控制台的 Authentication → Settings → Email Auth 中关闭 Confirm Email。");
+  }
   return { message: "账号已创建", isNewAccount: true };
 }
 
