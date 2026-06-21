@@ -83,6 +83,7 @@ import {
   pushTextBackupToAccount,
   pushRecordsToSupabase,
   requestPasswordReset,
+  requestPasswordResetByEmail,
   refreshSignedMediaUrls,
   signInWithGithub,
   signInWithPassword,
@@ -443,6 +444,8 @@ function FirstRunGuide({
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "register" | "skip">("login");
+  const [showReset, setShowReset] = useState(false);
+  const [resetEmail, setResetEmail] = useState("");
   const accountAvailable = hasAccountCloudConfig(draft);
 
   function updateAccount(patch: Partial<AppSettings["account"]>) {
@@ -468,7 +471,6 @@ function FirstRunGuide({
 
   function complete() {
     void run(async () => {
-      if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
       const username = validateUsername(draft.account.username);
 
       let next: AppSettings = {
@@ -488,6 +490,7 @@ function FirstRunGuide({
         await replaceAllRecords(sync.records);
         setRecords(sync.records);
       } else if (mode === "register") {
+        if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
         validatePassword(password);
         if (draft.account.recoveryEmail) validateRecoveryEmail(draft.account.recoveryEmail);
         const signUpResult = await signUpOnly(next, password);
@@ -496,6 +499,8 @@ function FirstRunGuide({
         message = `${signUpResult.message}，${sync.message}`;
         await replaceAllRecords(sync.records);
         setRecords(sync.records);
+      } else {
+        if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
       }
 
       await onSave(next);
@@ -516,17 +521,17 @@ function FirstRunGuide({
 
         {accountAvailable && (
           <div className="onboarding-choice-row">
-            <button className={`storage-choice${mode === "login" ? " is-active" : ""}`} type="button" onClick={() => { setMode("login"); setPassword(""); }}>
+            <button className={`storage-choice${mode === "login" ? " is-active" : ""}`} type="button" onClick={() => { setMode("login"); setPassword(""); setShowReset(false); }}>
               <span>01</span>
               <strong>登录已有账号</strong>
-              <em>已有账号和密码？输入账号密码登录，自动同步数据。</em>
+              <em>输入用户名和密码登录，自动同步云端数据。</em>
             </button>
-            <button className={`storage-choice${mode === "register" ? " is-active" : ""}`} type="button" onClick={() => { setMode("register"); setPassword(""); }}>
+            <button className={`storage-choice${mode === "register" ? " is-active" : ""}`} type="button" onClick={() => { setMode("register"); setPassword(""); setShowReset(false); }}>
               <span>02</span>
               <strong>创建新账号</strong>
               <em>第一次使用？创建账号，数据自动同步到云端。</em>
             </button>
-            <button className={`storage-choice${mode === "skip" ? " is-active" : ""}`} type="button" onClick={() => setMode("skip")}>
+            <button className={`storage-choice${mode === "skip" ? " is-active" : ""}`} type="button" onClick={() => { setMode("skip"); setShowReset(false); }}>
               <span>03</span>
               <strong>先在本地体验</strong>
               <em>暂不注册，数据仅保存在当前设备浏览器中。</em>
@@ -534,19 +539,52 @@ function FirstRunGuide({
           </div>
         )}
 
-        <div className="onboarding-form">
-          <div className="account-preview">
-            <AccountAvatar settings={draft} />
-            <p>{mode === "skip" ? "昵称和头像显示在页面右上角。" : "用户名用于登录，昵称和头像显示在页面右上角。"}</p>
+        {mode === "login" && (
+          <div className="onboarding-form onboarding-login-form">
+            <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="注册时使用的用户名" autoCapitalize="none" autoFocus /></label>
+            <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" autoFocus={!!draft.account.username} /></label>
           </div>
-          <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
-          <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
-          <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-          {mode === "register" && <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回 Live Memory 密码" /></label>}
-          {(mode === "login" || mode === "register") && <label className="field">{mode === "login" ? "账号密码" : "设置密码"}<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
-        </div>
+        )}
 
-        {accountAvailable && mode !== "skip" && <p className="plain-hint">{mode === "register" ? (draft.account.recoveryEmail ? "找回邮箱用于接收密码找回邮件。" : "不填邮箱也能使用；但忘记密码后将无法找回账号。") : "输入你注册时使用的账号和密码即可登录。"}</p>}
+        {mode === "register" && (
+          <div className="onboarding-form">
+            <div className="account-preview">
+              <AccountAvatar settings={draft} />
+              <p>用户名用于登录，昵称和头像显示在页面右上角。</p>
+            </div>
+            <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
+            <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
+            <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
+            <label className="field">找回邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="用于找回密码" /></label>
+            <label className="field">设置密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>
+          </div>
+        )}
+
+        {mode === "skip" && (
+          <div className="onboarding-form onboarding-skip-form">
+            <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" autoFocus /></label>
+            <label className="field">用户名（可选）<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
+          </div>
+        )}
+
+        {mode === "login" && (
+          <div className="onboarding-forgot">
+            {!showReset ? (
+              <button className="button-link" type="button" onClick={() => setShowReset(true)}>忘记密码？</button>
+            ) : (
+              <div className="onboarding-reset-row">
+                <input type="email" value={resetEmail} onChange={(event) => setResetEmail(event.target.value)} placeholder="输入你注册时填写的邮箱" />
+                <button className="button ghost" type="button" disabled={busy || !resetEmail.trim()} onClick={() => void run(async () => {
+                  const msg = await requestPasswordResetByEmail(resetEmail);
+                  flash(msg);
+                  setShowReset(false);
+                })}>发送重置邮件</button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {accountAvailable && mode === "register" && <p className="plain-hint">{draft.account.recoveryEmail ? "找回邮箱用于接收密码找回邮件。" : "不填邮箱也能使用；但忘记密码后将无法找回账号。"}</p>}
 
         <div className="onboarding-actions">
           {mode === "skip" && (

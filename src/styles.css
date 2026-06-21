@@ -3966,6 +3966,76 @@ body {
   gap: 10px;
 }
 
+.onboarding-login-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  max-width: 600px;
+}
+
+.onboarding-login-form .field {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.onboarding-skip-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  max-width: 600px;
+}
+
+.onboarding-skip-form .field {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.onboarding-forgot {
+  display: flex;
+  align-items: center;
+}
+
+.button-link {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #108879;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.button-link:hover {
+  color: #0a6b5f;
+}
+
+.onboarding-reset-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+  max-width: 480px;
+}
+
+.onboarding-reset-row input {
+  flex: 1;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: 1px solid rgba(17, 19, 24, 0.16);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.7);
+  font: inherit;
+}
+
+.onboarding-reset-row input:focus {
+  outline: 2px solid #108879;
+  outline-offset: -1px;
+}
+
 .wallet-list {
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 520px), 1fr));
   align-items: stretch;
@@ -4250,7 +4320,9 @@ body {
 
   .account-settings-grid,
   .onboarding-choice-row,
-  .onboarding-form {
+  .onboarding-form,
+  .onboarding-login-form,
+  .onboarding-skip-form {
     grid-template-columns: 1fr;
   }
 

@@ -246,6 +246,22 @@ export async function requestPasswordReset(settings: AppSettings) {
   return "找回邮件已发送";
 }
 
+export async function requestPasswordResetByEmail(email: string) {
+  const trimmed = email.trim().toLowerCase();
+  if (!trimmed) throw new Error("请输入找回邮箱");
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) throw new Error("邮箱格式不正确");
+  if (!accountUrl || !accountAnonKey) throw new Error("账号服务暂时不可用，请稍后再试");
+  const client = createClient(accountUrl, accountAnonKey, {
+    auth: { persistSession: false },
+  });
+  const { error } = await client.auth.resetPasswordForEmail(trimmed, { redirectTo: currentAppUrl() });
+  if (error) {
+    if (isEmailRateLimit(error)) throw new Error("邮件请求过于频繁，请稍后再试。");
+    throw error;
+  }
+  return "找回邮件已发送";
+}
+
 export async function updateAccountPassword(settings: AppSettings, password: string) {
   validatePassword(password);
   const client = makeAccountClient(settings);
