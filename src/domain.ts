@@ -218,7 +218,7 @@ export const defaultSettings: AppSettings = {
   onboardingComplete: false,
   account: {
     username: "",
-    nickname: "旅行者",
+    nickname: "乐迷",
     avatarUrl: "",
     recoveryEmail: "",
   },
