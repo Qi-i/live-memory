@@ -83,7 +83,7 @@ import {
   pushTextBackupToAccount,
   pushRecordsToSupabase,
   requestPasswordReset,
-  requestPasswordResetByEmail,
+  requestPasswordResetByUsername,
   refreshSignedMediaUrls,
   signInWithGithub,
   signInWithPassword,
@@ -452,7 +452,7 @@ function FirstRunGuide({
   const [password, setPassword] = useState("");
   const [mode, setMode] = useState<"login" | "register" | "skip">("login");
   const [showReset, setShowReset] = useState(false);
-  const [resetEmail, setResetEmail] = useState("");
+  const [resetUsername, setResetUsername] = useState("");
   const accountAvailable = hasAccountCloudConfig(draft);
 
   function updateAccount(patch: Partial<AppSettings["account"]>) {
@@ -576,9 +576,9 @@ function FirstRunGuide({
               <button className="button-link" type="button" onClick={() => setShowReset(true)}>忘记密码？</button>
             ) : (
               <div className="onboarding-reset-row">
-                <input type="email" value={resetEmail} onChange={(event) => setResetEmail(event.target.value)} placeholder="输入你注册时填写的邮箱" />
-                <button className="button ghost" type="button" disabled={busy || !resetEmail.trim()} onClick={() => void run(async () => {
-                  const msg = await requestPasswordResetByEmail(resetEmail);
+                <input value={resetUsername} onChange={(event) => setResetUsername(event.target.value)} placeholder="输入你的用户名" autoCapitalize="none" />
+                <button className="button ghost" type="button" disabled={busy || !resetUsername.trim()} onClick={() => void run(async () => {
+                  const msg = await requestPasswordResetByUsername(resetUsername);
                   flash(msg);
                   setShowReset(false);
                 })}>发送重置邮件</button>

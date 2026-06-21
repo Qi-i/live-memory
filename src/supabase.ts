@@ -146,8 +146,12 @@ export async function signUpOnly(settings: AppSettings, password: string): Promi
     if (/already|registered|exists/i.test(signUp.error.message)) throw new Error("该用户名已被注册，请直接登录。");
     throw signUp.error;
   }
-  if (!signUp.data.session && signUp.data.user?.identities?.length === 0) {
-    throw new Error("该用户名已被注册，请直接登录。");
+  if (!signUp.data.session) {
+    if (signUp.data.user?.identities?.length === 0) {
+      throw new Error("该用户名已被注册，请直接登录。");
+    }
+    // Session is null but user exists — likely email confirmation is enabled.
+    throw new Error("注册需要关闭邮箱验证：请在 Supabase 控制台的 Authentication → Settings → Email Auth 中关闭 Confirm Email。");
   }
   return { message: "账号已创建", isNewAccount: true };
 }
@@ -246,15 +250,27 @@ export async function requestPasswordReset(settings: AppSettings) {
   return "找回邮件已发送";
 }
 
-export async function requestPasswordResetByEmail(email: string) {
-  const trimmed = email.trim().toLowerCase();
-  if (!trimmed) throw new Error("请输入找回邮箱");
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) throw new Error("邮箱格式不正确");
+export async function requestPasswordResetByUsername(username: string) {
+  const trimmed = username.trim().toLowerCase();
+  if (!trimmed) throw new Error("请输入用户名");
   if (!accountUrl || !accountAnonKey) throw new Error("账号服务暂时不可用，请稍后再试");
   const client = createClient(accountUrl, accountAnonKey, {
     auth: { persistSession: false },
   });
-  const { error } = await client.auth.resetPasswordForEmail(trimmed, { redirectTo: currentAppUrl() });
+
+  // Look up the recovery email by username in the profiles table.
+  const { data: profile, error: profileError } = await client
+    .from("echo_user_profiles")
+    .select("recovery_email")
+    .eq("username", trimmed)
+    .maybeSingle();
+  if (profileError) throw profileError;
+
+  const recoveryEmail = (profile as { recovery_email?: string } | null)?.recovery_email?.trim();
+  if (!recoveryEmail) throw new Error("该账号未设置找回邮箱，无法通过邮件重置密码。");
+
+  // Send the Supabase reset email to the real recovery address.
+  const { error } = await client.auth.resetPasswordForEmail(recoveryEmail, { redirectTo: currentAppUrl() });
   if (error) {
     if (isEmailRateLimit(error)) throw new Error("邮件请求过于频繁，请稍后再试。");
     throw error;
@@ -646,8 +662,6 @@ function accountMetadata(settings: AppSettings) {
 }
 
 function authEmailForSettings(settings: AppSettings) {
-  const recoveryEmail = validateRecoveryEmail(settings.account.recoveryEmail);
-  if (recoveryEmail) return recoveryEmail;
   const username = validateUsername(settings.account.username);
   return `${username}@users.live-memory.local`;
 }
