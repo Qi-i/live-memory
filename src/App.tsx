@@ -1558,7 +1558,7 @@ function SettingsView({
                     登录 / 创建账号
                   </button>
                   <button className="button ghost" disabled={!password || busy} type="button" onClick={() => run("密码已更新", async () => { await updateAccountPassword(draft, password); })}>更新密码</button>
-                  <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await onSave(draft); await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
+                  <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
                   <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
                 </div>
                 <p className="plain-hint">账号状态：{accountSignedIn ? `已登录（${userLabel}）` : "未登录"}</p>
