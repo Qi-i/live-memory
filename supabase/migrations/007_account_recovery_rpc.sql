@@ -1,46 +1,79 @@
--- 007_account_recovery_rpc.sql
--- RPC: bridge username → auth email for password reset via recovery email.
--- The client calls resetPasswordForEmail with the auth email (synthetic),
--- which Supabase Auth can find in auth.users. The reset link goes to the
--- redirectTo URL where the user completes the password change.
+create extension if not exists pgcrypto with schema extensions;
 
-create or replace function public.echo_find_auth_email(p_username text)
-returns text
+create schema if not exists live_memory_private;
+
+revoke all on schema live_memory_private from public, anon, authenticated;
+
+create or replace function live_memory_private.recover_account_password(
+  input_username text,
+  input_recovery_email text,
+  input_new_password text
+)
+returns boolean
 language plpgsql
 security definer
-set search_path = ''
+set search_path = public, auth, extensions
 as $$
 declare
-  v_auth_email text;
-  v_recovery_email text;
+  normalized_username text := lower(trim(coalesce(input_username, '')));
+  normalized_email text := lower(trim(coalesce(input_recovery_email, '')));
+  target_user_id uuid;
 begin
-  -- 1. Verify profile exists and has a recovery email
-  select p.recovery_email into v_recovery_email
-    from public.echo_user_profiles p
-   where lower(p.username) = lower(p_username);
-
-  if v_recovery_email is null or trim(v_recovery_email) = '' then
-    raise exception 'no_recovery_email';
+  if normalized_username !~ '^[a-z0-9]{4,32}$' then
+    perform pg_sleep(0.35);
+    return false;
   end if;
 
-  -- 2. Find the auth email for this user
-  select u.email into v_auth_email
-    from public.echo_user_profiles p
-    join auth.users u on u.id = p.user_id
-   where lower(p.username) = lower(p_username);
-
-  if v_auth_email is null then
-    raise exception 'user_not_found';
+  if normalized_email !~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$' then
+    perform pg_sleep(0.35);
+    return false;
   end if;
 
-  return v_auth_email;
+  if length(coalesce(input_new_password, '')) < 8 or length(input_new_password) > 256 then
+    perform pg_sleep(0.35);
+    return false;
+  end if;
+
+  select profile.user_id
+    into target_user_id
+  from public.echo_user_profiles as profile
+  where lower(profile.username) = normalized_username
+    and lower(coalesce(profile.recovery_email, '')) = normalized_email
+  limit 1;
+
+  if target_user_id is null then
+    perform pg_sleep(0.35);
+    return false;
+  end if;
+
+  update auth.users
+  set encrypted_password = extensions.crypt(input_new_password, extensions.gen_salt('bf')),
+      email_confirmed_at = coalesce(email_confirmed_at, now()),
+      updated_at = now()
+  where id = target_user_id;
+
+  return found;
 end;
 $$;
 
-comment on function public.echo_find_auth_email(text) is
-  'Looks up the auth email for a username. Used by the password reset flow to bridge the gap between the recovery email in echo_user_profiles and the synthetic email in auth.users.';
+revoke all on function live_memory_private.recover_account_password(text, text, text) from public, anon, authenticated;
+grant usage on schema live_memory_private to anon, authenticated;
+grant execute on function live_memory_private.recover_account_password(text, text, text) to anon, authenticated;
 
--- Allow anonymous calls (the user is not logged in when resetting password)
-grant execute on function public.echo_find_auth_email(text) to anon;
-grant execute on function public.echo_find_auth_email(text) to authenticated;
+create or replace function public.echo_recover_account_password(
+  input_username text,
+  input_recovery_email text,
+  input_new_password text
+)
+returns boolean
+language sql
+security invoker
+set search_path = public
+as $$
+  select live_memory_private.recover_account_password(input_username, input_recovery_email, input_new_password)
+$$;
 
+grant execute on function public.echo_recover_account_password(text, text, text) to anon, authenticated;
+
+comment on function public.echo_recover_account_password(text, text, text) is
+  'Resets a Live Memory account password only when username and recovery email match. The recovery email is never returned to the client.';
