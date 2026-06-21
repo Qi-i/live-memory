@@ -269,6 +269,13 @@ export default function App() {
           <RouteButton active={route === "stats"} icon={<Sparkles />} label="统计" onClick={() => setRoute("stats")} />
           <RouteButton active={route === "settings"} icon={<Settings />} label="设置" onClick={() => setRoute("settings")} />
         </nav>
+        <div className="rail-profile">
+          <AccountAvatar settings={settings} />
+          <span>
+            <strong>{accountLabel(settings)}</strong>
+            <small>@{settings.account.username || "local"}</small>
+          </span>
+        </div>
       </aside>
 
       <main className="workspace">
@@ -471,7 +478,8 @@ function FirstRunGuide({
 
   function complete() {
     void run(async () => {
-      const username = validateUsername(draft.account.username);
+      const needsUsername = mode === "login" || mode === "register";
+      const username = needsUsername ? validateUsername(draft.account.username) : draft.account.username;
 
       let next: AppSettings = {
         ...draft,
@@ -499,8 +507,6 @@ function FirstRunGuide({
         message = `${signUpResult.message}，${sync.message}`;
         await replaceAllRecords(sync.records);
         setRecords(sync.records);
-      } else {
-        if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
       }
 
       await onSave(next);
@@ -561,10 +567,7 @@ function FirstRunGuide({
         )}
 
         {mode === "skip" && (
-          <div className="onboarding-form onboarding-skip-form">
-            <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" autoFocus /></label>
-            <label className="field">用户名（可选）<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
-          </div>
+          <p className="plain-hint">使用默认昵称和头像开始，后续可在设置中修改个人信息和同步配置。</p>
         )}
 
         {mode === "login" && (
