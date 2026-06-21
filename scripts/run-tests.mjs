@@ -10,6 +10,7 @@ const server = await createServer({
 
 try {
   const domain = await server.ssrLoadModule("/src/domain.ts");
+  const storage = await server.ssrLoadModule("/src/storage.ts");
   const syncModel = await server.ssrLoadModule("/src/syncModel.ts");
   const supabase = await server.ssrLoadModule("/src/supabase.ts");
 
@@ -20,6 +21,8 @@ try {
   assert.throws(() => domain.validatePassword("1234567"));
   assert.equal(domain.validateRecoveryEmail("qi@example.com"), "qi@example.com");
   assert.throws(() => domain.validateRecoveryEmail("qi.example.com"));
+  assert.equal(domain.normalizeExternalUrl("javascript:alert(1)"), "");
+  assert.equal(domain.normalizeExternalUrl("https://m.damai.cn/shows/item.html?itemId=1"), "https://m.damai.cn/shows/item.html?itemId=1");
 
   const baseRecord = {
     schemaVersion: 2,
@@ -47,6 +50,13 @@ try {
 
   const textOnly = syncModel.withoutLocalMedia(baseRecord);
   assert.equal(textOnly.media.length, 0);
+  const normalizedUnsafe = storage.normalizeRecord({
+    ...baseRecord,
+    sourceUrl: "javascript:alert(1)",
+    media: [{ ...baseRecord.media[0], src: "data:text/html;base64,PHNjcmlwdD4=" }],
+  });
+  assert.equal(normalizedUnsafe.sourceUrl, undefined);
+  assert.equal(normalizedUnsafe.media[0].src, "");
 
   const cloudRecord = { ...textOnly, title: "云端新标题", updatedAt: "2026-06-20T00:00:00.000Z" };
   const merged = syncModel.mergeTextBackup([baseRecord], [cloudRecord]);
@@ -76,7 +86,7 @@ try {
     /账号邮件请求过于频繁/,
   );
 
-  console.log("Core verification passed: account rules, text-only backup, local media merge, recycle state, cloud upload guard, friendly auth errors, friendly email-rate errors.");
+  console.log("Core verification passed: account rules, safe URL cleanup, text-only backup, local media merge, recycle state, cloud upload guard, friendly auth errors, friendly email-rate errors.");
 } finally {
   await server.close();
 }

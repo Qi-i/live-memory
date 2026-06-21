@@ -5,7 +5,7 @@ Supabase 在回响册里有两种用途：
 | 角色 | 需要做什么 | 保存什么 |
 | --- | --- | --- |
 | 普通用户 | 建立自己的个人档案项目 | 演出记录、票根、座位图和照片 |
-| 站点维护者 | 建立 Live Memory 账号项目 | 登录、找回密码、账号资料、偏好、个人云端配置和文字备份 |
+| 站点维护者 | 建立 Live Memory 账号项目 | 登录、备用邮箱重置密码、账号资料、偏好、个人云端配置和文字备份 |
 
 只使用公开站点时，先看“普通用户”一节。只有 Fork 仓库并发布自己的站点时，才需要配置“站点维护者”一节。
 
@@ -72,17 +72,16 @@ GitHub 仓库只包含 3 条演示记录。导入的 25 条记录先进入当前
 
 ## 站点维护者：建立账号项目
 
-账号项目承载 Live Memory 登录、账号资料、显示偏好、个人云端配置、密码找回和文字备份。普通用户不需要自己配置这一节。
+账号项目承载 Live Memory 登录、账号资料、显示偏好、个人云端配置、备用邮箱重置密码和文字备份。普通用户不需要自己配置这一节。
 
 1. 创建独立 Supabase 项目。
-2. 按顺序运行六个 migration。
-3. 在 `Authentication > Providers > Email` 开启邮箱登录；如允许用户不填写备用邮箱，请关闭邮件确认。
+2. 按顺序运行七个 migration。
+3. 在 `Authentication > Providers > Email` 开启邮箱登录，并关闭 Confirm Email。Live Memory 用用户名生成登录邮箱，备用邮箱只用于核对重置密码。
 4. 在 `Authentication > URL Configuration` 设置站点 URL，并加入生产与本地跳转地址。
-5. 在密码找回邮件模板中将产品名改为 `Live Memory`。
-6. 在项目的 Auth 设置中将最短密码长度设为 8。
-7. 将 Project URL 和 publishable key 写入部署环境的 `VITE_ACCOUNT_SUPABASE_URL`、`VITE_ACCOUNT_SUPABASE_ANON_KEY`。
+5. 在项目的 Auth 设置中将最短密码长度设为 8。
+6. 将 Project URL 和 publishable key 写入部署环境的 `VITE_ACCOUNT_SUPABASE_URL`、`VITE_ACCOUNT_SUPABASE_ANON_KEY`。
 
-账号项目需要运行 `001_echo_archive.sql` 到 `006_account_preferences.sql`。个人档案项目只运行 `005_passkey_cloud_sync.sql`，两类项目不要混用。
+账号项目需要运行 `001_echo_archive.sql` 到 `007_account_recovery_rpc.sql`。个人档案项目只运行 `005_passkey_cloud_sync.sql`，两类项目不要混用。
 
 ### GitHub Pages Variables
 
@@ -112,7 +111,7 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 两者用途不同：
 
-- 备用邮箱：用于 Live Memory 账号找回。
+- 备用邮箱：用于 Live Memory 账号重置密码时核对身份。它像密保答案一样使用，页面不会把它查出来展示。
 - 个人 Supabase：保存演出记录与图片，使用同步钥匙识别自己的档案。
 
 修改个人 Supabase 项目不会改变 Live Memory 备用邮箱。更换备用邮箱也不会自动修改个人档案项目。Live Memory 账号密码不会明文保存；它只用于登录账号。
@@ -121,11 +120,15 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 ### 提示数据表不存在
 
-如果错误里出现 `PGRST205`、`Could not find the table` 或 `echo_passkey_records`，说明当前个人 Supabase 项目还没有成功建立同步表。个人档案项目重新运行 `005_passkey_cloud_sync.sql`。自部署账号项目重新按顺序运行六个 migration，确认每个查询都显示 Success。
+如果错误里出现 `PGRST205`、`Could not find the table` 或 `echo_passkey_records`，说明当前个人 Supabase 项目还没有成功建立同步表。个人档案项目重新运行 `005_passkey_cloud_sync.sql`。自部署账号项目重新按顺序运行七个 migration，确认每个查询都显示 Success。
 
 ### 登录后没有恢复个人 Supabase 配置
 
 自部署账号项目请确认已经运行 `006_account_preferences.sql`。公开站点用户只需在一台设备上登录账号、填写个人 Supabase 并保存连接设置，之后其他设备登录同一账号就会自动带回项目地址、公开连接密钥、图片空间名称和显示偏好。
+
+### 提示账号服务需要更新 007
+
+备用邮箱重置密码需要账号项目运行 `007_account_recovery_rpc.sql`。这是账号项目脚本，不需要在个人档案项目里运行。
 
 ### `new row violates row-level security policy`
 
@@ -147,6 +150,6 @@ VITE_ACCOUNT_SUPABASE_ANON_KEY
 
 关闭“同步图片”即可只同步文字。完整图片继续保存在当前设备，并通过完整 JSON 定期备份。也可以只上传海报、票根、座位图和少量现场精选。
 
-### 找回密码收不到邮件
+### 忘记密码怎么办
 
-找回邮件由账号项目发送，与个人 Supabase 项目无关。检查注册时填写的备用邮箱、垃圾邮件目录和账号项目的 Auth 邮件日志。
+登录页或设置页点击“备用邮箱重置”，输入用户名、注册时保存的备用邮箱和新密码。备用邮箱只用于匹配校验，不会发送邮件。匹配成功后，直接使用新密码登录。

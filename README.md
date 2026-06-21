@@ -80,7 +80,7 @@ npm run preview
 
 只有维护自己的公开站点时才需要这一节。普通用户直接使用公开地址时，不需要配置这些变量。
 
-Live Memory 账号项目用于登录、找回密码、账号资料、显示偏好、个人 Supabase 配置和文字备份；用户个人演出档案仍由用户自己的 Supabase 或当前设备保存。复制 `.env.example` 为 `.env.local`：
+Live Memory 账号项目用于登录、备用邮箱核对重置密码、账号资料、显示偏好、个人 Supabase 配置和文字备份；用户个人演出档案仍由用户自己的 Supabase 或当前设备保存。复制 `.env.example` 为 `.env.local`：
 
 ```dotenv
 VITE_ACCOUNT_SUPABASE_URL=https://YOUR_ACCOUNT_PROJECT.supabase.co
@@ -93,7 +93,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 | 变量 | 用途 |
 | --- | --- |
-| `VITE_ACCOUNT_SUPABASE_URL` | Live Memory 账号、资料、偏好、密码找回和文字备份 |
+| `VITE_ACCOUNT_SUPABASE_URL` | Live Memory 账号、资料、偏好、备用邮箱重置密码和文字备份 |
 | `VITE_ACCOUNT_SUPABASE_ANON_KEY` | 账号项目的公开连接密钥 |
 | `VITE_SUPABASE_URL` | 可选的默认个人数据项目；通常由用户在设置页填写 |
 | `VITE_SUPABASE_ANON_KEY` | 默认个人数据项目的公开连接密钥 |
@@ -107,7 +107,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 - [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
 
-这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 1-6 号 migration 并配置 GitHub Pages 变量。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
+这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 1-7 号 migration 并配置 GitHub Pages 变量。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
 
 ## 把现有记录迁入私人云端
 

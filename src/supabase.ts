@@ -114,16 +114,7 @@ export async function signInWithPassword(settings: AppSettings, password: string
   validatePassword(password);
   const existing = await client.auth.getUser();
   if (existing.data.user) return { message: "账号已登录", isNewAccount: false };
-
-  const username = validateUsername(settings.account.username);
-
-  // Pre-check: does this username have a profile record?
-  const { data: profile } = await client
-    .from("echo_user_profiles")
-    .select("username")
-    .eq("username", username.toLowerCase())
-    .maybeSingle();
-  const profileExists = Boolean(profile);
+  validateUsername(settings.account.username);
 
   let { error } = await client.auth.signInWithPassword({ email, password });
   if (!error) return { message: "登录成功", isNewAccount: false };
@@ -133,46 +124,8 @@ export async function signInWithPassword(settings: AppSettings, password: string
     error = legacy.error;
   }
 
-  // Login failed — decide what to do based on profile existence and error message.
-  const loginMessage = (error.message || "").toLowerCase();
-  const isNotFound = /not found|not exist|unknown user|no user|user not/i.test(loginMessage);
-
-  if (profileExists) {
-    // Account exists in our records — must be a wrong password.
-    throw new Error("密码错误，请检查后重试");
-  }
-
-  if (!isNotFound) {
-    // Generic error (e.g. "Invalid login credentials") and no profile found.
-    // The account likely doesn't exist in Supabase Auth — auto-register.
-    return autoRegister(client, email, password, settings);
-  }
-
-  // Explicit "not found" from Supabase — auto-register.
-  return autoRegister(client, email, password, settings);
-}
-
-async function autoRegister(
-  client: SupabaseClient,
-  email: string,
-  password: string,
-  settings: AppSettings,
-): Promise<AccountSignInResult> {
-  const signUp = await client.auth.signUp({
-    email,
-    password,
-    options: { data: accountMetadata(settings) },
-  });
-  if (signUp.error) {
-    if (isEmailRateLimit(signUp.error)) throw new Error("账号服务暂时不可用，请稍后再试。");
-    if (/already|registered|exists/i.test(signUp.error.message)) throw new Error("密码错误，请检查后重试");
-    throw signUp.error;
-  }
-  if (!signUp.data.session) {
-    if (signUp.data.user?.identities?.length === 0) throw new Error("密码错误，请检查后重试");
-    throw new Error("注册需要关闭邮箱验证：请在 Supabase 控制台的 Authentication → Settings → Email Auth 中关闭 Confirm Email。");
-  }
-  return { message: "账号已创建", isNewAccount: true };
+  if (isEmailRateLimit(error)) throw new Error("账号请求过于频繁，请稍后再试。");
+  throw new Error("用户名或密码不正确。新用户请先选择“创建新账号”。");
 }
 
 export async function signUpOnly(settings: AppSettings, password: string): Promise<AccountSignInResult> {
@@ -197,6 +150,28 @@ export async function signUpOnly(settings: AppSettings, password: string): Promi
     throw new Error("注册需要关闭邮箱验证：请在 Supabase 控制台的 Authentication → Settings → Email Auth 中关闭 Confirm Email。");
   }
   return { message: "账号已创建", isNewAccount: true };
+}
+
+export async function recoverAccountPasswordWithEmail(settings: AppSettings, username: string, recoveryEmail: string, newPassword: string) {
+  const client = makeAccountClient(settings);
+  const normalizedUsername = validateUsername(username);
+  const normalizedRecoveryEmail = validateRecoveryEmail(recoveryEmail);
+  validatePassword(newPassword);
+  if (!normalizedRecoveryEmail) throw new Error("请输入注册时保存的备用邮箱");
+  const { data, error } = await client.rpc("echo_recover_account_password", {
+    input_username: normalizedUsername,
+    input_recovery_email: normalizedRecoveryEmail,
+    input_new_password: newPassword,
+  });
+  if (error) {
+    if (error.code === "42883" || /function.*does not exist|schema cache/i.test(error.message || "")) {
+      throw new Error("账号服务需要更新：请在账号 Supabase 项目运行 007_account_recovery_rpc.sql");
+    }
+    throw error;
+  }
+  if (data !== true) throw new Error("用户名与备用邮箱不匹配，请检查后重试");
+  await client.auth.signOut();
+  return "密码已重置，请用新密码登录";
 }
 
 export async function signInStorageWithPassword(settings: AppSettings, password: string) {
@@ -282,43 +257,6 @@ function throwPersonalCloudError(error: unknown): never {
   }
   if (message) throw new Error(`个人云端连接失败：${message}`);
   throw error;
-}
-
-export async function requestPasswordReset(settings: AppSettings) {
-  const email = validateRecoveryEmail(settings.account.recoveryEmail);
-  if (!email) throw new Error("请先填写备用邮箱");
-  const client = makeAccountClient(settings);
-  const { error } = await client.auth.resetPasswordForEmail(email, { redirectTo: currentAppUrl() });
-  if (error) throw error;
-  return "找回邮件已发送";
-}
-
-export async function requestPasswordResetByUsername(username: string) {
-  const trimmed = username.trim().toLowerCase();
-  if (!trimmed) throw new Error("请输入用户名");
-  if (!accountUrl || !accountAnonKey) throw new Error("账号服务暂时不可用，请稍后再试");
-  const client = createClient(accountUrl, accountAnonKey, {
-    auth: { persistSession: false },
-  });
-
-  // Look up the recovery email by username in the profiles table.
-  const { data: profile, error: profileError } = await client
-    .from("echo_user_profiles")
-    .select("recovery_email")
-    .eq("username", trimmed)
-    .maybeSingle();
-  if (profileError) throw profileError;
-
-  const recoveryEmail = (profile as { recovery_email?: string } | null)?.recovery_email?.trim();
-  if (!recoveryEmail) throw new Error("该账号未设置找回邮箱，无法通过邮件重置密码。");
-
-  // Send the Supabase reset email to the real recovery address.
-  const { error } = await client.auth.resetPasswordForEmail(recoveryEmail, { redirectTo: currentAppUrl() });
-  if (error) {
-    if (isEmailRateLimit(error)) throw new Error("邮件请求过于频繁，请稍后再试。");
-    throw error;
-  }
-  return "找回邮件已发送";
 }
 
 export async function updateAccountPassword(settings: AppSettings, password: string) {
@@ -466,10 +404,7 @@ export async function syncAfterLogin(
       messages.push(`已上传 ${localRecords.filter((r) => !r.deletedAt).length} 条记录`);
     }
   } catch {
-    // Text backup tables may not exist yet; push local data as fallback
-    if (localRecords.filter((r) => !r.deletedAt).length > 0) {
-      await pushTextBackupToAccount(nextSettings, localRecords).catch(() => undefined);
-    }
+    messages.push("文字备份暂未恢复");
   }
 
   return {
@@ -492,11 +427,28 @@ export async function pushTextBackupToAccount(settings: AppSettings, records: Ev
       deleted_at: payload.deletedAt || null,
     };
   });
+  let skipped = 0;
+  let uploaded = 0;
   if (rows.length) {
-    const { error } = await client.from("echo_text_backups").upsert(rows, { onConflict: "user_id,id" });
+    const existing = await client
+      .from("echo_text_backups")
+      .select("id, updated_at")
+      .eq("user_id", user.id)
+      .in("id", rows.map((row) => row.id));
+    if (existing.error) throwTextBackupError(existing.error);
+    const cloudUpdated = new Map((existing.data || []).map((row) => [String(row.id), String(row.updated_at || "")]));
+    const rowsToUpsert = rows.filter((row) => !isCloudNewer(row.updated_at, cloudUpdated.get(row.id)));
+    skipped = rows.length - rowsToUpsert.length;
+    uploaded = rowsToUpsert.filter((row) => !row.deleted_at).length;
+    const { error } = rowsToUpsert.length
+      ? await client.from("echo_text_backups").upsert(rowsToUpsert, { onConflict: "user_id,id" })
+      : { error: null };
     if (error) throwTextBackupError(error);
   }
-  return { records, message: `已备份 ${rows.filter((row) => !row.deleted_at).length} 条文字记录` };
+  return {
+    records,
+    message: `已备份 ${uploaded} 条文字记录${skipped ? `，跳过 ${skipped} 条云端较新记录` : ""}`,
+  };
 }
 
 export async function pullTextBackupFromAccount(settings: AppSettings, localRecords: EventRecord[]): Promise<SyncResult> {
@@ -552,18 +504,36 @@ export async function purgeRecordFromSupabase(settings: AppSettings, recordId: s
 async function pushRecordsToPasskeySupabase(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
   const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
-  const uploadedRecords: EventRecord[] = [];
+  const resultRecords: EventRecord[] = [];
+  let skipped = 0;
+  let uploaded = 0;
+  const ids = records.map((record) => record.id);
+  const existing = ids.length
+    ? await client
+      .from(passkeyRecordTable(settings))
+      .select("id, updated_at")
+      .eq("owner_key", ownerKey)
+      .in("id", ids)
+    : { data: [], error: null };
+  if (existing.error) throwPersonalCloudError(existing.error);
+  const cloudUpdated = new Map((existing.data || []).map((row) => [String(row.id), String(row.updated_at || "")]));
 
   for (const record of records) {
+    if (isCloudNewer(record.updatedAt, cloudUpdated.get(record.id))) {
+      skipped += 1;
+      resultRecords.push(normalizeRecord(record));
+      continue;
+    }
     const bucket = mediaBucket(settings);
     const media = record.deletedAt || !settings.supabase.syncMedia
       ? record.media
       : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket)));
     const next = normalizeRecord({ ...record, media, updatedAt: nowIso() });
+    if (!next.deletedAt) uploaded += 1;
     const cloudPayload = next.deletedAt
       ? cloudRecordPayload({ ...next, media: next.media.filter((asset) => asset.storagePath) })
       : settings.supabase.syncMedia ? cloudRecordPayload(next) : withoutLocalMedia(next);
-    uploadedRecords.push(next);
+    resultRecords.push(next);
     const { error } = await client.from(passkeyRecordTable(settings)).upsert(
       {
         id: next.id,
@@ -601,10 +571,10 @@ async function pushRecordsToPasskeySupabase(settings: AppSettings, records: Even
   }
 
   return {
-    records: uploadedRecords,
+    records: resultRecords,
     message: settings.supabase.syncMedia
-      ? `已同步 ${uploadedRecords.filter((record) => !record.deletedAt).length} 条记录和图片`
-      : `已同步 ${uploadedRecords.filter((record) => !record.deletedAt).length} 条文字记录`,
+      ? `已同步 ${uploaded} 条记录和图片${skipped ? `，跳过 ${skipped} 条云端较新记录` : ""}`
+      : `已同步 ${uploaded} 条文字记录${skipped ? `，跳过 ${skipped} 条云端较新记录` : ""}`,
   };
 }
 
@@ -675,6 +645,10 @@ function isAuthSessionMissing(error: unknown) {
 function isEmailRateLimit(error: unknown) {
   const message = String((error as { message?: string }).message || "");
   return /email rate limit|rate limit exceeded|too many/i.test(message);
+}
+
+function isCloudNewer(localUpdatedAt: string, cloudUpdatedAt?: string) {
+  return Boolean(cloudUpdatedAt && cloudUpdatedAt > localUpdatedAt);
 }
 
 function githubIdentity(user: Awaited<ReturnType<typeof requireUser>>) {

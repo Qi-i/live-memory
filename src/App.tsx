@@ -65,6 +65,7 @@ import { blankRecord } from "./seeds";
 import {
   deleteRecord,
   loadRecordsWithMigration,
+  normalizeRecord,
   readSettings,
   replaceAllRecords,
   saveRecord,
@@ -80,6 +81,7 @@ import {
   pullRecordsFromSupabase,
   purgeRecordFromSupabase,
   purgeTextBackupFromAccount,
+  recoverAccountPasswordWithEmail,
   pushTextBackupToAccount,
   pushRecordsToSupabase,
   refreshSignedMediaUrls,
@@ -461,8 +463,14 @@ function FirstRunGuide({
 }) {
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
-  const [mode, setMode] = useState<"login" | "register" | "skip">("login");
+  const [mode, setMode] = useState<"login" | "register" | "skip">(hasAccountCloudConfig(settings) ? "login" : "skip");
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
   const accountAvailable = hasAccountCloudConfig(draft);
+  useEffect(() => {
+    if (!accountAvailable && mode !== "skip") setMode("skip");
+  }, [accountAvailable, mode]);
 
   function updateAccount(patch: Partial<AppSettings["account"]>) {
     const account = { ...draft.account, ...patch };
@@ -523,6 +531,17 @@ function FirstRunGuide({
     });
   }
 
+  function recoverPassword() {
+    void run(async () => {
+      const message = await recoverAccountPasswordWithEmail(draft, draft.account.username, recoveryEmail, recoveryPassword);
+      setPassword(recoveryPassword);
+      setRecoveryPassword("");
+      setRecoveryEmail("");
+      setRecoveryOpen(false);
+      flash(message);
+    });
+  }
+
   return (
     <div className="onboarding-backdrop">
       <section className="onboarding-card" role="dialog" aria-modal="true" aria-labelledby="first-run-title">
@@ -554,14 +573,26 @@ function FirstRunGuide({
           </div>
         )}
 
-        {mode === "login" && (
+        {accountAvailable && mode === "login" && (
           <div className="onboarding-form onboarding-login-form">
             <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="注册时使用的用户名" autoCapitalize="none" autoFocus /></label>
             <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" autoFocus={!!draft.account.username} /></label>
+            <button className="inline-toggle wide" type="button" onClick={() => setRecoveryOpen((value) => !value)}>
+              <ChevronDown size={16} />
+              {recoveryOpen ? "收起密码重置" : "忘记密码，用备用邮箱重置"}
+            </button>
+            {recoveryOpen && (
+              <div className="recovery-box wide">
+                <p>输入注册时保存的备用邮箱。匹配成功后会直接设置新密码，不会发送邮件。</p>
+                <label className="field">备用邮箱<input type="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="注册时填写的备用邮箱" /></label>
+                <label className="field">新密码<input type="password" value={recoveryPassword} onChange={(event) => setRecoveryPassword(event.target.value)} placeholder="至少 8 位" /></label>
+                <button className="button ghost" type="button" disabled={busy || !recoveryEmail || !recoveryPassword} onClick={recoverPassword}>重置密码</button>
+              </div>
+            )}
           </div>
         )}
 
-        {mode === "register" && (
+        {accountAvailable && mode === "register" && (
           <div className="onboarding-form">
             <div className="account-preview">
               <AccountAvatar settings={draft} />
@@ -570,7 +601,7 @@ function FirstRunGuide({
             <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="例如：Qi" /></label>
             <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
             <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-            <label className="field">备用邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="仅作为账号备注标识" /></label>
+            <label className="field">备用邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="忘记密码时用于核对身份" /></label>
             <label className="field">设置密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>
           </div>
         )}
@@ -579,7 +610,7 @@ function FirstRunGuide({
           <p className="plain-hint">使用默认昵称和头像开始，后续可在设置中修改个人信息和同步配置。</p>
         )}
 
-        {accountAvailable && mode === "register" && <p className="plain-hint">{draft.account.recoveryEmail ? "备用邮箱仅作为账号备注标识，当前不支持邮件发送。" : "建议记住密码，忘记密码后需要联系管理员重置。"}</p>}
+        {accountAvailable && mode === "register" && <p className="plain-hint">{draft.account.recoveryEmail ? "备用邮箱会作为密码重置时的核对答案，不会公开展示。" : "建议填写备用邮箱；忘记密码时可用它核对并设置新密码。"}</p>}
 
         <div className="onboarding-actions">
           {mode === "skip" && (
@@ -588,13 +619,13 @@ function FirstRunGuide({
               开始使用
             </button>
           )}
-          {mode === "login" && (
+          {accountAvailable && mode === "login" && (
             <button className="button primary" type="button" disabled={busy || !password} onClick={complete}>
               {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
               登录
             </button>
           )}
-          {mode === "register" && (
+          {accountAvailable && mode === "register" && (
             <button className="button primary" type="button" disabled={busy || !password} onClick={complete}>
               {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
               创建账号
@@ -1155,7 +1186,7 @@ function VenueView({ records, settings }: { records: EventRecord[]; settings: Ap
           position: [point.lng, point.lat],
           title: `${point.title} · ${point.count} 场`,
           label: {
-            content: `<span class="amap-memory-label">${point.title}<b>${point.count}</b></span>`,
+            content: `<span class="amap-memory-label">${escapeHtml(point.title)}<b>${point.count}</b></span>`,
             direction: "top",
           },
         }));
@@ -1239,6 +1270,15 @@ function loadAmap(key: string, securityCode: string) {
     throw error;
   });
   return window.__liveMemoryAmapPromise;
+}
+
+function escapeHtml(value: unknown) {
+  return String(value || "")
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
 }
 
 async function resolveMapPoints(AMap: AMapNamespace, records: EventRecord[], mode: VenueMapMode) {
@@ -1401,6 +1441,9 @@ function SettingsView({
   const [showCloudMore, setShowCloudMore] = useState(false);
   const [showCloudReconnect, setShowCloudReconnect] = useState(false);
   const [showMapMore, setShowMapMore] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [recoveryEmail, setRecoveryEmail] = useState("");
+  const [recoveryPassword, setRecoveryPassword] = useState("");
   useEffect(() => setDraft(settings), [settings]);
   const accountAvailable = hasAccountCloudConfig(draft);
   useEffect(() => {
@@ -1441,9 +1484,10 @@ function SettingsView({
     const parsed = JSON.parse(text);
     const rows = Array.isArray(parsed) ? parsed : parsed.records;
     if (!Array.isArray(rows)) throw new Error("备份文件格式不正确");
-    await replaceAllRecords(rows as EventRecord[]);
-    setRecords(rows as EventRecord[]);
-    flash(`已导入 ${rows.length} 条记录`);
+    const normalized = rows.map((row) => normalizeRecord(row as EventRecord));
+    await replaceAllRecords(normalized);
+    setRecords(normalized);
+    flash(`已导入 ${normalized.length} 条记录`);
   }
 
   function chooseStorageMode(storageMode: AppSettings["storageMode"]) {
@@ -1514,6 +1558,39 @@ function SettingsView({
     flash(`${signInResult.message}，${sync.message}`);
   }
 
+  async function handleAccountRegister() {
+    if (!draft.account.nickname.trim()) throw new Error("请先填写昵称");
+    const next = {
+      ...draft,
+      account: {
+        ...draft.account,
+        username: validateUsername(draft.account.username),
+        recoveryEmail: validateRecoveryEmail(draft.account.recoveryEmail),
+      },
+    };
+    validatePassword(password);
+    await onSave(next);
+    const signUpResult = await signUpOnly(next, password);
+    const sync = await syncAfterLogin(next, records);
+    setDraft(sync.settings);
+    await onSave(sync.settings);
+    await replaceAllRecords(sync.records);
+    setRecords(sync.records);
+    const user = await currentUser(sync.settings);
+    if (user) setUserLabel(userDisplayName(user));
+    setAccountSignedIn(Boolean(user));
+    flash(`${signUpResult.message}，${sync.message}`);
+  }
+
+  async function handleRecoverPassword() {
+    const message = await recoverAccountPasswordWithEmail(draft, draft.account.username, recoveryEmail, recoveryPassword);
+    setPassword(recoveryPassword);
+    setRecoveryEmail("");
+    setRecoveryPassword("");
+    setRecoveryOpen(false);
+    flash(message);
+  }
+
   async function handleConnectCloud() {
     validateUsername(draft.account.username);
     const connected = accountSignedIn
@@ -1562,22 +1639,34 @@ function SettingsView({
                 <label className="field">昵称<input value={draft.account.nickname} onChange={(event) => updateAccount({ nickname: event.target.value })} placeholder="页面显示名，例如 Qi" /></label>
                 <label className="field">用户名<input value={draft.account.username} onChange={(event) => updateAccount({ username: cleanUsernameInput(event.target.value) })} placeholder="4-32 位英文字母或数字" autoCapitalize="none" /></label>
                 <label className="field avatar-upload-field">头像（可选）<span className="file-picker"><ImagePlus size={18} />{draft.account.avatarUrl ? "更换头像" : "选择图片"}<input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void chooseAvatar(event.target.files?.[0])} /></span></label>
-                {accountAvailable && <label className="field">备用邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="仅作为账号备注标识" /></label>}
+                {accountAvailable && <label className="field">备用邮箱（可选）<input type="email" value={draft.account.recoveryEmail} onChange={(event) => updateAccount({ recoveryEmail: event.target.value })} placeholder="忘记密码时用于核对身份" /></label>}
                 {accountAvailable && <label className="field">密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位，字符不限" /></label>}
               </div>
             </div>
             {accountAvailable ? (
               <>
-                <p className="hint">{draft.account.recoveryEmail ? "备用邮箱仅作为账号备注标识，当前不支持邮件发送。" : "建议记住密码，忘记密码后需要联系管理员重置。"}</p>
+                <p className="hint">{draft.account.recoveryEmail ? "备用邮箱会作为密码重置时的核对答案，不会公开展示。" : "建议填写备用邮箱；忘记密码时可用它核对并设置新密码。"}</p>
                 <div className="button-row">
                   <button className="button primary" disabled={busy || !password} type="button" onClick={() => run("", handleAccountLogin)}>
                     {busy ? <Loader2 className="spin" /> : <ShieldCheck size={18} />}
-                    登录 / 创建账号
+                    登录账号
                   </button>
+                  <button className="button ghost" disabled={busy || !password} type="button" onClick={() => run("", handleAccountRegister)}>创建账号</button>
                   <button className="button ghost" disabled={!password || busy} type="button" onClick={() => run("密码已更新", async () => { await updateAccountPassword(draft, password); })}>更新密码</button>
+                  <button className="button ghost" disabled={busy} type="button" onClick={() => setRecoveryOpen((value) => !value)}>备用邮箱重置</button>
                   <button className="button ghost" disabled={busy} type="button" onClick={() => run("正在打开 GitHub", async () => { await signInWithGithub(draft); })}><Github size={18} />GitHub 登录</button>
                   <button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>
                 </div>
+                {recoveryOpen && (
+                  <div className="recovery-box">
+                    <p>输入当前用户名、注册时保存的备用邮箱和新密码。匹配成功后会直接设置新密码，不会发送邮件。</p>
+                    <div className="field-stack">
+                      <label className="field">备用邮箱<input type="email" value={recoveryEmail} onChange={(event) => setRecoveryEmail(event.target.value)} placeholder="注册时填写的备用邮箱" /></label>
+                      <label className="field">新密码<input type="password" value={recoveryPassword} onChange={(event) => setRecoveryPassword(event.target.value)} placeholder="至少 8 位" /></label>
+                    </div>
+                    <button className="button primary" disabled={busy || !draft.account.username || !recoveryEmail || !recoveryPassword} type="button" onClick={() => run("", handleRecoverPassword)}>确认重置密码</button>
+                  </div>
+                )}
                 <p className="plain-hint">账号状态：{accountSignedIn ? `已登录（${userLabel}）` : "未登录"}</p>
               </>
             ) : (

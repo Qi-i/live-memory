@@ -16,7 +16,7 @@
 
 ### 环境变量
 
-公开部署需要配置 Live Memory 账号项目，才能提供账号登录、找回密码、账号资料、显示偏好、个人云端配置和文字备份。在 `Settings > Secrets and variables > Actions > Variables` 添加：
+公开部署需要配置 Live Memory 账号项目，才能提供账号登录、备用邮箱重置密码、账号资料、显示偏好、个人云端配置和文字备份。在 `Settings > Secrets and variables > Actions > Variables` 添加：
 
 ```text
 VITE_ACCOUNT_SUPABASE_URL

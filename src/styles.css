@@ -3253,6 +3253,24 @@ body {
   transition: transform 0.18s ease;
 }
 
+.recovery-box {
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(17, 19, 24, 0.1);
+  border-radius: 12px;
+  background: rgba(101, 223, 207, 0.12);
+}
+
+.recovery-box p {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.55;
+}
+
 .subtle-fields {
   margin-top: 10px;
   padding: 12px;

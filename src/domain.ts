@@ -263,6 +263,17 @@ export function validateRecoveryEmail(value: string) {
   return email;
 }
 
+export function normalizeExternalUrl(value: unknown) {
+  const url = String(value || "").trim();
+  if (!url) return "";
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "http:" || parsed.protocol === "https:" ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
 export function createId(prefix = "record") {
   const value = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(16).slice(2)}`;
   return `${prefix}-${value}`;
