@@ -78,18 +78,23 @@ export function makeSupabaseClient(settings: AppSettings) {
   });
 }
 
+let cachedAccountClient: ReturnType<typeof createClient> | null = null;
+
 function makeAccountClient(settings: AppSettings) {
   void settings;
   const url = accountUrl;
   const key = accountAnonKey;
   if (!url || !key) throw new Error("账号服务暂时不可用，请稍后再试");
-  return createClient(url, key, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      storageKey: accountUrl ? "live-memory-account-session" : undefined,
-    },
-  });
+  if (!cachedAccountClient) {
+    cachedAccountClient = createClient(url, key, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        storageKey: "live-memory-account-session",
+      },
+    });
+  }
+  return cachedAccountClient;
 }
 
 function currentAppUrl() {
@@ -294,7 +299,7 @@ export async function currentUser(settings: AppSettings) {
 
 // ── Admin dashboard ──────────────────────────────────────────
 
-const ADMIN_USERNAMES = ["qi-i"];
+const ADMIN_USERNAMES = ["qi-i", "qiqi0909"];
 
 export function isAdmin(settings: AppSettings): boolean {
   return ADMIN_USERNAMES.includes(settings.account.username.toLowerCase());
