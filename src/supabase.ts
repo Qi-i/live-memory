@@ -292,6 +292,102 @@ export async function currentUser(settings: AppSettings) {
   return data.user || null;
 }
 
+// ── Admin dashboard ──────────────────────────────────────────
+
+const ADMIN_USERNAMES = ["qi-i"];
+
+export function isAdmin(settings: AppSettings): boolean {
+  return ADMIN_USERNAMES.includes(settings.account.username.toLowerCase());
+}
+
+export interface AdminOverview {
+  total_users: number;
+  total_records: number;
+  total_media: number;
+  active_users: number;
+  latest_users: Array<{ username: string; display_name: string; created_at: string }>;
+}
+
+export async function fetchAdminOverview(settings: AppSettings): Promise<AdminOverview> {
+  const client = makeAccountClient(settings);
+  const { data, error } = await client.rpc("echo_admin_stats_overview");
+  if (error) {
+    if (error.code === "42883" || /function.*does not exist|schema cache/i.test(error.message || "")) {
+      throw new Error("管理面板需要更新：请在账号 Supabase 运行 008_admin_stats.sql");
+    }
+    throw error;
+  }
+  return data as AdminOverview;
+}
+
+export interface AdminTrendRow {
+  day: string;
+  new_users: number;
+  new_records: number;
+}
+
+export async function fetchAdminTrends(settings: AppSettings, days = 30): Promise<AdminTrendRow[]> {
+  const client = makeAccountClient(settings);
+  const { data, error } = await client.rpc("echo_admin_stats_trends", { p_days: days });
+  if (error) {
+    if (error.code === "42883" || /function.*does not exist|schema cache/i.test(error.message || "")) {
+      throw new Error("管理面板需要更新：请在账号 Supabase 运行 008_admin_stats.sql");
+    }
+    throw error;
+  }
+  return (data || []) as AdminTrendRow[];
+}
+
+export interface AdminStorageRow {
+  username: string;
+  display_name: string;
+  record_count: number;
+  media_count: number;
+}
+
+export async function fetchAdminStorageBreakdown(settings: AppSettings): Promise<AdminStorageRow[]> {
+  const client = makeAccountClient(settings);
+  const { data, error } = await client.rpc("echo_admin_storage_breakdown");
+  if (error) {
+    if (error.code === "42883" || /function.*does not exist|schema cache/i.test(error.message || "")) {
+      throw new Error("管理面板需要更新：请在账号 Supabase 运行 008_admin_stats.sql");
+    }
+    throw error;
+  }
+  return (data || []) as AdminStorageRow[];
+}
+
+export interface AdminVisitorStats {
+  total_views: number;
+  unique_paths: number;
+  daily_views: Array<{ day: string; count: number }>;
+  top_paths: Array<{ path: string; count: number }>;
+}
+
+export async function fetchAdminVisitorStats(settings: AppSettings, days = 30): Promise<AdminVisitorStats> {
+  const client = makeAccountClient(settings);
+  const { data, error } = await client.rpc("echo_admin_visitor_stats", { p_days: days });
+  if (error) {
+    if (error.code === "42883" || /function.*does not exist|schema cache/i.test(error.message || "")) {
+      throw new Error("管理面板需要更新：请在账号 Supabase 运行 008_admin_stats.sql");
+    }
+    throw error;
+  }
+  return data as AdminVisitorStats;
+}
+
+export async function recordPageView(path: string, referrer?: string): Promise<void> {
+  if (!accountUrl || !accountAnonKey) return;
+  const client = createClient(accountUrl, accountAnonKey, {
+    auth: { persistSession: false },
+  });
+  await client.rpc("echo_record_page_view", {
+    p_path: path,
+    p_referrer: referrer || null,
+    p_user_agent: navigator.userAgent.slice(0, 500),
+  });
+}
+
 export async function saveUserProfileBinding(settings: AppSettings): Promise<UserProfileBinding> {
   const client = makeAccountClient(settings);
   const user = await requireUser(client);

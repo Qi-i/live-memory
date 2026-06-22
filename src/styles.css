@@ -4625,3 +4625,188 @@ body {
     padding-right: 38px;
   }
 }
+
+/* ── Admin dashboard ────────────────────────────────────── */
+
+.admin-page {
+  display: grid;
+  gap: 20px;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+.admin-stat-cards {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.admin-stat-cards-sm {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.admin-card {
+  padding: 22px 20px;
+  border: 1px solid rgba(10, 14, 17, 0.12);
+  border-radius: 14px;
+  color: #fffdf2;
+  background: #090d10;
+  box-shadow: 6px 6px 0 rgba(10, 14, 17, 0.12);
+}
+
+.admin-card span {
+  display: block;
+  font-size: 13px;
+  font-weight: 900;
+  opacity: 0.7;
+}
+
+.admin-card strong {
+  display: block;
+  margin-top: 10px;
+  font-size: clamp(32px, 5vw, 52px);
+  line-height: 1;
+}
+
+.admin-panel {
+  padding: 22px;
+  border-radius: 14px;
+  background: rgba(255, 253, 245, 0.94);
+}
+
+.admin-panel h2 {
+  margin: 0 0 16px;
+  font-size: 22px;
+}
+
+.admin-user-list {
+  display: grid;
+  gap: 8px;
+}
+
+.admin-user-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(10, 14, 17, 0.04);
+  font-size: 14px;
+}
+
+.admin-user-row strong {
+  font-weight: 900;
+}
+
+.admin-user-row span {
+  color: var(--muted);
+}
+
+.admin-user-row em {
+  font-style: normal;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.admin-trend-chart {
+  display: flex;
+  align-items: end;
+  gap: 3px;
+  height: 140px;
+  padding: 0 0 24px;
+  position: relative;
+}
+
+.admin-trend-chart-single {
+  height: 100px;
+}
+
+.admin-trend-bar {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 0;
+}
+
+.admin-trend-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: stretch;
+  height: 100%;
+  gap: 1px;
+}
+
+.admin-trend-stack i {
+  display: block;
+  border-radius: 3px 3px 0 0;
+  min-height: 0;
+  transition: height 0.3s ease;
+}
+
+.admin-trend-users {
+  background: var(--mint);
+}
+
+.admin-trend-records {
+  background: var(--lime);
+}
+
+.admin-trend-bar small {
+  display: block;
+  margin-top: 4px;
+  font-size: 10px;
+  color: var(--muted);
+  transform: rotate(-45deg);
+  transform-origin: center;
+  white-space: nowrap;
+}
+
+.admin-legend {
+  display: flex;
+  gap: 18px;
+  margin-top: 8px;
+  font-size: 13px;
+  font-weight: 850;
+  color: var(--muted);
+}
+
+.admin-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.admin-legend i {
+  display: inline-block;
+  width: 14px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.admin-storage-row {
+  margin: 10px 0;
+}
+
+@media (max-width: 840px) {
+  .admin-stat-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .admin-trend-chart {
+    height: 100px;
+  }
+}
+
+@media (max-width: 540px) {
+  .admin-stat-cards {
+    grid-template-columns: 1fr;
+  }
+
+  .admin-user-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

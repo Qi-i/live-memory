@@ -74,26 +74,38 @@ import {
 } from "./storage";
 import {
   currentUser,
+  fetchAdminOverview,
+  fetchAdminStorageBreakdown,
+  fetchAdminTrends,
+  fetchAdminVisitorStats,
   friendlySupabaseErrorMessage,
   hasAccountCloudConfig,
   hasPersonalCloudConnection,
   hasSupabaseConfig,
+  isAdmin,
   pullRecordsFromSupabase,
   purgeRecordFromSupabase,
   purgeTextBackupFromAccount,
-  recoverAccountPasswordWithEmail,
-  pushTextBackupToAccount,
   pushRecordsToSupabase,
+  pushTextBackupToAccount,
+  recoverAccountPasswordWithEmail,
+  recordPageView,
   refreshSignedMediaUrls,
   saveUserProfileBinding,
-  signInWithGithub,
-  signInWithPassword,
   signInStorageWithAccount,
   signInStorageWithPassword,
+  signInWithGithub,
+  signInWithPassword,
   signOut,
   signUpOnly,
   syncAfterLogin,
   updateAccountPassword,
+} from "./supabase";
+import type {
+  AdminOverview,
+  AdminTrendRow,
+  AdminStorageRow,
+  AdminVisitorStats,
 } from "./supabase";
 import { withoutLocalMedia } from "./syncModel";
 
@@ -107,7 +119,7 @@ const emptyFilters: Filters = {
   tags: [],
 };
 
-type Route = "archive" | "stats" | "settings";
+type Route = "archive" | "stats" | "settings" | "admin";
 type SortMode = "smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc";
 type ConfirmAction = {
   title: string;
@@ -197,6 +209,12 @@ export default function App() {
     };
   }, [mediaRefreshKey]);
 
+  useEffect(() => {
+    if (hasAccountCloudConfig(settings)) {
+      recordPageView(route, document.referrer || undefined).catch(() => {});
+    }
+  }, [route, settings]);
+
   function flash(message: string) {
     setToast(message);
     window.setTimeout(() => setToast(""), 2600);
@@ -265,7 +283,7 @@ export default function App() {
     flash(message);
   }
 
-  const title = route === "archive" ? "档案" : route === "stats" ? "统计" : "设置";
+  const title = route === "archive" ? "档案" : route === "stats" ? "统计" : route === "admin" ? "管理" : "设置";
 
   return (
     <div className="app">
@@ -281,6 +299,7 @@ export default function App() {
           <RouteButton active={route === "archive"} icon={<Archive />} label="档案" onClick={() => setRoute("archive")} />
           <RouteButton active={route === "stats"} icon={<Sparkles />} label="统计" onClick={() => setRoute("stats")} />
           <RouteButton active={route === "settings"} icon={<Settings />} label="设置" onClick={() => setRoute("settings")} />
+          {isAdmin(settings) && <RouteButton active={route === "admin"} icon={<ShieldCheck />} label="管理" onClick={() => setRoute("admin")} />}
         </nav>
         <div className="rail-profile">
           <AccountAvatar settings={settings} />
@@ -366,6 +385,9 @@ export default function App() {
               onConfirm: () => permanentlyDeleteRecord(record),
             })}
           />
+        )}
+        {route === "admin" && isAdmin(settings) && (
+          <AdminView settings={settings} />
         )}
       </main>
 
@@ -1406,6 +1428,189 @@ function StatsView({ records, allRecords }: { records: EventRecord[]; allRecords
         <Metric title="总票价" value={`¥${totalPrice}`} hint="按已填票价" light />
       </div>
       <SummaryView records={records} />
+    </section>
+  );
+}
+
+function AdminView({ settings }: { settings: AppSettings }) {
+  const [overview, setOverview] = useState<AdminOverview | null>(null);
+  const [trends, setTrends] = useState<AdminTrendRow[]>([]);
+  const [storage, setStorage] = useState<AdminStorageRow[]>([]);
+  const [visitors, setVisitors] = useState<AdminVisitorStats | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  useEffect(() => {
+    let alive = true;
+    setLoading(true);
+    Promise.all([
+      fetchAdminOverview(settings),
+      fetchAdminTrends(settings),
+      fetchAdminStorageBreakdown(settings),
+      fetchAdminVisitorStats(settings),
+    ])
+      .then(([ov, tr, st, vi]) => {
+        if (!alive) return;
+        setOverview(ov);
+        setTrends(tr);
+        setStorage(st);
+        setVisitors(vi);
+        setError("");
+      })
+      .catch((err) => {
+        if (!alive) return;
+        setError(err instanceof Error ? err.message : "加载失败");
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => { alive = false; };
+  }, [settings]);
+
+  if (loading) {
+    return (
+      <section className="admin-page">
+        <div className="panel" style={{ textAlign: "center", padding: "60px 24px" }}>
+          <Loader2 className="spin" size={32} />
+          <p style={{ marginTop: 12, color: "var(--muted)" }}>加载管理数据…</p>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="admin-page">
+        <div className="panel" style={{ padding: 24 }}>
+          <h2>管理面板</h2>
+          <p style={{ color: "var(--pink)" }}>{error}</p>
+        </div>
+      </section>
+    );
+  }
+
+  const trendMax = Math.max(1, ...trends.flatMap((t) => [t.new_users, t.new_records]));
+  const storageMax = Math.max(1, ...storage.map((s) => s.record_count + s.media_count));
+  const visitorMax = Math.max(1, ...(visitors?.daily_views || []).map((d) => d.count));
+
+  return (
+    <section className="admin-page">
+      {overview && (
+        <div className="admin-stat-cards">
+          <div className="admin-card">
+            <span>注册用户</span>
+            <strong>{overview.total_users}</strong>
+          </div>
+          <div className="admin-card">
+            <span>演出记录</span>
+            <strong>{overview.total_records}</strong>
+          </div>
+          <div className="admin-card">
+            <span>媒体资源</span>
+            <strong>{overview.total_media}</strong>
+          </div>
+          <div className="admin-card">
+            <span>活跃用户</span>
+            <strong>{overview.active_users}</strong>
+          </div>
+        </div>
+      )}
+
+      {overview?.latest_users && overview.latest_users.length > 0 && (
+        <div className="panel admin-panel">
+          <h2>最新用户</h2>
+          <div className="admin-user-list">
+            {overview.latest_users.map((u) => (
+              <div className="admin-user-row" key={u.username}>
+                <strong>{u.display_name || u.username}</strong>
+                <span>@{u.username}</span>
+                <em>{new Date(u.created_at).toLocaleDateString("zh-CN")}</em>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {trends.length > 0 && (
+        <div className="panel admin-panel">
+          <h2>30 天趋势</h2>
+          <div className="admin-trend-chart">
+            {trends.map((t) => (
+              <div className="admin-trend-bar" key={t.day} title={`${t.day}: ${t.new_users} 用户, ${t.new_records} 记录`}>
+                <div className="admin-trend-stack">
+                  <i className="admin-trend-users" style={{ height: `${(t.new_users / trendMax) * 100}%` }} />
+                  <i className="admin-trend-records" style={{ height: `${(t.new_records / trendMax) * 100}%` }} />
+                </div>
+                <small>{t.day.slice(5)}</small>
+              </div>
+            ))}
+          </div>
+          <div className="admin-legend">
+            <span><i className="admin-trend-users" /> 新用户</span>
+            <span><i className="admin-trend-records" /> 新记录</span>
+          </div>
+        </div>
+      )}
+
+      {storage.length > 0 && (
+        <div className="panel admin-panel">
+          <h2>用户存储</h2>
+          {storage.map((s) => (
+            <div className="bar-row admin-storage-row" key={s.username}>
+              <span title={s.username}>{s.display_name || s.username}</span>
+              <div>
+                <i style={{ width: `${((s.record_count + s.media_count) / storageMax) * 100}%` }} />
+              </div>
+              <b>{s.record_count + s.media_count}</b>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {visitors && (
+        <div className="panel admin-panel">
+          <h2>访客统计</h2>
+          <div className="admin-stat-cards admin-stat-cards-sm">
+            <div className="admin-card">
+              <span>总访问</span>
+              <strong>{visitors.total_views}</strong>
+            </div>
+            <div className="admin-card">
+              <span>独立页面</span>
+              <strong>{visitors.unique_paths}</strong>
+            </div>
+          </div>
+          {visitors.daily_views.length > 0 && (
+            <>
+              <h3 style={{ margin: "18px 0 10px", fontSize: 16, fontWeight: 900 }}>每日访问</h3>
+              <div className="admin-trend-chart admin-trend-chart-single">
+                {visitors.daily_views.map((d) => (
+                  <div className="admin-trend-bar" key={d.day} title={`${d.day}: ${d.count} 次访问`}>
+                    <div className="admin-trend-stack">
+                      <i className="admin-trend-records" style={{ height: `${(d.count / visitorMax) * 100}%` }} />
+                    </div>
+                    <small>{d.day.slice(5)}</small>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+          {visitors.top_paths.length > 0 && (
+            <>
+              <h3 style={{ margin: "18px 0 10px", fontSize: 16, fontWeight: 900 }}>热门页面</h3>
+              {visitors.top_paths.map((p) => (
+                <div className="bar-row" key={p.path}>
+                  <span title={p.path}>{p.path}</span>
+                  <div>
+                    <i style={{ width: `${(p.count / Math.max(1, visitors.top_paths[0].count)) * 100}%` }} />
+                  </div>
+                  <b>{p.count}</b>
+                </div>
+              ))}
+            </>
+          )}
+        </div>
+      )}
     </section>
   );
 }
