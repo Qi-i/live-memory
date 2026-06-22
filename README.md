@@ -42,6 +42,9 @@
 - 大麦公开链接、文本、多张图片、JSON 备份批量导入。
 - Live Memory 账号资料、显示偏好、个人 Supabase 配置、文字云备份和自动备份。
 - 用户自带 Supabase 完整同步；公开站点登录账号后可直接连接，图片上传可独立关闭。
+- 备用邮箱密码找回，账号服务端直接重置密码，无需邮件验证。
+- 管理员面板查看平台用户数、演出记录、媒体资源、活跃用户、30 天趋势、用户存储分布和访客统计。
+- 轻量级页面访客追踪，路由切换时自动记录，不影响页面加载。
 - 删除二次确认、回收站恢复和永久删除确认。
 - JSON 完整备份、JSON 文字备份和 CSV 导出。
 - 响应式桌面/手机界面与 PWA 安装。
@@ -107,7 +110,7 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 - [`005_passkey_cloud_sync.sql`](./supabase/migrations/005_passkey_cloud_sync.sql)
 
-这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 1-7 号 migration 并配置 GitHub Pages 变量。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
+这个文件会建立私人演出记录表、媒体索引、私有图片空间和访问规则。站点维护者自部署 Live Memory 账号项目时，才需要按顺序运行 001–008 号 migration 并配置 GitHub Pages 变量。其中 008 号为管理员面板和访客追踪所需。完整操作见 [Supabase 配置指南](./docs/supabase-setup.md)。
 
 ## 把现有记录迁入私人云端
 
@@ -137,14 +140,16 @@ VITE_SUPABASE_MEDIA_BUCKET=echo-media
 
 ## 数据边界
 
-- 源代码、图标、文档和 3 条演示记录进入 GitHub。
+- 源代码、图标、文档和 3 条演示记录进入 GitHub 仓库。
 - 演出记录先写入浏览器 IndexedDB。
 - 账号资料、显示偏好和个人 Supabase 公开连接配置写入账号项目的 `echo_user_profiles`。
 - 文字备份写入账号项目的 `echo_text_backups`。
+- 页面访客记录写入账号项目的 `echo_page_views`，仅记录路径、来源和浏览器标识，不关联用户身份。
 - 完整同步写入用户个人项目的 `echo_passkey_records` 和 `echo_passkey_media_assets`。
 - 图片仅在开启图片同步后进入私有 `echo-media` 空间。
 - 回收站使用 `deletedAt` 和云端 `deleted_at` 保留可恢复删除状态。
 - 账号表按当前用户 ID 限制访问，个人完整档案按同步钥匙限制访问。
+- 管理面板函数使用 `SECURITY DEFINER` 绕过行级安全策略，聚合查询全平台数据。
 
 完整 JSON 可能包含票根、二维码、订单信息和现场照片，请保存在私人设备或可信存储中。
 
@@ -180,5 +185,9 @@ docs/                    使用、架构、同步和部署文档
 ## 技术栈
 
 Vite 7、React 18、TypeScript 5、IndexedDB、Supabase、Lucide React、Service Worker、GitHub Actions 和 GitHub Pages。
+
+## AI 协作
+
+本项目由 [Codex (GPT-5.5)](https://openai.com/codex/) 与 [QoderWork (Qwen 3.7 Max)](https://qoder.com) 协同开发完成。Codex 负责核心功能实现与代码架构，QoderWork 负责基础设施配置、数据库迁移、部署调试及文档维护。两者在同一个 Git 仓库上协作，所有代码变更均可在 commit 历史中追溯。
 
 本项目采用 [MIT License](./LICENSE)。
