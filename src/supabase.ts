@@ -1,4 +1,17 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
+
+/**
+ * Loose database type to avoid TypeScript 'never' resolution when
+ * no generated Supabase types are available. Keeps all table/row types
+ * as Record<string, any> so .from() and .rpc() calls compile cleanly.
+ */
+type LooseDatabase = {
+  public: {
+    Tables: Record<string, { Row: Record<string, any>; Insert: Record<string, any>; Update: Record<string, any>; Relationships: [] }>;
+    Views: Record<string, never>;
+    Functions: Record<string, { Args: Record<string, any>; Returns: unknown }>;
+  };
+};
 import {
   AppSettings,
   EventRecord,
@@ -69,7 +82,7 @@ export function hasAccountCloudConfig(settings?: AppSettings) {
 export function makeSupabaseClient(settings: AppSettings) {
   if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
   const headers = settings.supabase.ownerKey ? { [ownerHeader]: settings.supabase.ownerKey } : undefined;
-  return createClient(settings.supabase.url, settings.supabase.anonKey, {
+  return createClient<LooseDatabase>(settings.supabase.url, settings.supabase.anonKey, {
     auth: {
       persistSession: true,
       autoRefreshToken: true,
@@ -78,7 +91,7 @@ export function makeSupabaseClient(settings: AppSettings) {
   });
 }
 
-let cachedAccountClient: ReturnType<typeof createClient> | null = null;
+let cachedAccountClient: SupabaseClient<LooseDatabase> | null = null;
 
 function makeAccountClient(settings: AppSettings) {
   void settings;
@@ -86,7 +99,7 @@ function makeAccountClient(settings: AppSettings) {
   const key = accountAnonKey;
   if (!url || !key) throw new Error("账号服务暂时不可用，请稍后再试");
   if (!cachedAccountClient) {
-    cachedAccountClient = createClient(url, key, {
+    cachedAccountClient = createClient<LooseDatabase>(url, key, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -383,7 +396,7 @@ export async function fetchAdminVisitorStats(settings: AppSettings, days = 30): 
 
 export async function recordPageView(path: string, referrer?: string): Promise<void> {
   if (!accountUrl || !accountAnonKey) return;
-  const client = createClient(accountUrl, accountAnonKey, {
+  const client = createClient<LooseDatabase>(accountUrl, accountAnonKey, {
     auth: { persistSession: false },
   });
   await client.rpc("echo_record_page_view", {
