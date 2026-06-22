@@ -1,4 +1,5 @@
 import {
+  AlertTriangle,
   Archive,
   BookOpen,
   CalendarDays,
@@ -73,6 +74,7 @@ import {
   writeSettings,
 } from "./storage";
 import {
+  autoSyncAll,
   currentUser,
   fetchAdminOverview,
   fetchAdminStorageBreakdown,
@@ -91,6 +93,8 @@ import {
   recoverAccountPasswordWithEmail,
   recordPageView,
   refreshSignedMediaUrls,
+  resolveAllConflicts,
+  resolveSyncConflict,
   saveUserProfileBinding,
   signInStorageWithAccount,
   signInStorageWithPassword,
@@ -106,6 +110,7 @@ import type {
   AdminTrendRow,
   AdminStorageRow,
   AdminVisitorStats,
+  SyncConflict,
 } from "./supabase";
 import { withoutLocalMedia } from "./syncModel";
 
@@ -143,6 +148,10 @@ export default function App() {
   const [toast, setToast] = useState("");
   const [busy, setBusy] = useState(false);
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
+  const [syncing, setSyncing] = useState(false);
+  const lastSyncFingerprint = useRef("");
+  const editingRef = useRef<EventRecord | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -170,23 +179,36 @@ export default function App() {
   }, [records, settings]);
   const lastMediaRefreshKey = useRef("");
 
+  useEffect(() => { editingRef.current = editing; }, [editing]);
+
   useEffect(() => {
     if (!settings.onboardingComplete) return;
-    if (!hasAccountCloudConfig(settings) || records.length === 0) return;
-    const last = settings.accountBackup.lastBackupAt ? new Date(settings.accountBackup.lastBackupAt).getTime() : 0;
-    const interval = Math.max(1, settings.accountBackup.intervalHours) * 60 * 60 * 1000;
-    if (Date.now() - last < interval) return;
+    if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
+    if (records.length === 0) return;
+    if (editingRef.current) return;
+    if (syncing) return;
+
+    const fingerprint = records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
+    if (fingerprint === lastSyncFingerprint.current) return;
+
     const timer = window.setTimeout(() => {
-      pushTextBackupToAccount(settings, records)
-        .then(() => {
-          const saved = writeSettings({
-            ...settings,
-            accountBackup: { ...settings.accountBackup, lastBackupAt: nowIso() },
-          });
-          setSettings(saved);
+      lastSyncFingerprint.current = fingerprint;
+      setSyncing(true);
+      autoSyncAll(settings, records)
+        .then((result) => {
+          if (result.conflicts.length > 0) {
+            setSyncConflicts(result.conflicts);
+          }
+          const newFingerprint = result.records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
+          if (newFingerprint !== fingerprint) {
+            lastSyncFingerprint.current = newFingerprint;
+            replaceAllRecords(result.records).then(() => setRecords(result.records));
+          }
+          if (result.message) flash(result.message);
         })
-        .catch(() => undefined);
-    }, 30000);
+        .catch(() => {})
+        .finally(() => setSyncing(false));
+    }, 1500);
     return () => window.clearTimeout(timer);
   }, [records, settings]);
 
@@ -324,10 +346,10 @@ export default function App() {
           </div>
           <HeroPosterWall records={activeRecords} onOpen={setSelected} />
           <div className="hero-actions">
-            <AccountChip settings={settings} onClick={() => setRoute("settings")} />
-            <span className="sync-pill">
-              <Cloud size={16} />
-              {storageLocationLabel(settings)}
+            <AccountChip settings={settings} syncing={syncing} conflictCount={syncConflicts.length} onClick={() => setRoute("settings")} />
+            <span className={`sync-pill${syncing ? " syncing" : ""}`}>
+              {syncing ? <Loader2 size={16} className="spin" /> : syncConflicts.length > 0 ? <AlertTriangle size={16} /> : <Cloud size={16} />}
+              {syncing ? "同步中…" : syncConflicts.length > 0 ? `${syncConflicts.length} 条冲突` : storageLocationLabel(settings)}
             </span>
             <label className="search">
               <Search size={18} />
@@ -411,6 +433,23 @@ export default function App() {
       {importOpen && <ImportDrawer onClose={() => setImportOpen(false)} onSave={persistRecord} flash={flash} />}
       {zoomMedia && <ImageZoom media={zoomMedia} onClose={() => setZoomMedia(null)} />}
       {confirmAction && <ConfirmDialog action={confirmAction} onClose={() => setConfirmAction(null)} />}
+      {syncConflicts.length > 0 && (
+        <SyncConflictDialog
+          conflicts={syncConflicts}
+          settings={settings}
+          onResolve={async (resolved) => {
+            const next = records.map((r) => {
+              const fix = resolved.find((rr) => rr.id === r.id);
+              return fix || r;
+            });
+            await replaceAllRecords(next);
+            setRecords(next);
+            setSyncConflicts([]);
+            flash("冲突已解决");
+          }}
+          onDismiss={() => setSyncConflicts([])}
+        />
+      )}
       {!settings.onboardingComplete && (
         <FirstRunGuide
           settings={settings}
@@ -427,17 +466,18 @@ export default function App() {
   );
 }
 
-function AccountChip({ settings, onClick }: { settings: AppSettings; onClick: () => void }) {
+function AccountChip({ settings, syncing, conflictCount, onClick }: { settings: AppSettings; syncing: boolean; conflictCount: number; onClick: () => void }) {
   const label = accountLabel(settings);
-  const storageLabel = settings.storageMode === "supabase"
+  const baseLabel = settings.storageMode === "supabase"
     ? hasPersonalCloudConnection(settings) ? "云同步已连接" : "云端待连接"
     : hasAccountCloudConfig(settings) ? "文字备份中" : "仅当前设备";
+  const statusLabel = syncing ? "同步中…" : conflictCount > 0 ? `${conflictCount} 条冲突` : baseLabel;
   return (
     <button className="account-chip" type="button" onClick={onClick}>
       <AccountAvatar settings={settings} />
       <span>
         <strong>{label}</strong>
-        <small>{storageLabel}</small>
+        <small>{statusLabel}</small>
       </span>
     </button>
   );
@@ -2440,6 +2480,83 @@ function ConfirmDialog({ action, onClose }: { action: ConfirmAction; onClose: ()
         <div className="button-row">
           <button className="button ghost" type="button" disabled={working} onClick={onClose}>取消</button>
           <button className={`button ${action.danger ? "danger" : "primary"}`} type="button" disabled={working} onClick={() => void confirm()}>{working ? <Loader2 className="spin" /> : <Trash2 size={18} />}{action.confirmLabel}</button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function SyncConflictDialog({
+  conflicts,
+  settings,
+  onResolve,
+  onDismiss,
+}: {
+  conflicts: SyncConflict[];
+  settings: AppSettings;
+  onResolve: (resolved: EventRecord[]) => Promise<void>;
+  onDismiss: () => void;
+}) {
+  const [working, setWorking] = useState(false);
+  const [remaining, setRemaining] = useState(conflicts);
+
+  async function resolveOne(conflict: SyncConflict, choice: "local" | "cloud") {
+    setWorking(true);
+    try {
+      const resolved = await resolveSyncConflict(settings, conflict, choice);
+      const next = remaining.filter((c) => c.recordId !== conflict.recordId);
+      setRemaining(next);
+      if (next.length === 0) {
+        await onResolve([resolved, ...conflicts.filter((c) => c.recordId !== conflict.recordId).map((c) => c.localRecord)]);
+      }
+    } catch (err) {
+      // Silently continue on error
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function resolveAll(choice: "local" | "cloud") {
+    setWorking(true);
+    try {
+      const resolved = await resolveAllConflicts(settings, remaining, choice);
+      setRemaining([]);
+      await onResolve(resolved);
+    } catch {
+      // Silently continue
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  return (
+    <div className="confirm-backdrop" role="presentation" onClick={onDismiss}>
+      <section className="sync-conflict-dialog" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <h2>发现 {remaining.length} 条冲突记录</h2>
+        <p className="conflict-hint">本地和云端同时修改了这些记录，请选择保留哪个版本。</p>
+        {remaining.length > 1 && (
+          <div className="bulk-actions">
+            <button className="button ghost" type="button" disabled={working} onClick={() => resolveAll("local")}>全部保留本地</button>
+            <button className="button ghost" type="button" disabled={working} onClick={() => resolveAll("cloud")}>全部保留云端</button>
+          </div>
+        )}
+        <div className="conflict-list">
+          {remaining.map((c) => (
+            <div className="conflict-card" key={c.recordId}>
+              <strong>{c.title}</strong>
+              <div className="conflict-meta">
+                <span>本地: {new Date(c.localUpdatedAt).toLocaleString("zh-CN")}</span>
+                <span>云端: {new Date(c.cloudUpdatedAt).toLocaleString("zh-CN")}</span>
+              </div>
+              <div className="conflict-actions">
+                <button className="button primary" type="button" disabled={working} onClick={() => resolveOne(c, "local")}>保留本地</button>
+                <button className="button ghost" type="button" disabled={working} onClick={() => resolveOne(c, "cloud")}>保留云端</button>
+              </div>
+            </div>
+          ))}
+        </div>
+        <div className="button-row">
+          <button className="button ghost" type="button" disabled={working} onClick={onDismiss}>稍后处理</button>
         </div>
       </section>
     </div>

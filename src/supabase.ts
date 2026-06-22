@@ -597,6 +597,313 @@ export async function purgeRecordFromSupabase(settings: AppSettings, recordId: s
   await purgePasskeyRecordFromSupabase(settings, recordId);
 }
 
+// ── Auto-sync ───────────────────────────────────────────────
+
+export interface SyncConflict {
+  recordId: string;
+  title: string;
+  localUpdatedAt: string;
+  cloudUpdatedAt: string;
+  localRecord: EventRecord;
+  cloudRecord: EventRecord;
+  source: "account" | "personal";
+}
+
+export interface AutoSyncResult {
+  records: EventRecord[];
+  conflicts: SyncConflict[];
+  message: string;
+}
+
+export async function autoSyncAll(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
+  const allConflicts: SyncConflict[] = [];
+  const messages: string[] = [];
+  let merged = [...localRecords];
+
+  // 1. Account text backup (bidirectional)
+  if (hasAccountCloudConfig(settings)) {
+    try {
+      const accountResult = await syncAccountTextBackup(settings, merged);
+      merged = accountResult.records;
+      allConflicts.push(...accountResult.conflicts);
+      if (accountResult.message) messages.push(accountResult.message);
+    } catch {
+      // Account sync failure is non-fatal
+    }
+  }
+
+  // 2. Personal Supabase (bidirectional, if connected)
+  if (hasPersonalCloudConnection(settings)) {
+    try {
+      const personalResult = await syncPersonalSupabase(settings, merged);
+      merged = personalResult.records;
+      allConflicts.push(...personalResult.conflicts);
+      if (personalResult.message) messages.push(personalResult.message);
+    } catch {
+      // Personal sync failure is non-fatal
+    }
+  }
+
+  return {
+    records: merged,
+    conflicts: allConflicts,
+    message: messages.join("，") || "自动同步完成",
+  };
+}
+
+async function syncAccountTextBackup(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
+  const client = makeAccountClient(settings);
+  const user = await requireUser(client);
+  const conflicts: SyncConflict[] = [];
+
+  // Pull all cloud records
+  const { data, error } = await client
+    .from("echo_text_backups")
+    .select("payload, updated_at, deleted_at")
+    .eq("user_id", user.id)
+    .order("updated_at", { ascending: false });
+  if (error) throwTextBackupError(error);
+
+  const cloudRecords = (data || []).map((row) => normalizeRecord({
+    ...(row.payload as EventRecord),
+    updatedAt: String(row.updated_at || (row.payload as EventRecord).updatedAt),
+    deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
+  }));
+
+  const localById = new Map(localRecords.map((r) => [r.id, r]));
+  const cloudById = new Map(cloudRecords.map((r) => [r.id, r]));
+  const merged = new Map(localById);
+  const toPush: EventRecord[] = [];
+
+  // Check each local record against cloud
+  for (const [id, local] of localById) {
+    const cloud = cloudById.get(id);
+    if (!cloud) {
+      // Only in local → push
+      toPush.push(local);
+      continue;
+    }
+    // Exists in both → check for conflicts
+    const syncedAt = local.syncedAt;
+    if (syncedAt) {
+      const localChanged = local.updatedAt > syncedAt;
+      const cloudChanged = cloud.updatedAt > syncedAt;
+      if (localChanged && cloudChanged) {
+        conflicts.push({
+          recordId: id,
+          title: local.title,
+          localUpdatedAt: local.updatedAt,
+          cloudUpdatedAt: cloud.updatedAt,
+          localRecord: local,
+          cloudRecord: cloud,
+          source: "account",
+        });
+      } else if (!localChanged && cloudChanged) {
+        // Cloud wins
+        merged.set(id, normalizeRecord({ ...cloud, media: local.media, syncedAt: nowIso() }));
+      } else if (localChanged && !cloudChanged) {
+        toPush.push(local);
+      }
+      // Neither changed → skip
+    } else {
+      // No syncedAt → last-write-wins
+      if (cloud.updatedAt > local.updatedAt) {
+        merged.set(id, normalizeRecord({ ...cloud, media: local.media, syncedAt: nowIso() }));
+      } else {
+        toPush.push(local);
+      }
+    }
+  }
+
+  // Cloud-only records → pull
+  for (const [id, cloud] of cloudById) {
+    if (!localById.has(id)) {
+      merged.set(id, normalizeRecord({ ...cloud, media: [], syncedAt: nowIso() }));
+    }
+  }
+
+  // Push local changes
+  if (toPush.length) {
+    const rows = toPush.map((record) => ({
+      id: record.id,
+      user_id: user.id,
+      payload: withoutLocalMedia({ ...record, syncedAt: nowIso() }),
+      updated_at: record.updatedAt,
+      deleted_at: record.deletedAt || null,
+    }));
+    const { error: pushError } = await client.from("echo_text_backups").upsert(rows, { onConflict: "user_id,id" });
+    if (pushError) throwTextBackupError(pushError);
+    // Update local syncedAt for pushed records
+    for (const record of toPush) {
+      const existing = merged.get(record.id);
+      if (existing) merged.set(record.id, { ...existing, syncedAt: nowIso() });
+    }
+  }
+
+  const records = Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
+  return {
+    records,
+    conflicts,
+    message: toPush.length ? `已同步 ${toPush.length} 条记录到账号备份` : "",
+  };
+}
+
+async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
+  const ownerKey = requireOwnerKey(settings);
+  const client = makeSupabaseClient(settings);
+  const conflicts: SyncConflict[] = [];
+
+  // Pull all cloud records
+  const { data, error } = await client
+    .from("echo_passkey_records")
+    .select("payload, updated_at, deleted_at")
+    .eq("owner_key", ownerKey)
+    .order("updated_at", { ascending: false });
+  if (error) throwPersonalCloudError(error);
+
+  const cloudRecords = (data || []).map((row) => normalizeRecord({
+    ...(row.payload as EventRecord),
+    deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
+  }));
+
+  const localById = new Map(localRecords.map((r) => [r.id, r]));
+  const cloudById = new Map(cloudRecords.map((r) => [r.id, r]));
+  const merged = new Map(localById);
+  const toPush: EventRecord[] = [];
+
+  for (const [id, local] of localById) {
+    const cloud = cloudById.get(id);
+    if (!cloud) {
+      toPush.push(local);
+      continue;
+    }
+    const syncedAt = local.syncedAt;
+    if (syncedAt) {
+      const localChanged = local.updatedAt > syncedAt;
+      const cloudChanged = cloud.updatedAt > syncedAt;
+      if (localChanged && cloudChanged) {
+        conflicts.push({
+          recordId: id,
+          title: local.title,
+          localUpdatedAt: local.updatedAt,
+          cloudUpdatedAt: cloud.updatedAt,
+          localRecord: local,
+          cloudRecord: cloud,
+          source: "personal",
+        });
+      } else if (!localChanged && cloudChanged) {
+        merged.set(id, normalizeRecord({ ...cloud, syncedAt: nowIso() }));
+      } else if (localChanged && !cloudChanged) {
+        toPush.push(local);
+      }
+    } else {
+      if (cloud.updatedAt > local.updatedAt) {
+        merged.set(id, normalizeRecord({ ...cloud, syncedAt: nowIso() }));
+      } else {
+        toPush.push(local);
+      }
+    }
+  }
+
+  for (const [id, cloud] of cloudById) {
+    if (!localById.has(id)) {
+      merged.set(id, normalizeRecord({ ...cloud, syncedAt: nowIso() }));
+    }
+  }
+
+  // Push local changes
+  if (toPush.length) {
+    for (const record of toPush) {
+      const syncedRecord = { ...record, syncedAt: nowIso() };
+      const cloudPayload = settings.supabase.syncMedia ? cloudRecordPayload(syncedRecord) : withoutLocalMedia(syncedRecord);
+      const { error: pushError } = await client.from("echo_passkey_records").upsert(
+        {
+          id: syncedRecord.id,
+          owner_key: ownerKey,
+          payload: cloudPayload,
+          updated_at: syncedRecord.updatedAt,
+          deleted_at: syncedRecord.deletedAt || null,
+        },
+        { onConflict: "owner_key,id" },
+      );
+      if (pushError) throwPersonalCloudError(pushError);
+      merged.set(record.id, syncedRecord);
+
+      // Upload media if syncMedia is enabled
+      if (settings.supabase.syncMedia && !record.deletedAt) {
+        const bucket = mediaBucket(settings);
+        for (const asset of record.media) {
+          if (!asset.storagePath && asset.src.startsWith("data:")) {
+            try {
+              await uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket);
+            } catch {
+              // Individual media upload failure is non-fatal
+            }
+          }
+        }
+      }
+    }
+  }
+
+  const records = Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
+  return {
+    records,
+    conflicts,
+    message: toPush.length ? `已同步 ${toPush.length} 条记录到个人云端` : "",
+  };
+}
+
+export async function resolveSyncConflict(
+  settings: AppSettings,
+  conflict: SyncConflict,
+  choice: "local" | "cloud",
+): Promise<EventRecord> {
+  const resolved = choice === "local"
+    ? { ...conflict.localRecord, syncedAt: nowIso() }
+    : { ...conflict.cloudRecord, syncedAt: nowIso(), media: choice === "cloud" ? conflict.localRecord.media : conflict.cloudRecord.media };
+
+  if (choice === "local") {
+    // Push local version to cloud
+    if (conflict.source === "account") {
+      const client = makeAccountClient(settings);
+      const user = await requireUser(client);
+      await client.from("echo_text_backups").upsert({
+        id: resolved.id,
+        user_id: user.id,
+        payload: withoutLocalMedia(resolved),
+        updated_at: resolved.updatedAt,
+        deleted_at: resolved.deletedAt || null,
+      }, { onConflict: "user_id,id" });
+    } else {
+      const ownerKey = requireOwnerKey(settings);
+      const client = makeSupabaseClient(settings);
+      const cloudPayload = settings.supabase.syncMedia ? cloudRecordPayload(resolved) : withoutLocalMedia(resolved);
+      await client.from("echo_passkey_records").upsert({
+        id: resolved.id,
+        owner_key: ownerKey,
+        payload: cloudPayload,
+        updated_at: resolved.updatedAt,
+        deleted_at: resolved.deletedAt || null,
+      }, { onConflict: "owner_key,id" });
+    }
+  }
+
+  return normalizeRecord(resolved);
+}
+
+export async function resolveAllConflicts(
+  settings: AppSettings,
+  conflicts: SyncConflict[],
+  choice: "local" | "cloud",
+): Promise<EventRecord[]> {
+  const resolved: EventRecord[] = [];
+  for (const conflict of conflicts) {
+    const record = await resolveSyncConflict(settings, conflict, choice);
+    resolved.push(record);
+  }
+  return resolved;
+}
+
 async function pushRecordsToPasskeySupabase(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
   const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);

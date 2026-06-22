@@ -256,6 +256,7 @@ export function normalizeRecord(record: EventRecord): EventRecord {
     createdAt: record.createdAt || timestamp,
     updatedAt: timestamp,
     deletedAt: record.deletedAt || undefined,
+    syncedAt: record.syncedAt || undefined,
   };
 }
 

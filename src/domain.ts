@@ -62,6 +62,7 @@ export interface EventRecord {
   createdAt: string;
   updatedAt: string;
   deletedAt?: string;
+  syncedAt?: string;
 }
 
 export interface ImportDraft {

@@ -4810,3 +4810,72 @@ body {
     gap: 4px;
   }
 }
+
+/* ── Sync Conflict Dialog ── */
+
+.sync-conflict-dialog {
+  display: grid;
+  width: min(520px, 100%);
+  max-height: 80vh;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid rgba(17, 19, 24, 0.12);
+  border-radius: 8px;
+  background: #fffdf5;
+  box-shadow: 10px 10px 0 rgba(17, 19, 24, 0.22);
+  overflow-y: auto;
+}
+
+.sync-conflict-dialog h2 {
+  margin: 0;
+  font-size: 22px;
+}
+
+.conflict-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.65;
+}
+
+.bulk-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.conflict-list {
+  display: grid;
+  gap: 12px;
+}
+
+.conflict-card {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid rgba(17, 19, 24, 0.1);
+  border-radius: 6px;
+  background: rgba(255, 253, 242, 0.6);
+}
+
+.conflict-card strong {
+  font-size: 15px;
+}
+
+.conflict-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.conflict-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.sync-pill.syncing {
+  color: var(--muted);
+}
