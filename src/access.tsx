@@ -1,4 +1,4 @@
-import { Github, Loader2, ShieldCheck, UserRound } from "lucide-react";
+import { ArrowRight, CheckCircle2, Github, Loader2, ShieldCheck, UserRound } from "lucide-react";
 import {
   FormEvent,
   ReactNode,
@@ -16,6 +16,7 @@ import {
   signInWithPassword,
   signOut,
   signUpOnly,
+  watchAccountAuth,
 } from "./supabase";
 
 const GUEST_SESSION_KEY = "live-memory-guest-session";
@@ -72,12 +73,7 @@ function settingsForSessionUser(settings: AppSettings, user: AccountUser) {
   const avatarUrl = userText(user, "avatar_url", "picture") || settings.account.avatarUrl;
   return writeSettings({
     ...settings,
-    account: {
-      ...settings.account,
-      username,
-      nickname,
-      avatarUrl,
-    },
+    account: { ...settings.account, username, nickname, avatarUrl },
   });
 }
 
@@ -99,28 +95,41 @@ export function AccessGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let active = true;
-    const bootstrap = async () => {
-      const initialSettings = readSettings();
-      try {
-        const sessionUser = await currentUser(initialSettings);
-        if (!active) return;
-        if (sessionUser) {
-          sessionStorage.removeItem(GUEST_SESSION_KEY);
-          settingsForSessionUser(readSettings(), sessionUser);
-          setUser(sessionUser);
-          setMode("account");
-          return;
-        }
-      } catch {
-        // A failed session lookup is treated as signed out; the login screen remains usable.
-      }
+
+    const applyUser = (sessionUser: AccountUser | null) => {
       if (!active) return;
-      setUser(null);
-      setMode(sessionStorage.getItem(GUEST_SESSION_KEY) === "1" ? "guest" : "signed-out");
+      if (sessionUser) {
+        sessionStorage.removeItem(GUEST_SESSION_KEY);
+        settingsForSessionUser(readSettings(), sessionUser);
+        setUser(sessionUser);
+        setMode("account");
+      } else {
+        setUser(null);
+        setMode(sessionStorage.getItem(GUEST_SESSION_KEY) === "1" ? "guest" : "signed-out");
+      }
+    };
+
+    const bootstrap = async () => {
+      try {
+        applyUser(await currentUser(readSettings()));
+      } catch {
+        applyUser(null);
+      }
     };
     void bootstrap();
+
+    let stopWatching = () => undefined;
+    try {
+      stopWatching = watchAccountAuth(readSettings(), (sessionUser) => {
+        window.setTimeout(() => applyUser(sessionUser), 0);
+      });
+    } catch {
+      // Keep the login screen available if the account service is temporarily unreachable.
+    }
+
     return () => {
       active = false;
+      stopWatching();
     };
   }, []);
 
@@ -152,12 +161,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
   }), [mode, user]);
 
   if (mode === "loading") {
-    return (
-      <div className="access-loading" role="status">
-        <Loader2 className="spin" />
-        <span>正在确认登录状态…</span>
-      </div>
-    );
+    return <div className="access-loading" role="status"><Loader2 className="spin" /><span>正在打开现场记…</span></div>;
   }
 
   if (mode === "signed-out") {
@@ -165,26 +169,24 @@ export function AccessGate({ children }: { children: ReactNode }) {
       <AccessContext.Provider value={contextValue}>
         <LoginGate
           onGuest={enterGuest}
-          onGithub={async () => {
-            await signInWithGithub(readSettings());
-          }}
+          onGithub={() => signInWithGithub(readSettings()).then(() => undefined)}
           onLogin={async (username, password) => {
             validatePassword(password);
             const settings = settingsForCredentials(username);
             await signInWithPassword(settings, password);
             const sessionUser = await currentUser(settings);
-            if (!sessionUser) throw new Error("登录未建立有效会话，请重试");
+            if (!sessionUser) throw new Error("登录没有完成，请刷新页面后再试。");
             settingsForSessionUser(settings, sessionUser);
             setUser(sessionUser);
             setMode("account");
           }}
           onRegister={async (nickname, username, password) => {
-            if (!nickname.trim()) throw new Error("请输入昵称");
+            if (!nickname.trim()) throw new Error("请填写昵称。");
             validatePassword(password);
             const settings = settingsForCredentials(username, nickname);
             await signUpOnly(settings, password);
             const sessionUser = await currentUser(settings);
-            if (!sessionUser) throw new Error("账号已创建，但未建立会话，请检查 Supabase 邮箱验证设置");
+            if (!sessionUser) throw new Error("账号已经创建，但登录没有完成，请刷新后再试。");
             settingsForSessionUser(settings, sessionUser);
             setUser(sessionUser);
             setMode("account");
@@ -195,6 +197,27 @@ export function AccessGate({ children }: { children: ReactNode }) {
   }
 
   return <AccessContext.Provider value={contextValue}>{children}</AccessContext.Provider>;
+}
+
+const demoCards = [
+  ["zhou-shen.jpg", "周深", "郑州"],
+  ["xue-zhiqian.jpg", "薛之谦", "洛阳"],
+  ["zhang-jie.jpg", "张杰", "乌鲁木齐"],
+  ["wang-sulong.jpg", "汪苏泷", "郑州"],
+  ["zhao-lei.jpg", "赵雷", "西安"],
+] as const;
+
+function demoAsset(file: string) {
+  return `${import.meta.env.BASE_URL}demo/${file}`;
+}
+
+function accessMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error || "");
+  if (/failed to fetch|network|connection|load failed|closed/i.test(message)) {
+    return "暂时无法连接账号服务。请刷新页面后重试；访客示例仍可正常查看。";
+  }
+  if (/invalid login credentials|用户名或密码/i.test(message)) return "用户名或密码不正确。";
+  return message || "操作没有完成，请稍后重试。";
 }
 
 function LoginGate({
@@ -221,7 +244,7 @@ function LoginGate({
     try {
       await action();
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "操作失败，请稍后重试");
+      setMessage(accessMessage(error));
     } finally {
       setBusy(false);
     }
@@ -236,65 +259,66 @@ function LoginGate({
 
   return (
     <main className="access-shell">
-      <section className="access-brand-panel">
-        <div className="access-logo"><span>演</span></div>
-        <p>LIVE MEMORY</p>
-        <h1>回响册</h1>
-        <strong>你的演出档案应当只在明确身份下打开。</strong>
-        <div className="access-points">
-          <span>登录后显示真实头像与账户状态</span>
-          <span>个人 Supabase 负责跨设备完整同步</span>
-          <span>访客模式不读取、不写入你的正式档案</span>
+      <section className="access-showcase" aria-label="示例演出记录">
+        <header className="access-brand-line">
+          <span className="access-logo">演</span>
+          <div><strong>现场记</strong><small>演出记录 · 票根收藏</small></div>
+        </header>
+
+        <div className="access-copy">
+          <span>把每次现场留在这里</span>
+          <h1>整理演出、海报、票根和照片。</h1>
+          <p>按时间、城市和艺人查看自己的观演记录，也可以生成适合分享的图片。</p>
+        </div>
+
+        <div className="access-poster-wall">
+          {demoCards.map(([file, artist, city], index) => (
+            <figure key={file} className={`access-poster-card poster-${index + 1}`}>
+              <img src={demoAsset(file)} alt={`${artist}演出海报`} />
+              <figcaption><strong>{artist}</strong><span>{city}</span></figcaption>
+            </figure>
+          ))}
+        </div>
+
+        <div className="access-benefits">
+          <span><CheckCircle2 />多种档案视图</span>
+          <span><CheckCircle2 />票根与照片分类保存</span>
+          <span><CheckCircle2 />可选个人云端同步</span>
         </div>
       </section>
 
       <section className="access-card">
         <header>
-          <span>{registering ? "创建账号" : "账号登录"}</span>
-          <h2>{registering ? "建立 Live Memory 账号" : "继续进入回响册"}</h2>
-          <p>未登录时不会展示现有档案、头像或云同步状态。</p>
+          <span>{registering ? "创建账号" : "欢迎回来"}</span>
+          <h2>{registering ? "创建现场记账号" : "登录现场记"}</h2>
+          <p>{registering ? "创建后可保存个人资料，并按需连接自己的 Supabase。" : "使用之前创建的用户名和密码，或直接使用 GitHub。"}</p>
         </header>
 
         <form onSubmit={submit}>
           {registering && (
-            <label>
-              <span>昵称</span>
-              <input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="页面显示名称" autoComplete="nickname" />
-            </label>
+            <label><span>昵称</span><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="页面上显示的名字" autoComplete="nickname" /></label>
           )}
-          <label>
-            <span>用户名</span>
-            <input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))} placeholder="4–32 位英文字母或数字" autoComplete="username" />
-          </label>
-          <label>
-            <span>密码</span>
-            <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" autoComplete={registering ? "new-password" : "current-password"} />
-          </label>
-          {message && <p className="access-error">{message}</p>}
+          <label><span>用户名</span><input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))} placeholder="4–32 位英文字母或数字" autoComplete="username" /></label>
+          <label><span>密码</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" autoComplete={registering ? "new-password" : "current-password"} /></label>
+          {message && <p className="access-error" role="alert">{message}</p>}
           <button className="access-primary" disabled={busy || !username || !password || (registering && !nickname)} type="submit">
-            {busy ? <Loader2 className="spin" /> : <ShieldCheck />}
-            {registering ? "创建并登录" : "登录账号"}
+            {busy ? <Loader2 className="spin" /> : <ShieldCheck />}{registering ? "创建并登录" : "登录"}
           </button>
         </form>
 
-        <button className="access-github" disabled={busy} type="button" onClick={() => void run(onGithub)}>
-          <Github />
-          使用 GitHub 登录
+        <div className="access-divider"><span>或</span></div>
+        <button className="access-github" disabled={busy} type="button" onClick={() => void run(onGithub)}><Github />使用 GitHub 登录</button>
+
+        <button className="access-switch" type="button" onClick={() => { setRegistering((value) => !value); setMessage(""); }}>
+          {registering ? "已有账号，返回登录" : "第一次使用？创建账号"}
         </button>
 
-        <div className="access-switch">
-          <button type="button" onClick={() => { setRegistering((value) => !value); setMessage(""); }}>
-            {registering ? "已有账号，返回登录" : "没有账号，创建一个"}
-          </button>
+        <div className="access-guest">
+          <div><UserRound /><span><strong>先看看示例</strong><small>内置 5 条公开演出示例；你的修改不会保存，也不会读取个人记录。</small></span></div>
+          <button type="button" onClick={onGuest}>进入示例<ArrowRight /></button>
         </div>
 
-        <div className="access-guest">
-          <div>
-            <UserRound />
-            <span><strong>访客临时模式</strong><small>仅保存在当前页面内，刷新或关闭后清空，不接触正式档案。</small></span>
-          </div>
-          <button type="button" onClick={onGuest}>临时进入</button>
-        </div>
+        <p className="access-footnote">登录账号用于识别你；只有主动连接个人 Supabase 后，图片才会跨设备同步。</p>
       </section>
     </main>
   );
@@ -313,18 +337,7 @@ export function makeGuestSettings(): AppSettings {
     ...defaultSettings,
     onboardingComplete: true,
     storageMode: "local",
-    account: {
-      username: "guest",
-      nickname: "访客",
-      avatarUrl: "",
-      recoveryEmail: "",
-    },
-    supabase: {
-      url: "",
-      anonKey: "",
-      mediaBucket: "echo-media",
-      syncMedia: false,
-      ownerKey: "",
-    },
+    account: { username: "guest", nickname: "访客", avatarUrl: "", recoveryEmail: "" },
+    supabase: { url: "", anonKey: "", mediaBucket: "echo-media", syncMedia: false, ownerKey: "" },
   };
 }
