@@ -46,7 +46,7 @@ function mediaPathFingerprint(records: EventRecord[]) {
 export function useAppController() {
   const access = useAccess();
   const isGuest = access.mode === "guest";
-  const [records, setRecordsState] = useState<EventRecord[]>([]);
+  const [records, setRecordState] = useState<EventRecord[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [route, setRoute] = useState<AppRoute>("archive");
   const [selected, setSelected] = useState<EventRecord | null>(null);
@@ -65,7 +65,7 @@ export function useAppController() {
   const lastMediaRefreshAt = useRef(0);
 
   function setRecords(next: EventRecord[] | ((current: EventRecord[]) => EventRecord[])) {
-    setRecordsState((current) => {
+    setRecordState((current) => {
       const resolved = typeof next === "function" ? next(current) : next;
       recordsRef.current = resolved;
       return resolved;
@@ -91,8 +91,9 @@ export function useAppController() {
         }
         if (!active) return;
         recordsRef.current = nextRecords;
-        setRecordsState(nextRecords);
+        setRecordState(nextRecords);
         setSettings(nextSettings);
+        lastSyncFingerprint.current = recordFingerprint(nextRecords);
         initialized.current = true;
       })
       .catch((error) => {
@@ -105,16 +106,10 @@ export function useAppController() {
     };
   }, [access.mode, access.user, isGuest]);
 
-  const records = recordsRef.current.length === 0 && recordsRef.current !== recordsRef.current ? [] : undefined;
-  void records;
-
-  const currentRecords = useMemo(() => recordsRef.current, [recordsRef.current]);
-  void currentRecords;
-
-  const activeRecords = useMemo(() => recordsRef.current.filter((record) => !record.deletedAt), [recordsRef.current]);
-  const trashRecords = useMemo(() => recordsRef.current.filter((record) => Boolean(record.deletedAt)), [recordsRef.current]);
-  const health = useMemo(() => storageHealth(recordsRef.current, settings), [recordsRef.current, settings]);
-  const cloudMediaPaths = useMemo(() => mediaPathFingerprint(recordsRef.current), [recordsRef.current]);
+  const activeRecords = useMemo(() => records.filter((record) => !record.deletedAt), [records]);
+  const trashRecords = useMemo(() => records.filter((record) => Boolean(record.deletedAt)), [records]);
+  const health = useMemo(() => storageHealth(records, settings), [records, settings]);
+  const cloudMediaPaths = useMemo(() => mediaPathFingerprint(records), [records]);
 
   function flash(message: string) {
     if (!message) return;
@@ -128,10 +123,9 @@ export function useAppController() {
   }, []);
 
   useEffect(() => {
-    const snapshot = recordsRef.current;
-    if (!initialized.current || isGuest || !access.user || editing || syncing || snapshot.length === 0) return;
+    if (!initialized.current || isGuest || !access.user || editing || syncing || records.length === 0) return;
     if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
-    const fingerprint = recordFingerprint(snapshot);
+    const fingerprint = recordFingerprint(records);
     if (lastSyncFingerprint.current === fingerprint) return;
     const timer = window.setTimeout(() => {
       lastSyncFingerprint.current = fingerprint;
@@ -143,8 +137,8 @@ export function useAppController() {
           if (nextFingerprint !== fingerprint) {
             await replaceAllRecords(result.records);
             setRecords(result.records);
-            lastSyncFingerprint.current = nextFingerprint;
           }
+          lastSyncFingerprint.current = nextFingerprint;
           if (result.message) flash(result.message);
         })
         .catch((error) => {
@@ -154,7 +148,7 @@ export function useAppController() {
         .finally(() => setSyncing(false));
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [access.user, editing, isGuest, settings, syncing, activeRecords.length, trashRecords.length]);
+  }, [access.user, editing, isGuest, records, settings, syncing]);
 
   useEffect(() => {
     if (isGuest || !access.user || !hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia || !cloudMediaPaths) return;
@@ -258,7 +252,7 @@ export function useAppController() {
     isGuest,
     route,
     setRoute,
-    records: recordsRef.current,
+    records,
     setRecords,
     activeRecords,
     trashRecords,
