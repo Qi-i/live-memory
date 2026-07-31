@@ -20,6 +20,7 @@ const DB_NAME = "echo-archive-v2";
 const DB_VERSION = 1;
 const RECORD_STORE = "records";
 const SETTINGS_KEY = "echoArchiveSettingsV2";
+const GUEST_SESSION_KEY = "live-memory-guest-session";
 
 const LEGACY_DB_NAME = "echo-archive-local";
 const LEGACY_STORE = "events";
@@ -27,6 +28,38 @@ const LEGACY_LOCAL_KEY = "echoArchiveEvents";
 const MIGRATION_DONE_KEY = "echoArchiveV2MigrationDone";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let guestRecords: EventRecord[] = [];
+
+function isGuestSession() {
+  return typeof sessionStorage !== "undefined" && sessionStorage.getItem(GUEST_SESSION_KEY) === "1";
+}
+
+function guestSettings(value: Partial<AppSettings> = {}): AppSettings {
+  return {
+    ...defaultSettings,
+    ...value,
+    defaultView: value.defaultView || defaultSettings.defaultView,
+    posterColumns: Math.min(6, Math.max(2, Number(value.posterColumns || defaultSettings.posterColumns))),
+    storageMode: "local",
+    onboardingComplete: true,
+    account: {
+      username: "guest",
+      nickname: "访客",
+      avatarUrl: "",
+      recoveryEmail: "",
+    },
+    accountBackup: { ...defaultSettings.accountBackup },
+    map: { ...defaultSettings.map },
+    supabase: {
+      url: "",
+      anonKey: "",
+      mediaBucket: "echo-media",
+      syncMedia: false,
+      ownerKey: "",
+    },
+    lastSyncAt: undefined,
+  };
+}
 
 function openDb() {
   if (!dbPromise) {
@@ -62,6 +95,7 @@ async function objectStore(mode: IDBTransactionMode) {
 }
 
 export async function loadRecordsWithMigration() {
+  if (isGuestSession()) return guestRecords.map(normalizeRecord);
   const current = await listRecords();
   if (current.length > 0) return current;
 
@@ -73,6 +107,9 @@ export async function loadRecordsWithMigration() {
 }
 
 export async function listRecords() {
+  if (isGuestSession()) {
+    return guestRecords.map(normalizeRecord).sort((a, b) => b.date.localeCompare(a.date));
+  }
   try {
     const store = await objectStore("readonly");
     const rows = await requestToPromise<EventRecord[]>(store.getAll());
@@ -85,6 +122,10 @@ export async function listRecords() {
 
 export async function saveRecord(record: EventRecord) {
   const next = normalizeRecord({ ...record, updatedAt: nowIso() });
+  if (isGuestSession()) {
+    guestRecords = guestRecords.filter((item) => item.id !== next.id).concat(next);
+    return next;
+  }
   try {
     const store = await objectStore("readwrite");
     await requestToPromise(store.put(next));
@@ -96,6 +137,10 @@ export async function saveRecord(record: EventRecord) {
 }
 
 export async function deleteRecord(id: string) {
+  if (isGuestSession()) {
+    guestRecords = guestRecords.filter((item) => item.id !== id);
+    return;
+  }
   try {
     const store = await objectStore("readwrite");
     await requestToPromise(store.delete(id));
@@ -106,6 +151,10 @@ export async function deleteRecord(id: string) {
 
 export async function replaceAllRecords(records: EventRecord[]) {
   const normalized = records.map(normalizeRecord);
+  if (isGuestSession()) {
+    guestRecords = normalized;
+    return;
+  }
   try {
     const store = await objectStore("readwrite");
     await requestToPromise(store.clear());
@@ -116,6 +165,7 @@ export async function replaceAllRecords(records: EventRecord[]) {
 }
 
 export function readSettings(): AppSettings {
+  if (isGuestSession()) return guestSettings();
   try {
     return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"));
   } catch {
@@ -124,6 +174,7 @@ export function readSettings(): AppSettings {
 }
 
 export function writeSettings(settings: AppSettings) {
+  if (isGuestSession()) return guestSettings(settings);
   const normalized = normalizeSettings(settings);
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
   return normalized;
@@ -263,7 +314,6 @@ export function normalizeRecord(record: EventRecord): EventRecord {
 function normalizeSettings(value: Partial<AppSettings>): AppSettings {
   const legacySupabase = (value.supabase || {}) as Partial<AppSettings["supabase"]> & { email?: string };
   const supabase = { ...defaultSettings.supabase, ...legacySupabase };
-  // v2.0 initially shipped with a bucket default that did not match the SQL migration.
   if (supabase.mediaBucket === "private-data") supabase.mediaBucket = "echo-media";
   const account = {
     ...defaultSettings.account,
