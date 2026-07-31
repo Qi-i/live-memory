@@ -6,6 +6,7 @@ import {
   Plus,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
+import type { AppSettings } from "./domain";
 import { useAppController } from "./appController";
 import { ArchivePage } from "./archive";
 import type { ArchiveLayout, ShareFormat } from "./archive";
@@ -18,9 +19,9 @@ import {
   ImageZoom,
   ImportDrawer,
   RecordEditor,
-  SyncConflictDialog,
 } from "./overlays";
 import type { ConfirmAction } from "./overlays";
+import { SyncConflictDialog } from "./syncConflictDialog";
 import { blankRecord } from "./seeds";
 import { hasPersonalCloudConnection, isAdmin } from "./supabase";
 import { replaceAllRecords } from "./storage";
@@ -80,6 +81,7 @@ export default function AppRoot() {
   const watchedCount = activeRecords.filter((record) => record.status === "watched").length;
   const cityCount = new Set(activeRecords.map((record) => record.city).filter(Boolean)).size;
   const yearCount = new Set(activeRecords.map((record) => record.date.slice(0, 4))).size;
+  const archiveMediaKey = useMemo(() => activeRecords.flatMap((record) => record.media.map((asset) => `${asset.id}:${asset.src}`)).join("|"), [activeRecords]);
   const metrics = useMemo(() => {
     if (route === "archive") return [
       { value: activeRecords.length, label: "记录" },
@@ -134,6 +136,7 @@ export default function AppRoot() {
     >
       {route === "archive" && (
         <ArchivePage
+          key={archiveMediaKey}
           records={activeRecords}
           settings={settings}
           layout={layout}
@@ -159,12 +162,20 @@ export default function AppRoot() {
           setRecords={setRecords}
           onSave={updateSettings}
           onRestore={restoreRecord}
-          onPermanentDelete={permanentlyDeleteRecord}
+          onPermanentDelete={async (record) => {
+            setConfirmAction({
+              title: "永久删除这条记录？",
+              message: `“${record.title}”的文字、票根和照片将从当前设备和已连接云端删除，无法恢复。`,
+              confirmLabel: "永久删除",
+              danger: true,
+              onConfirm: () => permanentlyDeleteRecord(record),
+            });
+          }}
           onSignOut={access.signOutAndReturn}
           flash={flash}
         />
       )}
-      {route === "admin" && !isGuest && isAdmin(settings) && <AdminPage settings={settings} />}
+      {route === "admin" && !isGuest && Boolean(access.user) && isAdmin(settings) && <AdminPage settings={settings} />}
 
       {selected && (
         <DetailDrawer
@@ -206,16 +217,16 @@ export default function AppRoot() {
   );
 }
 
-function AccountAvatar({ settings, guest }: { settings: typeof import("./domain").defaultSettings; guest: boolean }) {
+function AccountAvatar({ settings, guest }: { settings: AppSettings; guest: boolean }) {
   const label = guest ? "访" : accountLabel(settings).slice(0, 1).toUpperCase();
   return <span className="account-avatar">{settings.account.avatarUrl && !guest ? <img src={settings.account.avatarUrl} alt={accountLabel(settings)} /> : <b>{label}</b>}</span>;
 }
 
-function AccountStatus({ settings, syncing, conflicts, guest, onClick }: { settings: typeof import("./domain").defaultSettings; syncing: boolean; conflicts: number; guest: boolean; onClick: () => void }) {
+function AccountStatus({ settings, syncing, conflicts, guest, onClick }: { settings: AppSettings; syncing: boolean; conflicts: number; guest: boolean; onClick: () => void }) {
   const status = guest ? "临时会话" : syncing ? "同步中…" : conflicts ? `${conflicts} 条冲突` : hasPersonalCloudConnection(settings) ? "云同步已连接" : "已登录";
   return <button className="account-chip" type="button" onClick={onClick}><AccountAvatar settings={settings} guest={guest} /><span><strong>{guest ? "访客" : accountLabel(settings)}</strong><small>{status}</small></span></button>;
 }
 
-function accountLabel(settings: typeof import("./domain").defaultSettings) {
+function accountLabel(settings: AppSettings) {
   return settings.account.nickname.trim() || settings.account.username.trim() || "Live Memory";
 }
