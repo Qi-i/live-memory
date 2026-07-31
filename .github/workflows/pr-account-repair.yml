@@ -53,7 +53,7 @@ jobs:
 
           download_private "$owner_key/seen-shot-20260618-05/media-bc085035-781f-4c23-bd1c-05ed1131e37a.jpg" public/demo/zhang-jie.jpg
           download_private "$owner_key/seen-shot-20260618-08/media-9d21cb89-5492-4e2d-ac4a-bcfd4bbabbd5.jpg" public/demo/wang-sulong.jpg
-          download_private "$owner_key/seen-shot-20260618-14/media-32d6c7d4-6abd-4f88-b1ed-29cdc4c9c8d3.png" public/demo/zhao-lei.png
+          download_private "$owner_key/seen-shot-20260618-14/media-32d6c7d4-6abd-4f88-b1ed-29cdc4c9c8d3.png" public/demo/zhao-lei.jpg
           file public/demo/*
 
       - name: Execute repair blocks
