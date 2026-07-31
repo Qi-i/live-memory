@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import { createServer } from "vite";
 
 const server = await createServer({
@@ -86,7 +87,32 @@ try {
     /账号邮件请求过于频繁/,
   );
 
-  console.log("Core verification passed: account rules, safe URL cleanup, text-only backup, local media merge, recycle state, cloud upload guard, friendly auth errors, friendly email-rate errors.");
+  const appEntry = await readFile(new URL("../src/App.tsx", import.meta.url), "utf8");
+  const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
+  const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
+  const access = await readFile(new URL("../src/access.tsx", import.meta.url), "utf8");
+  const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
+  const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
+  const experienceCss = await readFile(new URL("../src/experience.css", import.meta.url), "utf8");
+  const storageSource = await readFile(new URL("../src/storage.ts", import.meta.url), "utf8");
+
+  assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
+  assert.match(main, /<ExperienceThemeProvider>[\s\S]*<AccessGate>/);
+  assert.match(appRoot, /<ExperienceShell/);
+  assert.doesNotMatch(appRoot, /className="rail"|className="hero"/);
+  assert.match(access, /mode === "signed-out"/);
+  assert.match(access, /访客临时模式/);
+  assert.match(storageSource, /GUEST_SESSION_KEY/);
+  assert.match(storageSource, /guestRecords/);
+  assert.match(archive, /value: "showcase"/);
+  assert.match(archive, /分享画布/);
+  assert.match(archive, /"poster"[\s\S]*"wallet"[\s\S]*"ticket"[\s\S]*"timeline"[\s\S]*"calendar"[\s\S]*"venue"[\s\S]*"price"[\s\S]*"summary"[\s\S]*"list"/);
+  assert.match(experience, /https:\/\/github\.com\/Qi-i\/live-memory/);
+  assert.match(experience, /experience-mobile-nav/);
+  assert.match(experienceCss, /@media \(max-width: 920px\)/);
+  assert.match(experienceCss, /is-share-mode/);
+
+  console.log("Core and architecture verification passed: account rules, safe URL cleanup, guest isolation, modular shell, archive view registry, responsive navigation, share canvas, GitHub entry, cloud upload guard, and friendly auth errors.");
 } finally {
   await server.close();
 }

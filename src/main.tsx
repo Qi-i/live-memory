@@ -2,15 +2,23 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
 import { AccessGate } from "./access";
-import "./styles.css";
-import "./ui-consistency.css";
+import { ExperienceThemeProvider } from "./experience";
+import "./base.css";
 import "./access.css";
+import "./experience.css";
+import "./archive.css";
+import "./share-fixes.css";
+import "./statsPage.css";
+import "./settingsPage.css";
+import "./overlays.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
   <React.StrictMode>
-    <AccessGate>
-      <App />
-    </AccessGate>
+    <ExperienceThemeProvider>
+      <AccessGate>
+        <App />
+      </AccessGate>
+    </ExperienceThemeProvider>
   </React.StrictMode>,
 );
 
