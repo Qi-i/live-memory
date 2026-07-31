@@ -118,7 +118,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     };
     void bootstrap();
 
-    let stopWatching = () => undefined;
+    let stopWatching: () => void = () => undefined;
     try {
       stopWatching = watchAccountAuth(readSettings(), (sessionUser) => {
         window.setTimeout(() => applyUser(sessionUser), 0);
@@ -200,11 +200,11 @@ export function AccessGate({ children }: { children: ReactNode }) {
 }
 
 const demoCards = [
-  ["zhou-shen.jpg", "周深", "郑州"],
-  ["xue-zhiqian.jpg", "薛之谦", "洛阳"],
+  ["zhou-shen.webp", "周深", "郑州"],
+  ["xue-zhiqian.webp", "薛之谦", "洛阳"],
   ["zhang-jie.jpg", "张杰", "乌鲁木齐"],
   ["wang-sulong.jpg", "汪苏泷", "郑州"],
-  ["zhao-lei.jpg", "赵雷", "西安"],
+  ["zhao-lei.png", "赵雷", "西安"],
 ] as const;
 
 function demoAsset(file: string) {

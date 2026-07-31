@@ -64,7 +64,7 @@ export const seedRecords: EventRecord[] = [
     venue: "郑州奥林匹克体育中心·体育场", price: 929, seat: "内场 B 区 18 排 06 座",
     companions: [], sourceChannel: "official", importConfidence: 1,
     tags: ["演示", "演唱会"], setlist: [], note: demoNote,
-    colors: ["#34236b", "#d7c8ff"], poster: demoAsset("zhou-shen.jpg"),
+    colors: ["#34236b", "#d7c8ff"], poster: demoAsset("zhou-shen.webp"),
   }),
   seedRecord({
     id: "guest-xue-zhiqian-luoyang-2026",
@@ -74,7 +74,7 @@ export const seedRecords: EventRecord[] = [
     venue: "洛阳奥林匹克中心体育场", price: 917, seat: "内场 A5 区 12 排 18 座",
     companions: [], sourceChannel: "official", importConfidence: 1,
     tags: ["演示", "演唱会"], setlist: [], note: demoNote,
-    colors: ["#22272d", "#d9dde1"], poster: demoAsset("xue-zhiqian.jpg"),
+    colors: ["#22272d", "#d9dde1"], poster: demoAsset("xue-zhiqian.webp"),
   }),
   seedRecord({
     id: "guest-zhang-jie-urumqi-2025",
@@ -104,6 +104,6 @@ export const seedRecords: EventRecord[] = [
     venue: "西安奥体中心体育馆", price: 580, seat: "看台 102 区 08 排 15 座",
     companions: [], sourceChannel: "official", importConfidence: 1,
     tags: ["演示", "巡演"], setlist: [], note: demoNote,
-    colors: ["#49433d", "#d7c4a3"], poster: demoAsset("zhao-lei.jpg"),
+    colors: ["#49433d", "#d7c4a3"], poster: demoAsset("zhao-lei.png"),
   }),
 ];

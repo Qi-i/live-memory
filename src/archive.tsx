@@ -133,9 +133,9 @@ export function ArchivePage({
     <section className="archive-page">
       <header className="archive-masthead">
         <div>
-          <span>LIVE MEMORY ARCHIVE</span>
-          <h2>让每一次现场，都有清晰的位置。</h2>
-          <p>海报负责第一眼，票根保留细节，时间线连接记忆。布局切换只改变阅读方式，不改变你的数据。</p>
+          <span>我的演出记录</span>
+          <h2>把看过和想看的演出放在一起。</h2>
+          <p>可以按海报、票根、时间、城市或票价查看，视图随时切换。</p>
         </div>
         <ArchiveHighlights records={records} onOpen={onOpen} />
       </header>
@@ -167,7 +167,7 @@ export function ArchivePage({
           </button>
           <button type="button" onClick={() => setShareMode(true)}>
             <Share2 />
-            <span>分享画布</span>
+            <span>生成分享图</span>
           </button>
         </div>
       </section>
@@ -410,9 +410,9 @@ function ShareCanvas({ records, format, setFormat, onClose }: { records: EventRe
         <button type="button" onClick={onClose}><X />退出分享</button>
       </div>
       <article className={`share-canvas share-canvas-${format}`}>
-        <header><div><span>LIVE MEMORY</span><h1>我的现场回响</h1><p>{years.length ? `${years[0]}—${years[years.length - 1]}` : new Date().getFullYear()} · {records.length} 场演出</p></div><strong>演</strong></header>
+        <header><div><span>现场记</span><h1>我的现场回响</h1><p>{years.length ? `${years[0]}—${years[years.length - 1]}` : new Date().getFullYear()} · {records.length} 场演出</p></div><strong>演</strong></header>
         <div className="share-poster-wall">{selected.map((record, index) => <figure key={record.id} className={`share-poster-${index + 1}`}><RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 2)} /><figcaption><span>{record.city || record.date}</span><b>{record.title}</b><em>{record.artists.join(" / ")}</em></figcaption></figure>)}</div>
-        <footer><span>回响册 · Live Memory</span><b>{new Set(records.map((record) => record.city).filter(Boolean)).size} 城市 · {records.filter((record) => record.status === "watched").length} 已看</b></footer>
+        <footer><span>现场记 · Live Memory</span><b>{new Set(records.map((record) => record.city).filter(Boolean)).size} 城市 · {records.filter((record) => record.status === "watched").length} 已看</b></footer>
       </article>
     </section>
   );
