@@ -32,8 +32,8 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p public/demo
-          curl -L --fail --retry 3 'https://img.alicdn.com/imgextra/i3/2251059038/O1CN01DdC1Sn2GdSmcwNS5Y_!!2251059038.jpg' -o public/demo/zhou-shen.jpg
-          curl -L --fail --retry 3 'https://img.alicdn.com/imgextra/i2/2251059038/O1CN01JLdVX82GdSmhDSJH7_!!2251059038.jpg' -o public/demo/xue-zhiqian.jpg
+          curl -L --fail --retry 3 'https://img.alicdn.com/imgextra/i3/2251059038/O1CN01DdC1Sn2GdSmcwNS5Y_!!2251059038.jpg' -o public/demo/zhou-shen.webp
+          curl -L --fail --retry 3 'https://img.alicdn.com/imgextra/i2/2251059038/O1CN01JLdVX82GdSmhDSJH7_!!2251059038.jpg' -o public/demo/xue-zhiqian.webp
 
           owner_key='0941992329cd3a6274552595ad64c473b21de0999ceba494b7b8708cfc4cfa17'
           download_private() {
@@ -53,32 +53,25 @@ jobs:
 
           download_private "$owner_key/seen-shot-20260618-05/media-bc085035-781f-4c23-bd1c-05ed1131e37a.jpg" public/demo/zhang-jie.jpg
           download_private "$owner_key/seen-shot-20260618-08/media-9d21cb89-5492-4e2d-ac4a-bcfd4bbabbd5.jpg" public/demo/wang-sulong.jpg
-          download_private "$owner_key/seen-shot-20260618-14/media-32d6c7d4-6abd-4f88-b1ed-29cdc4c9c8d3.png" public/demo/zhao-lei.jpg
+          download_private "$owner_key/seen-shot-20260618-14/media-32d6c7d4-6abd-4f88-b1ed-29cdc4c9c8d3.png" public/demo/zhao-lei.png
           file public/demo/*
 
-      - name: Execute repair blocks
+      - name: Apply source repair
+        run: python scripts/repair_account_home.py
+
+      - name: Verify application
         run: |
-          python <<'PY'
-          from pathlib import Path
-          import os, subprocess
-          lines = Path('.github/workflows/repair-account-and-home.yml').read_text().splitlines()
-          blocks = []
-          i = 0
-          while i < len(lines):
-              if lines[i].startswith('        run: |'):
-                  i += 1
-                  block = []
-                  while i < len(lines) and (lines[i].startswith('          ') or lines[i] == ''):
-                      block.append(lines[i][10:] if lines[i].startswith('          ') else '')
-                      i += 1
-                  blocks.append('\n'.join(block))
-                  continue
-              i += 1
-          if len(blocks) < 6:
-              raise SystemExit(f'Expected 6 repair blocks, found {len(blocks)}')
-          # Block 1 downloads posters from obsolete public URLs. The preceding step replaces it.
-          for index, block in enumerate(blocks[1:], 2):
-              print(f'::group::repair block {index}/{len(blocks)}')
-              subprocess.run(['bash', '-euo', 'pipefail', '-c', block], check=True, env=os.environ.copy())
-              print('::endgroup::')
-          PY
+          npm ci
+          npm run check
+
+      - name: Commit verified repair
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add src public index.html scripts/repair_account_home.py
+          if git diff --cached --quiet; then
+            echo 'No generated changes to commit.'
+            exit 0
+          fi
+          git commit -m 'Repair account access, guest examples and homepage'
+          git push origin fix/account-auth-parity
