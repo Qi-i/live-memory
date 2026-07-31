@@ -79,16 +79,46 @@ export function hasAccountCloudConfig(settings?: AppSettings) {
   return Boolean(accountUrl && accountAnonKey);
 }
 
+const PERSONAL_CLOUD_TIMEOUT_MS = 8000;
+const ACCOUNT_SYNC_TIMEOUT_MS = 5000;
+
+function withTimeout<T>(task: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+    Promise.resolve(task).then(
+      (value) => {
+        window.clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        window.clearTimeout(timer);
+        reject(error);
+      },
+    );
+  });
+}
+
+let cachedPersonalClient: { cacheKey: string; client: SupabaseClient<LooseDatabase> } | null = null;
+
 export function makeSupabaseClient(settings: AppSettings) {
   if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
-  const headers = settings.supabase.ownerKey ? { [ownerHeader]: settings.supabase.ownerKey } : undefined;
-  return createClient<LooseDatabase>(settings.supabase.url, settings.supabase.anonKey, {
+  const url = settings.supabase.url.trim().replace(/\/+$/, "");
+  const anonKey = settings.supabase.anonKey.trim();
+  const ownerKey = settings.supabase.ownerKey?.trim() || "";
+  const cacheKey = `${url}|${anonKey}|${ownerKey}`;
+  if (cachedPersonalClient?.cacheKey === cacheKey) return cachedPersonalClient.client;
+
+  const headers = ownerKey ? { [ownerHeader]: ownerKey } : undefined;
+  const client = createClient<LooseDatabase>(url, anonKey, {
     auth: {
-      persistSession: true,
-      autoRefreshToken: true,
+      persistSession: false,
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
     },
     global: headers ? { headers } : undefined,
   });
+  cachedPersonalClient = { cacheKey, client };
+  return client;
 }
 
 let cachedAccountClient: SupabaseClient<LooseDatabase> | null = null;
@@ -130,8 +160,8 @@ export async function signInWithPassword(settings: AppSettings, password: string
   const email = authEmailForSettings(settings);
   const recoveryEmail = validateRecoveryEmail(settings.account.recoveryEmail);
   validatePassword(password);
-  const existing = await client.auth.getUser();
-  if (existing.data.user) return { message: "账号已登录", isNewAccount: false };
+  const existing = await client.auth.getSession();
+  if (existing.data.session?.user) return { message: "账号已登录", isNewAccount: false };
   validateUsername(settings.account.username);
 
   let { error } = await client.auth.signInWithPassword({ email, password });
@@ -210,11 +240,15 @@ export async function signInStorageWithAccount(settings: AppSettings) {
 async function connectStorageWithOwnerKey(settings: AppSettings, ownerKey: string) {
   const next = { ...settings, supabase: { ...settings.supabase, ownerKey } };
   const client = makeSupabaseClient(next);
-  const probe = await client
-    .from("echo_passkey_records")
-    .select("id")
-    .eq("owner_key", ownerKey)
-    .limit(1);
+  const probe = await withTimeout(
+    client
+      .from("echo_passkey_records")
+      .select("id")
+      .eq("owner_key", ownerKey)
+      .limit(1),
+    PERSONAL_CLOUD_TIMEOUT_MS,
+    "连接个人 Supabase 超时。项目可能处于休眠、网络不可达，或项目区域响应较慢。",
+  );
   if (probe.error) throwPersonalCloudError(probe.error);
   return { settings: next, message: "个人云端已连接" };
 }
@@ -304,10 +338,10 @@ export async function signOut(settings: AppSettings) {
 
 export async function currentUser(settings: AppSettings) {
   const client = makeAccountClient(settings);
-  const { data, error } = await client.auth.getUser();
+  const { data, error } = await client.auth.getSession();
   if (error && isAuthSessionMissing(error)) return null;
   if (error) throw error;
-  return data.user || null;
+  return data.session?.user || null;
 }
 
 // ── Admin dashboard ──────────────────────────────────────────
@@ -637,35 +671,49 @@ export async function autoSyncAll(settings: AppSettings, localRecords: EventReco
   const allConflicts: SyncConflict[] = [];
   const messages: string[] = [];
   let merged = [...localRecords];
+  let personalFailure: unknown = null;
 
-  // 1. Account text backup (bidirectional)
-  if (hasAccountCloudConfig(settings)) {
-    try {
-      const accountResult = await syncAccountTextBackup(settings, merged);
-      merged = accountResult.records;
-      allConflicts.push(...accountResult.conflicts);
-      if (accountResult.message) messages.push(accountResult.message);
-    } catch {
-      // Account sync failure is non-fatal
-    }
-  }
-
-  // 2. Personal Supabase (bidirectional, if connected)
+  // Personal Supabase is the selected full-data store, so never make it wait
+  // behind the optional Live Memory account backup.
   if (hasPersonalCloudConnection(settings)) {
     try {
-      const personalResult = await syncPersonalSupabase(settings, merged);
+      const personalResult = await withTimeout(
+        syncPersonalSupabase(settings, merged),
+        PERSONAL_CLOUD_TIMEOUT_MS,
+        "个人 Supabase 响应超时，已停止本次等待",
+      );
       merged = personalResult.records;
       allConflicts.push(...personalResult.conflicts);
       if (personalResult.message) messages.push(personalResult.message);
-    } catch {
-      // Personal sync failure is non-fatal
+    } catch (error) {
+      personalFailure = error;
     }
   }
 
+  // Account text backup is secondary. A missing local account session now fails
+  // immediately instead of blocking personal Supabase synchronization.
+  if (hasAccountCloudConfig(settings)) {
+    try {
+      const accountResult = await withTimeout(
+        syncAccountTextBackup(settings, merged),
+        ACCOUNT_SYNC_TIMEOUT_MS,
+        "账号文字备份响应超时，已跳过本次备份",
+      );
+      merged = accountResult.records;
+      allConflicts.push(...accountResult.conflicts);
+      if (accountResult.message) messages.push(accountResult.message);
+    } catch (error) {
+      if (!isAuthSessionMissing(error) && /超时/.test(String((error as { message?: string }).message || ""))) {
+        messages.push("账号文字备份响应超时");
+      }
+    }
+  }
+
+  if (personalFailure) throw personalFailure;
   return {
     records: merged,
     conflicts: allConflicts,
-    message: messages.join("，") || "自动同步完成",
+    message: messages.join("，"),
   };
 }
 
@@ -1036,13 +1084,15 @@ async function purgePasskeyRecordFromSupabase(settings: AppSettings, recordId: s
 }
 
 async function requireUser(client: SupabaseClient, message = "请先登录账号") {
-  const { data, error } = await client.auth.getUser();
+  // getSession reads the persisted session locally and returns immediately when the
+  // account is logged out. RLS still validates the JWT on every database request.
+  const { data, error } = await client.auth.getSession();
   if (error) {
     if (isAuthSessionMissing(error)) throw new Error(message);
     throw error;
   }
-  if (!data.user) throw new Error(message);
-  return data.user;
+  if (!data.session?.user) throw new Error(message);
+  return data.session.user;
 }
 
 export function friendlySupabaseErrorMessage(error: unknown, fallback = "未完成，请检查页面设置") {

@@ -197,8 +197,10 @@ export default function App() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [syncRetryTick, setSyncRetryTick] = useState(0);
   const [mediaRefreshTick, setMediaRefreshTick] = useState(0);
   const lastSyncFingerprint = useRef("");
+  const syncRetryAttempts = useRef(0);
   const editingRef = useRef<EventRecord | null>(null);
   const lastMediaRefreshKey = useRef("");
   const lastMediaRefreshAt = useRef(0);
@@ -228,35 +230,51 @@ export default function App() {
   useEffect(() => { editingRef.current = editing; }, [editing]);
 
   useEffect(() => {
-    if (!settings.onboardingComplete) return;
-    if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
-    if (records.length === 0) return;
-    if (editingRef.current) return;
-    if (syncing) return;
+  if (!settings.onboardingComplete) return;
+  if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
+  if (records.length === 0) return;
+  if (editingRef.current) return;
+  if (syncing) return;
 
-    const fingerprint = records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
-    if (fingerprint === lastSyncFingerprint.current) return;
+  const fingerprint = records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
+  if (fingerprint === lastSyncFingerprint.current) return;
 
-    const timer = window.setTimeout(() => {
-      lastSyncFingerprint.current = fingerprint;
-      setSyncing(true);
-      autoSyncAll(settings, records)
-        .then((result) => {
-          if (result.conflicts.length > 0) {
-            setSyncConflicts(result.conflicts);
-          }
-          const newFingerprint = result.records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
-          if (newFingerprint !== fingerprint) {
-            lastSyncFingerprint.current = newFingerprint;
-            replaceAllRecords(result.records).then(() => setRecords(result.records));
-          }
-          if (result.message) flash(result.message);
-        })
-        .catch(() => {})
-        .finally(() => setSyncing(false));
-    }, 1500);
-    return () => window.clearTimeout(timer);
-  }, [records, settings]);
+  let retryTimer: number | null = null;
+  const timer = window.setTimeout(() => {
+    lastSyncFingerprint.current = fingerprint;
+    setSyncing(true);
+    autoSyncAll(settings, records)
+      .then((result) => {
+        syncRetryAttempts.current = 0;
+        if (result.conflicts.length > 0) {
+          setSyncConflicts(result.conflicts);
+        }
+        const newFingerprint = result.records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
+        if (newFingerprint !== fingerprint) {
+          lastSyncFingerprint.current = newFingerprint;
+          replaceAllRecords(result.records).then(() => setRecords(result.records));
+        }
+        if (result.message) flash(result.message);
+      })
+      .catch((error) => {
+        lastSyncFingerprint.current = "";
+        const attempt = syncRetryAttempts.current;
+        const delay = [3000, 10000][attempt];
+        syncRetryAttempts.current = attempt + 1;
+        if (delay !== undefined) {
+          retryTimer = window.setTimeout(() => setSyncRetryTick((value) => value + 1), delay);
+          return;
+        }
+        syncRetryAttempts.current = 0;
+        flash(friendlySupabaseErrorMessage(error, "云同步暂时不可用"));
+      })
+      .finally(() => setSyncing(false));
+  }, 900);
+  return () => {
+    window.clearTimeout(timer);
+    if (retryTimer !== null) window.clearTimeout(retryTimer);
+  };
+}, [records, settings, syncRetryTick]);
 
   useEffect(() => {
     if (!mediaRefreshKey || mediaRefreshKey === lastMediaRefreshKey.current) return;
