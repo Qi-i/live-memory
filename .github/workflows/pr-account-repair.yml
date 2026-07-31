@@ -57,7 +57,9 @@ jobs:
           file public/demo/*
 
       - name: Apply source repair
-        run: python scripts/repair_account_home.py
+        run: |
+          python scripts/repair_account_home.py
+          sed -i 's/请先登录 Live Memory 账号/请先登录现场记账号/g' src/supabase.ts
 
       - name: Verify application
         run: |
@@ -68,7 +70,7 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add src public index.html scripts/repair_account_home.py
+          git add src public index.html scripts
           if git diff --cached --quiet; then
             echo 'No generated changes to commit.'
             exit 0
