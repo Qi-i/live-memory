@@ -1,0 +1,58 @@
+name: Orchestrate account and homepage repair
+
+on:
+  push:
+    branches: [main]
+    paths: [.github/workflows/orchestrate-account-home-repair.yml]
+
+permissions:
+  contents: write
+
+env:
+  VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+  VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+
+jobs:
+  run-repair:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/account-auth-parity
+          fetch-depth: 2
+          token: ${{ github.token }}
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Execute repair steps from branch workflow
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import os, subprocess
+
+          lines = Path('.github/workflows/repair-account-and-home.yml').read_text().splitlines()
+          blocks = []
+          i = 0
+          while i < len(lines):
+              if lines[i].startswith('        run: |'):
+                  i += 1
+                  block = []
+                  while i < len(lines) and (lines[i].startswith('          ') or lines[i] == ''):
+                      block.append(lines[i][10:] if lines[i].startswith('          ') else '')
+                      i += 1
+                  blocks.append('\n'.join(block))
+                  continue
+              i += 1
+
+          if len(blocks) < 5:
+              raise SystemExit(f'Expected repair run blocks, found {len(blocks)}')
+
+          for index, block in enumerate(blocks, 1):
+              print(f'::group::repair block {index}/{len(blocks)}')
+              subprocess.run(['bash', '-euo', 'pipefail', '-c', block], check=True, env=os.environ.copy())
+              print('::endgroup::')
+          PY
