@@ -134,6 +134,53 @@ type ConfirmAction = {
   onConfirm: () => Promise<void>;
 };
 
+const CLOUD_MEDIA_REFRESH_EVENT = "live-memory:cloud-media-refresh";
+const CLOUD_MEDIA_RETRY_DELAYS = [1200, 4000, 12000];
+const CLOUD_MEDIA_REFRESH_INTERVAL = 6 * 60 * 60 * 1000;
+
+function cloudMediaRefreshKey(records: EventRecord[], settings: AppSettings) {
+  if (!hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia) return "";
+  const assets = records.flatMap((record) => record.media
+    .filter((asset) => asset.storagePath)
+    .map((asset) => {
+      const sourceState = asset.src.startsWith("data:") ? "local" : asset.src ? "remote" : "missing";
+      return `${record.id}:${asset.id}:${asset.storagePath}:${sourceState}`;
+    }));
+  return [settings.supabase.url, settings.supabase.mediaBucket, settings.supabase.ownerKey, ...assets].join("|");
+}
+
+function cloudMediaSourceMap(records: EventRecord[]) {
+  const sources = new Map<string, string>();
+  records.forEach((record) => record.media.forEach((asset) => {
+    sources.set(`${record.id}:${asset.id}`, asset.src);
+  }));
+  return sources;
+}
+
+function countCloudMediaRefreshFailures(before: Map<string, string>, records: EventRecord[]) {
+  let failed = 0;
+  records.forEach((record) => record.media.forEach((asset) => {
+    if (!asset.storagePath || asset.src.startsWith("data:")) return;
+    const previous = before.get(`${record.id}:${asset.id}`) || "";
+    if (!asset.src || asset.src === previous) failed += 1;
+  }));
+  return failed;
+}
+
+function countRefreshedCloudMedia(before: Map<string, string>, records: EventRecord[]) {
+  let refreshed = 0;
+  records.forEach((record) => record.media.forEach((asset) => {
+    if (!asset.storagePath || asset.src.startsWith("data:")) return;
+    const previous = before.get(`${record.id}:${asset.id}`) || "";
+    if (asset.src && asset.src !== previous) refreshed += 1;
+  }));
+  return refreshed;
+}
+
+function cloudMediaSourcesChanged(before: Map<string, string>, records: EventRecord[]) {
+  return records.some((record) => record.media.some((asset) => before.get(`${record.id}:${asset.id}`) !== asset.src));
+}
+
 export default function App() {
   const [records, setRecords] = useState<EventRecord[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
@@ -150,8 +197,13 @@ export default function App() {
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
   const [syncing, setSyncing] = useState(false);
+  const [mediaRefreshTick, setMediaRefreshTick] = useState(0);
   const lastSyncFingerprint = useRef("");
   const editingRef = useRef<EventRecord | null>(null);
+  const lastMediaRefreshKey = useRef("");
+  const lastMediaRefreshAt = useRef(0);
+  const mediaRefreshAttempts = useRef(0);
+  const mediaRefreshWakeTimer = useRef<number | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -171,13 +223,7 @@ export default function App() {
   const facets = useMemo(() => buildFacets(activeRecords), [activeRecords]);
   const filteredRecords = useMemo(() => sortRecords(filterRecords(activeRecords, filters), sort), [activeRecords, filters, sort]);
   const health = useMemo(() => storageHealth(records, settings), [records, settings]);
-  const mediaRefreshKey = useMemo(() => {
-    if (!hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia) return "";
-    return records
-      .flatMap((record) => record.media.filter((asset) => asset.storagePath).map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`))
-      .join("|");
-  }, [records, settings]);
-  const lastMediaRefreshKey = useRef("");
+  const mediaRefreshKey = useMemo(() => cloudMediaRefreshKey(records, settings), [records, settings]);
 
   useEffect(() => { editingRef.current = editing; }, [editing]);
 
@@ -214,22 +260,88 @@ export default function App() {
 
   useEffect(() => {
     if (!mediaRefreshKey || mediaRefreshKey === lastMediaRefreshKey.current) return;
-    if (!records.some((record) => record.media.some((asset) => asset.storagePath && !asset.src.startsWith("data:")))) return;
-    lastMediaRefreshKey.current = mediaRefreshKey;
+    const cloudAssets = records.flatMap((record) => record.media.filter((asset) => asset.storagePath && !asset.src.startsWith("data:")));
+    if (!cloudAssets.length) {
+      lastMediaRefreshKey.current = mediaRefreshKey;
+      return;
+    }
+
     let cancelled = false;
+    let retryTimer: number | null = null;
+    const beforeSources = cloudMediaSourceMap(records);
+
+    function retryOrReport(message: string, failed: number) {
+      if (cancelled) return;
+      mediaRefreshAttempts.current += 1;
+      const delay = CLOUD_MEDIA_RETRY_DELAYS[mediaRefreshAttempts.current - 1];
+      if (delay !== undefined) {
+        retryTimer = window.setTimeout(() => {
+          lastMediaRefreshKey.current = "";
+          setMediaRefreshTick((value) => value + 1);
+        }, delay);
+        return;
+      }
+      mediaRefreshAttempts.current = 0;
+      flash(`${message}${failed ? `（${failed} 张）` : ""}，请在“设置 → 同步”中点击“刷新云端图片”。`);
+    }
+
     refreshSignedMediaUrls(settings, records)
       .then(async (next) => {
         if (cancelled) return;
-        const changed = JSON.stringify(next.map((record) => record.media.map((asset) => asset.src))) !== JSON.stringify(records.map((record) => record.media.map((asset) => asset.src)));
-        if (!changed) return;
-        await replaceAllRecords(next);
-        setRecords(next);
+        const failed = countCloudMediaRefreshFailures(beforeSources, next);
+        if (cloudMediaSourcesChanged(beforeSources, next)) {
+          await replaceAllRecords(next);
+          if (cancelled) return;
+          setRecords(next);
+        }
+        if (failed === 0) {
+          lastMediaRefreshKey.current = cloudMediaRefreshKey(next, settings);
+          lastMediaRefreshAt.current = Date.now();
+          mediaRefreshAttempts.current = 0;
+          return;
+        }
+        retryOrReport("部分云端图片链接刷新失败", failed);
       })
-      .catch(() => undefined);
+      .catch((error) => {
+        retryOrReport(friendlySupabaseErrorMessage(error, "云端图片刷新失败"), cloudAssets.length);
+      });
+
     return () => {
       cancelled = true;
+      if (retryTimer !== null) window.clearTimeout(retryTimer);
     };
-  }, [mediaRefreshKey]);
+  }, [mediaRefreshKey, mediaRefreshTick]);
+
+  useEffect(() => {
+    function requestRefresh(force: boolean) {
+      if (!hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia) return;
+      if (!force && lastMediaRefreshAt.current && Date.now() - lastMediaRefreshAt.current < CLOUD_MEDIA_REFRESH_INTERVAL) return;
+      if (mediaRefreshWakeTimer.current !== null) window.clearTimeout(mediaRefreshWakeTimer.current);
+      mediaRefreshWakeTimer.current = window.setTimeout(() => {
+        lastMediaRefreshKey.current = "";
+        mediaRefreshAttempts.current = 0;
+        setMediaRefreshTick((value) => value + 1);
+      }, 300);
+    }
+
+    const handleMediaError = () => requestRefresh(true);
+    const handleOnline = () => requestRefresh(true);
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") requestRefresh(false);
+    };
+    const interval = window.setInterval(() => requestRefresh(false), CLOUD_MEDIA_REFRESH_INTERVAL);
+
+    window.addEventListener(CLOUD_MEDIA_REFRESH_EVENT, handleMediaError);
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibility);
+    return () => {
+      window.removeEventListener(CLOUD_MEDIA_REFRESH_EVENT, handleMediaError);
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibility);
+      window.clearInterval(interval);
+      if (mediaRefreshWakeTimer.current !== null) window.clearTimeout(mediaRefreshWakeTimer.current);
+    };
+  }, [settings.supabase.url, settings.supabase.anonKey, settings.supabase.mediaBucket, settings.supabase.ownerKey, settings.supabase.syncMedia]);
 
   useEffect(() => {
     if (hasAccountCloudConfig(settings)) {
@@ -496,14 +608,31 @@ function AccountAvatar({ settings }: { settings: AppSettings }) {
 function MediaImage({ media, alt, onClick }: { media: MediaAsset; alt?: string; onClick?: (event: MouseEvent<HTMLImageElement | HTMLSpanElement>) => void }) {
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [media.src, media.storagePath]);
+
+  function requestRefresh(event: MouseEvent<HTMLImageElement | HTMLSpanElement>) {
+    if (media.storagePath) window.dispatchEvent(new Event(CLOUD_MEDIA_REFRESH_EVENT));
+    onClick?.(event);
+  }
+
   if (!media.src || failed) {
     return (
-      <span className="media-fallback" onClick={onClick}>
-        {media.storagePath ? "云端图片待刷新" : "图片待补"}
+      <span className="media-fallback" title={media.storagePath ? "点击重新获取云端图片链接" : undefined} onClick={requestRefresh}>
+        {media.storagePath ? "云端图片加载失败" : "图片待补"}
       </span>
     );
   }
-  return <img src={media.src} alt={alt || ""} loading="lazy" onClick={onClick} onError={() => setFailed(true)} />;
+  return (
+    <img
+      src={media.src}
+      alt={alt || ""}
+      loading="lazy"
+      onClick={onClick}
+      onError={() => {
+        setFailed(true);
+        if (media.storagePath) window.dispatchEvent(new Event(CLOUD_MEDIA_REFRESH_EVENT));
+      }}
+    />
+  );
 }
 
 function FirstRunGuide({
@@ -1862,6 +1991,21 @@ function SettingsView({
     await onSave({ ...draft, lastSyncAt: nowIso() });
   }
 
+  async function handleRefreshCloudMedia() {
+    const beforeSources = cloudMediaSourceMap(records);
+    const next = await refreshSignedMediaUrls(draft, records);
+    const refreshed = countRefreshedCloudMedia(beforeSources, next);
+    const failed = countCloudMediaRefreshFailures(beforeSources, next);
+    if (cloudMediaSourcesChanged(beforeSources, next)) {
+      await replaceAllRecords(next);
+      setRecords(next);
+    }
+    if (failed > 0) {
+      throw new Error(`已刷新 ${refreshed} 个链接，仍有 ${failed} 个失败。请确认图片空间名称“${draft.supabase.mediaBucket || "echo-media"}”存在，并已运行最新 Storage 访问策略。`);
+    }
+    flash(refreshed > 0 ? `已刷新 ${refreshed} 个云端图片链接` : "云端图片链接当前有效");
+  }
+
   return (
     <section className="settings-page">
       <div className="settings-masonry">
@@ -2004,6 +2148,10 @@ function SettingsView({
                 <button className="button ghost" disabled={!syncReady || !syncConnected || busy} type="button" onClick={() => run("已从云端恢复", handleRestoreFromCloud)}>
                   <Download size={18} />
                   从云端恢复到本机
+                </button>
+                <button className="button ghost" disabled={!syncReady || !syncConnected || busy || !draft.supabase.syncMedia} type="button" onClick={() => run("", handleRefreshCloudMedia)}>
+                  <RotateCcw size={18} />
+                  刷新云端图片
                 </button>
               </div>
             </section>
