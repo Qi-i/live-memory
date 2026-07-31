@@ -19,12 +19,12 @@ async function addRecord({ title, artist, city, venue, date, price, colors }) {
   await page.getByRole("button", { name: "新增", exact: true }).click();
   const editor = page.locator(".record-editor-v2");
   await editor.waitFor({ state: "visible" });
-  await editor.getByLabel("演出名称").fill(title);
-  await editor.getByLabel("艺人 / 阵容").fill(artist);
-  await editor.getByLabel("日期").fill(date);
-  await editor.getByLabel("城市").fill(city);
-  await editor.getByLabel("场馆").fill(venue);
-  await editor.getByLabel("票价").fill(String(price));
+  await editor.getByRole("textbox", { name: "演出名称", exact: true }).fill(title);
+  await editor.getByRole("textbox", { name: "艺人 / 阵容", exact: true }).fill(artist);
+  await editor.getByLabel("日期", { exact: true }).fill(date);
+  await editor.getByRole("textbox", { name: "城市", exact: true }).fill(city);
+  await editor.getByRole("textbox", { name: "场馆", exact: true }).fill(venue);
+  await editor.getByRole("spinbutton", { name: "票价", exact: true }).fill(String(price));
   await editor.locator(".media-upload-grid-v2 label").first().locator("input[type=file]").setInputFiles({
     name: `${title}.svg`,
     mimeType: "image/svg+xml",
