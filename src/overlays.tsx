@@ -102,7 +102,7 @@ export function DetailDrawer({
         <section className="detail-text-v2">
           <header><span>MEMORY NOTES</span><h3>现场记录</h3></header>
           {record.tags.length > 0 && <div>{record.tags.map((tag) => <span key={tag}>{tag}</span>)}</div>}
-          <p>{record.note || "还没有写下现场记忆。"}</p>
+          <p>{record.note || "还没有写下演出记录。"}</p>
           {record.setlist.length > 0 && <ol>{record.setlist.map((song) => <li key={song}>{song}</li>)}</ol>}
         </section>
       </aside>
@@ -169,7 +169,7 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
           </div>
           {draft.media.length > 0 && <div className="editor-media-preview-v2 is-wide">{draft.media.map((item) => <figure key={item.id}><OverlayMedia media={item} alt={item.title || mediaKindLabels[item.kind]} /><figcaption>{mediaKindLabels[item.kind]}</figcaption></figure>)}</div>}
           <EditorField className="is-wide" label="曲目"><textarea value={draft.setlist.join("\n")} onChange={(event) => setDraft({ ...draft, setlist: splitTextList(event.target.value) })} /></EditorField>
-          <EditorField className="is-wide" label="现场记忆"><textarea value={draft.note || ""} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></EditorField>
+          <EditorField className="is-wide" label="演出记录"><textarea value={draft.note || ""} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></EditorField>
         </div>
         <footer className="editor-footer-v2"><button className="button ghost" type="button" onClick={onCancel}>取消</button><button className="button primary" disabled={saving} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}保存记录</button></footer>
       </form>
