@@ -157,7 +157,6 @@ jobs:
   const statusLabel = guest ? baseLabel : syncing ? "同步中…" : conflictCount > 0 ? `${conflictCount} 条冲突` : baseLabel;''', 'account chip')
           app = replace_once(app, '  setBusy,\n  onRestore,', '  setBusy,\n  onSignOut,\n  onRestore,', 'settings prop destructure')
           app = replace_once(app, '  setBusy: (value: boolean) => void;\n  onRestore:', '  setBusy: (value: boolean) => void;\n  onSignOut: () => Promise<void>;\n  onRestore:', 'settings prop type')
-
           old_exit = '<button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>'
           app = replace_once(app, old_exit, '<button className="button ghost" type="button" onClick={() => run("", onSignOut)}>退出账号</button>', 'account exit action')
           app_path.write_text(app, encoding='utf-8')
