@@ -48,13 +48,27 @@ function userText(user: AccountUser, ...keys: string[]) {
   return "";
 }
 
+function validSavedUsername(value: string) {
+  const normalized = value.trim().toLowerCase();
+  return /^[a-z0-9]{4,32}$/.test(normalized) ? normalized : "";
+}
+
+function normalizedProviderUsername(value: string) {
+  const normalized = value.toLowerCase().replace(/[^a-z0-9]/g, "").slice(0, 32);
+  return /^[a-z0-9]{4,32}$/.test(normalized) ? normalized : "";
+}
+
 function settingsForSessionUser(settings: AppSettings, user: AccountUser) {
-  const username = userText(user, "user_name", "preferred_username", "username")
+  const providerUsername = userText(user, "user_name", "preferred_username", "username")
     || user.email?.split("@")[0]
-    || settings.account.username;
+    || "";
+  const username = validSavedUsername(settings.account.username)
+    || normalizedProviderUsername(providerUsername)
+    || "user0000";
   const nickname = userText(user, "nickname", "name", "full_name")
-    || username
-    || settings.account.nickname;
+    || settings.account.nickname
+    || providerUsername
+    || username;
   const avatarUrl = userText(user, "avatar_url", "picture") || settings.account.avatarUrl;
   return writeSettings({
     ...settings,
@@ -86,13 +100,13 @@ export function AccessGate({ children }: { children: ReactNode }) {
   useEffect(() => {
     let active = true;
     const bootstrap = async () => {
-      const settings = readSettings();
+      const initialSettings = readSettings();
       try {
-        const sessionUser = await currentUser(settings);
+        const sessionUser = await currentUser(initialSettings);
         if (!active) return;
         if (sessionUser) {
-          settingsForSessionUser(settings, sessionUser);
           sessionStorage.removeItem(GUEST_SESSION_KEY);
+          settingsForSessionUser(readSettings(), sessionUser);
           setUser(sessionUser);
           setMode("account");
           return;
