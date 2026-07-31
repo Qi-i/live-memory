@@ -1,0 +1,631 @@
+/* Unified layout system: final override layer for consistent boundaries, spacing and module geometry. */
+:root {
+  --ui-gap: 14px;
+  --ui-gap-lg: 18px;
+  --ui-pad: 16px;
+  --ui-pad-compact: 12px;
+  --ui-radius: 10px;
+  --ui-border: 1px solid rgba(17, 19, 24, 0.11);
+  --ui-surface: rgba(255, 253, 245, 0.94);
+  --ui-shadow: 0 10px 26px rgba(24, 28, 34, 0.10);
+}
+
+/* Page frame: one left/right boundary for every route and every view. */
+.app {
+  grid-template-columns: 212px minmax(0, 1fr);
+  gap: 18px;
+  padding: 18px;
+}
+
+.rail {
+  top: 18px;
+  min-height: calc(100vh - 36px);
+  padding: 16px;
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+}
+
+.workspace {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.workspace > * {
+  width: 100%;
+  max-width: none;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Shared surface geometry. */
+.hero,
+.toolbar,
+.count-bar,
+.panel,
+.metric,
+.poster-card,
+.wallet-card,
+.memory-ticket,
+.timeline-item,
+.timeline-rail,
+.month-block,
+.list-view button,
+.price-head,
+.price-row,
+.map-stage,
+.empty-state,
+.settings-topline,
+.account-chip,
+.sync-pill,
+.search,
+.select-wrap,
+.button,
+.field,
+.storage-choice,
+.supabase-explain-card,
+.supabase-guide-panel,
+.import-file,
+.recycle-panel article,
+.admin-card {
+  border: var(--ui-border);
+  border-radius: var(--ui-radius);
+  box-shadow: var(--ui-shadow);
+}
+
+.hero,
+.toolbar,
+.count-bar,
+.panel,
+.metric,
+.poster-card,
+.wallet-card,
+.memory-ticket,
+.timeline-item,
+.month-block,
+.list-view button,
+.price-row,
+.map-stage,
+.empty-state,
+.settings-topline,
+.admin-card {
+  overflow: hidden;
+}
+
+/* Vertical rhythm: no arbitrary blank bands between major modules. */
+.hero {
+  min-height: 320px;
+  padding: 24px;
+  gap: 20px;
+}
+
+.toolbar {
+  margin-top: var(--ui-gap);
+  padding: var(--ui-pad-compact);
+}
+
+.count-bar {
+  margin: var(--ui-gap) 0;
+  min-height: 54px;
+  padding: 9px 12px;
+}
+
+.price-board,
+.stats,
+.summary-grid,
+.calendar-list,
+.venue-view,
+.list-view,
+.ticket-grid,
+.poster-grid,
+.wallet-list,
+.timeline-shell,
+.settings-page,
+.admin-page {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+}
+
+.price-board,
+.stats,
+.calendar-list,
+.list-view,
+.settings-page,
+.admin-page {
+  gap: var(--ui-gap);
+}
+
+/* Controls: same height, border, internal padding and alignment. */
+.sync-pill,
+.search,
+.button,
+.select-wrap,
+.account-chip {
+  min-height: 42px;
+}
+
+.button {
+  padding: 0 14px;
+  box-shadow: none;
+}
+
+.button.primary {
+  box-shadow: 3px 3px 0 rgba(17, 19, 24, 0.16);
+}
+
+.search {
+  padding: 0 12px;
+  box-shadow: none;
+}
+
+.select-wrap {
+  padding: 6px 10px;
+  box-shadow: none;
+}
+
+.toolbar-row,
+.toolbar-row.has-columns {
+  align-items: stretch;
+}
+
+.column-density-control,
+.column-density-control .select-wrap {
+  height: 100%;
+}
+
+.view-switch {
+  align-items: stretch;
+}
+
+.view-switch button {
+  min-height: 44px;
+  height: 100%;
+  box-shadow: none;
+}
+
+/* Poster view: equal cards, fixed media geometry, aligned bottoms. */
+.poster-grid {
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+
+.poster-grid > .poster-card {
+  height: 100%;
+}
+
+.poster-card {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  padding: 8px;
+  background: var(--ui-surface);
+}
+
+.poster-frame {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  min-height: 0;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: #0c1114;
+}
+
+.poster-frame img {
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  object-fit: contain;
+  background: #0c1114;
+}
+
+.poster-info {
+  display: flex;
+  min-width: 0;
+  flex: 1 1 auto;
+  flex-direction: column;
+  padding: 9px 3px 3px;
+}
+
+.poster-info h3 {
+  display: -webkit-box;
+  min-height: 2.36em;
+  margin: 8px 0 6px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.poster-info dl {
+  margin-top: auto;
+}
+
+.poster-card .rank {
+  top: 14px;
+  right: 14px;
+}
+
+/* Wallet and ticket modules: equal rows and predictable media ratios. */
+.wallet-list {
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+
+.wallet-card {
+  height: 100%;
+  min-height: 196px;
+  padding: 12px;
+}
+
+.wallet-card::after {
+  inset: 8px;
+  border-radius: 7px;
+}
+
+.wallet-card .cover-button {
+  align-self: stretch;
+  min-height: 0;
+}
+
+.wallet-card .wallet-main {
+  padding-right: 32px;
+}
+
+.ticket-grid {
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+
+.memory-ticket {
+  height: 100%;
+}
+
+.ticket-poster {
+  aspect-ratio: 3 / 4;
+}
+
+.ticket-copy h3 {
+  display: -webkit-box;
+  min-height: 2.36em;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+/* Statistics and summary: equal cards, common internal spacing. */
+.metric-strip,
+.summary-grid {
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+
+.metric {
+  height: 100%;
+  min-height: 118px;
+  padding: var(--ui-pad);
+}
+
+.summary-grid > .panel,
+.stats > .panel {
+  height: 100%;
+}
+
+.panel {
+  padding: var(--ui-pad);
+  background: var(--ui-surface);
+}
+
+.panel h2 {
+  margin-bottom: 14px;
+}
+
+/* Price, list, calendar and timeline share the same row geometry. */
+.price-table {
+  gap: 8px;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.price-head,
+.price-row {
+  min-height: 48px;
+  padding-left: 14px;
+  padding-right: 14px;
+}
+
+.price-row {
+  min-height: 72px;
+  box-shadow: 0 5px 14px rgba(24, 28, 34, 0.08);
+}
+
+.list-view {
+  gap: 8px;
+}
+
+.list-view button {
+  min-height: 66px;
+  padding: 10px 14px;
+  box-shadow: 0 5px 14px rgba(24, 28, 34, 0.08);
+}
+
+.calendar-list {
+  gap: var(--ui-gap);
+}
+
+.month-block {
+  padding: 14px;
+  gap: 14px;
+}
+
+.timeline-shell {
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: var(--ui-gap);
+  justify-content: stretch;
+}
+
+.timeline,
+.timeline-year,
+.timeline-item {
+  width: 100%;
+  max-width: none;
+}
+
+.timeline-item {
+  min-height: 96px;
+  box-shadow: 0 5px 14px rgba(24, 28, 34, 0.08);
+}
+
+/* Venue: map and list have equal outer height and matching edges. */
+.venue-view {
+  gap: var(--ui-gap);
+  align-items: stretch;
+}
+
+.map-stage,
+.venue-list {
+  min-height: 500px;
+  height: 100%;
+}
+
+.map-stage {
+  padding: 10px;
+}
+
+.map-canvas,
+.map-fallback {
+  min-height: 478px;
+}
+
+/* Settings: stable two-column grid and identical section boundaries. */
+.settings-page {
+  gap: var(--ui-gap);
+}
+
+.settings-masonry {
+  grid-template-columns: minmax(0, 1.12fr) minmax(340px, 0.88fr);
+  gap: var(--ui-gap);
+  align-items: start;
+}
+
+.settings-col-main,
+.settings-col-side {
+  gap: var(--ui-gap);
+}
+
+.settings-page .panel {
+  padding: var(--ui-pad);
+}
+
+.panel-heading {
+  min-height: 54px;
+  align-items: flex-start;
+  margin-bottom: 12px;
+}
+
+.panel-heading > div {
+  min-width: 0;
+}
+
+.panel-heading p {
+  max-width: 420px;
+}
+
+.account-settings-grid,
+.storage-choice-grid,
+.field-stack,
+.settings-health-panel {
+  gap: 10px;
+}
+
+.field {
+  min-height: 58px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+
+.storage-choice {
+  height: 100%;
+  min-height: 120px;
+  padding: 14px;
+  box-shadow: none;
+}
+
+.supabase-explain-card,
+.supabase-guide-panel {
+  margin-top: 10px;
+  padding: 12px;
+  box-shadow: none;
+}
+
+.settings-health-panel .info-line {
+  margin: 0;
+  min-height: 36px;
+  padding: 7px 8px;
+}
+
+.recycle-list article {
+  min-height: 58px;
+  padding: 10px 12px;
+  box-shadow: none;
+}
+
+/* Admin page: same grid, spacing and card size as statistics. */
+.admin-page {
+  display: grid;
+  gap: var(--ui-gap);
+}
+
+.admin-stat-cards {
+  gap: var(--ui-gap);
+}
+
+.admin-card {
+  min-height: 118px;
+  padding: var(--ui-pad);
+  background: var(--ui-surface);
+}
+
+.admin-panel {
+  margin: 0;
+}
+
+/* Drawers and editors: equal insets, edge spacing and footer geometry. */
+.detail-drawer,
+.import-drawer,
+.editor {
+  padding: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  border-radius: var(--ui-radius);
+}
+
+.detail-drawer,
+.import-drawer {
+  inset: 14px 14px 14px auto;
+  width: min(980px, calc(100vw - 28px));
+}
+
+.editor {
+  width: min(980px, calc(100vw - 28px));
+  max-height: calc(100vh - 28px);
+  margin: 14px auto;
+}
+
+.form-grid {
+  gap: 10px;
+}
+
+.editor footer {
+  margin-top: 14px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* Responsive rules preserve the same visual system instead of introducing new spacing. */
+@media (max-width: 1180px) {
+  .app {
+    grid-template-columns: 1fr;
+    gap: var(--ui-gap);
+  }
+
+  .rail {
+    position: static;
+    min-height: auto;
+  }
+
+  .settings-masonry {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-list {
+    grid-template-columns: repeat(auto-fill, minmax(360px, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  :root {
+    --ui-gap: 10px;
+    --ui-pad: 12px;
+  }
+
+  .app {
+    padding: 10px;
+    gap: 10px;
+  }
+
+  .rail,
+  .hero,
+  .toolbar,
+  .count-bar,
+  .panel,
+  .metric,
+  .poster-card,
+  .wallet-card,
+  .memory-ticket,
+  .timeline-item,
+  .timeline-rail,
+  .month-block,
+  .list-view button,
+  .price-row,
+  .map-stage,
+  .empty-state,
+  .settings-topline,
+  .admin-card {
+    border-radius: 9px;
+  }
+
+  .hero {
+    padding: 16px;
+  }
+
+  .toolbar {
+    padding: 10px;
+  }
+
+  .count-bar {
+    margin: 10px 0;
+  }
+
+  .wallet-list {
+    grid-template-columns: 1fr;
+  }
+
+  .wallet-card {
+    min-height: 150px;
+  }
+
+  .metric-strip,
+  .summary-grid,
+  .admin-stat-cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .timeline-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .venue-view {
+    grid-template-columns: 1fr;
+  }
+
+  .map-stage,
+  .venue-list {
+    min-height: 420px;
+  }
+
+  .map-canvas,
+  .map-fallback {
+    min-height: 398px;
+  }
+
+  .detail-drawer,
+  .import-drawer,
+  .editor {
+    inset: 8px;
+    width: calc(100vw - 16px);
+    max-height: calc(100vh - 16px);
+    margin: 8px auto;
+    padding: 14px;
+  }
+}
