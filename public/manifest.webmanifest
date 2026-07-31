@@ -1,6 +1,6 @@
 {
-  "name": "回响册 - Live Memory",
-  "short_name": "回响册",
+  "name": "现场记 - Live Memory",
+  "short_name": "现场记",
   "description": "保存演出海报、票根、座位图和现场照片的私人记忆档案",
   "start_url": "./",
   "scope": "./",

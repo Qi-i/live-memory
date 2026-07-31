@@ -1,4 +1,4 @@
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
+import { createClient, SupabaseClient, type User } from "@supabase/supabase-js";
 
 /**
  * Loose database type to avoid TypeScript 'never' resolution when
@@ -134,20 +134,18 @@ function makeAccountClient(settings: AppSettings) {
         persistSession: true,
         autoRefreshToken: true,
         storageKey: "live-memory-account-session",
+        detectSessionInUrl: true,
+        flowType: "pkce",
       },
     });
   }
   return cachedAccountClient;
 }
 
-function currentAppUrl() {
-  const url = new URL(window.location.href);
-  url.hash = "";
-  url.search = "";
-  if (!url.pathname.endsWith("/")) {
-    url.pathname = url.pathname.slice(0, url.pathname.lastIndexOf("/") + 1);
-  }
-  return url.toString();
+function oauthRedirectUrl() {
+  if (typeof window === "undefined") return undefined;
+  const base = import.meta.env.BASE_URL || "/";
+  return new URL(base, window.location.origin).toString();
 }
 
 export interface AccountSignInResult {
@@ -172,8 +170,11 @@ export async function signInWithPassword(settings: AppSettings, password: string
     error = legacy.error;
   }
 
-  if (isEmailRateLimit(error)) throw new Error("账号请求过于频繁，请稍后再试。");
-  throw new Error("用户名或密码不正确。新用户请先选择“创建新账号”。");
+  if (isEmailRateLimit(error)) throw new Error("登录尝试过于频繁，请稍后再试。");
+  if (/failed to fetch|network|connection|load failed|closed/i.test(error.message || "")) {
+    throw new Error("暂时无法连接账号服务，请刷新页面后重试。");
+  }
+  throw new Error("用户名或密码不正确。");
 }
 
 export async function signUpOnly(settings: AppSettings, password: string): Promise<AccountSignInResult> {
@@ -232,7 +233,7 @@ export async function signInStorageWithPassword(settings: AppSettings, password:
 export async function signInStorageWithAccount(settings: AppSettings) {
   if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号，再连接个人云端");
+  const user = await requireUser(client, "请先登录现场记账号，再连接个人云端");
   const ownerKey = await deriveStorageOwnerKeyFromSecret(settings, `account:${user.id}`, "account");
   return connectStorageWithOwnerKey(settings, ownerKey);
 }
@@ -321,14 +322,39 @@ export async function updateAccountPassword(settings: AppSettings, password: str
 
 export async function signInWithGithub(settings: AppSettings) {
   const client = makeAccountClient(settings);
+  const redirectTo = oauthRedirectUrl();
   const { error } = await client.auth.signInWithOAuth({
     provider: "github",
-    options: {
-      redirectTo: currentAppUrl(),
-    },
+    options: redirectTo ? { redirectTo } : undefined,
   });
   if (error) throw error;
-  return "正在跳转到 GitHub 授权";
+  return "正在前往 GitHub 登录";
+}
+
+export async function linkGithubIdentity(settings: AppSettings) {
+  const client = makeAccountClient(settings);
+  const redirectTo = oauthRedirectUrl();
+  const { error } = await client.auth.linkIdentity({
+    provider: "github",
+    options: redirectTo ? { redirectTo } : undefined,
+  });
+  if (error) throw error;
+  return "正在前往 GitHub 完成绑定";
+}
+
+export async function getLinkedProviders(settings: AppSettings) {
+  const client = makeAccountClient(settings);
+  const { data, error } = await client.auth.getUserIdentities();
+  if (error) throw error;
+  return Array.from(new Set((data.identities || []).map((identity) => identity.provider)));
+}
+
+export function watchAccountAuth(settings: AppSettings, callback: (user: User | null) => void) {
+  const client = makeAccountClient(settings);
+  const { data: { subscription } } = client.auth.onAuthStateChange((_event, session) => {
+    callback(session?.user || null);
+  });
+  return () => subscription.unsubscribe();
 }
 
 export async function signOut(settings: AppSettings) {
@@ -564,7 +590,7 @@ export async function syncAfterLogin(
 
 export async function pushTextBackupToAccount(settings: AppSettings, records: EventRecord[]): Promise<SyncResult> {
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号，再使用账号文字备份");
+  const user = await requireUser(client, "请先登录现场记账号，再使用账号文字备份");
   const rows = records.map((record) => {
     const payload = withoutLocalMedia(record);
     return {
@@ -601,7 +627,7 @@ export async function pushTextBackupToAccount(settings: AppSettings, records: Ev
 
 export async function pullTextBackupFromAccount(settings: AppSettings, localRecords: EventRecord[]): Promise<SyncResult> {
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号，再恢复账号文字备份");
+  const user = await requireUser(client, "请先登录现场记账号，再恢复账号文字备份");
   const { data, error } = await client
     .from("echo_text_backups")
     .select("payload, updated_at, deleted_at")
@@ -620,7 +646,7 @@ export async function pullTextBackupFromAccount(settings: AppSettings, localReco
 export async function purgeTextBackupFromAccount(settings: AppSettings, recordId: string) {
   if (!hasAccountCloudConfig(settings)) return;
   const client = makeAccountClient(settings);
-  const user = await requireUser(client, "请先登录 Live Memory 账号，再管理账号文字备份");
+  const user = await requireUser(client, "请先登录现场记账号，再管理账号文字备份");
   const { error } = await client.from("echo_text_backups").delete().eq("user_id", user.id).eq("id", recordId);
   if (error) throwTextBackupError(error);
 }
@@ -1096,7 +1122,7 @@ async function requireUser(client: SupabaseClient, message = "请先登录账号
 }
 
 export function friendlySupabaseErrorMessage(error: unknown, fallback = "未完成，请检查页面设置") {
-  if (isAuthSessionMissing(error)) return "请先登录 Live Memory 账号，或关闭账号文字备份后再试";
+  if (isAuthSessionMissing(error)) return "请先登录现场记账号，或关闭账号文字备份后再试";
   if (isEmailRateLimit(error)) return "账号邮件请求过于频繁，请稍后再试。连接个人 Supabase 不需要账号邮件。";
   const message = String((error as { message?: string }).message || "");
   if (message) return message;
@@ -1288,7 +1314,7 @@ function throwProfileError(error: unknown): never {
 
 function throwTextBackupError(error: unknown): never {
   const code = (error as { code?: string }).code;
-  if (isAuthSessionMissing(error)) throw new Error("请先登录 Live Memory 账号，再使用账号文字备份");
+  if (isAuthSessionMissing(error)) throw new Error("请先登录现场记账号，再使用账号文字备份");
   if (code === "42P01") throw new Error("文字备份暂不可用，请稍后再试");
   throw error;
 }

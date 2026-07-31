@@ -69,7 +69,7 @@ function profileSentence(records: EventRecord[], watched: EventRecord[], cities:
   if (!records.length) return "你的现场画像会随着档案逐渐形成。";
   const city = cities[0]?.[0] || "不同城市";
   const artist = artists[0]?.[0] || "不同艺人";
-  return `你已经完成 ${watched.length} 次现场记忆，最常抵达 ${city}，档案中出现最多的是 ${artist}。`;
+  return `你已经完成 ${watched.length} 次演出记录，最常抵达 ${city}，档案中出现最多的是 ${artist}。`;
 }
 
 export function AdminPage({ settings }: { settings: AppSettings }) {

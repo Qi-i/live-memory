@@ -25,8 +25,9 @@ import {
   syncAfterLogin,
 } from "./supabase";
 import type { SyncConflict } from "./supabase";
-import { useAccess } from "./access";
+import { makeGuestSettings, useAccess } from "./access";
 import type { AppRoute } from "./experience";
+import { seedRecords } from "./seeds";
 
 const MEDIA_REFRESH_INTERVAL = 6 * 60 * 60 * 1000;
 const MEDIA_REFRESH_EVENT = "live-memory:cloud-media-refresh";
@@ -41,6 +42,19 @@ function mediaFingerprint(records: EventRecord[]) {
 
 function mediaPathFingerprint(records: EventRecord[]) {
   return records.flatMap((record) => record.media.filter((asset) => asset.storagePath).map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`)).join("|");
+}
+
+function guestDemoRecords(): EventRecord[] {
+  return seedRecords.map((record) => ({
+    ...record,
+    artists: [...record.artists],
+    lineup: record.lineup.map((item) => ({ ...item })),
+    media: record.media.map((asset) => ({ ...asset })),
+    companions: [...record.companions],
+    tags: [...record.tags],
+    setlist: [...record.setlist],
+    colors: [...record.colors],
+  }));
 }
 
 export function useAppController() {
@@ -75,11 +89,23 @@ export function useAppController() {
   useEffect(() => {
     let active = true;
     initialized.current = false;
+
+    if (isGuest) {
+      const demoRecords = guestDemoRecords();
+      const guestSettings = makeGuestSettings();
+      recordsRef.current = demoRecords;
+      setRecordState(demoRecords);
+      setSettings(guestSettings);
+      lastSyncFingerprint.current = recordFingerprint(demoRecords);
+      initialized.current = true;
+      return () => { active = false; };
+    }
+
     Promise.all([loadRecordsWithMigration(), Promise.resolve(readSettings())])
       .then(async ([loadedRecords, loadedSettings]) => {
         let nextRecords = loadedRecords;
         let nextSettings = loadedSettings;
-        if (!isGuest && access.user) {
+        if (access.user) {
           try {
             const initialSync = await syncAfterLogin({ ...loadedSettings, onboardingComplete: true }, loadedRecords);
             nextRecords = initialSync.records;
@@ -98,12 +124,10 @@ export function useAppController() {
       })
       .catch((error) => {
         if (!active) return;
-        setToast(friendlySupabaseErrorMessage(error, "本地数据加载失败"));
+        setToast(friendlySupabaseErrorMessage(error, "本机记录加载失败"));
         initialized.current = true;
       });
-    return () => {
-      active = false;
-    };
+    return () => { active = false; };
   }, [access.mode, access.user, isGuest]);
 
   const activeRecords = useMemo(() => records.filter((record) => !record.deletedAt), [records]);
@@ -198,32 +222,40 @@ export function useAppController() {
   }, [access.user, isGuest, route, settings]);
 
   async function persistRecord(record: EventRecord) {
-    const saved = await saveRecord({ ...record, updatedAt: nowIso() });
+    const nextRecord = { ...record, updatedAt: nowIso() };
+    const saved = isGuest ? nextRecord : await saveRecord(nextRecord);
     setRecords((current) => current.filter((item) => item.id !== saved.id).concat(saved));
     setSelected(saved);
     setEditing(null);
-    flash(isGuest ? "已保存到本次访客会话" : "已保存");
+    flash(isGuest ? "已更新示例（关闭页面后不会保留）" : "已保存");
     return saved;
   }
 
   async function moveToTrash(record: EventRecord) {
-    const saved = await saveRecord({ ...record, deletedAt: nowIso(), updatedAt: nowIso() });
+    const nextRecord = { ...record, deletedAt: nowIso(), updatedAt: nowIso() };
+    const saved = isGuest ? nextRecord : await saveRecord(nextRecord);
     setRecords((current) => current.filter((item) => item.id !== saved.id).concat(saved));
     setSelected(null);
-    flash("已移入回收站");
+    flash(isGuest ? "已从当前示例中移除" : "已移入回收站");
   }
 
   async function restoreRecord(record: EventRecord) {
-    const saved = await saveRecord({ ...record, deletedAt: undefined, updatedAt: nowIso() });
+    const nextRecord = { ...record, deletedAt: undefined, updatedAt: nowIso() };
+    const saved = isGuest ? nextRecord : await saveRecord(nextRecord);
     setRecords((current) => current.filter((item) => item.id !== saved.id).concat(saved));
     flash("记录已恢复");
   }
 
   async function permanentlyDeleteRecord(record: EventRecord) {
-    if (!isGuest && access.user && hasAccountCloudConfig(settings)) {
+    if (isGuest) {
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+      flash("已从当前示例中删除");
+      return;
+    }
+    if (access.user && hasAccountCloudConfig(settings)) {
       await purgeTextBackupFromAccount(settings, record.id).catch(() => undefined);
     }
-    if (!isGuest && settings.storageMode === "supabase" && hasSupabaseConfig(settings)) {
+    if (settings.storageMode === "supabase" && hasSupabaseConfig(settings)) {
       await purgeRecordFromSupabase(settings, record.id).catch(() => undefined);
     }
     await deleteRecord(record.id);
@@ -232,9 +264,14 @@ export function useAppController() {
   }
 
   async function updateSettings(next: AppSettings, message = "设置已保存") {
+    if (isGuest) {
+      setSettings(next);
+      flash("示例设置已更新（关闭页面后不会保留）");
+      return next;
+    }
     const saved = writeSettings(next);
     setSettings(saved);
-    if (!isGuest && access.user && hasAccountCloudConfig(saved)) {
+    if (access.user && hasAccountCloudConfig(saved)) {
       saveUserProfileBinding(saved).catch(() => undefined);
     }
     flash(message);
@@ -242,7 +279,7 @@ export function useAppController() {
   }
 
   async function replaceRecords(next: EventRecord[], message: string) {
-    await replaceAllRecords(next);
+    if (!isGuest) await replaceAllRecords(next);
     setRecords(next);
     flash(message);
   }

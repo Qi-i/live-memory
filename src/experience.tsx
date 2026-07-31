@@ -99,10 +99,10 @@ export function useExperienceTheme() {
 }
 
 const routeMeta: Record<AppRoute, { label: string; description: string; icon: ReactNode }> = {
-  archive: { label: "档案", description: "浏览、整理与分享你的演出记忆", icon: <Archive /> },
-  stats: { label: "统计", description: "从城市、艺人、时间与票价理解你的观演轨迹", icon: <BarChart3 /> },
-  settings: { label: "设置", description: "管理账号、同步、显示与本地数据", icon: <Settings /> },
-  admin: { label: "管理", description: "查看服务运行与用户数据概况", icon: <ShieldCheck /> },
+  archive: { label: "档案", description: "浏览和整理演出记录", icon: <Archive /> },
+  stats: { label: "统计", description: "查看城市、艺人、时间和票价统计", icon: <BarChart3 /> },
+  settings: { label: "设置", description: "管理账号、同步和显示方式", icon: <Settings /> },
+  admin: { label: "管理", description: "查看账号和服务使用情况", icon: <ShieldCheck /> },
 };
 
 export function routeMetadata(route: AppRoute) {
@@ -161,8 +161,8 @@ export function ExperienceShell({
         <button className="experience-brand" type="button" onClick={() => navigate("archive")}>
           <span className="experience-brand-mark">演</span>
           <span>
-            <strong>回响册</strong>
-            <small>Live Memory</small>
+            <strong>现场记</strong>
+            <small>演出记录</small>
           </span>
         </button>
 
@@ -246,9 +246,9 @@ export function ThemeSettingsPanel() {
   return (
     <section className="theme-settings-panel">
       <header>
-        <span>外观系统</span>
-        <h2>主题与阅读模式</h2>
-        <p>明暗模式与视觉主题独立设置，并自动适配移动端和分享画布。</p>
+        <span>外观</span>
+        <h2>页面风格</h2>
+        <p>选择明暗模式和页面风格，手机端与分享图会自动适配。</p>
       </header>
       <div className="theme-setting-group">
         <strong>明暗模式</strong>
@@ -265,11 +265,11 @@ export function ThemeSettingsPanel() {
         <div className="theme-choice-grid">
           <button className={visualTheme === "aurora" ? "is-active" : ""} type="button" onClick={() => setVisualTheme("aurora")}>
             <i className="theme-preview theme-preview-aurora" />
-            <span><b>Aurora</b><small>轻盈、通透、适合高密度档案浏览</small></span>
+            <span><b>清透</b><small>留白更轻，适合日常浏览</small></span>
           </button>
           <button className={visualTheme === "editorial" ? "is-active" : ""} type="button" onClick={() => setVisualTheme("editorial")}>
             <i className="theme-preview theme-preview-editorial" />
-            <span><b>Editorial</b><small>纸张感与强排版，适合截图与传播</small></span>
+            <span><b>画册</b><small>排版更突出，适合截图分享</small></span>
           </button>
         </div>
       </div>

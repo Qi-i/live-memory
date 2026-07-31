@@ -97,7 +97,7 @@ export default function AppRoot() {
   }, [activeRecords.length, cityCount, route, watchedCount, yearCount]);
 
   const syncLabel = isGuest
-    ? "访客临时数据"
+    ? "示例数据"
     : syncing
       ? "同步中…"
       : syncConflicts.length
@@ -228,5 +228,5 @@ function AccountStatus({ settings, syncing, conflicts, guest, onClick }: { setti
 }
 
 function accountLabel(settings: AppSettings) {
-  return settings.account.nickname.trim() || settings.account.username.trim() || "Live Memory";
+  return settings.account.nickname.trim() || settings.account.username.trim() || "现场记";
 }

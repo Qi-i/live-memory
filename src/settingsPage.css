@@ -545,3 +545,5 @@
     grid-template-columns: 1fr;
   }
 }
+
+.settings-help-v2 { margin: 10px 0 0; color: var(--muted); font-size: 12px; font-weight: 700; line-height: 1.55; }

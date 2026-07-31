@@ -1,16 +1,17 @@
 import { EventRecord, MediaAsset, createId } from "./domain";
 import { makeMedia, nowIso } from "./media";
 
-type SeedInput = Omit<EventRecord, "schemaVersion" | "media" | "lineup" | "favorite" | "createdAt" | "updatedAt"> & {
-  poster?: string;
-  seatMap?: string;
-};
+type SeedInput = Omit<EventRecord, "schemaVersion" | "media" | "lineup" | "favorite" | "createdAt" | "updatedAt"> & { poster?: string };
+
+function demoAsset(file: string) {
+  return `${import.meta.env.BASE_URL}demo/${file}`;
+}
 
 function seedRecord(input: SeedInput): EventRecord {
-  const timestamp = "2026-06-19T00:00:00.000Z";
-  const media: MediaAsset[] = [];
-  if (input.poster) media.push(makeMedia(input.id, "poster", input.poster, "示例海报", "sample"));
-  if (input.seatMap) media.push(makeMedia(input.id, "seatMap", input.seatMap, "示例座位图", "sample"));
+  const timestamp = "2026-08-01T00:00:00.000Z";
+  const media: MediaAsset[] = input.poster
+    ? [makeMedia(input.id, "poster", input.poster, "演出海报", "sample")]
+    : [];
   return {
     ...input,
     schemaVersion: 2,
@@ -20,31 +21,6 @@ function seedRecord(input: SeedInput): EventRecord {
     createdAt: timestamp,
     updatedAt: timestamp,
   };
-}
-
-function demoPoster(title: string, subtitle: string, colorA: string, colorB: string) {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 1200">
-      <defs>
-        <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
-          <stop stop-color="${colorA}" />
-          <stop offset="1" stop-color="${colorB}" />
-        </linearGradient>
-        <pattern id="grid" width="48" height="48" patternUnits="userSpaceOnUse">
-          <path d="M48 0H0v48" fill="none" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
-        </pattern>
-      </defs>
-      <rect width="900" height="1200" fill="url(#bg)" />
-      <rect width="900" height="1200" fill="url(#grid)" opacity=".42" />
-      <circle cx="720" cy="210" r="130" fill="rgba(255,255,255,.28)" />
-      <circle cx="170" cy="930" r="210" fill="rgba(0,0,0,.18)" />
-      <text x="76" y="140" fill="#fffdf5" font-family="Arial, sans-serif" font-size="42" font-weight="800">LIVE MEMORY SAMPLE</text>
-      <text x="76" y="570" fill="#fffdf5" font-family="Arial, sans-serif" font-size="92" font-weight="900">${title}</text>
-      <text x="76" y="665" fill="#fffdf5" font-family="Arial, sans-serif" font-size="58" font-weight="800">${subtitle}</text>
-      <text x="76" y="1050" fill="#fffdf5" font-family="Arial, sans-serif" font-size="36" font-weight="800">poster / ticket / seat map / live photo</text>
-    </svg>
-  `;
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
 }
 
 export function blankRecord(): EventRecord {
@@ -71,78 +47,63 @@ export function blankRecord(): EventRecord {
     sourceChannel: "",
     media: [],
     favorite: false,
-    colors: ["#101418", "#dfff4f"],
+    colors: ["#171a1f", "#d7f05a"],
     createdAt: timestamp,
     updatedAt: timestamp,
   };
 }
 
+const demoNote = "演出名称、日期、城市、场馆和海报来自公开票务信息；票价与座位为界面演示数据。";
+
 export const seedRecords: EventRecord[] = [
   seedRecord({
-    id: "demo-poster-concert",
-    title: "示例演唱会：回声巡演",
-    artists: ["示例歌手"],
-    category: "concert",
-    status: "watched",
-    recordState: "normal",
-    date: "2026-06-19",
-    time: "19:30",
-    city: "上海",
-    venue: "示例体育馆",
-    price: 580,
-    seat: "看台 A 区 12 排 08 座",
-    companions: ["朋友 A"],
-    sourceChannel: "official",
-    importConfidence: 1,
-    tags: ["示例", "演唱会"],
-    setlist: ["开场曲", "返场曲"],
-    note: "散场后把最喜欢的一首歌、舞台瞬间和同行人的名字记在这里。",
-    colors: ["#101418", "#65dfcf"],
-    poster: demoPoster("ECHO TOUR", "CONCERT", "#101418", "#65dfcf"),
+    id: "guest-zhou-shen-zhengzhou-2026",
+    title: "周深2026「深深的」巡回演唱会-郑州站",
+    artists: ["周深"], category: "concert", status: "planned", recordState: "normal",
+    date: "2026-06-28", time: "19:30", city: "郑州",
+    venue: "郑州奥林匹克体育中心·体育场", price: 929, seat: "内场 B 区 18 排 06 座",
+    companions: [], sourceChannel: "official", importConfidence: 1,
+    tags: ["演示", "演唱会"], setlist: [], note: demoNote,
+    colors: ["#34236b", "#d7c8ff"], poster: demoAsset("zhou-shen.webp"),
   }),
   seedRecord({
-    id: "demo-poster-festival",
-    title: "示例音乐节：夏日双日票",
-    artists: ["乐队甲", "歌手乙", "DJ 丙"],
-    category: "festival",
-    status: "planned",
-    recordState: "normal",
-    date: "2026-08-08",
-    time: "15:30",
-    city: "成都",
-    venue: "示例音乐公园",
-    price: 399,
-    seat: "双日通票",
-    companions: [],
-    sourceChannel: "official",
-    importConfidence: 1,
-    tags: ["示例", "音乐节", "多艺人"],
-    setlist: [],
-    note: "音乐节和拼盘演出可以保存多位艺人、每日票根和现场精选照片。",
-    colors: ["#ff6b8a", "#dfff4f"],
-    poster: demoPoster("SUMMER STAGE", "FESTIVAL", "#ff6b8a", "#dfff4f"),
+    id: "guest-xue-zhiqian-luoyang-2026",
+    title: "薛之谦“万兽之王”巡回演唱会-洛阳站",
+    artists: ["薛之谦"], category: "concert", status: "watched", recordState: "normal",
+    date: "2026-06-14", time: "19:30", city: "洛阳",
+    venue: "洛阳奥林匹克中心体育场", price: 917, seat: "内场 A5 区 12 排 18 座",
+    companions: [], sourceChannel: "official", importConfidence: 1,
+    tags: ["演示", "演唱会"], setlist: [], note: demoNote,
+    colors: ["#22272d", "#d9dde1"], poster: demoAsset("xue-zhiqian.webp"),
   }),
   seedRecord({
-    id: "demo-poster-livehouse",
-    title: "示例 Livehouse：午夜小场",
-    artists: ["独立乐队"],
-    category: "livehouse",
-    status: "wish",
-    recordState: "normal",
-    date: "2026-10-24",
-    time: "20:30",
-    city: "杭州",
-    venue: "示例 Livehouse",
-    price: null,
-    publicPriceRange: "180-280 CNY",
-    seat: "站席",
-    companions: [],
-    sourceChannel: "official",
-    importConfidence: 1,
-    tags: ["示例", "Livehouse"],
-    setlist: [],
-    note: "可以把它替换成你自己的第一场记录，或直接导入备份恢复私人档案。",
-    colors: ["#43c8ff", "#ff8c5a"],
-    poster: demoPoster("MIDNIGHT ROOM", "LIVEHOUSE", "#43c8ff", "#ff8c5a"),
+    id: "guest-zhang-jie-urumqi-2025",
+    title: "2025张杰未·LIVE—「开往1982」世界巡回演唱会-乌鲁木齐站",
+    artists: ["张杰"], category: "concert", status: "watched", recordState: "normal",
+    date: "2025-08-17", time: "19:30", city: "乌鲁木齐",
+    venue: "乌鲁木齐奥体中心体育场", price: 1280, seat: "内场 B3 区 09 排 22 座",
+    companions: [], sourceChannel: "official", importConfidence: 1,
+    tags: ["演示", "演唱会"], setlist: [], note: demoNote,
+    colors: ["#0e3550", "#79c4de"], poster: demoAsset("zhang-jie.jpg"),
+  }),
+  seedRecord({
+    id: "guest-wang-sulong-zhengzhou-2024",
+    title: "汪苏泷2024「十万伏特」巡回演唱会-郑州站",
+    artists: ["汪苏泷"], category: "concert", status: "watched", recordState: "normal",
+    date: "2024-08-18", time: "19:30", city: "郑州",
+    venue: "郑州奥林匹克体育中心体育场", price: 680, seat: "看台 A 区 15 排 08 座",
+    companions: [], sourceChannel: "official", importConfidence: 1,
+    tags: ["演示", "演唱会"], setlist: [], note: demoNote,
+    colors: ["#20365a", "#e792b5"], poster: demoAsset("wang-sulong.jpg"),
+  }),
+  seedRecord({
+    id: "guest-zhao-lei-xian-2024",
+    title: "赵雷“没有信号”2024巡演-西安站",
+    artists: ["赵雷"], category: "concert", status: "watched", recordState: "normal",
+    date: "2024-03-10", time: "19:30", city: "西安",
+    venue: "西安奥体中心体育馆", price: 580, seat: "看台 102 区 08 排 15 座",
+    companions: [], sourceChannel: "official", importConfidence: 1,
+    tags: ["演示", "巡演"], setlist: [], note: demoNote,
+    colors: ["#49433d", "#d7c4a3"], poster: demoAsset("zhao-lei.png"),
   }),
 ];

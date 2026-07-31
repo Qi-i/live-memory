@@ -18,8 +18,10 @@ import { fileToAvatar, downloadBlob, nowIso } from "./media";
 import { normalizeRecord, replaceAllRecords } from "./storage";
 import {
   friendlySupabaseErrorMessage,
+  getLinkedProviders,
   hasPersonalCloudConnection,
   hasSupabaseConfig,
+  linkGithubIdentity,
   pullRecordsFromSupabase,
   pushRecordsToSupabase,
   refreshSignedMediaUrls,
@@ -64,10 +66,19 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
+  const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
   useEffect(() => setDraft(settings), [settings]);
+  useEffect(() => {
+    let active = true;
+    getLinkedProviders(settings)
+      .then((providers) => { if (active) setLinkedProviders(providers); })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [settings.account.username]);
   const cloudReady = hasSupabaseConfig(draft);
   const cloudConnected = hasPersonalCloudConnection(draft);
   const trashRecords = records.filter((record) => record.deletedAt);
+  const githubLinked = linkedProviders.includes("github");
 
   async function run(action: () => Promise<void>) {
     setBusy(true);
@@ -135,7 +146,7 @@ export function SettingsPage({
       <div className="settings-layout-v2">
         <div className="settings-main-v2">
           <section className="settings-module account-module-v2">
-            <ModuleHeader eyebrow="账号" title="Live Memory 账号" description="登录状态由应用入口统一管理；设置页只负责资料、密码和退出。" />
+            <ModuleHeader eyebrow="账号" title="现场记账号" description="查看个人资料、登录方式和密码设置。" />
             <div className="account-profile-v2">
               <div className="account-avatar-preview-v2">
                 <span>{draft.account.avatarUrl ? <img src={draft.account.avatarUrl} alt={draft.account.nickname} /> : draft.account.nickname.slice(0, 1).toUpperCase()}</span>
@@ -153,22 +164,24 @@ export function SettingsPage({
               <button className="button primary" type="button" disabled={busy} onClick={() => void onSave(draft)}><Check />保存账号资料</button>
               <label className="inline-password-v2">新密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" /></label>
               <button className="button ghost" type="button" disabled={busy || !password} onClick={() => void run(async () => { await updateAccountPassword(draft, password); setPassword(""); flash("密码已更新"); })}><ShieldCheck />更新密码</button>
+              <button className="button ghost" type="button" disabled={busy || githubLinked} title="绑定后可使用同一个账号的用户名密码或 GitHub 登录" onClick={() => void run(async () => { await linkGithubIdentity(draft); })}><Github />{githubLinked ? "GitHub 已绑定" : "绑定 GitHub"}</button>
               <button className="button ghost" type="button" disabled={busy} onClick={() => void run(onSignOut)}>退出账号</button>
             </div>
           </section>
 
           <section className="settings-module cloud-module-v2">
-            <ModuleHeader eyebrow="同步" title="个人 Supabase" description="账号负责身份；你的 Supabase 项目负责演出文字和图片的完整跨设备同步。" />
+            <ModuleHeader eyebrow="同步" title="个人 Supabase" description="连接自己的 Supabase 后，文字和图片可以在电脑与手机之间同步。" />
             <div className="cloud-status-v2">
               <span className={cloudConnected ? "is-connected" : ""}><i />{cloudConnected ? "个人云端已连接" : cloudReady ? "配置已保存，等待连接" : "尚未填写连接信息"}</span>
               <strong>{health.remoteMedia} 个云端图片</strong>
             </div>
             <div className="settings-fields-v2 settings-fields-two-v2">
-              <label>项目 URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
-              <label>anon / publishable key<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value, ownerKey: "" } })} /></label>
-              <label>图片空间<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
+              <label title="在 Supabase 项目设置的 API 页面复制 Project URL">项目 URL<input value={draft.supabase.url} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, url: event.target.value, ownerKey: "" } })} placeholder="https://xxxx.supabase.co" /></label>
+              <label title="只填写 anon 或 publishable key，不要填写 service_role 或数据库密码">anon / publishable key<input type="password" value={draft.supabase.anonKey} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, anonKey: event.target.value, ownerKey: "" } })} /></label>
+              <label title="用于存放海报、票根和照片；默认名称为 echo-media">图片空间<input value={draft.supabase.mediaBucket} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, mediaBucket: event.target.value } })} placeholder="echo-media" /></label>
               <label className="toggle-field-v2"><input type="checkbox" checked={draft.supabase.syncMedia} onChange={(event) => setDraft({ ...draft, supabase: { ...draft.supabase, syncMedia: event.target.checked } })} /><span><strong>同步图片</strong><small>海报、票根、座位图和现场照片</small></span></label>
             </div>
+            <p className="settings-help-v2">项目 URL 和公开密钥可在 Supabase 的 Project Settings → API 中找到。这里只能填写 anon 或 publishable key。</p>
             <div className="settings-actions-v2">
               <button className="button primary" type="button" disabled={busy || !cloudReady} onClick={() => void run(connectPersonalCloud)}>{busy ? <Loader2 className="spin" /> : <ShieldCheck />}{cloudConnected ? "重新连接" : "连接个人云端"}</button>
               <button className="button ghost" type="button" disabled={busy || !cloudConnected} onClick={() => void run(uploadCloud)}><Upload />上传当前档案</button>
@@ -179,7 +192,7 @@ export function SettingsPage({
           </section>
 
           <section className="settings-module data-module-v2">
-            <ModuleHeader eyebrow="数据" title="导出、导入与回收站" description="备份操作集中在一个模块，避免同一功能散落在多个卡片。" />
+            <ModuleHeader eyebrow="数据" title="导出、导入与回收站" description="可导出备份、恢复记录或处理已删除内容。" />
             <div className="data-action-grid-v2">
               <button type="button" onClick={() => exportJson(records)}><Download /><span><strong>完整 JSON</strong><small>包含当前图片数据</small></span></button>
               <button type="button" onClick={() => exportText(records)}><Download /><span><strong>文字备份</strong><small>不包含本地图片</small></span></button>
@@ -210,7 +223,7 @@ export function SettingsPage({
           </section>
 
           <section className="settings-module storage-health-v2">
-            <ModuleHeader eyebrow="状态" title="数据健康检查" description="当前设备与个人云端的实际数据量。" />
+            <ModuleHeader eyebrow="状态" title="数据概况" description="查看当前设备和云端各保存了多少记录与图片。" />
             <Info label="有效记录" value={`${health.localRecords} 条`} />
             <Info label="图片附件" value={`${health.mediaAssets} 个`} />
             <Info label="仅本地图片" value={`${health.localOnlyMedia} 个`} />
@@ -226,7 +239,7 @@ export function SettingsPage({
 }
 
 export function GuestSettingsPage({ onLogin }: { onLogin: () => void }) {
-  return <section className="guest-settings-v2"><span>访客临时模式</span><h2>正式档案没有被读取。</h2><p>访客新增和编辑的数据只存在于当前标签页的内存中；关闭页面后清空，也不会连接账号或个人 Supabase。</p><button className="button primary" type="button" onClick={onLogin}><ShieldCheck />返回账号登录</button></section>;
+  return <section className="guest-settings-v2"><span>示例模式</span><h2>这里显示的是 5 条演出示例。</h2><p>你可以切换视图、编辑或新增记录；关闭页面后这些修改会清空，也不会影响个人账号。</p><button className="button primary" type="button" onClick={onLogin}><ShieldCheck />返回账号登录</button></section>;
 }
 
 function ModuleHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
