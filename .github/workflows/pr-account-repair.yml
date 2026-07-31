@@ -22,10 +22,40 @@ jobs:
           ref: fix/account-auth-parity
           fetch-depth: 2
           token: ${{ github.token }}
+
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
+
+      - name: Bundle five demo posters
+        run: |
+          set -euo pipefail
+          mkdir -p public/demo
+          curl -L --fail --retry 3 'https://img.alicdn.com/imgextra/i3/2251059038/O1CN01DdC1Sn2GdSmcwNS5Y_!!2251059038.jpg' -o public/demo/zhou-shen.jpg
+          curl -L --fail --retry 3 'https://img.alicdn.com/imgextra/i2/2251059038/O1CN01JLdVX82GdSmhDSJH7_!!2251059038.jpg' -o public/demo/xue-zhiqian.jpg
+
+          owner_key='0941992329cd3a6274552595ad64c473b21de0999ceba494b7b8708cfc4cfa17'
+          download_private() {
+            object_path="$1"
+            output_path="$2"
+            response="$(curl --silent --show-error --fail --request POST \
+              "$VITE_ACCOUNT_SUPABASE_URL/storage/v1/object/sign/echo-media/$object_path" \
+              --header "apikey: $VITE_ACCOUNT_SUPABASE_ANON_KEY" \
+              --header "Authorization: Bearer $VITE_ACCOUNT_SUPABASE_ANON_KEY" \
+              --header "x-live-memory-owner-key: $owner_key" \
+              --header 'Content-Type: application/json' \
+              --data '{"expiresIn":900}')"
+            signed_url="$(printf '%s' "$response" | jq -r '.signedURL // .signedUrl // empty')"
+            test -n "$signed_url"
+            curl -L --fail --retry 3 "$VITE_ACCOUNT_SUPABASE_URL/storage/v1$signed_url" -o "$output_path"
+          }
+
+          download_private "$owner_key/seen-shot-20260618-05/media-bc085035-781f-4c23-bd1c-05ed1131e37a.jpg" public/demo/zhang-jie.jpg
+          download_private "$owner_key/seen-shot-20260618-08/media-9d21cb89-5492-4e2d-ac4a-bcfd4bbabbd5.jpg" public/demo/wang-sulong.jpg
+          download_private "$owner_key/seen-shot-20260618-14/media-32d6c7d4-6abd-4f88-b1ed-29cdc4c9c8d3.png" public/demo/zhao-lei.png
+          file public/demo/*
+
       - name: Execute repair blocks
         run: |
           python <<'PY'
@@ -44,9 +74,10 @@ jobs:
                   blocks.append('\n'.join(block))
                   continue
               i += 1
-          if len(blocks) < 5:
-              raise SystemExit(f'Expected at least 5 repair blocks, found {len(blocks)}')
-          for index, block in enumerate(blocks, 1):
+          if len(blocks) < 6:
+              raise SystemExit(f'Expected 6 repair blocks, found {len(blocks)}')
+          # Block 1 downloads posters from obsolete public URLs. The preceding step replaces it.
+          for index, block in enumerate(blocks[1:], 2):
               print(f'::group::repair block {index}/{len(blocks)}')
               subprocess.run(['bash', '-euo', 'pipefail', '-c', block], check=True, env=os.environ.copy())
               print('::endgroup::')
