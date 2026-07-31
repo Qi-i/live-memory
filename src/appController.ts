@@ -13,6 +13,7 @@ import {
 } from "./storage";
 import {
   autoSyncAll,
+  friendlySupabaseErrorMessage,
   hasAccountCloudConfig,
   hasPersonalCloudConnection,
   hasSupabaseConfig,
@@ -21,12 +22,14 @@ import {
   recordPageView,
   refreshSignedMediaUrls,
   saveUserProfileBinding,
+  syncAfterLogin,
 } from "./supabase";
 import type { SyncConflict } from "./supabase";
 import { useAccess } from "./access";
 import type { AppRoute } from "./experience";
 
 const MEDIA_REFRESH_INTERVAL = 6 * 60 * 60 * 1000;
+const MEDIA_REFRESH_EVENT = "live-memory:cloud-media-refresh";
 
 function recordFingerprint(records: EventRecord[]) {
   return records.map((record) => `${record.id}:${record.updatedAt}:${record.deletedAt || ""}`).join("|");
@@ -36,10 +39,14 @@ function mediaFingerprint(records: EventRecord[]) {
   return records.flatMap((record) => record.media.map((asset) => `${asset.id}:${asset.src}:${asset.storagePath || ""}`)).join("|");
 }
 
+function mediaPathFingerprint(records: EventRecord[]) {
+  return records.flatMap((record) => record.media.filter((asset) => asset.storagePath).map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`)).join("|");
+}
+
 export function useAppController() {
   const access = useAccess();
   const isGuest = access.mode === "guest";
-  const [records, setRecords] = useState<EventRecord[]>([]);
+  const [records, setRecordsState] = useState<EventRecord[]>([]);
   const [settings, setSettings] = useState<AppSettings>(defaultSettings);
   const [route, setRoute] = useState<AppRoute>("archive");
   const [selected, setSelected] = useState<EventRecord | null>(null);
@@ -53,24 +60,61 @@ export function useAppController() {
   const initialized = useRef(false);
   const lastSyncFingerprint = useRef("");
   const toastTimer = useRef<number | null>(null);
+  const recordsRef = useRef<EventRecord[]>([]);
+  const mediaRefreshInFlight = useRef(false);
+  const lastMediaRefreshAt = useRef(0);
+
+  function setRecords(next: EventRecord[] | ((current: EventRecord[]) => EventRecord[])) {
+    setRecordsState((current) => {
+      const resolved = typeof next === "function" ? next(current) : next;
+      recordsRef.current = resolved;
+      return resolved;
+    });
+  }
 
   useEffect(() => {
     let active = true;
+    initialized.current = false;
     Promise.all([loadRecordsWithMigration(), Promise.resolve(readSettings())])
-      .then(([loadedRecords, loadedSettings]) => {
+      .then(async ([loadedRecords, loadedSettings]) => {
+        let nextRecords = loadedRecords;
+        let nextSettings = loadedSettings;
+        if (!isGuest && access.user) {
+          try {
+            const initialSync = await syncAfterLogin({ ...loadedSettings, onboardingComplete: true }, loadedRecords);
+            nextRecords = initialSync.records;
+            nextSettings = writeSettings({ ...initialSync.settings, onboardingComplete: true });
+            await replaceAllRecords(nextRecords);
+          } catch {
+            nextSettings = writeSettings({ ...loadedSettings, onboardingComplete: true });
+          }
+        }
         if (!active) return;
-        setRecords(loadedRecords);
-        setSettings(loadedSettings);
+        recordsRef.current = nextRecords;
+        setRecordsState(nextRecords);
+        setSettings(nextSettings);
+        initialized.current = true;
+      })
+      .catch((error) => {
+        if (!active) return;
+        setToast(friendlySupabaseErrorMessage(error, "本地数据加载失败"));
         initialized.current = true;
       });
     return () => {
       active = false;
     };
-  }, [access.mode]);
+  }, [access.mode, access.user, isGuest]);
 
-  const activeRecords = useMemo(() => records.filter((record) => !record.deletedAt), [records]);
-  const trashRecords = useMemo(() => records.filter((record) => Boolean(record.deletedAt)), [records]);
-  const health = useMemo(() => storageHealth(records, settings), [records, settings]);
+  const records = recordsRef.current.length === 0 && recordsRef.current !== recordsRef.current ? [] : undefined;
+  void records;
+
+  const currentRecords = useMemo(() => recordsRef.current, [recordsRef.current]);
+  void currentRecords;
+
+  const activeRecords = useMemo(() => recordsRef.current.filter((record) => !record.deletedAt), [recordsRef.current]);
+  const trashRecords = useMemo(() => recordsRef.current.filter((record) => Boolean(record.deletedAt)), [recordsRef.current]);
+  const health = useMemo(() => storageHealth(recordsRef.current, settings), [recordsRef.current, settings]);
+  const cloudMediaPaths = useMemo(() => mediaPathFingerprint(recordsRef.current), [recordsRef.current]);
 
   function flash(message: string) {
     if (!message) return;
@@ -84,14 +128,15 @@ export function useAppController() {
   }, []);
 
   useEffect(() => {
-    if (!initialized.current || isGuest || !access.user || editing || syncing || !settings.onboardingComplete || records.length === 0) return;
+    const snapshot = recordsRef.current;
+    if (!initialized.current || isGuest || !access.user || editing || syncing || snapshot.length === 0) return;
     if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
-    const fingerprint = recordFingerprint(records);
+    const fingerprint = recordFingerprint(snapshot);
     if (lastSyncFingerprint.current === fingerprint) return;
     const timer = window.setTimeout(() => {
       lastSyncFingerprint.current = fingerprint;
       setSyncing(true);
-      autoSyncAll(settings, records)
+      autoSyncAll(settings, recordsRef.current)
         .then(async (result) => {
           setSyncConflicts(result.conflicts);
           const nextFingerprint = recordFingerprint(result.records);
@@ -104,39 +149,54 @@ export function useAppController() {
         })
         .catch((error) => {
           lastSyncFingerprint.current = "";
-          flash(error instanceof Error ? error.message : "云同步暂时不可用");
+          flash(friendlySupabaseErrorMessage(error, "云同步暂时不可用"));
         })
         .finally(() => setSyncing(false));
     }, 900);
     return () => window.clearTimeout(timer);
-  }, [access.user, editing, isGuest, records, settings, syncing]);
+  }, [access.user, editing, isGuest, settings, syncing, activeRecords.length, trashRecords.length]);
 
   useEffect(() => {
-    if (isGuest || !access.user || !hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia || records.length === 0) return;
+    if (isGuest || !access.user || !hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia || !cloudMediaPaths) return;
     let cancelled = false;
-    async function refresh() {
-      const before = mediaFingerprint(records);
+
+    async function refresh(force = false) {
+      if (mediaRefreshInFlight.current) return;
+      if (!force && lastMediaRefreshAt.current && Date.now() - lastMediaRefreshAt.current < MEDIA_REFRESH_INTERVAL) return;
+      mediaRefreshInFlight.current = true;
+      const snapshot = recordsRef.current;
+      const before = mediaFingerprint(snapshot);
       try {
-        const next = await refreshSignedMediaUrls(settings, records);
-        if (cancelled || mediaFingerprint(next) === before) return;
-        await replaceAllRecords(next);
-        if (!cancelled) setRecords(next);
-      } catch {
-        // Media refresh is non-fatal; explicit refresh remains available in settings.
+        const next = await refreshSignedMediaUrls(settings, snapshot);
+        if (cancelled) return;
+        lastMediaRefreshAt.current = Date.now();
+        if (mediaFingerprint(next) !== before) {
+          await replaceAllRecords(next);
+          if (!cancelled) setRecords(next);
+        }
+      } catch (error) {
+        if (force && !cancelled) flash(friendlySupabaseErrorMessage(error, "云端图片刷新失败"));
+      } finally {
+        mediaRefreshInFlight.current = false;
       }
     }
-    void refresh();
-    const interval = window.setInterval(refresh, MEDIA_REFRESH_INTERVAL);
-    const onVisible = () => {
-      if (document.visibilityState === "visible") void refresh();
-    };
+
+    void refresh(true);
+    const interval = window.setInterval(() => void refresh(false), MEDIA_REFRESH_INTERVAL);
+    const onVisible = () => { if (document.visibilityState === "visible") void refresh(false); };
+    const onOnline = () => void refresh(true);
+    const onMediaError = () => void refresh(true);
     document.addEventListener("visibilitychange", onVisible);
+    window.addEventListener("online", onOnline);
+    window.addEventListener(MEDIA_REFRESH_EVENT, onMediaError);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
       document.removeEventListener("visibilitychange", onVisible);
+      window.removeEventListener("online", onOnline);
+      window.removeEventListener(MEDIA_REFRESH_EVENT, onMediaError);
     };
-  }, [access.user, isGuest, records.length, settings.supabase.anonKey, settings.supabase.mediaBucket, settings.supabase.ownerKey, settings.supabase.syncMedia, settings.supabase.url]);
+  }, [access.user, cloudMediaPaths, isGuest, settings.supabase.anonKey, settings.supabase.mediaBucket, settings.supabase.ownerKey, settings.supabase.syncMedia, settings.supabase.url]);
 
   useEffect(() => {
     if (isGuest || !access.user || !hasAccountCloudConfig(settings)) return;
@@ -198,7 +258,7 @@ export function useAppController() {
     isGuest,
     route,
     setRoute,
-    records,
+    records: recordsRef.current,
     setRecords,
     activeRecords,
     trashRecords,
