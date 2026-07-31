@@ -25,11 +25,7 @@ async function addRecord({ title, artist, city, venue, date, price, colors }) {
   await editor.getByRole("textbox", { name: "城市", exact: true }).fill(city);
   await editor.getByRole("textbox", { name: "场馆", exact: true }).fill(venue);
   await editor.getByRole("spinbutton", { name: "票价", exact: true }).fill(String(price));
-  await editor.locator(".media-upload-grid-v2 label").first().locator("input[type=file]").setInputFiles({
-    name: `${title}.svg`,
-    mimeType: "image/svg+xml",
-    buffer: svgPoster(title, colors[0], colors[1]),
-  });
+  await editor.locator(".media-upload-grid-v2 label").first().locator("input[type=file]").setInputFiles({ name: `${title}.svg`, mimeType: "image/svg+xml", buffer: svgPoster(title, colors[0], colors[1]) });
   await editor.getByRole("button", { name: "保存记录", exact: true }).click();
   await page.locator(".record-detail-v2").waitFor({ state: "visible" });
   await page.locator(".record-detail-v2 .overlay-header-v2 > button").first().click();
@@ -58,7 +54,9 @@ try {
   await page.screenshot({ path: `${outputDir}/03-archive-showcase-desktop.png`, fullPage: true });
   await page.getByRole("button", { name: "分享画布", exact: true }).click();
   await page.locator(".share-canvas").waitFor({ state: "visible" });
+  await page.waitForTimeout(2600);
   await page.screenshot({ path: `${outputDir}/04-share-landscape.png`, fullPage: true });
+  await page.locator(".share-floating-controls").hover();
   await page.getByRole("button", { name: "退出分享", exact: true }).click();
 
   await page.setViewportSize({ width: 390, height: 844 });
