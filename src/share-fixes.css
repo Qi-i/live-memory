@@ -1,0 +1,80 @@
+.experience-shell.is-share-mode .toast {
+  display: none;
+}
+
+.share-poster-wall figure,
+.share-poster-wall .share-poster-1,
+.share-poster-wall .share-poster-2,
+.share-poster-wall .share-poster-3,
+.share-poster-wall .share-poster-4,
+.share-poster-wall .share-poster-5,
+.share-poster-wall .share-poster-6 {
+  grid-column: span 4;
+  grid-row: span 4;
+}
+
+.share-canvas-landscape .share-poster-wall,
+.share-canvas-square .share-poster-wall {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+}
+
+.share-canvas-portrait .share-poster-wall {
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  grid-template-rows: repeat(16, minmax(0, 1fr));
+}
+
+.share-canvas-portrait .share-poster-wall figure,
+.share-canvas-portrait .share-poster-wall .share-poster-1,
+.share-canvas-portrait .share-poster-wall .share-poster-2,
+.share-canvas-portrait .share-poster-wall .share-poster-3,
+.share-canvas-portrait .share-poster-wall .share-poster-4,
+.share-canvas-portrait .share-poster-wall .share-poster-5,
+.share-canvas-portrait .share-poster-wall .share-poster-6,
+.share-canvas-portrait .share-poster-wall .share-poster-7,
+.share-canvas-portrait .share-poster-wall .share-poster-8 {
+  grid-column: span 6;
+  grid-row: span 4;
+}
+
+.share-floating-controls {
+  animation: share-controls-autohide 2.2s ease forwards;
+}
+
+.share-floating-controls:hover,
+.share-floating-controls:focus-within {
+  opacity: 1;
+  animation: none;
+}
+
+@keyframes share-controls-autohide {
+  0%, 72% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+}
+
+@media (max-width: 720px) {
+  .share-canvas-landscape .share-poster-wall,
+  .share-canvas-square .share-poster-wall {
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-template-rows: repeat(12, minmax(0, 1fr));
+  }
+
+  .share-canvas-landscape .share-poster-wall figure,
+  .share-canvas-square .share-poster-wall figure {
+    grid-column: span 6;
+    grid-row: span 4;
+  }
+}
+
+@media print {
+  .share-floating-controls,
+  .experience-shell.is-share-mode .toast {
+    display: none !important;
+  }
+}
