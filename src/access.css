@@ -1,0 +1,376 @@
+.access-loading,
+.access-shell {
+  min-height: 100vh;
+}
+
+.access-loading {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  color: #111318;
+  background:
+    linear-gradient(110deg, rgba(223, 255, 79, 0.22) 0 22%, transparent 22% 64%, rgba(107, 189, 255, 0.17) 64%),
+    #f4f2ea;
+  font-weight: 900;
+}
+
+.access-loading svg {
+  width: 30px;
+  height: 30px;
+}
+
+.access-shell {
+  display: grid;
+  grid-template-columns: minmax(330px, 0.9fr) minmax(420px, 1.1fr);
+  gap: 18px;
+  padding: 18px;
+  color: #111318;
+  background:
+    linear-gradient(110deg, rgba(223, 255, 79, 0.22) 0 19%, transparent 19% 62%, rgba(107, 189, 255, 0.16) 62% 76%, transparent 76%),
+    linear-gradient(rgba(17, 19, 24, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(17, 19, 24, 0.035) 1px, transparent 1px),
+    #f4f2ea;
+  background-size: auto, 34px 34px, 34px 34px, auto;
+}
+
+.access-brand-panel,
+.access-card {
+  border: 1px solid rgba(17, 19, 24, 0.11);
+  border-radius: 12px;
+  box-shadow: 0 18px 45px rgba(24, 28, 34, 0.12);
+}
+
+.access-brand-panel {
+  position: relative;
+  display: flex;
+  min-height: calc(100vh - 36px);
+  flex-direction: column;
+  justify-content: flex-end;
+  overflow: hidden;
+  padding: clamp(32px, 6vw, 76px);
+  color: #fffdf5;
+  background:
+    radial-gradient(circle at 76% 18%, rgba(103, 220, 200, 0.35), transparent 28%),
+    linear-gradient(145deg, #0b1013, #1a292e 68%, #111318);
+}
+
+.access-brand-panel::before {
+  content: "LIVE MEMORY";
+  position: absolute;
+  top: 28px;
+  left: 32px;
+  color: rgba(255, 253, 245, 0.08);
+  font-size: clamp(54px, 8vw, 112px);
+  font-weight: 950;
+  line-height: 0.88;
+  writing-mode: vertical-rl;
+}
+
+.access-logo {
+  position: absolute;
+  top: 38px;
+  right: 38px;
+  display: grid;
+  width: 76px;
+  height: 76px;
+  place-items: center;
+  border-radius: 12px;
+  color: #111318;
+  background: linear-gradient(135deg, #dfff4f, #67dcc8 50%, #6bbdff 72%, #ff6d96);
+  box-shadow: 7px 7px 0 rgba(255, 255, 255, 0.12);
+  font-size: 36px;
+  font-weight: 950;
+}
+
+.access-brand-panel > p {
+  margin: 0 0 8px;
+  color: #dfff4f;
+  font-size: 13px;
+  font-weight: 950;
+  letter-spacing: 0.18em;
+}
+
+.access-brand-panel h1 {
+  margin: 0;
+  font-size: clamp(58px, 8vw, 112px);
+  line-height: 0.92;
+}
+
+.access-brand-panel > strong {
+  display: block;
+  max-width: 620px;
+  margin-top: 20px;
+  color: rgba(255, 253, 245, 0.78);
+  font-size: clamp(17px, 2vw, 24px);
+  line-height: 1.5;
+}
+
+.access-points {
+  display: grid;
+  gap: 9px;
+  max-width: 620px;
+  margin-top: 30px;
+}
+
+.access-points span {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  padding: 9px 13px;
+  border: 1px solid rgba(255, 253, 245, 0.12);
+  border-radius: 9px;
+  background: rgba(255, 253, 245, 0.07);
+  color: rgba(255, 253, 245, 0.82);
+  font-weight: 850;
+}
+
+.access-card {
+  align-self: center;
+  width: min(620px, 100%);
+  justify-self: center;
+  padding: clamp(26px, 5vw, 48px);
+  background: rgba(255, 253, 245, 0.95);
+  backdrop-filter: blur(22px);
+}
+
+.access-card header > span {
+  display: block;
+  margin-bottom: 8px;
+  color: #108879;
+  font-size: 12px;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.access-card h2 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 1.05;
+}
+
+.access-card header p {
+  margin: 12px 0 24px;
+  color: #6f7882;
+  font-weight: 850;
+  line-height: 1.6;
+}
+
+.access-card form {
+  display: grid;
+  gap: 11px;
+}
+
+.access-card form label {
+  display: grid;
+  gap: 7px;
+  padding: 11px 12px;
+  border: 1px solid rgba(17, 19, 24, 0.11);
+  border-radius: 9px;
+  background: #fffdf5;
+}
+
+.access-card form label > span {
+  color: #6f7882;
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.access-card input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  color: #111318;
+  background: transparent;
+  font: inherit;
+  font-weight: 850;
+}
+
+.access-primary,
+.access-github,
+.access-guest button,
+.access-switch button {
+  border: 1px solid rgba(17, 19, 24, 0.12);
+  font: inherit;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.access-primary,
+.access-github {
+  display: inline-flex;
+  width: 100%;
+  min-height: 48px;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border-radius: 9px;
+}
+
+.access-primary {
+  margin-top: 4px;
+  color: #111318;
+  background: linear-gradient(135deg, #dfff4f, #f3ff9e);
+  box-shadow: 4px 4px 0 rgba(17, 19, 24, 0.16);
+}
+
+.access-github {
+  margin-top: 10px;
+  color: #fffdf5;
+  background: #111318;
+}
+
+.access-primary svg,
+.access-github svg,
+.access-guest svg {
+  width: 19px;
+  height: 19px;
+}
+
+.access-primary:disabled,
+.access-github:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.access-error {
+  margin: 0;
+  padding: 9px 11px;
+  border-radius: 8px;
+  color: #7c2437;
+  background: rgba(255, 109, 150, 0.14);
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.access-switch {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0 18px;
+}
+
+.access-switch button {
+  border: 0;
+  color: #0b6960;
+  background: transparent;
+}
+
+.access-guest {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  padding: 14px;
+  border: 1px dashed rgba(17, 19, 24, 0.18);
+  border-radius: 10px;
+  background: rgba(103, 220, 200, 0.11);
+}
+
+.access-guest > div {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.access-guest span {
+  display: grid;
+  gap: 3px;
+}
+
+.access-guest small {
+  color: #6f7882;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.45;
+}
+
+.access-guest button {
+  min-height: 38px;
+  padding: 0 13px;
+  border-radius: 8px;
+  color: #111318;
+  background: #fffdf5;
+}
+
+.guest-mode-panel {
+  display: grid;
+  gap: 16px;
+  padding: 24px;
+  border: 1px solid rgba(17, 19, 24, 0.11);
+  border-radius: 10px;
+  background: rgba(255, 253, 245, 0.94);
+  box-shadow: 0 10px 26px rgba(24, 28, 34, 0.1);
+}
+
+.guest-mode-panel h2,
+.guest-mode-panel p {
+  margin: 0;
+}
+
+.guest-mode-panel p {
+  max-width: 720px;
+  color: #6f7882;
+  font-weight: 850;
+  line-height: 1.65;
+}
+
+@media (max-width: 900px) {
+  .access-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .access-brand-panel {
+    min-height: 360px;
+  }
+
+  .access-card {
+    width: 100%;
+  }
+}
+
+@media (max-width: 620px) {
+  .access-shell {
+    gap: 10px;
+    padding: 10px;
+  }
+
+  .access-brand-panel,
+  .access-card {
+    border-radius: 10px;
+  }
+
+  .access-brand-panel {
+    min-height: 300px;
+    padding: 26px;
+  }
+
+  .access-brand-panel::before {
+    display: none;
+  }
+
+  .access-logo {
+    top: 22px;
+    right: 22px;
+    width: 58px;
+    height: 58px;
+    font-size: 28px;
+  }
+
+  .access-brand-panel h1 {
+    font-size: 58px;
+  }
+
+  .access-points {
+    display: none;
+  }
+
+  .access-card {
+    padding: 22px;
+  }
+
+  .access-guest {
+    grid-template-columns: 1fr;
+  }
+}
