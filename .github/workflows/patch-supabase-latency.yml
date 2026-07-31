@@ -1,0 +1,306 @@
+name: Patch Supabase latency
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: main
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Apply connection and auto-sync fixes
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          def sub_once(text, pattern, replacement, label):
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"Unable to patch {label}: matched {count} times")
+              return updated
+
+          supabase_path = Path("src/supabase.ts")
+          supabase = supabase_path.read_text(encoding="utf-8")
+
+          supabase = sub_once(
+              supabase,
+              r'export function makeSupabaseClient\(settings: AppSettings\) \{.*?\n\}\n\nlet cachedAccountClient',
+              '''const PERSONAL_CLOUD_TIMEOUT_MS = 8000;
+          const ACCOUNT_SYNC_TIMEOUT_MS = 5000;
+
+          function withTimeout<T>(task: PromiseLike<T>, timeoutMs: number, message: string): Promise<T> {
+            return new Promise<T>((resolve, reject) => {
+              const timer = window.setTimeout(() => reject(new Error(message)), timeoutMs);
+              Promise.resolve(task).then(
+                (value) => {
+                  window.clearTimeout(timer);
+                  resolve(value);
+                },
+                (error) => {
+                  window.clearTimeout(timer);
+                  reject(error);
+                },
+              );
+            });
+          }
+
+          let cachedPersonalClient: { cacheKey: string; client: SupabaseClient<LooseDatabase> } | null = null;
+
+          export function makeSupabaseClient(settings: AppSettings) {
+            if (!hasSupabaseConfig(settings)) throw new Error("请先填写 Supabase 项目地址和公开连接密钥");
+            const url = settings.supabase.url.trim().replace(/\\\/+$/, "");
+            const anonKey = settings.supabase.anonKey.trim();
+            const ownerKey = settings.supabase.ownerKey?.trim() || "";
+            const cacheKey = `${url}|${anonKey}|${ownerKey}`;
+            if (cachedPersonalClient?.cacheKey === cacheKey) return cachedPersonalClient.client;
+
+            const headers = ownerKey ? { [ownerHeader]: ownerKey } : undefined;
+            const client = createClient<LooseDatabase>(url, anonKey, {
+              auth: {
+                persistSession: false,
+                autoRefreshToken: false,
+                detectSessionInUrl: false,
+              },
+              global: headers ? { headers } : undefined,
+            });
+            cachedPersonalClient = { cacheKey, client };
+            return client;
+          }
+
+          let cachedAccountClient''',
+              "personal client cache",
+          )
+
+          supabase = supabase.replace(
+              '''  const existing = await client.auth.getUser();
+            if (existing.data.user) return { message: "账号已登录", isNewAccount: false };''',
+              '''  const existing = await client.auth.getSession();
+            if (existing.data.session?.user) return { message: "账号已登录", isNewAccount: false };''',
+              1,
+          )
+
+          supabase = sub_once(
+              supabase,
+              r'async function connectStorageWithOwnerKey\(settings: AppSettings, ownerKey: string\) \{.*?\n\}\n\nexport async function deriveStorageOwnerKey',
+              '''async function connectStorageWithOwnerKey(settings: AppSettings, ownerKey: string) {
+            const next = { ...settings, supabase: { ...settings.supabase, ownerKey } };
+            const client = makeSupabaseClient(next);
+            const probe = await withTimeout(
+              client
+                .from("echo_passkey_records")
+                .select("id")
+                .eq("owner_key", ownerKey)
+                .limit(1),
+              PERSONAL_CLOUD_TIMEOUT_MS,
+              "连接个人 Supabase 超时。项目可能处于休眠、网络不可达，或项目区域响应较慢。",
+            );
+            if (probe.error) throwPersonalCloudError(probe.error);
+            return { settings: next, message: "个人云端已连接" };
+          }
+
+          export async function deriveStorageOwnerKey''',
+              "storage connection probe",
+          )
+
+          supabase = sub_once(
+              supabase,
+              r'export async function currentUser\(settings: AppSettings\) \{.*?\n\}\n\n// ── Admin dashboard',
+              '''export async function currentUser(settings: AppSettings) {
+            const client = makeAccountClient(settings);
+            const { data, error } = await client.auth.getSession();
+            if (error && isAuthSessionMissing(error)) return null;
+            if (error) throw error;
+            return data.session?.user || null;
+          }
+
+          // ── Admin dashboard''',
+              "current user session lookup",
+          )
+
+          supabase = sub_once(
+              supabase,
+              r'export async function autoSyncAll\(settings: AppSettings, localRecords: EventRecord\[\]\): Promise<AutoSyncResult> \{.*?\n\}\n\nasync function syncAccountTextBackup',
+              '''export async function autoSyncAll(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
+            const allConflicts: SyncConflict[] = [];
+            const messages: string[] = [];
+            let merged = [...localRecords];
+            let personalFailure: unknown = null;
+
+            // Personal Supabase is the selected full-data store, so never make it wait
+            // behind the optional Live Memory account backup.
+            if (hasPersonalCloudConnection(settings)) {
+              try {
+                const personalResult = await withTimeout(
+                  syncPersonalSupabase(settings, merged),
+                  PERSONAL_CLOUD_TIMEOUT_MS,
+                  "个人 Supabase 响应超时，已停止本次等待",
+                );
+                merged = personalResult.records;
+                allConflicts.push(...personalResult.conflicts);
+                if (personalResult.message) messages.push(personalResult.message);
+              } catch (error) {
+                personalFailure = error;
+              }
+            }
+
+            // Account text backup is secondary. A missing local account session now fails
+            // immediately instead of blocking personal Supabase synchronization.
+            if (hasAccountCloudConfig(settings)) {
+              try {
+                const accountResult = await withTimeout(
+                  syncAccountTextBackup(settings, merged),
+                  ACCOUNT_SYNC_TIMEOUT_MS,
+                  "账号文字备份响应超时，已跳过本次备份",
+                );
+                merged = accountResult.records;
+                allConflicts.push(...accountResult.conflicts);
+                if (accountResult.message) messages.push(accountResult.message);
+              } catch (error) {
+                if (!isAuthSessionMissing(error) && /超时/.test(String((error as { message?: string }).message || ""))) {
+                  messages.push("账号文字备份响应超时");
+                }
+              }
+            }
+
+            if (personalFailure) throw personalFailure;
+            return {
+              records: merged,
+              conflicts: allConflicts,
+              message: messages.join("，"),
+            };
+          }
+
+          async function syncAccountTextBackup''',
+              "auto sync ordering and timeout",
+          )
+
+          supabase = sub_once(
+              supabase,
+              r'async function requireUser\(client: SupabaseClient, message = "请先登录账号"\) \{.*?\n\}\n\nexport function friendlySupabaseErrorMessage',
+              '''async function requireUser(client: SupabaseClient, message = "请先登录账号") {
+            // getSession reads the persisted session locally and returns immediately when the
+            // account is logged out. RLS still validates the JWT on every database request.
+            const { data, error } = await client.auth.getSession();
+            if (error) {
+              if (isAuthSessionMissing(error)) throw new Error(message);
+              throw error;
+            }
+            if (!data.session?.user) throw new Error(message);
+            return data.session.user;
+          }
+
+          export function friendlySupabaseErrorMessage''',
+              "local session check",
+          )
+
+          supabase_path.write_text(supabase, encoding="utf-8")
+
+          app_path = Path("src/App.tsx")
+          app = app_path.read_text(encoding="utf-8")
+          app = app.replace(
+              '''  const [syncing, setSyncing] = useState(false);
+            const [mediaRefreshTick, setMediaRefreshTick] = useState(0);''',
+              '''  const [syncing, setSyncing] = useState(false);
+            const [syncRetryTick, setSyncRetryTick] = useState(0);
+            const [mediaRefreshTick, setMediaRefreshTick] = useState(0);''',
+              1,
+          )
+          app = app.replace(
+              '''  const lastSyncFingerprint = useRef("");
+            const editingRef = useRef<EventRecord | null>(null);''',
+              '''  const lastSyncFingerprint = useRef("");
+            const syncRetryAttempts = useRef(0);
+            const editingRef = useRef<EventRecord | null>(null);''',
+              1,
+          )
+
+          app = sub_once(
+              app,
+              r'  useEffect\(\(\) => \{\n    if \(!settings\.onboardingComplete\) return;.*?\n  \}, \[records, settings\]\);',
+              '''  useEffect(() => {
+            if (!settings.onboardingComplete) return;
+            if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
+            if (records.length === 0) return;
+            if (editingRef.current) return;
+            if (syncing) return;
+
+            const fingerprint = records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
+            if (fingerprint === lastSyncFingerprint.current) return;
+
+            let retryTimer: number | null = null;
+            const timer = window.setTimeout(() => {
+              lastSyncFingerprint.current = fingerprint;
+              setSyncing(true);
+              autoSyncAll(settings, records)
+                .then((result) => {
+                  syncRetryAttempts.current = 0;
+                  if (result.conflicts.length > 0) {
+                    setSyncConflicts(result.conflicts);
+                  }
+                  const newFingerprint = result.records.map((r) => `${r.id}:${r.updatedAt}`).join("|");
+                  if (newFingerprint !== fingerprint) {
+                    lastSyncFingerprint.current = newFingerprint;
+                    replaceAllRecords(result.records).then(() => setRecords(result.records));
+                  }
+                  if (result.message) flash(result.message);
+                })
+                .catch((error) => {
+                  lastSyncFingerprint.current = "";
+                  const attempt = syncRetryAttempts.current;
+                  const delay = [3000, 10000][attempt];
+                  syncRetryAttempts.current = attempt + 1;
+                  if (delay !== undefined) {
+                    retryTimer = window.setTimeout(() => setSyncRetryTick((value) => value + 1), delay);
+                    return;
+                  }
+                  syncRetryAttempts.current = 0;
+                  flash(friendlySupabaseErrorMessage(error, "云同步暂时不可用"));
+                })
+                .finally(() => setSyncing(false));
+            }, 900);
+            return () => {
+              window.clearTimeout(timer);
+              if (retryTimer !== null) window.clearTimeout(retryTimer);
+            };
+          }, [records, settings, syncRetryTick]);''',
+              "App auto sync retry",
+          )
+
+          app_path.write_text(app, encoding="utf-8")
+          PY
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check and build
+        run: npm run check
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Commit verified fix and remove one-time workflow
+        shell: bash
+        run: |
+          rm -f .github/workflows/patch-supabase-latency.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/supabase.ts .github/workflows/patch-supabase-latency.yml
+          git commit -m "Fix slow and stuck Supabase synchronization"
+          git push origin main
