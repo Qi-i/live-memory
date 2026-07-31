@@ -21,16 +21,17 @@ try {
 
   await page.getByRole("button", { name: "进入示例", exact: true }).click();
   await page.locator(".experience-shell").waitFor({ state: "visible", timeout: 15000 });
-  await page.locator(".poster-card-v2, .poster-card").first().waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".archive-poster-card").first().waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(800);
   await page.screenshot({ path: `${outputDir}/02-archive-poster-desktop.png`, fullPage: true });
 
   await page.getByTitle("画报").click();
+  await page.locator(".showcase-card").first().waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${outputDir}/03-archive-showcase-desktop.png`, fullPage: true });
 
   await page.getByRole("button", { name: "生成分享图", exact: true }).click();
-  await page.locator(".share-canvas").waitFor({ state: "visible" });
+  await page.locator(".share-canvas").waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(2600);
   await page.screenshot({ path: `${outputDir}/04-share-landscape.png`, fullPage: true });
   await page.locator(".share-floating-controls").hover();
@@ -38,6 +39,7 @@ try {
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByTitle("海报").click();
+  await page.locator(".archive-poster-card").first().waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${outputDir}/05-archive-mobile.png`, fullPage: true });
   await page.locator(".experience-mobile-nav").getByRole("button", { name: "设置", exact: true }).click();
