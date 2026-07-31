@@ -60,6 +60,7 @@ jobs:
         run: |
           python scripts/repair_account_home.py
           sed -i 's/请先登录 Live Memory 账号/请先登录现场记账号/g' src/supabase.ts
+          sed -i 's/let stopWatching = () => undefined;/let stopWatching: () => void = () => undefined;/' src/access.tsx
 
       - name: Verify application
         run: |
