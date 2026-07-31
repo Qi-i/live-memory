@@ -1,0 +1,196 @@
+name: Orchestrate round one refactor
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: refactor/experience-system-v3
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply round-one architecture
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          app_path = Path('src/App.tsx')
+          app = app_path.read_text(encoding='utf-8')
+
+          def replace_once(text, old, new, label):
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return text.replace(old, new, 1)
+
+          def sub_once(text, pattern, replacement, label):
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f'{label}: expected 1 match, got {count}')
+              return updated
+
+          app = replace_once(app, 'import { withoutLocalMedia } from "./syncModel";\n', 'import { withoutLocalMedia } from "./syncModel";\nimport { useAccess } from "./access";\nimport { AppRoute, ExperienceShell, ThemeSettingsPanel } from "./experience";\n', 'experience imports')
+          app = replace_once(app, 'type Route = "archive" | "stats" | "settings" | "admin";', 'type Route = AppRoute;', 'route alias')
+          app = replace_once(app, 'export default function App() {\n  const [records, setRecords] = useState<EventRecord[]>([]);', 'export default function App() {\n  const { mode: accessMode, user: accountUser, leaveGuest, signOutAndReturn } = useAccess();\n  const isGuest = accessMode === "guest";\n  const [records, setRecords] = useState<EventRecord[]>([]);', 'access state')
+
+          old_start = '  const title = route === "archive" ? "档案" : route === "stats" ? "统计" : route === "admin" ? "管理" : "设置";\n\n  return (\n    <div className="app">'
+          start = app.find(old_start)
+          if start < 0:
+              raise SystemExit('shell start not found')
+          end_marker = '      {selected && (\n'
+          end = app.find(end_marker, start)
+          if end < 0:
+              raise SystemExit('shell end not found')
+
+          new_start = '''  const watchedCount = activeRecords.filter((record) => record.status === "watched").length;
+  const cityCount = new Set(activeRecords.map((record) => record.city).filter(Boolean)).size;
+  const accountSecondary = isGuest ? "临时本地" : `@${settings.account.username || "account"}`;
+  const syncLabel = isGuest
+    ? "本次访问"
+    : syncing
+      ? "同步中…"
+      : syncConflicts.length > 0
+        ? `${syncConflicts.length} 条冲突`
+        : storageLocationLabel(settings);
+
+  return (
+    <ExperienceShell
+      route={route}
+      onRouteChange={setRoute}
+      adminVisible={!isGuest && Boolean(accountUser) && isAdmin(settings)}
+      accountAvatar={<AccountAvatar settings={settings} />}
+      accountLabel={isGuest ? "访客" : accountLabel(settings)}
+      accountSecondary={accountSecondary}
+      accountStatus={<AccountChip settings={settings} syncing={syncing} conflictCount={syncConflicts.length} guest={isGuest} onClick={() => isGuest ? leaveGuest() : setRoute("settings")} />}
+      metrics={route === "archive" ? [
+        { value: activeRecords.length, label: "记录" },
+        { value: watchedCount, label: "已看" },
+        { value: cityCount, label: "城市" },
+      ] : []}
+      utilityActions={(
+        <>
+          <span className={`sync-pill${syncing ? " syncing" : ""}`}>
+            {syncing ? <Loader2 size={16} className="spin" /> : syncConflicts.length > 0 ? <AlertTriangle size={16} /> : <Cloud size={16} />}
+            {syncLabel}
+          </span>
+          {route === "archive" && (
+            <>
+              <label className="search">
+                <Search size={18} />
+                <input value={filters.query} onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))} placeholder="搜索艺人 / 城市 / 场馆 / 主题" />
+              </label>
+              <button className="button ghost" type="button" onClick={() => setImportOpen(true)}><Import size={18} />导入</button>
+              <button className="button primary" type="button" onClick={() => setEditing(blankRecord())}><Plus size={18} />新增</button>
+            </>
+          )}
+        </>
+      )}
+    >
+      {route === "archive" && (
+        <>
+          <section className="archive-intro">
+            <div className="archive-intro-copy">
+              <span>LIVE MEMORY ARCHIVE</span>
+              <h2>让每一次现场，都有清晰的位置。</h2>
+              <p>海报负责第一眼，票根保留细节，时间线连接记忆；筛选与视图只服务于当前档案，不再重复整页导航。</p>
+            </div>
+            <HeroPosterWall records={activeRecords} onOpen={setSelected} />
+          </section>
+          <FilterBar filters={filters} setFilters={setFilters} facets={facets} view={view} setView={setView} sort={sort} setSort={setSort} posterColumns={settings.posterColumns} setPosterColumns={updatePosterColumns} />
+          <CountBar count={filteredRecords.length} sort={sort} />
+          <ArchiveViewRenderer records={filteredRecords} view={view} posterColumns={settings.posterColumns} settings={settings} onOpen={setSelected} onZoom={setZoomMedia} onEdit={setEditing} />
+        </>
+      )}
+      {route === "stats" && <StatsView records={filteredRecords} allRecords={activeRecords} />}
+      {route === "settings" && isGuest && <GuestModeView onLogin={leaveGuest} />}
+      {route === "settings" && !isGuest && (
+        <>
+          <ThemeSettingsPanel />
+          <SettingsView
+            settings={settings}
+            onSave={updateSettings}
+            records={records}
+            health={health}
+            setRecords={setRecords}
+            flash={flash}
+            busy={busy}
+            setBusy={setBusy}
+            onSignOut={signOutAndReturn}
+            onRestore={restoreRecord}
+            onPermanentDelete={(record) => setConfirmAction({
+              title: "永久删除这条记录？",
+              message: `"${record.title}"的文字、票根和照片将无法恢复。`,
+              confirmLabel: "永久删除",
+              danger: true,
+              onConfirm: () => permanentlyDeleteRecord(record),
+            })}
+          />
+        </>
+      )}
+      {route === "admin" && !isGuest && Boolean(accountUser) && isAdmin(settings) && <AdminView settings={settings} />}
+
+'''
+          app = app[:start] + new_start + app[end:]
+          app = replace_once(app, '      {!settings.onboardingComplete && (', '      {!isGuest && !settings.onboardingComplete && (', 'guest onboarding guard')
+          app = replace_once(app, '    </div>\n  );\n}\n\nfunction AccountChip', '    </ExperienceShell>\n  );\n}\n\nfunction GuestModeView({ onLogin }: { onLogin: () => void }) {\n  return (\n    <section className="guest-mode-panel">\n      <span className="badge">访客临时模式</span>\n      <h2>本次访问不读取正式档案</h2>\n      <p>当前新增、编辑和导入的数据只存在于本次页面会话，不连接 Live Memory 账号或个人 Supabase。关闭标签页后临时数据会清空。</p>\n      <div className="button-row"><button className="button primary" type="button" onClick={onLogin}><ShieldCheck size={18} />返回账号登录</button></div>\n    </section>\n  );\n}\n\nfunction AccountChip', 'guest mode view')
+          app = sub_once(app, r'function AccountChip\(\{ settings, syncing, conflictCount, onClick \}: \{ settings: AppSettings; syncing: boolean; conflictCount: number; onClick: \(\) => void \}\) \{\n  const label = accountLabel\(settings\);\n  const baseLabel = settings\.storageMode === "supabase"\n    \? hasPersonalCloudConnection\(settings\) \? "云同步已连接" : "云端待连接"\n    : hasAccountCloudConfig\(settings\) \? "文字备份中" : "仅当前设备";\n  const statusLabel = syncing \? "同步中…" : conflictCount > 0 \? `\$\{conflictCount\} 条冲突` : baseLabel;', '''function AccountChip({ settings, syncing, conflictCount, guest, onClick }: { settings: AppSettings; syncing: boolean; conflictCount: number; guest?: boolean; onClick: () => void }) {
+  const label = guest ? "访客" : accountLabel(settings);
+  const baseLabel = guest
+    ? "临时本地数据"
+    : settings.storageMode === "supabase"
+      ? hasPersonalCloudConnection(settings) ? "云同步已连接" : "云端待连接"
+      : hasAccountCloudConfig(settings) ? "文字备份中" : "仅当前设备";
+  const statusLabel = guest ? baseLabel : syncing ? "同步中…" : conflictCount > 0 ? `${conflictCount} 条冲突` : baseLabel;''', 'account chip')
+          app = replace_once(app, '  setBusy,\n  onRestore,', '  setBusy,\n  onSignOut,\n  onRestore,', 'settings prop destructure')
+          app = replace_once(app, '  setBusy: (value: boolean) => void;\n  onRestore:', '  setBusy: (value: boolean) => void;\n  onSignOut: () => Promise<void>;\n  onRestore:', 'settings prop type')
+
+          old_exit = '<button className="button ghost" type="button" onClick={() => run("已退出账号", async () => { await signOut(draft); setUserLabel("未登录"); setAccountSignedIn(false); })}>退出</button>'
+          app = replace_once(app, old_exit, '<button className="button ghost" type="button" onClick={() => run("", onSignOut)}>退出账号</button>', 'account exit action')
+          app_path.write_text(app, encoding='utf-8')
+
+          supabase_path = Path('src/supabase.ts')
+          supabase = supabase_path.read_text(encoding='utf-8')
+          supabase = replace_once(supabase, 'export function hasAccountCloudConfig(settings?: AppSettings) {\n  void settings;\n  return Boolean(accountUrl && accountAnonKey);\n}', 'export function hasAccountCloudConfig(settings?: AppSettings) {\n  if (settings?.account.username === "guest") return false;\n  return Boolean(accountUrl && accountAnonKey);\n}', 'guest cloud guard')
+          supabase_path.write_text(supabase, encoding='utf-8')
+          PY
+      - run: npm ci
+      - name: Verify round one
+        run: npm run check
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Commit branch changes
+        shell: bash
+        run: |
+          rm -f .github/workflows/round1-shell-refactor.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/App.tsx src/supabase.ts .github/workflows/round1-shell-refactor.yml
+          git commit -m "Round 1: unify shell, account state and theme architecture"
+          git push origin HEAD:refactor/experience-system-v3
+      - name: Remove orchestrator from main
+        if: always()
+        shell: bash
+        run: |
+          git fetch origin main
+          git checkout main
+          rm -f .github/workflows/orchestrate-round1.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/orchestrate-round1.yml
+          git commit -m "Remove round-one refactor orchestrator" || true
+          git push origin main
