@@ -1,0 +1,64 @@
+name: One-time cloud media patch
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]' && contains(github.event.head_commit.message, 'Run one-time cloud media patch')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Check out patch branch
+        uses: actions/checkout@v5
+        with:
+          ref: fix/cloud-media-refresh-retry
+          path: target
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: target/package-lock.json
+
+      - name: Apply patch
+        working-directory: target
+        run: python scripts/patch-cloud-media-refresh.py
+
+      - name: Install dependencies
+        working-directory: target
+        run: npm ci
+
+      - name: Verify patch
+        working-directory: target
+        run: npm run check
+
+      - name: Commit verified patch to branch
+        working-directory: target
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/patch-cloud-media-refresh.yml scripts/patch-cloud-media-refresh.py
+          git add src/App.tsx
+          git commit -m "Fix cloud media URL refresh and retry"
+          git push origin HEAD:fix/cloud-media-refresh-retry
+
+      - name: Check out main for cleanup
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: cleanup
+
+      - name: Remove one-time workflow
+        working-directory: cleanup
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm .github/workflows/one-time-cloud-media-patch.yml
+          git commit -m "Remove one-time cloud media patch workflow"
+          git push origin HEAD:main
