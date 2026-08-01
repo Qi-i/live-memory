@@ -1,0 +1,39 @@
+name: Apply portrait banner migration
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.event.pull_request.head.ref == 'design/portrait-banner-mass-share'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: Qi-i/live-memory
+          ref: design/portrait-banner-mass-share
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply banner migration once
+        run: |
+          if grep -q 'archive-highlight-card-1 { top: 2%; left: 38%' src/archive.css; then
+            echo 'Portrait banner already applied.'
+            exit 0
+          fi
+          node scripts/apply-portrait-banner.mjs
+          npm run check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/archive.css
+          git commit -m "Preserve portrait posters in homepage banner"
+          git push origin HEAD:design/portrait-banner-mass-share
