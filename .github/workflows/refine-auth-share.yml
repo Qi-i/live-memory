@@ -23,7 +23,7 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - name: Apply refinements
+      - name: Apply verified refinements
         run: node scripts/refine-auth-share.mjs
       - run: npm ci
       - run: npm run check
