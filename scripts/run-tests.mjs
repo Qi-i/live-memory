@@ -96,6 +96,7 @@ try {
   const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
   const experienceCss = await readFile(new URL("../src/experience.css", import.meta.url), "utf8");
   const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
+  const shareStudioCss = await readFile(new URL("../src/shareStudio.css", import.meta.url), "utf8");
   const mediaCache = await readFile(new URL("../src/mediaCache.ts", import.meta.url), "utf8");
 
   assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
@@ -108,7 +109,12 @@ try {
   assert.match(appController, /if \(isGuest\)/);
   assert.match(appController, /isGuest \? nextRecord : await saveRecord/);
   assert.match(archive, /value: "showcase"/);
-  assert.match(archive, /生成分享图/);
+  assert.match(archive, /制作分享图/);
+  assert.match(archive, /archive-highlight-card/);
+  assert.doesNotMatch(archive, /Compact archive masthead v2/);
+  assert.match(shareStudio, /share-preview-aura/);
+  assert.match(shareStudio, /itemLimit/);
+  assert.match(shareStudioCss, /share-layout-collage/);
   assert.match(archive, /"poster"[\s\S]*"wallet"[\s\S]*"ticket"[\s\S]*"timeline"[\s\S]*"calendar"[\s\S]*"venue"[\s\S]*"price"[\s\S]*"summary"[\s\S]*"list"/);
   assert.match(experience, /https:\/\/github\.com\/Qi-i\/live-memory/);
   assert.match(experience, /experience-mobile-nav/);

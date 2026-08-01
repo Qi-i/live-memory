@@ -137,9 +137,13 @@ export function ArchivePage({
     <section className="archive-page">
       <header className="archive-masthead">
         <div className="archive-masthead-copy">
-          <span>我的演出记录</span>
-          <h2>现场，一场一场地留下来。</h2>
-          <p>海报、票根、日期和城市都放在同一个档案里，需要时再切换查看方式。</p>
+          <span>LIVE MEMORY · 我的演出档案</span>
+          <h2>每一场现场，<br />都是独一无二的记忆。</h2>
+          <p>把看过的演出、留下的票根和走过的城市，整理成一份会继续生长的个人档案。</p>
+          <div className="archive-masthead-actions">
+            <button type="button" onClick={() => document.querySelector(".archive-command")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Archive />浏览全部档案</button>
+            <button type="button" onClick={() => setShareMode(true)}><Share2 />制作分享图</button>
+          </div>
           <div className="archive-masthead-stats" aria-label="演出记录摘要">
             <strong>{records.length}<span>全部记录</span></strong>
             <strong>{records.filter((record) => record.status === "watched").length}<span>已经看过</span></strong>
@@ -229,16 +233,27 @@ export function ArchivePage({
 }
 
 function ArchiveHighlights({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
-  const highlights = records.filter((record) => primaryMedia(record)).slice(0, 5);
-  if (!highlights.length) return <div className="archive-highlight-empty"><span>海报</span><span>票根</span><span>现场</span></div>;
+  const highlights = records.filter((record) => primaryMedia(record)).slice(0, 6);
+  const featured = highlights[0];
+  if (!highlights.length) return <div className="archive-highlight-empty"><span>把第一张演出海报放进来</span><small>这里会自动生成你的精选现场</small></div>;
   return (
-    <div className="archive-highlights">
-      {highlights.map((record, index) => (
-        <button key={record.id} type="button" style={{ "--highlight-index": index } as CSSProperties} onClick={() => onOpen(record)}>
-          <RecordMedia media={primaryMedia(record)} alt={record.title} />
-          <span>{record.city || categoryLabels[record.category]}</span>
+    <div className="archive-highlights" aria-label="精选演出海报">
+      <span className="archive-highlight-orbit" aria-hidden="true" />
+      <div className="archive-highlight-stack">
+        {highlights.map((record, index) => (
+          <button className={`archive-highlight-card archive-highlight-card-${index + 1}`} key={record.id} type="button" onClick={() => onOpen(record)}>
+            <RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 4)} />
+            <span><b>{record.city || categoryLabels[record.category]}</b><small>{record.date.slice(0, 4)}</small></span>
+          </button>
+        ))}
+      </div>
+      {featured && (
+        <button className="archive-highlight-feature" type="button" onClick={() => onOpen(featured)}>
+          <span>最近收录</span>
+          <strong>{featured.title}</strong>
+          <small>{featured.date} · {featured.city || featured.venue || "演出记录"}</small>
         </button>
-      ))}
+      )}
     </div>
   );
 }
