@@ -33,6 +33,8 @@ import type {
   Filters,
   MediaAsset,
 } from "./domain";
+import { ShareStudio, type ShareFormat } from "./shareStudio";
+export type { ShareFormat } from "./shareStudio";
 import {
   categoryLabels,
   daysFromToday,
@@ -43,7 +45,6 @@ import {
 } from "./domain";
 
 export type ArchiveLayout = ArchiveView | "showcase";
-export type ShareFormat = "landscape" | "portrait" | "square";
 
 const emptyFilters: Filters = {
   query: "",
@@ -120,7 +121,7 @@ export function ArchivePage({
 
   if (shareMode) {
     return (
-      <ShareCanvas
+      <ShareStudio
         records={visibleRecords}
         format={shareFormat}
         setFormat={setShareFormat}
@@ -132,10 +133,15 @@ export function ArchivePage({
   return (
     <section className="archive-page">
       <header className="archive-masthead">
-        <div>
+        <div className="archive-masthead-copy">
           <span>我的演出记录</span>
-          <h2>把看过和想看的演出放在一起。</h2>
-          <p>可以按海报、票根、时间、城市或票价查看，视图随时切换。</p>
+          <h2>现场，一场一场地留下来。</h2>
+          <p>海报、票根、日期和城市都放在同一个档案里，需要时再切换查看方式。</p>
+          <div className="archive-masthead-stats" aria-label="演出记录摘要">
+            <strong>{records.length}<span>全部记录</span></strong>
+            <strong>{records.filter((record) => record.status === "watched").length}<span>已经看过</span></strong>
+            <strong>{new Set(records.map((record) => record.city).filter(Boolean)).size}<span>到访城市</span></strong>
+          </div>
         </div>
         <ArchiveHighlights records={records} onOpen={onOpen} />
       </header>
@@ -398,24 +404,6 @@ function SummaryPanel({ title, rows }: { title: string; rows: [string, number][]
 
 function ListView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   return <section className="archive-list"><header><span>日期</span><span>演出</span><span>艺人</span><span>地点</span><span>票价</span></header>{records.map((record) => <button key={record.id} type="button" onClick={() => onOpen(record)}><span>{record.date}</span><strong>{record.title}</strong><em>{record.artists.join(" / ") || "待补"}</em><span>{record.city} · {record.venue}</span><b>{record.price ? `¥${record.price}` : "待补"}</b></button>)}</section>;
-}
-
-function ShareCanvas({ records, format, setFormat, onClose }: { records: EventRecord[]; format: ShareFormat; setFormat: (format: ShareFormat) => void; onClose: () => void }) {
-  const selected = records.filter((record) => primaryMedia(record)).slice(0, format === "portrait" ? 8 : 6);
-  const years = unique(records.map((record) => record.date.slice(0, 4))).sort();
-  return (
-    <section className="share-stage">
-      <div className="share-floating-controls">
-        <div>{(["landscape", "portrait", "square"] as ShareFormat[]).map((item) => <button className={format === item ? "is-active" : ""} key={item} type="button" onClick={() => setFormat(item)}>{item === "landscape" ? "横版" : item === "portrait" ? "竖版" : "方形"}</button>)}</div>
-        <button type="button" onClick={onClose}><X />退出分享</button>
-      </div>
-      <article className={`share-canvas share-canvas-${format}`}>
-        <header><div><span>现场记</span><h1>我的演出记录</h1><p>{years.length ? `${years[0]}—${years[years.length - 1]}` : new Date().getFullYear()} · {records.length} 场演出</p></div><strong>演</strong></header>
-        <div className="share-poster-wall">{selected.map((record, index) => <figure key={record.id} className={`share-poster-${index + 1}`}><RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 2)} /><figcaption><span>{record.city || record.date}</span><b>{record.title}</b><em>{record.artists.join(" / ")}</em></figcaption></figure>)}</div>
-        <footer><span>现场记 · 演出记录</span><b>{new Set(records.map((record) => record.city).filter(Boolean)).size} 城市 · {records.filter((record) => record.status === "watched").length} 已看</b></footer>
-      </article>
-    </section>
-  );
 }
 
 function RecordMedia({ media, alt, fallback = "图片待补", onClick }: { media?: MediaAsset; alt?: string; fallback?: string; onClick?: (event: MouseEvent<HTMLImageElement | HTMLSpanElement>) => void }) {
