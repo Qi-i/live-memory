@@ -142,10 +142,13 @@ function makeAccountClient(settings: AppSettings) {
   return cachedAccountClient;
 }
 
+const LIVE_MEMORY_PUBLIC_URL = "https://qi-i.github.io/live-memory/";
+
 function oauthRedirectUrl() {
-  if (typeof window === "undefined") return undefined;
-  const base = import.meta.env.BASE_URL || "/";
-  return new URL(base, window.location.origin).toString();
+  if (typeof window === "undefined") return LIVE_MEMORY_PUBLIC_URL;
+  const isLocal = window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1";
+  if (isLocal) return new URL(import.meta.env.BASE_URL || "/", window.location.origin).toString();
+  return LIVE_MEMORY_PUBLIC_URL;
 }
 
 export interface AccountSignInResult {

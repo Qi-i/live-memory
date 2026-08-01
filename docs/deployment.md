@@ -48,7 +48,7 @@ GitHub Pages 发布同一套静态应用。账号文字备份进入账号项目�
 https://qi-i.github.io/live-memory/
 ```
 
-`vite.config.ts` 使用 `base: "./"`，避免仓库子路径下静态资源 404。
+`vite.config.ts` 使用固定项目路径 `base: "/live-memory/"`，确保静态资源和 OAuth 回跳都位于 GitHub Pages 项目站点。
 
 ## 发布前检查
 
@@ -72,7 +72,7 @@ Pages 尚未启用。回到 `Settings > Pages`，把 Source 设为 GitHub Action
 
 ### 页面打开但资源 404
 
-确认构建产物使用相对路径，并清理旧 Service Worker 缓存后刷新。当前 `vite.config.ts` 已为 GitHub 项目页设置相对 base。
+确认构建产物使用 `/live-memory/` 项目路径，并清理旧 Service Worker 缓存后刷新。Supabase Auth 的 Site URL 与 Redirect URLs 也必须包含 `https://qi-i.github.io/live-memory/`。
 
 ### 新版本一直不出现
 

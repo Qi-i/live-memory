@@ -762,3 +762,80 @@
   .share-stage { min-height: 0; }
   .share-canvas { width: 100% !important; box-shadow: none; }
 }
+
+
+/* Compact archive masthead v2 */
+.archive-masthead {
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, .55fr);
+  min-height: 176px;
+}
+
+.archive-masthead-copy {
+  display: grid;
+  align-content: center;
+  padding: clamp(22px, 3vw, 34px);
+  background:
+    radial-gradient(circle at 88% 12%, color-mix(in srgb, var(--experience-accent-2) 24%, transparent), transparent 32%),
+    linear-gradient(135deg, color-mix(in srgb, var(--experience-accent) 12%, var(--experience-surface-solid)), var(--experience-surface-solid));
+}
+
+.archive-masthead h2 {
+  max-width: 760px;
+  margin: 7px 0 8px;
+  font-size: clamp(30px, 3.25vw, 48px);
+  line-height: 1.02;
+}
+
+.archive-masthead p {
+  max-width: 700px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.archive-masthead-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin-top: 15px;
+}
+
+.archive-masthead-stats strong {
+  display: grid;
+  min-width: 86px;
+  padding: 7px 10px;
+  border: 1px solid color-mix(in srgb, var(--experience-text) 8%, transparent);
+  border-radius: 9px;
+  background: color-mix(in srgb, var(--experience-surface-solid) 76%, transparent);
+  font-size: 16px;
+}
+
+.archive-masthead-stats span {
+  margin-top: 3px;
+  color: var(--experience-muted);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.archive-highlights,
+.archive-highlight-empty { min-height: 176px; }
+
+.archive-highlights button {
+  top: calc(12px + var(--highlight-index) * 2px);
+  right: calc(14px + var(--highlight-index) * 38px);
+  width: 108px;
+  height: 148px;
+  border-width: 3px;
+}
+
+@media (max-width: 1020px) {
+  .archive-masthead { min-height: 160px; }
+}
+
+@media (max-width: 720px) {
+  .archive-masthead { min-height: 0; }
+  .archive-masthead-copy { padding: 16px; }
+  .archive-masthead h2 { font-size: 29px; }
+  .archive-masthead p { display: block; font-size: 11px; }
+  .archive-masthead-stats { margin-top: 11px; }
+  .archive-masthead-stats strong { min-width: 72px; padding: 6px 8px; font-size: 14px; }
+}
