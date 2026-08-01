@@ -28,6 +28,7 @@ import type { SyncConflict } from "./supabase";
 import { makeGuestSettings, useAccess } from "./access";
 import type { AppRoute } from "./experience";
 import { seedRecords } from "./seeds";
+import { preloadRecordMedia } from "./mediaCache";
 
 const MEDIA_REFRESH_INTERVAL = 6 * 60 * 60 * 1000;
 const MEDIA_REFRESH_EVENT = "live-memory:cloud-media-refresh";
@@ -96,6 +97,7 @@ export function useAppController() {
       recordsRef.current = demoRecords;
       setRecordState(demoRecords);
       setSettings(guestSettings);
+      void preloadRecordMedia(demoRecords);
       lastSyncFingerprint.current = recordFingerprint(demoRecords);
       initialized.current = true;
       return () => { active = false; };
@@ -119,6 +121,7 @@ export function useAppController() {
         recordsRef.current = nextRecords;
         setRecordState(nextRecords);
         setSettings(nextSettings);
+        void preloadRecordMedia(nextRecords);
         lastSyncFingerprint.current = recordFingerprint(nextRecords);
         initialized.current = true;
       })
@@ -178,14 +181,15 @@ export function useAppController() {
     if (isGuest || !access.user || !hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia || !cloudMediaPaths) return;
     let cancelled = false;
 
-    async function refresh(force = false) {
+    async function refresh(force = false, storagePath?: string) {
       if (mediaRefreshInFlight.current) return;
       if (!force && lastMediaRefreshAt.current && Date.now() - lastMediaRefreshAt.current < MEDIA_REFRESH_INTERVAL) return;
       mediaRefreshInFlight.current = true;
       const snapshot = recordsRef.current;
       const before = mediaFingerprint(snapshot);
       try {
-        const next = await refreshSignedMediaUrls(settings, snapshot);
+        const next = await refreshSignedMediaUrls(settings, snapshot, { force, storagePath });
+        void preloadRecordMedia(next);
         if (cancelled) return;
         lastMediaRefreshAt.current = Date.now();
         if (mediaFingerprint(next) !== before) {
@@ -199,11 +203,14 @@ export function useAppController() {
       }
     }
 
-    void refresh(true);
+    void refresh(false);
     const interval = window.setInterval(() => void refresh(false), MEDIA_REFRESH_INTERVAL);
     const onVisible = () => { if (document.visibilityState === "visible") void refresh(false); };
-    const onOnline = () => void refresh(true);
-    const onMediaError = () => void refresh(true);
+    const onOnline = () => void refresh(false);
+    const onMediaError = (event: Event) => {
+      const storagePath = (event as CustomEvent<{ storagePath?: string }>).detail?.storagePath;
+      void refresh(true, storagePath);
+    };
     document.addEventListener("visibilitychange", onVisible);
     window.addEventListener("online", onOnline);
     window.addEventListener(MEDIA_REFRESH_EVENT, onMediaError);

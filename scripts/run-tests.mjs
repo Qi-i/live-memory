@@ -95,6 +95,8 @@ try {
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
   const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
   const experienceCss = await readFile(new URL("../src/experience.css", import.meta.url), "utf8");
+  const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
+  const mediaCache = await readFile(new URL("../src/mediaCache.ts", import.meta.url), "utf8");
 
   assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
   assert.match(main, /<ExperienceThemeProvider>[\s\S]*<AccessGate>/);
@@ -112,6 +114,12 @@ try {
   assert.match(experience, /experience-mobile-nav/);
   assert.match(experienceCss, /@media \(max-width: 920px\)/);
   assert.match(experienceCss, /is-share-mode/);
+  assert.match(mediaCache, /caches\.open\(CACHE_NAME\)/);
+  assert.match(mediaCache, /storage:\$\{asset\.storagePath\}/);
+  assert.match(appController, /preloadRecordMedia/);
+  assert.match(appController, /CustomEvent<\{ storagePath\?: string \}>/);
+  assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
+  assert.match(shareStudio, /正在准备海报/);
 
   console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, responsive navigation, share image, GitHub entry, cloud upload guard, and clear auth errors.");
 } finally {
