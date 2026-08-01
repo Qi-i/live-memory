@@ -74,7 +74,7 @@ try {
 
   await page.getByRole("button", { name: "全部记录", exact: true }).click();
   await page.getByRole("button", { name: "长图", exact: true }).click();
-  await page.getByRole("button", { name: "海报目录", exact: true }).click();
+  await page.locator(".share-layout-control button").nth(1).click();
   await page.locator('.share-palette-control button[data-palette="paper"]').click();
   await page.waitForTimeout(600);
   await page.screenshot({ path: `${outputDir}/07-share-long-catalog-paper.png`, fullPage: true });
