@@ -27,10 +27,15 @@ try {
 
   const bannerGeometry = await page.locator(".archive-highlight-card:visible").evaluateAll((cards) => cards.map((card) => {
     const rect = card.getBoundingClientRect();
-    return { ratio: rect.height / rect.width, aspectRatio: getComputedStyle(card).aspectRatio };
+    const image = card.querySelector("img");
+    return {
+      ratio: rect.height / rect.width,
+      aspectRatio: getComputedStyle(card).aspectRatio,
+      objectFit: image ? getComputedStyle(image).objectFit : "fallback",
+    };
   }));
-  if (bannerGeometry.length < 3 || bannerGeometry.some(({ ratio, aspectRatio }) => ratio < 1.2 || !aspectRatio.includes("2 / 3"))) {
-    throw new Error(`Banner posters are not portrait: ${JSON.stringify(bannerGeometry)}`);
+  if (bannerGeometry.length < 3 || bannerGeometry.some(({ ratio, aspectRatio, objectFit }) => ratio < 1.2 || !aspectRatio.includes("2 / 3") || objectFit !== "contain")) {
+    throw new Error(`Banner posters are not preserved as portrait images: ${JSON.stringify(bannerGeometry)}`);
   }
 
   const posterTops = await page.locator(".archive-poster-card").evaluateAll((cards) => cards.slice(0, 10).map((card) => Math.round(card.getBoundingClientRect().top)));
@@ -51,12 +56,17 @@ try {
     return button instanceof HTMLButtonElement && !button.disabled;
   }, null, { timeout: 30000 });
 
-  const shareRatios = await page.locator(".share-preview-posters figure").evaluateAll((figures) => figures.map((figure) => {
+  const shareMedia = await page.locator(".share-preview-posters figure").evaluateAll((figures) => figures.map((figure) => {
     const rect = figure.getBoundingClientRect();
-    return rect.height / rect.width;
+    const image = figure.querySelector("img");
+    return {
+      cellRatio: rect.height / rect.width,
+      objectFit: image ? getComputedStyle(image).objectFit : "fallback",
+      naturalRatio: image && image.naturalWidth ? image.naturalHeight / image.naturalWidth : null,
+    };
   }));
-  if (!shareRatios.length || shareRatios.some((ratio) => Math.abs(ratio - 1.5) > 0.12)) {
-    throw new Error(`Share posters lost 2:3 portrait ratio: ${shareRatios.join(", ")}`);
+  if (!shareMedia.length || shareMedia.some(({ cellRatio, objectFit, naturalRatio }) => cellRatio <= 1.05 || objectFit !== "contain" || (naturalRatio !== null && naturalRatio <= 1))) {
+    throw new Error(`Share preview cropped or flattened portrait posters: ${JSON.stringify(shareMedia)}`);
   }
   await page.screenshot({ path: `${outputDir}/04-share-all-dense-mint.png`, fullPage: true });
 
