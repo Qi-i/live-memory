@@ -1,0 +1,69 @@
+/* Final responsive corrections after visual audit. */
+
+@media (min-width: 1180px) {
+  .archive-poster-grid[style*="--archive-columns: 4"] {
+    --poster-card-min: 218px;
+  }
+}
+
+@media (max-width: 760px) {
+  .archive-masthead {
+    display: block !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+
+  .archive-masthead-copy,
+  .archive-masthead > div:first-child {
+    width: 100%;
+    min-width: 0;
+    padding: 16px !important;
+    border-right: 0 !important;
+  }
+
+  .archive-masthead-copy > span {
+    display: block;
+    margin-bottom: 5px;
+    writing-mode: horizontal-tb;
+  }
+
+  .archive-masthead h2 {
+    max-width: none;
+    margin: 0 0 7px;
+    font-size: clamp(26px, 8.4vw, 32px) !important;
+    line-height: 1.05 !important;
+    letter-spacing: -0.045em;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    writing-mode: horizontal-tb;
+  }
+
+  .archive-masthead p {
+    display: block;
+    max-width: none;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .archive-masthead-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .archive-masthead-stats strong {
+    min-width: 0;
+    padding: 6px 7px;
+  }
+
+  .archive-highlights,
+  .archive-highlight-empty {
+    display: none !important;
+  }
+
+  .experience-content {
+    padding-bottom: 86px;
+  }
+}
