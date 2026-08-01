@@ -93,6 +93,7 @@ try {
   const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
   const access = await readFile(new URL("../src/access.tsx", import.meta.url), "utf8");
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
+  const archiveCss = await readFile(new URL("../src/archive.css", import.meta.url), "utf8");
   const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
   const experienceCss = await readFile(new URL("../src/experience.css", import.meta.url), "utf8");
   const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
@@ -112,9 +113,14 @@ try {
   assert.match(archive, /制作分享图/);
   assert.match(archive, /archive-highlight-card/);
   assert.doesNotMatch(archive, /Compact archive masthead v2/);
-  assert.match(shareStudio, /share-preview-aura/);
-  assert.match(shareStudio, /itemLimit/);
-  assert.match(shareStudioCss, /share-layout-collage/);
+  assert.match(archiveCss, /object-fit:\s*contain/);
+  assert.match(shareStudio, /ScopeMode/);
+  assert.match(shareStudio, /selectedIds/);
+  assert.match(shareStudio, /ItemLimit = 12 \| 20 \| 30 \| "all"/);
+  assert.match(shareStudio, /ShareFormat = "landscape" \| "portrait" \| "square" \| "long"/);
+  assert.match(shareStudioCss, /share-layout-dense/);
+  assert.match(shareStudioCss, /aspect-ratio:\s*2 \/ 3/);
+  assert.match(shareStudioCss, /object-fit:\s*contain/);
   assert.match(archive, /"poster"[\s\S]*"wallet"[\s\S]*"ticket"[\s\S]*"timeline"[\s\S]*"calendar"[\s\S]*"venue"[\s\S]*"price"[\s\S]*"summary"[\s\S]*"list"/);
   assert.match(experience, /https:\/\/github\.com\/Qi-i\/live-memory/);
   assert.match(experience, /experience-mobile-nav/);
@@ -127,7 +133,7 @@ try {
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
   assert.match(shareStudio, /正在准备海报/);
 
-  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, responsive navigation, share image, GitHub entry, cloud upload guard, and clear auth errors.");
+  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, portrait banner, mass share selection, responsive navigation, share image, GitHub entry, cloud upload guard, and clear auth errors.");
 } finally {
   await server.close();
 }
