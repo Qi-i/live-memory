@@ -1,0 +1,31 @@
+name: Apply archive refinement v3
+
+on:
+  push:
+    branches: [fix/poster-themes-admin-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[v3-applied]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/poster-themes-admin-v3
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/refine-v3.mjs
+      - run: npm run check
+      - name: Commit refined source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/archive.tsx src/experience.tsx scripts/visual-audit.mjs
+          git commit -m "Refine archive density and theme descriptions [v3-applied]"
+          git push origin HEAD:fix/poster-themes-admin-v3
