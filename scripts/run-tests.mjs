@@ -93,7 +93,7 @@ try {
   const main = await readFile(new URL("../src/main.tsx", import.meta.url), "utf8");
   const access = await readFile(new URL("../src/access.tsx", import.meta.url), "utf8");
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
-  const archiveCss = await readFile(new URL("../src/archive.css", import.meta.url), "utf8");
+  const archiveBannerCss = await readFile(new URL("../src/archiveBanner.css", import.meta.url), "utf8");
   const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
   const experienceCss = await readFile(new URL("../src/experience.css", import.meta.url), "utf8");
   const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
@@ -102,6 +102,7 @@ try {
 
   assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
   assert.match(main, /<ExperienceThemeProvider>[\s\S]*<AccessGate>/);
+  assert.match(main, /archive\.css[\s\S]*archiveBanner\.css/);
   assert.match(appRoot, /<ExperienceShell/);
   assert.doesNotMatch(appRoot, /className="rail"|className="hero"/);
   assert.match(access, /mode === "signed-out"/);
@@ -113,7 +114,8 @@ try {
   assert.match(archive, /制作分享图/);
   assert.match(archive, /archive-highlight-card/);
   assert.doesNotMatch(archive, /Compact archive masthead v2/);
-  assert.match(archiveCss, /object-fit:\s*contain/);
+  assert.match(archiveBannerCss, /aspect-ratio:\s*2 \/ 3/);
+  assert.match(archiveBannerCss, /object-fit:\s*contain/);
   assert.match(shareStudio, /ScopeMode/);
   assert.match(shareStudio, /selectedIds/);
   assert.match(shareStudio, /ItemLimit = 12 \| 20 \| 30 \| "all"/);
