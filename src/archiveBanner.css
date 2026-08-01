@@ -1,0 +1,229 @@
+.archive-page .archive-masthead {
+  grid-template-columns: minmax(360px, 0.92fr) minmax(500px, 1.08fr);
+  min-height: 430px;
+  background:
+    radial-gradient(circle at 78% 12%, color-mix(in srgb, var(--experience-accent) 28%, transparent), transparent 25%),
+    radial-gradient(circle at 57% 88%, color-mix(in srgb, var(--experience-accent-2) 18%, transparent), transparent 31%),
+    linear-gradient(135deg, color-mix(in srgb, var(--experience-accent) 10%, var(--experience-surface-solid)), var(--experience-surface-solid) 47%, color-mix(in srgb, var(--experience-accent-2) 10%, var(--experience-surface-solid)));
+}
+
+.archive-page .archive-highlights {
+  min-height: 430px;
+  background:
+    radial-gradient(circle at 50% 45%, color-mix(in srgb, var(--experience-accent) 25%, transparent), transparent 34%),
+    linear-gradient(150deg, color-mix(in srgb, var(--experience-surface-solid) 10%, transparent), color-mix(in srgb, var(--experience-accent-2) 8%, transparent));
+}
+
+.archive-page .archive-highlights::after {
+  right: 8%;
+  bottom: 5%;
+  left: 8%;
+  height: 52px;
+  filter: blur(28px);
+}
+
+.archive-page .archive-highlight-orbit {
+  top: 12%;
+  left: 30%;
+  width: 44%;
+  box-shadow:
+    0 0 0 38px color-mix(in srgb, var(--experience-accent) 7%, transparent),
+    0 0 0 78px color-mix(in srgb, var(--experience-accent-2) 4%, transparent);
+  opacity: 0.72;
+}
+
+.archive-page .archive-highlight-stack {
+  inset: 18px 20px 22px 12px;
+  perspective: 1200px;
+}
+
+.archive-page .archive-highlight-card {
+  width: auto;
+  height: 68%;
+  aspect-ratio: 2 / 3;
+  border-width: 4px;
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--experience-surface-solid) 84%, #101a18);
+  box-shadow: 0 24px 58px rgba(25, 46, 44, 0.25);
+}
+
+.archive-page .archive-highlight-card-1 {
+  top: 2%;
+  left: 38%;
+  width: auto;
+  height: 88%;
+  transform: rotate(-1deg) translateZ(78px);
+}
+
+.archive-page .archive-highlight-card-2 {
+  top: 16%;
+  left: 13%;
+  width: auto;
+  height: 69%;
+  transform: rotate(-8deg) translateZ(18px);
+}
+
+.archive-page .archive-highlight-card-3 {
+  top: 15%;
+  right: 9%;
+  left: auto;
+  width: auto;
+  height: 72%;
+  transform: rotate(7deg) translateZ(28px);
+}
+
+.archive-page .archive-highlight-card-4 {
+  top: 27%;
+  left: 1%;
+  width: auto;
+  height: 56%;
+  transform: rotate(-12deg);
+}
+
+.archive-page .archive-highlight-card-5,
+.archive-page .archive-highlight-card-6 {
+  display: none;
+}
+
+.archive-page .archive-highlight-card-1:hover {
+  transform: rotate(-1deg) translateY(-8px) translateZ(96px);
+}
+
+.archive-page .archive-highlight-card-2:hover {
+  transform: rotate(-5deg) translateY(-7px) translateZ(52px);
+}
+
+.archive-page .archive-highlight-card-3:hover {
+  transform: rotate(5deg) translateY(-7px) translateZ(54px);
+}
+
+.archive-page .archive-highlight-card-4:hover {
+  transform: rotate(-6deg) translateY(-7px) translateZ(45px);
+}
+
+.archive-page .archive-highlight-card img,
+.archive-page .archive-highlight-card > .record-media-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: color-mix(in srgb, var(--experience-surface-solid) 84%, #101a18);
+}
+
+.archive-page .archive-highlight-card > span:last-child {
+  right: 8px;
+  bottom: 8px;
+  left: 8px;
+  padding: 7px 9px;
+  border-radius: 9px;
+}
+
+.archive-page .archive-highlight-card > span b {
+  font-size: 10px;
+}
+
+.archive-page .archive-highlight-card > span small {
+  font-size: 8px;
+}
+
+.archive-page .archive-highlight-feature {
+  right: 20px;
+  bottom: 18px;
+  max-width: 260px;
+  padding: 11px 13px;
+  border-radius: 13px;
+}
+
+.archive-page .archive-highlight-empty {
+  min-height: 430px;
+}
+
+@media (max-width: 1020px) {
+  .archive-page .archive-masthead {
+    grid-template-columns: 1fr;
+    min-height: 0;
+  }
+
+  .archive-page .archive-highlights {
+    min-height: 360px;
+    border-top: 1px solid var(--experience-border);
+  }
+
+  .archive-page .archive-highlight-stack {
+    inset: 12px 10px 18px;
+  }
+
+  .archive-page .archive-highlight-card-1 {
+    left: 40%;
+    height: 88%;
+  }
+
+  .archive-page .archive-highlight-card-2 {
+    left: 16%;
+  }
+
+  .archive-page .archive-highlight-card-3 {
+    right: 13%;
+  }
+}
+
+@media (max-width: 720px) {
+  .archive-page .archive-highlights {
+    display: block;
+    min-height: 265px;
+  }
+
+  .archive-page .archive-highlight-stack {
+    inset: 8px 6px 14px;
+  }
+
+  .archive-page .archive-highlight-card {
+    border-width: 3px;
+    border-radius: 11px;
+  }
+
+  .archive-page .archive-highlight-card-1 {
+    top: 3%;
+    left: 37%;
+    width: auto;
+    height: 86%;
+  }
+
+  .archive-page .archive-highlight-card-2 {
+    top: 18%;
+    left: 8%;
+    width: auto;
+    height: 66%;
+  }
+
+  .archive-page .archive-highlight-card-3 {
+    top: 17%;
+    right: 5%;
+    left: auto;
+    width: auto;
+    height: 67%;
+  }
+
+  .archive-page .archive-highlight-card-4 {
+    top: 30%;
+    left: -3%;
+    width: auto;
+    height: 50%;
+  }
+
+  .archive-page .archive-highlight-card-5,
+  .archive-page .archive-highlight-card-6,
+  .archive-page .archive-highlight-feature {
+    display: none;
+  }
+
+  .archive-page .archive-highlight-card > span:last-child {
+    right: 5px;
+    bottom: 5px;
+    left: 5px;
+    padding: 5px 7px;
+  }
+
+  .archive-page .archive-highlight-card > span b {
+    font-size: 8px;
+  }
+}
