@@ -114,7 +114,8 @@ export function ArchivePage({
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<"smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc">("smart");
   const [expanded, setExpanded] = useState(false);
-  const [density, setDensity] = useState(settings.posterColumns || 4);
+  const preferredPosterColumns = Math.min(8, Math.max(4, settings.posterColumns || 5));
+  const [density, setDensity] = useState(preferredPosterColumns);
   const facets = useMemo(() => buildFacets(records), [records]);
   const visibleRecords = useMemo(() => sortRecords(filterRecords(records, filters), sort), [filters, records, sort]);
   const activeFilterCount = filters.categories.length + filters.statuses.length + filters.years.length + filters.cities.length + filters.artists.length + filters.tags.length;
@@ -198,7 +199,7 @@ export function ArchivePage({
             {(layout === "poster" || layout === "showcase") && (
               <label>密度
                 <select value={density} onChange={(event) => setDensity(Number(event.target.value))}>
-                  {[2, 3, 4, 5, 6].map((count) => <option key={count} value={count}>{count} 列</option>)}
+                  {[4, 5, 6, 7, 8].map((count) => <option key={count} value={count}>{count} 列</option>)}
                 </select>
               </label>
             )}
