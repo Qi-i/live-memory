@@ -111,6 +111,7 @@ try {
   assert.match(archive, /value: "showcase"/);
   assert.match(archive, /制作分享图/);
   assert.match(archive, /archive-highlight-card/);
+  assert.doesNotMatch(archive, /Compact archive masthead v2/);
   assert.match(shareStudio, /share-preview-aura/);
   assert.match(shareStudio, /itemLimit/);
   assert.match(shareStudioCss, /share-layout-collage/);
