@@ -18,4 +18,4 @@ if (!tests.includes("Compact archive masthead v2")) {
   await writeFile(testsPath, tests);
 }
 
-console.log("Removed legacy compact masthead override.");
+console.log("Removed legacy compact masthead override and locked the regression test.");
