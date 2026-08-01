@@ -265,11 +265,11 @@ export function ThemeSettingsPanel() {
         <div className="theme-choice-grid">
           <button className={visualTheme === "aurora" ? "is-active" : ""} type="button" onClick={() => setVisualTheme("aurora")}>
             <i className="theme-preview theme-preview-aurora" />
-            <span><b>清透</b><small>留白更轻，适合日常浏览</small></span>
+            <span><b>清透玻璃</b><small>柔和渐变、圆角玻璃与轻盈留白</small></span>
           </button>
           <button className={visualTheme === "editorial" ? "is-active" : ""} type="button" onClick={() => setVisualTheme("editorial")}>
             <i className="theme-preview theme-preview-editorial" />
-            <span><b>画册</b><small>排版更突出，适合截图分享</small></span>
+            <span><b>纸质画册</b><small>纸张底色、硬边框与杂志式排版</small></span>
           </button>
         </div>
       </div>

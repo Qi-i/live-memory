@@ -1,0 +1,121 @@
+/* Final responsive corrections after visual audit. */
+
+/* Respect the selected desktop density. The default is five columns and users
+   can explicitly choose 4–8 columns instead of the grid silently collapsing. */
+@media (min-width: 1180px) {
+  .archive-poster-grid {
+    grid-template-columns: repeat(var(--archive-columns), minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1179px) {
+  .archive-poster-grid {
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 760px) {
+  html,
+  body,
+  #root,
+  .experience-shell,
+  .experience-workspace,
+  .experience-topbar,
+  .experience-content,
+  .archive-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  .experience-topbar {
+    grid-template-columns: 42px minmax(0, 1fr) 46px !important;
+  }
+
+  .experience-status {
+    width: 46px;
+    min-width: 0;
+    max-width: 46px;
+    overflow: hidden;
+  }
+
+  .experience-status .account-chip {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    padding: 4px;
+    overflow: hidden;
+  }
+
+  .experience-status .account-chip > span:not(.account-avatar),
+  .experience-status .account-chip > div:not(.account-avatar) {
+    display: none !important;
+  }
+
+  .archive-masthead {
+    display: block !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    min-height: 0 !important;
+    overflow: hidden;
+  }
+
+  .archive-masthead-copy,
+  .archive-masthead > div:first-child {
+    width: 100%;
+    min-width: 0;
+    padding: 16px !important;
+    border-right: 0 !important;
+    box-sizing: border-box;
+  }
+
+  .archive-masthead-copy > span {
+    display: block;
+    margin-bottom: 5px;
+    writing-mode: horizontal-tb;
+  }
+
+  .archive-masthead h2 {
+    max-width: none;
+    margin: 0 0 7px;
+    font-size: clamp(26px, 8.4vw, 32px) !important;
+    line-height: 1.05 !important;
+    letter-spacing: -0.045em;
+    word-break: keep-all;
+    overflow-wrap: break-word;
+    writing-mode: horizontal-tb;
+  }
+
+  .archive-masthead p {
+    display: block;
+    max-width: none;
+    font-size: 10px;
+    line-height: 1.5;
+  }
+
+  .archive-masthead-stats {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    margin-top: 10px;
+  }
+
+  .archive-masthead-stats strong {
+    min-width: 0;
+    padding: 6px 7px;
+  }
+
+  .archive-highlights,
+  .archive-highlight-empty {
+    display: none !important;
+  }
+
+  .archive-poster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .experience-content {
+    padding-bottom: 86px;
+  }
+}
