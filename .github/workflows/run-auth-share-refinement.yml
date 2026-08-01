@@ -1,16 +1,16 @@
 name: Run auth and share refinement
 
 on:
-  push:
-    branches: [main]
-    paths: [.github/workflows/run-auth-share-refinement.yml]
+  issues:
+    types: [opened]
 
 permissions:
   contents: write
+  issues: write
 
 jobs:
   refine:
-    if: github.actor != 'github-actions[bot]'
+    if: github.event.issue.title == '[automation] refine auth and share studio'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -35,3 +35,7 @@ jobs:
           git add src/supabase.ts src/archive.tsx src/archive.css docs/deployment.md
           git commit -m "Refine OAuth callback, archive masthead and share studio"
           git push origin HEAD:fix/auth-share-studio-v2
+      - name: Close trigger issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh issue close ${{ github.event.issue.number }} --comment "Refinement workflow completed."
