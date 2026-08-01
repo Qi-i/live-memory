@@ -1,4 +1,5 @@
 /* Final responsive corrections after visual audit. */
+/* The mobile archive keeps the portrait Banner visible; do not hide archive-highlights here. */
 
 /* Respect the selected desktop density. The default is five columns and users
    can explicitly choose 4–8 columns instead of the grid silently collapsing. */
