@@ -55,8 +55,7 @@ const liveAssets = assetContents.join("\n");
 const checks = {
   scopeTitle: liveAssets.includes("选择真正想分享的现场"),
   manualSelection: liveAssets.includes("逐场选择"),
-  limit20: liveAssets.includes("20 张"),
-  limit30: liveAssets.includes("30 张"),
+  massPosterLimit: liveAssets.includes("20 张"),
   posterFrame: liveAssets.includes("share-poster-frame"),
   posterForeground: liveAssets.includes("share-poster-foreground"),
   bannerComposition: liveAssets.includes("archive-highlight-card-1"),
