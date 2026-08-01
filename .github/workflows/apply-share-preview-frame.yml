@@ -1,0 +1,35 @@
+name: Apply share preview poster frames
+
+on:
+  pull_request_target:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: github.event.pull_request.head.ref == 'design/portrait-banner-mass-share'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          repository: Qi-i/live-memory
+          ref: design/portrait-banner-mass-share
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-share-preview-frame.mjs
+      - run: npm run check
+      - name: Commit poster frame migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/shareStudio.tsx src/shareStudio.css scripts/visual-audit.mjs
+          git commit -m "Remove blank bars from portrait share posters"
+          git push origin HEAD:design/portrait-banner-mass-share
