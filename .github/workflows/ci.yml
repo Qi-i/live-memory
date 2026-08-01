@@ -7,62 +7,10 @@ on:
     branches: [refactor/experience-system-v3]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  prepare-premium-redesign:
-    if: github.event_name == 'pull_request' && github.head_ref == 'design/premium-home-share'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@v5
-        with:
-          ref: design/premium-home-share
-          token: ${{ secrets.GITHUB_TOKEN }}
-      - uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-      - run: npm ci
-      - name: Apply redesign once
-        run: |
-          if grep -q 'archive-highlight-card-1' src/archive.css; then
-            echo 'Premium redesign already applied.'
-            exit 0
-          fi
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/apply-premium-home-share.mjs')
-          source = path.read_text()
-          path.write_text(source.replace('${', '\\${'))
-          PY
-          node scripts/apply-premium-home-share.mjs
-          python - <<'PY'
-          from pathlib import Path
-          path = Path('scripts/run-tests.mjs')
-          lines = path.read_text().splitlines()
-          prefixes = ('  const shareStudio = ', '  const shareStudioCss = ')
-          seen = set()
-          output = []
-          for line in lines:
-            prefix = next((item for item in prefixes if line.startswith(item)), None)
-            if prefix:
-              if prefix in seen:
-                continue
-              seen.add(prefix)
-            output.append(line)
-          path.write_text('\n'.join(output) + '\n')
-          PY
-          npm run check
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/archive.tsx src/archive.css src/main.tsx src/shareStudio.tsx src/shareStudio.css scripts/run-tests.mjs
-          git commit -m "Redesign homepage and share studio [premium-home-share-applied]"
-          git push origin HEAD:design/premium-home-share
-
   verify:
-    needs: prepare-premium-redesign
-    if: always() && (needs.prepare-premium-redesign.result == 'success' || needs.prepare-premium-redesign.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
