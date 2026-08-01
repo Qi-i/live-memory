@@ -37,6 +37,22 @@ jobs:
           path.write_text(source.replace('${', '\\${'))
           PY
           node scripts/apply-premium-home-share.mjs
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/run-tests.mjs')
+          lines = path.read_text().splitlines()
+          prefixes = ('  const shareStudio = ', '  const shareStudioCss = ')
+          seen = set()
+          output = []
+          for line in lines:
+            prefix = next((item for item in prefixes if line.startswith(item)), None)
+            if prefix:
+              if prefix in seen:
+                continue
+              seen.add(prefix)
+            output.append(line)
+          path.write_text('\n'.join(output) + '\n')
+          PY
           npm run check
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
