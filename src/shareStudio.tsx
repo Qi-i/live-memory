@@ -6,6 +6,7 @@ import {
   LayoutTemplate,
   Palette,
   Rows3,
+  Search,
   X,
 } from "lucide-react";
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
@@ -14,9 +15,11 @@ import { primaryMedia } from "./domain";
 import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
-export type ShareFormat = "landscape" | "portrait" | "square";
-type ShareLayout = "collage" | "grid" | "timeline" | "cover";
+export type ShareFormat = "landscape" | "portrait" | "square" | "long";
+type ShareLayout = "dense" | "catalog" | "staggered";
 type SharePalette = "midnight" | "paper" | "mint" | "sunset";
+type ScopeMode = "all" | "range" | "manual";
+type ItemLimit = 12 | 20 | 30 | "all";
 
 interface ShareStudioProps {
   records: EventRecord[];
@@ -34,28 +37,38 @@ interface PaletteDefinition {
   border: string;
 }
 
+interface GridSpec {
+  width: number;
+  height: number;
+  columns: number;
+  rows: number;
+  gap: number;
+  headerHeight: number;
+  footerHeight: number;
+  padding: number;
+}
+
 const layoutOptions: Array<{ value: ShareLayout; label: string; description: string; icon: ReactNode }> = [
-  { value: "collage", label: "层叠海报", description: "突出主海报", icon: <LayoutTemplate /> },
-  { value: "grid", label: "整齐网格", description: "信息更完整", icon: <Grid3X3 /> },
-  { value: "timeline", label: "时间线", description: "按日期浏览", icon: <Rows3 /> },
-  { value: "cover", label: "主海报", description: "集中展示一场", icon: <ImageIcon /> },
+  { value: "dense", label: "密集海报墙", description: "适合 20 张以上", icon: <Grid3X3 /> },
+  { value: "catalog", label: "海报目录", description: "保留标题与日期", icon: <Rows3 /> },
+  { value: "staggered", label: "错落画报", description: "保持竖版轻微旋转", icon: <LayoutTemplate /> },
 ];
 
 const paletteOptions: Array<{ value: SharePalette; label: string }> = [
-  { value: "midnight", label: "深色" },
+  { value: "midnight", label: "深夜" },
   { value: "paper", label: "米白" },
   { value: "mint", label: "薄荷" },
-  { value: "sunset", label: "暖色" },
+  { value: "sunset", label: "暖霞" },
 ];
 
 const palettes: Record<SharePalette, PaletteDefinition> = {
   midnight: {
-    background: ["#081014", "#1b2a30"],
-    surface: "#10191e",
+    background: ["#071114", "#1a2d31"],
+    surface: "#101a1e",
     text: "#f7f8f3",
     muted: "#9aa9ad",
     accent: "#dfff4f",
-    border: "rgba(255,255,255,.78)",
+    border: "rgba(255,255,255,.72)",
   },
   paper: {
     background: ["#f4efe4", "#ddd5c5"],
@@ -66,7 +79,7 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
     border: "rgba(20,25,25,.18)",
   },
   mint: {
-    background: ["#dff6e9", "#a8dac8"],
+    background: ["#dff6e9", "#9fd6c4"],
     surface: "#effaf4",
     text: "#10201b",
     muted: "#4e6f64",
@@ -74,21 +87,32 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
     border: "rgba(20,25,25,.18)",
   },
   sunset: {
-    background: ["#361d31", "#d2765e"],
+    background: ["#321d30", "#d2765e"],
     surface: "#4b2939",
     text: "#fff7ef",
     muted: "#e8c8bf",
     accent: "#ffd45f",
-    border: "rgba(255,255,255,.78)",
+    border: "rgba(255,255,255,.72)",
   },
 };
 
 export function ShareStudio({ records, format, setFormat, onClose }: ShareStudioProps) {
-  const [layout, setLayout] = useState<ShareLayout>("collage");
+  const eligibleRecords = useMemo(
+    () => records.filter((record) => primaryMedia(record)).slice().sort((a, b) => a.date.localeCompare(b.date)),
+    [records],
+  );
+  const earliestDate = eligibleRecords[0]?.date || "";
+  const latestDate = eligibleRecords.at(-1)?.date || "";
+  const [layout, setLayout] = useState<ShareLayout>("dense");
   const [palette, setPalette] = useState<SharePalette>("mint");
   const [headline, setHeadline] = useState("我的现场档案");
-  const [itemLimit, setItemLimit] = useState<4 | 6 | 8>(6);
-  const [showDetails, setShowDetails] = useState(true);
+  const [scope, setScope] = useState<ScopeMode>("all");
+  const [itemLimit, setItemLimit] = useState<ItemLimit>("all");
+  const [startDate, setStartDate] = useState(earliestDate);
+  const [endDate, setEndDate] = useState(latestDate);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(eligibleRecords.map((record) => record.id)));
+  const [selectionQuery, setSelectionQuery] = useState("");
+  const [showDetails, setShowDetails] = useState(false);
   const [showBrand, setShowBrand] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -96,18 +120,48 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   const [preparing, setPreparing] = useState(true);
   const [error, setError] = useState("");
 
-  const maxItems = Math.min(itemLimit, layout === "timeline" ? 8 : format === "portrait" ? 8 : 6);
-  const selected = useMemo(
-    () => records.filter((record) => primaryMedia(record)).slice(0, maxItems),
-    [maxItems, records],
-  );
   const years = useMemo(
-    () => Array.from(new Set(records.map((record) => record.date.slice(0, 4)).filter(Boolean))).sort(),
-    [records],
+    () => Array.from(new Set(eligibleRecords.map((record) => record.date.slice(0, 4)).filter(Boolean))).sort(),
+    [eligibleRecords],
   );
-  const period = years.length ? `${years[0]}—${years[years.length - 1]}` : String(new Date().getFullYear());
-  const watched = records.filter((record) => record.status === "watched").length;
-  const cities = new Set(records.map((record) => record.city).filter(Boolean)).size;
+
+  useEffect(() => {
+    setStartDate((current) => current || earliestDate);
+    setEndDate((current) => current || latestDate);
+    setSelectedIds((current) => {
+      const valid = new Set(eligibleRecords.filter((record) => current.has(record.id)).map((record) => record.id));
+      return valid.size ? valid : new Set(eligibleRecords.map((record) => record.id));
+    });
+  }, [earliestDate, latestDate, eligibleRecords]);
+
+  const scopedRecords = useMemo(() => {
+    if (scope === "range") {
+      return eligibleRecords.filter((record) => (!startDate || record.date >= startDate) && (!endDate || record.date <= endDate));
+    }
+    if (scope === "manual") return eligibleRecords.filter((record) => selectedIds.has(record.id));
+    return eligibleRecords;
+  }, [eligibleRecords, endDate, scope, selectedIds, startDate]);
+
+  const selectedRecords = useMemo(() => {
+    if (itemLimit === "all") return scopedRecords;
+    return scopedRecords.slice(0, itemLimit);
+  }, [itemLimit, scopedRecords]);
+
+  const visibleSelectionRecords = useMemo(() => {
+    const query = selectionQuery.trim().toLowerCase();
+    if (!query) return eligibleRecords;
+    return eligibleRecords.filter((record) => [record.title, record.city, record.venue, record.artists.join(" "), record.date]
+      .join(" ").toLowerCase().includes(query));
+  }, [eligibleRecords, selectionQuery]);
+
+  const period = useMemo(() => formatPeriod(selectedRecords), [selectedRecords]);
+  const watched = selectedRecords.filter((record) => record.status === "watched").length;
+  const cities = new Set(selectedRecords.map((record) => record.city).filter(Boolean)).size;
+  const gridSpec = useMemo(() => getGridSpec(format, selectedRecords.length, layout), [format, layout, selectedRecords.length]);
+  const previewStyle = {
+    "--share-columns": gridSpec.columns,
+    "--share-preview-ratio": `${gridSpec.width} / ${gridSpec.height}`,
+  } as CSSProperties;
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -125,24 +179,48 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   useEffect(() => {
     let active = true;
     setPreparing(true);
-    void preloadRecordMedia(selected).finally(() => {
+    void preloadRecordMedia(selectedRecords).finally(() => {
       if (active) setPreparing(false);
     });
     return () => { active = false; };
-  }, [selected]);
+  }, [selectedRecords]);
+
+  function toggleRecord(recordId: string) {
+    setSelectedIds((current) => {
+      const next = new Set(current);
+      if (next.has(recordId)) next.delete(recordId);
+      else next.add(recordId);
+      return next;
+    });
+  }
+
+  function selectYear(year: string) {
+    setScope("range");
+    setStartDate(`${year}-01-01`);
+    setEndDate(`${year}-12-31`);
+  }
 
   async function savePng() {
-    if (saving) return;
+    if (saving || !selectedRecords.length) return;
     setSaving(true);
     setSaved(false);
     setError("");
     try {
-      await exportSharePng({ records, format, layout, palette, headline: headline.trim() || "我的现场档案", itemLimit, showDetails, showBrand, showStats });
+      await exportSharePng({
+        records: selectedRecords,
+        format,
+        layout,
+        palette,
+        headline: headline.trim() || "我的现场档案",
+        showDetails,
+        showBrand,
+        showStats,
+      });
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2400);
     } catch (caught) {
       console.error("Share PNG export failed", caught);
-      setError("图片生成失败。请稍后重试；无法跨域读取的外部图片会自动改用色块。");
+      setError("图片生成失败。请稍后重试；无法读取的外部图片会自动改用色块。");
     } finally {
       setSaving(false);
     }
@@ -155,14 +233,16 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
       <aside className="share-studio-panel" aria-label="分享图设置">
         <header>
           <div>
-            <span>分享制作</span>
-            <h2>制作你的现场分享图</h2>
-            <p>选择比例、海报编排和背景，右侧会即时呈现最终效果。</p>
+            <span>现场分享图</span>
+            <h2>选择真正想分享的现场</h2>
+            <p>支持时间范围、逐场选择和二十张以上的竖版海报墙。</p>
           </div>
           <button type="button" aria-label="退出分享制作" title="关闭（Esc）" onClick={onClose}><X /></button>
         </header>
 
-        <div className="share-studio-summary"><strong>{selected.length}</strong><span>张海报已就绪</span><small>{period} · {cities} 个城市</small></div>
+        <div className="share-studio-summary">
+          <strong>{selectedRecords.length}</strong><span>张海报进入成图</span><small>{period} · {cities} 个城市</small>
+        </div>
 
         <section className="share-control-group">
           <strong>分享标题</strong>
@@ -170,18 +250,64 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </section>
 
         <section className="share-control-group">
-          <strong>图片比例</strong>
+          <strong>选择范围</strong>
+          <div className="share-scope-control">
+            {(["all", "range", "manual"] as ScopeMode[]).map((item) => (
+              <button className={scope === item ? "is-active" : ""} key={item} type="button" onClick={() => setScope(item)}>
+                {item === "all" ? "全部记录" : item === "range" ? "按时间" : "逐场选择"}
+              </button>
+            ))}
+          </div>
+        </section>
+
+        {scope === "range" && (
+          <section className="share-range-control">
+            <div><label>开始日期<input type="date" value={startDate} onChange={(event) => setStartDate(event.target.value)} /></label><label>结束日期<input type="date" value={endDate} onChange={(event) => setEndDate(event.target.value)} /></label></div>
+            <div className="share-year-chips">{years.map((year) => <button type="button" key={year} onClick={() => selectYear(year)}>{year}</button>)}</div>
+          </section>
+        )}
+
+        {scope === "manual" && (
+          <section className="share-selection-browser">
+            <label><Search /><input value={selectionQuery} onChange={(event) => setSelectionQuery(event.target.value)} placeholder="搜索标题、城市、日期" /></label>
+            <div className="share-selection-actions">
+              <button type="button" onClick={() => setSelectedIds(new Set(visibleSelectionRecords.map((record) => record.id)))}>选择当前结果</button>
+              <button type="button" onClick={() => setSelectedIds(new Set())}>清空</button>
+            </div>
+            <div className="share-selection-grid">
+              {visibleSelectionRecords.map((record) => (
+                <button className={selectedIds.has(record.id) ? "is-selected" : ""} type="button" key={record.id} onClick={() => toggleRecord(record.id)}>
+                  <SharePoster record={record} />
+                  <span><b>{record.title}</b><small>{record.date} · {record.city || "城市待补"}</small></span>
+                  <i>{selectedIds.has(record.id) ? "✓" : ""}</i>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <section className="share-control-group">
+          <strong>最多使用</strong>
+          <div className="share-count-control">
+            {([12, 20, 30, "all"] as ItemLimit[]).map((count) => (
+              <button className={itemLimit === count ? "is-active" : ""} key={count} type="button" onClick={() => setItemLimit(count)}>{count === "all" ? "全部" : `${count} 张`}</button>
+            ))}
+          </div>
+        </section>
+
+        <section className="share-control-group">
+          <strong>成图比例</strong>
           <div className="share-format-control">
-            {(["landscape", "portrait", "square"] as ShareFormat[]).map((item) => (
+            {(["landscape", "portrait", "square", "long"] as ShareFormat[]).map((item) => (
               <button className={format === item ? "is-active" : ""} key={item} type="button" onClick={() => setFormat(item)}>
-                {item === "landscape" ? "横版 16:9" : item === "portrait" ? "竖版 3:4" : "方形 1:1"}
+                {item === "landscape" ? "横版" : item === "portrait" ? "竖版" : item === "square" ? "方形" : "长图"}
               </button>
             ))}
           </div>
         </section>
 
         <section className="share-control-group">
-          <strong>海报排列</strong>
+          <strong>海报编排</strong>
           <div className="share-layout-control">
             {layoutOptions.map((item) => (
               <button className={layout === item.value ? "is-active" : ""} key={item.value} type="button" onClick={() => setLayout(item.value)}>
@@ -192,65 +318,43 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </section>
 
         <section className="share-control-group">
-          <strong>海报数量</strong>
-          <div className="share-count-control">
-            {([4, 6, 8] as const).map((count) => <button className={itemLimit === count ? "is-active" : ""} key={count} type="button" onClick={() => setItemLimit(count)}>{count} 张</button>)}
-          </div>
-        </section>
-
-        <section className="share-control-group">
           <strong><Palette />背景</strong>
           <div className="share-palette-control">
             {paletteOptions.map((item) => (
-              <button className={palette === item.value ? "is-active" : ""} data-palette={item.value} key={item.value} type="button" onClick={() => setPalette(item.value)}>
-                <i /><span>{item.label}</span>
-              </button>
+              <button className={palette === item.value ? "is-active" : ""} data-palette={item.value} key={item.value} type="button" onClick={() => setPalette(item.value)}><i /><span>{item.label}</span></button>
             ))}
           </div>
         </section>
 
         <section className="share-switches">
-          <label>
-            <input type="checkbox" checked={showDetails} onChange={(event) => setShowDetails(event.target.checked)} />
-            <span><b>显示演出信息</b><small>展示日期、城市和演出名称。</small></span>
-          </label>
-          <label>
-            <input type="checkbox" checked={showBrand} onChange={(event) => setShowBrand(event.target.checked)} />
-            <span><b>显示项目标识</b><small>保留“现场记”和 GitHub 项目标识。</small></span>
-          </label>
-          <label>
-            <input type="checkbox" checked={showStats} onChange={(event) => setShowStats(event.target.checked)} />
-            <span><b>显示档案统计</b><small>展示城市数和已看场次。</small></span>
-          </label>
+          <label><input type="checkbox" checked={showDetails} onChange={(event) => setShowDetails(event.target.checked)} /><span><b>海报信息</b><small>在海报底部叠加日期和标题。</small></span></label>
+          <label><input type="checkbox" checked={showBrand} onChange={(event) => setShowBrand(event.target.checked)} /><span><b>项目标识</b><small>显示“现场记”和 GitHub 项目。</small></span></label>
+          <label><input type="checkbox" checked={showStats} onChange={(event) => setShowStats(event.target.checked)} /><span><b>档案统计</b><small>显示城市数和已看场次。</small></span></label>
         </section>
 
         {error && <p className="share-export-error">{error}</p>}
-        <button className="share-export-button" type="button" disabled={saving || preparing || !selected.length} onClick={() => void savePng()}>
-          <Download />{preparing ? "正在准备海报…" : saving ? "正在生成…" : saved ? "已保存到下载目录" : "保存 PNG 图片"}
+        <button className="share-export-button" type="button" disabled={saving || preparing || !selectedRecords.length} onClick={() => void savePng()}>
+          <Download />{preparing ? "正在准备海报…" : saving ? "正在生成…" : saved ? "已保存到下载目录" : `保存 ${selectedRecords.length} 张海报的 PNG`}
         </button>
-        <p className="share-export-note">按 Esc、右上角关闭或点击预览区外侧可返回。图片只在浏览器中生成，不会上传。</p>
       </aside>
 
       <main className="share-preview-area" onMouseDown={(event) => event.stopPropagation()}>
-        <article className={`share-preview share-preview-${format} share-layout-${layout}`}>
+        <article className={`share-preview share-preview-${format} share-layout-${layout}`} style={previewStyle}>
           <span className="share-preview-aura" aria-hidden="true" />
           <header>
-            <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {records.length} 场演出</p></div>
+            <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出</p></div>
             <strong>演</strong>
           </header>
           <div className="share-preview-posters">
-            {selected.map((record, index) => (
-              <figure className={`share-item-${index + 1}`} key={record.id}>
+            {selectedRecords.map((record, index) => (
+              <figure style={{ "--share-index": index } as CSSProperties} key={record.id}>
                 <SharePoster record={record} />
-                {showDetails && <figcaption><span>{record.date} · {record.city || "城市待补"}</span><b>{record.title}</b><em>{record.artists.join(" / ")}</em></figcaption>}
+                {showDetails && <figcaption><span>{record.date} · {record.city || "城市待补"}</span><b>{record.title}</b></figcaption>}
               </figure>
             ))}
           </div>
           <footer>
-            {showBrand ? <>
-              <span className="share-preview-brand"><i>演</i><b>现场记</b></span>
-              <span className="share-preview-github"><Github />Qi-i/live-memory</span>
-            </> : <span />}
+            {showBrand ? <><span className="share-preview-brand"><i>演</i><b>现场记</b></span><span className="share-preview-github"><Github />Qi-i/live-memory</span></> : <span />}
             {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
           </footer>
         </article>
@@ -273,276 +377,226 @@ interface ExportOptions {
   layout: ShareLayout;
   palette: SharePalette;
   headline: string;
-  itemLimit: 4 | 6 | 8;
   showDetails: boolean;
   showBrand: boolean;
   showStats: boolean;
 }
 
 async function exportSharePng(options: ExportOptions) {
-  const dimensions: Record<ShareFormat, [number, number]> = {
-    landscape: [1600, 900],
-    portrait: [1080, 1440],
-    square: [1200, 1200],
-  };
-  const [width, height] = dimensions[options.format];
+  const spec = getGridSpec(options.format, options.records.length, options.layout);
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = spec.width;
+  canvas.height = spec.height;
   const context = canvas.getContext("2d");
   if (!context) throw new Error("Canvas is unavailable");
   await document.fonts?.ready;
 
   const palette = palettes[options.palette];
-  drawBackground(context, width, height, palette);
-  const padding = Math.round(width * 0.052);
-  const headerHeight = Math.round(height * 0.17);
-  const footerHeight = Math.round(height * 0.07);
+  drawBackground(context, spec.width, spec.height, palette);
+  drawShareHeader(context, spec, options, palette);
 
-  context.fillStyle = palette.accent;
-  context.font = `800 ${Math.max(18, Math.round(width * 0.016))}px system-ui, sans-serif`;
-  context.fillText("LIVE MEMORY · CONCERT ARCHIVE", padding, padding * 0.82);
-  context.fillStyle = palette.text;
-  context.font = `900 ${Math.round(width * (options.format === "portrait" ? 0.061 : 0.047))}px system-ui, sans-serif`;
-  context.fillText(options.headline, padding, padding + headerHeight * 0.42);
+  const areaTop = spec.padding + spec.headerHeight;
+  const areaHeight = spec.height - spec.padding - spec.headerHeight - spec.footerHeight;
+  const availableWidth = spec.width - spec.padding * 2;
+  const posterWidthByGrid = (availableWidth - spec.gap * (spec.columns - 1)) / spec.columns;
+  const posterHeightByGrid = posterWidthByGrid * 1.5;
+  const requiredHeight = posterHeightByGrid * spec.rows + spec.gap * Math.max(0, spec.rows - 1);
+  const posterHeight = requiredHeight <= areaHeight
+    ? posterHeightByGrid
+    : (areaHeight - spec.gap * Math.max(0, spec.rows - 1)) / spec.rows;
+  const posterWidth = posterHeight / 1.5;
+  const rowWidth = posterWidth * spec.columns + spec.gap * Math.max(0, spec.columns - 1);
+  const startX = (spec.width - rowWidth) / 2;
+  const startY = areaTop + Math.max(0, (areaHeight - (posterHeight * spec.rows + spec.gap * Math.max(0, spec.rows - 1))) / 2);
 
-  const years = Array.from(new Set(options.records.map((record) => record.date.slice(0, 4)).filter(Boolean))).sort();
-  const period = years.length ? `${years[0]}—${years[years.length - 1]}` : String(new Date().getFullYear());
-  context.fillStyle = palette.muted;
-  context.font = `700 ${Math.max(16, Math.round(width * 0.015))}px system-ui, sans-serif`;
-  context.fillText(`${period} · ${options.records.length} 场演出`, padding, padding + headerHeight * 0.72);
-  drawLogo(context, width - padding - Math.round(width * 0.052), padding * 0.45, Math.round(width * 0.052), palette);
-
-  const maxItems = Math.min(options.itemLimit, options.layout === "timeline" ? 8 : options.format === "portrait" ? 8 : 6);
-  const selected = options.records.filter((record) => primaryMedia(record)).slice(0, maxItems);
-  const area = {
-    x: padding,
-    y: padding + headerHeight,
-    width: width - padding * 2,
-    height: height - padding - headerHeight - footerHeight,
-  };
-  const slots = makeSlots(options.layout, options.format, selected.length, area);
-  const orderedSlots = slots.map((slot, index) => ({ slot, index })).sort((a, b) => (a.slot.z || 0) - (b.slot.z || 0));
-  for (const { slot, index } of orderedSlots) {
-    const record = selected[index];
-    if (!record) continue;
-    await drawRecord(context, record, slot, palette, options.showDetails, options.layout === "timeline");
+  for (let index = 0; index < options.records.length; index += 1) {
+    const record = options.records[index];
+    const column = index % spec.columns;
+    const row = Math.floor(index / spec.columns);
+    const x = startX + column * (posterWidth + spec.gap);
+    const y = startY + row * (posterHeight + spec.gap);
+    const rotation = options.layout === "staggered" ? ((index % 5) - 2) * 0.012 : 0;
+    await drawPoster(context, record, { x, y, width: posterWidth, height: posterHeight }, palette, options.showDetails, options.layout, rotation);
   }
 
-  const footerY = height - padding * 0.42;
-  if (options.showBrand) {
-    context.fillStyle = palette.text;
-    context.font = `850 ${Math.max(15, Math.round(width * 0.015))}px system-ui, sans-serif`;
-    context.fillText("现场记", padding, footerY);
-    context.fillStyle = palette.muted;
-    context.font = `700 ${Math.max(13, Math.round(width * 0.012))}px system-ui, sans-serif`;
-    context.fillText("GitHub · Qi-i/live-memory", padding + Math.round(width * 0.075), footerY);
-  }
-  const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
-  const watched = options.records.filter((record) => record.status === "watched").length;
-  if (options.showStats) {
-    context.fillStyle = palette.muted;
-    context.font = `700 ${Math.max(13, Math.round(width * 0.012))}px system-ui, sans-serif`;
-    context.textAlign = "right";
-    context.fillText(`${cities} 城市 · ${watched} 已看`, width - padding, footerY);
-    context.textAlign = "left";
-  }
+  drawShareFooter(context, spec, options, palette);
 
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.96));
   if (!blob) throw new Error("PNG export failed");
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement("a");
   anchor.href = url;
-  anchor.download = `现场档案-${options.format}-${new Date().toISOString().slice(0, 10)}.png`;
+  anchor.download = `现场记-${options.records.length}场-${options.format}-${new Date().toISOString().slice(0, 10)}.png`;
   document.body.appendChild(anchor);
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-function drawBackground(context: CanvasRenderingContext2D, width: number, height: number, palette: PaletteDefinition) {
-  const gradient = context.createLinearGradient(0, 0, width, height);
-  gradient.addColorStop(0, palette.background[0]);
-  gradient.addColorStop(0.52, palette.surface);
-  gradient.addColorStop(1, palette.background[1]);
-  context.fillStyle = gradient;
-  context.fillRect(0, 0, width, height);
-
-  const glow = context.createRadialGradient(width * 0.76, height * 0.2, 0, width * 0.76, height * 0.2, width * 0.46);
-  glow.addColorStop(0, `${palette.accent}42`);
-  glow.addColorStop(1, `${palette.accent}00`);
-  context.fillStyle = glow;
-  context.fillRect(0, 0, width, height);
-
-  context.save();
-  context.globalAlpha = 0.14;
-  context.strokeStyle = palette.accent;
-  context.lineWidth = Math.max(2, width * 0.0015);
-  for (let index = 0; index < 4; index += 1) {
-    context.beginPath();
-    context.ellipse(width * 0.77, height * 0.78, width * (0.2 + index * 0.055), height * (0.08 + index * 0.025), -0.16, 0, Math.PI * 2);
-    context.stroke();
+function getGridSpec(format: ShareFormat, count: number, layout: ShareLayout): GridSpec {
+  const safeCount = Math.max(1, count);
+  const columns = format === "landscape"
+    ? safeCount <= 12 ? 6 : safeCount <= 24 ? 8 : safeCount <= 40 ? 10 : 12
+    : format === "portrait"
+      ? safeCount <= 12 ? 4 : safeCount <= 24 ? 5 : safeCount <= 40 ? 6 : 7
+      : format === "square"
+        ? safeCount <= 12 ? 4 : safeCount <= 24 ? 6 : safeCount <= 40 ? 7 : 8
+        : safeCount > 40 ? 5 : 4;
+  const rows = Math.ceil(safeCount / columns);
+  const width = format === "landscape" ? 1600 : format === "square" ? 1200 : 1080;
+  const padding = format === "landscape" ? 64 : 58;
+  const headerHeight = format === "landscape" ? 150 : 190;
+  const footerHeight = 92;
+  const gap = layout === "dense" ? 10 : layout === "catalog" ? 18 : 24;
+  if (format !== "long") {
+    return {
+      width,
+      height: format === "landscape" ? 900 : format === "square" ? 1200 : 1440,
+      columns,
+      rows,
+      gap,
+      headerHeight,
+      footerHeight,
+      padding,
+    };
   }
-  context.restore();
+  const posterWidth = (width - padding * 2 - gap * (columns - 1)) / columns;
+  const posterHeight = posterWidth * 1.5;
+  const contentHeight = rows * posterHeight + Math.max(0, rows - 1) * gap;
+  return {
+    width,
+    height: Math.ceil(padding + headerHeight + contentHeight + footerHeight + padding),
+    columns,
+    rows,
+    gap,
+    headerHeight,
+    footerHeight,
+    padding,
+  };
 }
 
-interface Slot { x: number; y: number; width: number; height: number; rotation?: number; z?: number; }
-
-function makeSlots(layout: ShareLayout, format: ShareFormat, count: number, area: Slot): Slot[] {
-  if (!count) return [];
-  const gap = Math.round(Math.min(area.width, area.height) * 0.018);
-  if (layout === "timeline") {
-    const rowHeight = (area.height - gap * (count - 1)) / count;
-    return Array.from({ length: count }, (_, index) => ({
-      x: area.x,
-      y: area.y + index * (rowHeight + gap),
-      width: area.width,
-      height: rowHeight,
-    }));
-  }
-  if (layout === "grid") {
-    const columns = format === "landscape" ? 3 : 2;
-    const rows = Math.ceil(count / columns);
-    const cellWidth = (area.width - gap * (columns - 1)) / columns;
-    const cellHeight = (area.height - gap * (rows - 1)) / rows;
-    return Array.from({ length: count }, (_, index) => ({
-      x: area.x + (index % columns) * (cellWidth + gap),
-      y: area.y + Math.floor(index / columns) * (cellHeight + gap),
-      width: cellWidth,
-      height: cellHeight,
-    }));
-  }
-  if (layout === "cover") {
-    if (format === "portrait") {
-      const mainHeight = area.height * 0.55;
-      const slots: Slot[] = [{ x: area.x, y: area.y, width: area.width, height: mainHeight }];
-      const remaining = count - 1;
-      if (!remaining) return slots;
-      const columns = 2;
-      const rows = Math.ceil(remaining / columns);
-      const cellWidth = (area.width - gap) / columns;
-      const cellHeight = (area.height - mainHeight - gap - gap * (rows - 1)) / rows;
-      for (let index = 0; index < remaining; index += 1) slots.push({
-        x: area.x + (index % columns) * (cellWidth + gap),
-        y: area.y + mainHeight + gap + Math.floor(index / columns) * (cellHeight + gap),
-        width: cellWidth,
-        height: cellHeight,
-      });
-      return slots;
-    }
-    const mainWidth = area.width * 0.61;
-    const slots: Slot[] = [{ x: area.x, y: area.y, width: mainWidth, height: area.height }];
-    const remaining = count - 1;
-    if (!remaining) return slots;
-    const sideWidth = area.width - mainWidth - gap;
-    const sideHeight = (area.height - gap * (remaining - 1)) / remaining;
-    for (let index = 0; index < remaining; index += 1) slots.push({
-      x: area.x + mainWidth + gap,
-      y: area.y + index * (sideHeight + gap),
-      width: sideWidth,
-      height: sideHeight,
-    });
-    return slots;
-  }
-
-  const normalized: Array<[number, number, number, number, number, number]> = format === "portrait"
-    ? [
-      [0.13, 0.02, 0.74, 0.48, -1, 5],
-      [0.02, 0.44, 0.46, 0.32, -5, 2],
-      [0.52, 0.43, 0.46, 0.34, 5, 3],
-      [0.08, 0.73, 0.39, 0.24, -3, 1],
-      [0.53, 0.73, 0.39, 0.24, 3, 1],
-      [0.33, 0.67, 0.34, 0.27, 0, 4],
-    ]
-    : [
-      [0.34, 0.02, 0.32, 0.94, -1, 6],
-      [0.11, 0.12, 0.28, 0.76, -7, 3],
-      [0.59, 0.10, 0.27, 0.78, 6, 4],
-      [0.76, 0.19, 0.22, 0.65, 10, 2],
-      [0.01, 0.28, 0.22, 0.57, -10, 1],
-      [0.70, 0.33, 0.20, 0.54, 3, 1],
-    ];
-  return normalized.slice(0, count).map(([x, y, slotWidth, slotHeight, rotation, z]) => ({
-    x: area.x + x * area.width,
-    y: area.y + y * area.height,
-    width: slotWidth * area.width,
-    height: slotHeight * area.height,
-    rotation,
-    z,
-  }));
+function formatPeriod(records: EventRecord[]) {
+  if (!records.length) return "尚未选择";
+  const dates = records.map((record) => record.date).filter(Boolean).sort();
+  const first = dates[0];
+  const last = dates.at(-1) || first;
+  if (first.slice(0, 4) === last.slice(0, 4)) return first.slice(0, 4);
+  return `${first.slice(0, 4)}—${last.slice(0, 4)}`;
 }
 
-async function drawRecord(
+function drawShareHeader(context: CanvasRenderingContext2D, spec: GridSpec, options: ExportOptions, palette: PaletteDefinition) {
+  const x = spec.padding;
+  context.fillStyle = palette.accent;
+  context.font = `800 ${Math.max(17, Math.round(spec.width * 0.014))}px system-ui, sans-serif`;
+  context.fillText("LIVE MEMORY · CONCERT ARCHIVE", x, spec.padding * 0.72);
+  context.fillStyle = palette.text;
+  context.font = `900 ${Math.round(spec.width * (options.format === "landscape" ? 0.038 : 0.052))}px system-ui, sans-serif`;
+  context.fillText(trimText(context, options.headline, spec.width - spec.padding * 3.2), x, spec.padding + spec.headerHeight * 0.45);
+  context.fillStyle = palette.muted;
+  context.font = `700 ${Math.max(15, Math.round(spec.width * 0.013))}px system-ui, sans-serif`;
+  context.fillText(`${formatPeriod(options.records)} · ${options.records.length} 场演出`, x, spec.padding + spec.headerHeight * 0.72);
+  drawLogo(context, spec.width - spec.padding - Math.round(spec.width * 0.055), spec.padding * 0.34, Math.round(spec.width * 0.055), palette);
+}
+
+function drawShareFooter(context: CanvasRenderingContext2D, spec: GridSpec, options: ExportOptions, palette: PaletteDefinition) {
+  const y = spec.height - spec.padding * 0.55;
+  if (options.showBrand) {
+    context.fillStyle = palette.text;
+    context.font = `850 ${Math.max(15, Math.round(spec.width * 0.014))}px system-ui, sans-serif`;
+    context.fillText("现场记", spec.padding, y);
+    context.fillStyle = palette.muted;
+    context.font = `700 ${Math.max(12, Math.round(spec.width * 0.011))}px system-ui, sans-serif`;
+    context.fillText("GitHub · Qi-i/live-memory", spec.padding + Math.round(spec.width * 0.078), y);
+  }
+  if (options.showStats) {
+    const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
+    const watched = options.records.filter((record) => record.status === "watched").length;
+    context.fillStyle = palette.muted;
+    context.font = `700 ${Math.max(12, Math.round(spec.width * 0.011))}px system-ui, sans-serif`;
+    context.textAlign = "right";
+    context.fillText(`${cities} 城市 · ${watched} 已看`, spec.width - spec.padding, y);
+    context.textAlign = "left";
+  }
+}
+
+async function drawPoster(
   context: CanvasRenderingContext2D,
   record: EventRecord,
-  slot: Slot,
+  slot: { x: number; y: number; width: number; height: number },
   palette: PaletteDefinition,
   showDetails: boolean,
-  timeline: boolean,
+  layout: ShareLayout,
+  rotation: number,
 ) {
-  const radius = Math.max(10, slot.width * 0.025);
-  const rotation = (slot.rotation || 0) * Math.PI / 180;
   context.save();
-  let x = slot.x;
-  let y = slot.y;
-  if (rotation) {
-    context.translate(slot.x + slot.width / 2, slot.y + slot.height / 2);
-    context.rotate(rotation);
-    x = -slot.width / 2;
-    y = -slot.height / 2;
-  }
-
-  context.shadowColor = "rgba(18, 35, 34, .28)";
-  context.shadowBlur = Math.max(12, slot.width * 0.065);
-  context.shadowOffsetY = Math.max(6, slot.height * 0.025);
+  context.translate(slot.x + slot.width / 2, slot.y + slot.height / 2);
+  context.rotate(rotation);
+  const x = -slot.width / 2;
+  const y = -slot.height / 2;
+  const radius = Math.max(4, slot.width * 0.035);
+  context.shadowColor = "rgba(0,0,0,.20)";
+  context.shadowBlur = layout === "dense" ? 4 : 14;
+  context.shadowOffsetY = layout === "dense" ? 2 : 7;
   roundedPath(context, x, y, slot.width, slot.height, radius);
   context.fillStyle = palette.surface;
   context.fill();
   context.shadowColor = "transparent";
-
   roundedPath(context, x, y, slot.width, slot.height, radius);
   context.clip();
-  context.fillStyle = palette.surface;
-  context.fillRect(x, y, slot.width, slot.height);
 
   const image = await loadMediaImage(primaryMedia(record));
-  const localSlot = { ...slot, x, y };
-  if (timeline) {
-    const imageWidth = Math.min(slot.width * 0.22, slot.height * 0.9);
-    if (image) drawCover(context, image, x, y, imageWidth, slot.height);
-    else drawFallback(context, record, x, y, imageWidth, slot.height);
-    const textX = x + imageWidth + slot.height * 0.2;
-    context.fillStyle = palette.accent;
-    context.font = `800 ${Math.max(12, slot.height * 0.15)}px system-ui, sans-serif`;
-    context.fillText(`${record.date} · ${record.city || "城市待补"}`, textX, y + slot.height * 0.38);
-    context.fillStyle = palette.text;
-    context.font = `900 ${Math.max(15, slot.height * 0.23)}px system-ui, sans-serif`;
-    context.fillText(trimText(context, record.title, x + slot.width - textX - 18), textX, y + slot.height * 0.69);
-  } else {
-    if (image) drawCover(context, image, x, y, slot.width, slot.height);
-    else drawFallback(context, record, x, y, slot.width, slot.height);
-    if (showDetails) drawDetails(context, record, localSlot, palette);
-  }
-  context.strokeStyle = palette.border;
-  context.lineWidth = Math.max(2, slot.width * 0.007);
-  roundedPath(context, x, y, slot.width, slot.height, radius);
-  context.stroke();
+  if (image) drawContain(context, image, x, y, slot.width, slot.height, palette.surface);
+  else drawFallback(context, record, x, y, slot.width, slot.height);
+  if (showDetails) drawDetails(context, record, { x, y, width: slot.width, height: slot.height }, palette);
   context.restore();
+
+  if (layout !== "dense") {
+    context.save();
+    context.translate(slot.x + slot.width / 2, slot.y + slot.height / 2);
+    context.rotate(rotation);
+    context.strokeStyle = palette.border;
+    context.lineWidth = Math.max(1.5, slot.width * 0.012);
+    roundedPath(context, -slot.width / 2, -slot.height / 2, slot.width, slot.height, radius);
+    context.stroke();
+    context.restore();
+  }
 }
 
-function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slot: Slot, palette: PaletteDefinition) {
-  const shade = context.createLinearGradient(0, slot.y + slot.height * 0.48, 0, slot.y + slot.height);
+function drawBackground(context: CanvasRenderingContext2D, width: number, height: number, palette: PaletteDefinition) {
+  const gradient = context.createLinearGradient(0, 0, width, height);
+  gradient.addColorStop(0, palette.background[0]);
+  gradient.addColorStop(1, palette.background[1]);
+  context.fillStyle = gradient;
+  context.fillRect(0, 0, width, height);
+  const glow = context.createRadialGradient(width * 0.78, height * 0.08, 0, width * 0.78, height * 0.08, width * 0.42);
+  glow.addColorStop(0, `${palette.accent}32`);
+  glow.addColorStop(1, `${palette.accent}00`);
+  context.fillStyle = glow;
+  context.fillRect(0, 0, width, height);
+}
+
+function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slot: { x: number; y: number; width: number; height: number }, palette: PaletteDefinition) {
+  const shade = context.createLinearGradient(0, slot.y + slot.height * 0.56, 0, slot.y + slot.height);
   shade.addColorStop(0, "rgba(0,0,0,0)");
   shade.addColorStop(1, "rgba(0,0,0,.9)");
   context.fillStyle = shade;
-  context.fillRect(slot.x, slot.y + slot.height * 0.43, slot.width, slot.height * 0.57);
-  const inset = Math.max(12, slot.width * 0.045);
+  context.fillRect(slot.x, slot.y + slot.height * 0.48, slot.width, slot.height * 0.52);
+  const inset = Math.max(5, slot.width * 0.055);
   context.fillStyle = palette.accent;
-  context.font = `800 ${Math.max(10, slot.width * 0.033)}px system-ui, sans-serif`;
-  context.fillText(`${record.date} · ${record.city || "城市待补"}`, slot.x + inset, slot.y + slot.height - inset * 3.0);
+  context.font = `800 ${Math.max(8, slot.width * 0.06)}px system-ui, sans-serif`;
+  context.fillText(record.date, slot.x + inset, slot.y + slot.height - inset * 3.0);
   context.fillStyle = "#ffffff";
-  context.font = `900 ${Math.max(14, slot.width * 0.052)}px system-ui, sans-serif`;
-  context.fillText(trimText(context, record.title, slot.width - inset * 2), slot.x + inset, slot.y + slot.height - inset * 1.25);
+  context.font = `900 ${Math.max(10, slot.width * 0.078)}px system-ui, sans-serif`;
+  context.fillText(trimText(context, record.title, slot.width - inset * 2), slot.x + inset, slot.y + slot.height - inset * 1.15);
+}
+
+function drawContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, background: string) {
+  context.fillStyle = background;
+  context.fillRect(x, y, width, height);
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function drawFallback(context: CanvasRenderingContext2D, record: EventRecord, x: number, y: number, width: number, height: number) {
@@ -554,17 +608,10 @@ function drawFallback(context: CanvasRenderingContext2D, record: EventRecord, x:
   context.fillStyle = "rgba(255,255,255,.86)";
   context.textAlign = "center";
   context.textBaseline = "middle";
-  context.font = `900 ${Math.max(18, Math.min(width, height) * 0.13)}px system-ui, sans-serif`;
+  context.font = `900 ${Math.max(13, Math.min(width, height) * 0.12)}px system-ui, sans-serif`;
   context.fillText(trimText(context, record.title, width * 0.76), x + width / 2, y + height / 2);
   context.textAlign = "left";
   context.textBaseline = "alphabetic";
-}
-
-function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
-  const drawWidth = image.naturalWidth * scale;
-  const drawHeight = image.naturalHeight * scale;
-  context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
 }
 
 function drawLogo(context: CanvasRenderingContext2D, x: number, y: number, size: number, palette: PaletteDefinition) {
@@ -572,7 +619,7 @@ function drawLogo(context: CanvasRenderingContext2D, x: number, y: number, size:
   gradient.addColorStop(0, palette.accent);
   gradient.addColorStop(1, palette.background[1]);
   context.fillStyle = gradient;
-  roundedPath(context, x, y, size, size, size * 0.18);
+  roundedPath(context, x, y, size, size, size * 0.2);
   context.fill();
   context.fillStyle = palette.text;
   context.textAlign = "center";
