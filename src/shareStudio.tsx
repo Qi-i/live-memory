@@ -11,6 +11,7 @@ import {
 import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
 import type { EventRecord } from "./domain";
 import { primaryMedia } from "./domain";
+import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
 export type ShareFormat = "landscape" | "portrait" | "square";
@@ -89,6 +90,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   const [showBrand, setShowBrand] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [preparing, setPreparing] = useState(true);
   const [error, setError] = useState("");
 
   const maxItems = layout === "timeline" ? 8 : format === "portrait" ? 8 : 6;
@@ -117,6 +119,15 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
     };
   }, [onClose]);
 
+  useEffect(() => {
+    let active = true;
+    setPreparing(true);
+    void preloadRecordMedia(selected).finally(() => {
+      if (active) setPreparing(false);
+    });
+    return () => { active = false; };
+  }, [selected]);
+
   async function savePng() {
     if (saving) return;
     setSaving(true);
@@ -128,7 +139,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
       window.setTimeout(() => setSaved(false), 2400);
     } catch (caught) {
       console.error("Share PNG export failed", caught);
-      setError("图片生成失败。请等待海报加载完成后再试；无法读取的外部图片会自动改用色块。 ");
+      setError("图片生成失败。请稍后重试；无法跨域读取的外部图片会自动改用色块。");
     } finally {
       setSaving(false);
     }
@@ -193,8 +204,8 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </section>
 
         {error && <p className="share-export-error">{error}</p>}
-        <button className="share-export-button" type="button" disabled={saving || !selected.length} onClick={() => void savePng()}>
-          <Download />{saving ? "正在生成…" : saved ? "已保存到下载目录" : "保存 PNG 图片"}
+        <button className="share-export-button" type="button" disabled={saving || preparing || !selected.length} onClick={() => void savePng()}>
+          <Download />{preparing ? "正在准备海报…" : saving ? "正在生成…" : saved ? "已保存到下载目录" : "保存 PNG 图片"}
         </button>
         <p className="share-export-note">按 Esc、右上角关闭或点击预览区外侧可返回。图片只在浏览器中生成，不会上传。</p>
       </aside>
@@ -228,9 +239,10 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
 
 function SharePoster({ record }: { record: EventRecord }) {
   const media = primaryMedia(record);
+  const src = useCachedMediaSrc(media);
   const style = { "--poster-a": record.colors[0], "--poster-b": record.colors[1] } as CSSProperties;
-  if (!media?.src) return <span className="share-poster-fallback" style={style}>{record.title.slice(0, 4)}</span>;
-  return <img src={media.src} alt={record.title} crossOrigin="anonymous" />;
+  if (!src) return <span className="share-poster-fallback" style={style}>{record.title.slice(0, 4)}</span>;
+  return <img src={src} alt={record.title} decoding="async" />;
 }
 
 interface ExportOptions {
@@ -424,7 +436,7 @@ async function drawRecord(
   context.fillStyle = palette.surface;
   context.fillRect(slot.x, slot.y, slot.width, slot.height);
 
-  const image = await safeLoadImage(primaryMedia(record)?.src);
+  const image = await loadMediaImage(primaryMedia(record));
   if (timeline) {
     const imageWidth = Math.min(slot.width * 0.22, slot.height * 0.9);
     if (image) drawCover(context, image, slot.x, slot.y, imageWidth, slot.height);
@@ -476,33 +488,6 @@ function drawFallback(context: CanvasRenderingContext2D, record: EventRecord, x:
   context.fillText(trimText(context, record.title, width * 0.76), x + width / 2, y + height / 2);
   context.textAlign = "left";
   context.textBaseline = "alphabetic";
-}
-
-async function safeLoadImage(src?: string) {
-  if (!src) return null;
-  try {
-    if (src.startsWith("data:") || src.startsWith("blob:")) return await imageFromUrl(src);
-    const response = await fetch(src, { mode: "cors", credentials: "omit" });
-    if (!response.ok) return null;
-    const blob = await response.blob();
-    const objectUrl = URL.createObjectURL(blob);
-    try {
-      return await imageFromUrl(objectUrl);
-    } finally {
-      URL.revokeObjectURL(objectUrl);
-    }
-  } catch {
-    return null;
-  }
-}
-
-function imageFromUrl(src: string) {
-  return new Promise<HTMLImageElement | null>((resolve) => {
-    const image = new Image();
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = src;
-  });
 }
 
 function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {

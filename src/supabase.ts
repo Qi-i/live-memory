@@ -664,12 +664,97 @@ export async function pullRecordsFromSupabase(settings: AppSettings, localRecord
   return pullRecordsFromPasskeySupabase(settings, localRecords);
 }
 
-export async function refreshSignedMediaUrls(settings: AppSettings, records: EventRecord[]) {
+const SIGNED_MEDIA_TTL_SECONDS = 60 * 60 * 24 * 30;
+const SIGNED_MEDIA_RENEW_WINDOW_MS = 24 * 60 * 60 * 1000;
+const signedMediaSessionCache = new Map<string, { url: string; expiresAt: number }>();
+
+export interface MediaRefreshOptions {
+  force?: boolean;
+  storagePath?: string;
+}
+
+function signedMediaCacheKey(bucket: string, path: string) {
+  return `${bucket}:${path}`;
+}
+
+function decodeJwtPayload(token: string) {
+  try {
+    const segment = token.split(".")[1];
+    if (!segment) return null;
+    const normalized = segment.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    return JSON.parse(atob(padded)) as { exp?: number };
+  } catch {
+    return null;
+  }
+}
+
+function signedMediaExpiresAt(url: string) {
+  if (!url) return 0;
+  try {
+    const parsed = new URL(url, "https://local.invalid");
+    const token = parsed.searchParams.get("token");
+    const payload = token ? decodeJwtPayload(token) : null;
+    if (payload?.exp) return payload.exp * 1000;
+    const expires = Number(parsed.searchParams.get("expires") || parsed.searchParams.get("expires_at"));
+    if (Number.isFinite(expires) && expires > 0) return expires > 10_000_000_000 ? expires : expires * 1000;
+  } catch {
+    return 0;
+  }
+  return 0;
+}
+
+function hasUsableSignedMedia(asset: MediaAsset) {
+  if (!asset.storagePath || !asset.src || asset.src.startsWith("data:") || asset.src.startsWith("blob:")) return false;
+  return signedMediaExpiresAt(asset.src) > Date.now() + SIGNED_MEDIA_RENEW_WINDOW_MS;
+}
+
+export async function refreshSignedMediaUrls(
+  settings: AppSettings,
+  records: EventRecord[],
+  options: MediaRefreshOptions = {},
+) {
   if (!settings.supabase.ownerKey || !settings.supabase.syncMedia) return records;
   const client = makeSupabaseClient(settings);
-  return Promise.all(records.map(async (record) => {
-    const media = await Promise.all(record.media.map((asset) => signMediaIfNeeded(client, asset, mediaBucket(settings))));
-    return normalizeRecord({ ...record, media });
+  const bucket = mediaBucket(settings);
+  const paths = new Set<string>();
+
+  for (const record of records) {
+    for (const asset of record.media) {
+      if (!asset.storagePath) continue;
+      if (options.storagePath && asset.storagePath !== options.storagePath) continue;
+      const key = signedMediaCacheKey(bucket, asset.storagePath);
+      if (!options.force && hasUsableSignedMedia(asset)) {
+        signedMediaSessionCache.set(key, { url: asset.src, expiresAt: signedMediaExpiresAt(asset.src) });
+        continue;
+      }
+      const cached = signedMediaSessionCache.get(key);
+      if (!options.force && cached && cached.expiresAt > Date.now() + SIGNED_MEDIA_RENEW_WINDOW_MS) continue;
+      paths.add(asset.storagePath);
+    }
+  }
+
+  if (paths.size) {
+    const signed = await client.storage.from(bucket).createSignedUrls(Array.from(paths), SIGNED_MEDIA_TTL_SECONDS);
+    if (signed.error) throw signed.error;
+    for (const item of signed.data || []) {
+      const path = String(item.path || "");
+      const url = String(item.signedUrl || "");
+      if (!path || !url) continue;
+      signedMediaSessionCache.set(signedMediaCacheKey(bucket, path), {
+        url,
+        expiresAt: signedMediaExpiresAt(url) || Date.now() + SIGNED_MEDIA_TTL_SECONDS * 1000,
+      });
+    }
+  }
+
+  return records.map((record) => normalizeRecord({
+    ...record,
+    media: record.media.map((asset) => {
+      if (!asset.storagePath) return asset;
+      const cached = signedMediaSessionCache.get(signedMediaCacheKey(bucket, asset.storagePath));
+      return cached ? { ...asset, src: cached.url, source: "supabase" as const } : asset;
+    }),
   }));
 }
 
@@ -1340,10 +1425,23 @@ async function uploadMediaIfNeeded(client: SupabaseClient, userId: string, recor
 }
 
 async function signMediaIfNeeded(client: SupabaseClient, asset: MediaAsset, bucket: string): Promise<MediaAsset> {
-  if (asset.src.startsWith("data:")) return asset;
+  if (asset.src.startsWith("data:") || asset.src.startsWith("blob:")) return asset;
   if (!asset.storagePath) return asset;
-  const signed = await client.storage.from(bucket).createSignedUrl(asset.storagePath, 60 * 60 * 24 * 7);
+  const key = signedMediaCacheKey(bucket, asset.storagePath);
+  if (hasUsableSignedMedia(asset)) {
+    signedMediaSessionCache.set(key, { url: asset.src, expiresAt: signedMediaExpiresAt(asset.src) });
+    return asset;
+  }
+  const cached = signedMediaSessionCache.get(key);
+  if (cached && cached.expiresAt > Date.now() + SIGNED_MEDIA_RENEW_WINDOW_MS) {
+    return { ...asset, src: cached.url, source: "supabase" };
+  }
+  const signed = await client.storage.from(bucket).createSignedUrl(asset.storagePath, SIGNED_MEDIA_TTL_SECONDS);
   if (signed.error || !signed.data?.signedUrl) return asset;
+  signedMediaSessionCache.set(key, {
+    url: signed.data.signedUrl,
+    expiresAt: signedMediaExpiresAt(signed.data.signedUrl) || Date.now() + SIGNED_MEDIA_TTL_SECONDS * 1000,
+  });
   return { ...asset, src: signed.data.signedUrl, source: "supabase" };
 }
 

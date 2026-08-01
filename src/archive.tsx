@@ -21,6 +21,7 @@ import {
   MouseEvent,
   ReactNode,
   SetStateAction,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -34,6 +35,7 @@ import type {
   MediaAsset,
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
+import { useCachedMediaSrc } from "./mediaCache";
 export type { ShareFormat } from "./shareStudio";
 import {
   categoryLabels,
@@ -408,9 +410,23 @@ function ListView({ records, onOpen }: { records: EventRecord[]; onOpen: (record
 }
 
 function RecordMedia({ media, alt, fallback = "图片待补", onClick }: { media?: MediaAsset; alt?: string; fallback?: string; onClick?: (event: MouseEvent<HTMLImageElement | HTMLSpanElement>) => void }) {
+  const src = useCachedMediaSrc(media);
   const [failed, setFailed] = useState(false);
-  if (!media?.src || failed) return <span className="record-media-fallback" onClick={onClick}>{media?.storagePath ? "图片正在重新加载" : fallback}</span>;
-  return <img src={media.src} alt={alt || ""} loading="lazy" onClick={onClick} onError={() => { setFailed(true); if (media.storagePath) window.dispatchEvent(new Event("live-memory:cloud-media-refresh")); }} />;
+  useEffect(() => setFailed(false), [src, media?.storagePath]);
+  if (!src || failed) return <span className="record-media-fallback" onClick={onClick}>{media?.storagePath ? "图片正在载入" : fallback}</span>;
+  return <img
+    src={src}
+    alt={alt || ""}
+    loading="lazy"
+    decoding="async"
+    onClick={onClick}
+    onError={() => {
+      setFailed(true);
+      if (media?.storagePath) {
+        window.dispatchEvent(new CustomEvent("live-memory:cloud-media-refresh", { detail: { storagePath: media.storagePath } }));
+      }
+    }}
+  />;
 }
 
 function ArchiveEmpty() {
