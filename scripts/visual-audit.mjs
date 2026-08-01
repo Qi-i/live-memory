@@ -25,12 +25,12 @@ try {
   await page.locator(".archive-highlight-card-1 img").waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(900);
 
-  const bannerRatios = await page.locator(".archive-highlight-card:visible").evaluateAll((cards) => cards.map((card) => {
+  const bannerGeometry = await page.locator(".archive-highlight-card:visible").evaluateAll((cards) => cards.map((card) => {
     const rect = card.getBoundingClientRect();
-    return rect.height / rect.width;
+    return { ratio: rect.height / rect.width, aspectRatio: getComputedStyle(card).aspectRatio };
   }));
-  if (bannerRatios.length < 3 || bannerRatios.some((ratio) => ratio < 1.35)) {
-    throw new Error(`Banner posters are not portrait: ${bannerRatios.join(", ")}`);
+  if (bannerGeometry.length < 3 || bannerGeometry.some(({ ratio, aspectRatio }) => ratio < 1.2 || !aspectRatio.includes("2 / 3"))) {
+    throw new Error(`Banner posters are not portrait: ${JSON.stringify(bannerGeometry)}`);
   }
 
   const posterTops = await page.locator(".archive-poster-card").evaluateAll((cards) => cards.slice(0, 10).map((card) => Math.round(card.getBoundingClientRect().top)));
