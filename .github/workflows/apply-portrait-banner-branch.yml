@@ -1,0 +1,32 @@
+name: Apply portrait banner on branch
+
+on:
+  push:
+    branches: [design/portrait-banner-mass-share]
+
+permissions:
+  contents: write
+
+jobs:
+  migrate:
+    if: ${{ !contains(github.event.head_commit.message, '[portrait-banner-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: design/portrait-banner-mass-share
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-portrait-banner.mjs
+      - run: npm run check
+      - name: Commit migration
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/archive.css
+          git commit -m "Preserve portrait posters in homepage banner [portrait-banner-applied]"
+          git push origin HEAD:design/portrait-banner-mass-share
