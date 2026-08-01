@@ -1,12 +1,59 @@
 /* Final responsive corrections after visual audit. */
 
+/* Respect the selected desktop density. The default is five columns and users
+   can explicitly choose 4–8 columns instead of the grid silently collapsing. */
 @media (min-width: 1180px) {
-  .archive-poster-grid[style*="--archive-columns: 4"] {
-    --poster-card-min: 218px;
+  .archive-poster-grid {
+    grid-template-columns: repeat(var(--archive-columns), minmax(0, 1fr)) !important;
+  }
+}
+
+@media (min-width: 761px) and (max-width: 1179px) {
+  .archive-poster-grid {
+    grid-template-columns: repeat(auto-fill, minmax(185px, 1fr)) !important;
   }
 }
 
 @media (max-width: 760px) {
+  html,
+  body,
+  #root,
+  .experience-shell,
+  .experience-workspace,
+  .experience-topbar,
+  .experience-content,
+  .archive-page {
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    overflow-x: hidden;
+    box-sizing: border-box;
+  }
+
+  .experience-topbar {
+    grid-template-columns: 42px minmax(0, 1fr) 46px !important;
+  }
+
+  .experience-status {
+    width: 46px;
+    min-width: 0;
+    max-width: 46px;
+    overflow: hidden;
+  }
+
+  .experience-status .account-chip {
+    width: 44px;
+    min-width: 44px;
+    max-width: 44px;
+    padding: 4px;
+    overflow: hidden;
+  }
+
+  .experience-status .account-chip > span:not(.account-avatar),
+  .experience-status .account-chip > div:not(.account-avatar) {
+    display: none !important;
+  }
+
   .archive-masthead {
     display: block !important;
     grid-template-columns: minmax(0, 1fr) !important;
@@ -20,6 +67,7 @@
     min-width: 0;
     padding: 16px !important;
     border-right: 0 !important;
+    box-sizing: border-box;
   }
 
   .archive-masthead-copy > span {
@@ -61,6 +109,10 @@
   .archive-highlights,
   .archive-highlight-empty {
     display: none !important;
+  }
+
+  .archive-poster-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
   .experience-content {
