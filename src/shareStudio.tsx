@@ -159,6 +159,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   const gridSpec = useMemo(() => getGridSpec(format, selectedRecords.length, layout), [format, layout, selectedRecords.length]);
   const previewStyle = {
     "--share-columns": gridSpec.columns,
+    "--share-rows": gridSpec.rows,
     "--share-preview-ratio": `${gridSpec.width} / ${gridSpec.height}`,
   } as CSSProperties;
 

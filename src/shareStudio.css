@@ -490,16 +490,21 @@
 .share-preview-posters {
   display: grid;
   grid-template-columns: repeat(var(--share-columns), minmax(0, 1fr));
+  grid-template-rows: repeat(var(--share-rows), minmax(0, 1fr));
   gap: clamp(3px, 0.55vw, 10px);
   min-height: 0;
-  align-content: center;
+  align-content: stretch;
+  overflow: hidden;
   padding: 0 clamp(18px, 3.2vw, 48px);
 }
 
 .share-preview-posters figure {
   position: relative;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
+  height: 100%;
   aspect-ratio: 2 / 3;
+  justify-self: center;
   margin: 0;
   overflow: hidden;
   border-radius: clamp(3px, 0.45vw, 8px);
