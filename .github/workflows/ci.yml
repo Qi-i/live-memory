@@ -30,6 +30,12 @@ jobs:
             echo 'Premium redesign already applied.'
             exit 0
           fi
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-premium-home-share.mjs')
+          source = path.read_text()
+          path.write_text(source.replace('${', '\\${'))
+          PY
           node scripts/apply-premium-home-share.mjs
           npm run check
           git config user.name "github-actions[bot]"
