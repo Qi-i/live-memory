@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import "./refinementV3Hotfix.css";
 
 export interface AdminUserRecord {
   id: string;
