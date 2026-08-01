@@ -56,7 +56,9 @@ try {
   await page.waitForTimeout(500);
   await page.screenshot({ path: `${outputDir}/07-archive-mobile.png`, fullPage: true });
 
-  await page.getByRole("button", { name: "生成分享图", exact: true }).click();
+  const mobileShareButton = page.locator(".archive-command-actions button").last();
+  await mobileShareButton.scrollIntoViewIfNeeded();
+  await mobileShareButton.click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
   await page.screenshot({ path: `${outputDir}/08-share-mobile.png`, fullPage: true });
   await page.keyboard.press("Escape");
