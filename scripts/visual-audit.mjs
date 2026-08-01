@@ -25,7 +25,7 @@ try {
   await page.waitForTimeout(900);
   const posterTops = await page.locator(".archive-poster-card").evaluateAll((cards) => cards.slice(0, 10).map((card) => Math.round(card.getBoundingClientRect().top)));
   const firstRowCount = posterTops.filter((top) => Math.abs(top - posterTops[0]) <= 3).length;
-  if (firstRowCount < 4) throw new Error(`Desktop poster grid rendered only ${firstRowCount} columns`);
+  if (firstRowCount < 5) throw new Error(`Desktop poster grid rendered only ${firstRowCount} columns`);
   await page.screenshot({ path: `${outputDir}/02-archive-poster-desktop.png`, fullPage: true });
 
   await page.getByTitle("画报").click();

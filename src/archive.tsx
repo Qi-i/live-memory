@@ -114,7 +114,7 @@ export function ArchivePage({
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<"smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc">("smart");
   const [expanded, setExpanded] = useState(false);
-  const preferredPosterColumns = Math.min(8, Math.max(4, settings.posterColumns || 5));
+  const preferredPosterColumns = Math.min(8, Math.max(5, settings.posterColumns || 5));
   const [density, setDensity] = useState(preferredPosterColumns);
   const facets = useMemo(() => buildFacets(records), [records]);
   const visibleRecords = useMemo(() => sortRecords(filterRecords(records, filters), sort), [filters, records, sort]);
