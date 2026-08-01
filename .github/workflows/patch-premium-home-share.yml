@@ -1,0 +1,32 @@
+name: Patch premium home and share redesign
+
+on:
+  push:
+    branches: [design/premium-home-share]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[premium-home-share-applied]') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: design/premium-home-share
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/apply-premium-home-share.mjs
+      - run: npm run check
+      - name: Commit redesign
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/archive.tsx src/archive.css src/main.tsx src/shareStudio.tsx src/shareStudio.css scripts/run-tests.mjs
+          git commit -m "Redesign homepage and share studio [premium-home-share-applied]"
+          git push origin HEAD:design/premium-home-share
