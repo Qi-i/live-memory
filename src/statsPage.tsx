@@ -25,6 +25,7 @@ import {
 } from "./adminApi";
 import "./refinementV3.css";
 import "./refinementV3Hotfix.css";
+import "./refinementV3Hotfix.css";
 
 export function StatsPage({ records }: { records: EventRecord[] }) {
   const watched = records.filter((record) => record.status === "watched");
