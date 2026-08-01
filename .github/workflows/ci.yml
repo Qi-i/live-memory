@@ -7,10 +7,40 @@ on:
     branches: [refactor/experience-system-v3]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  prepare-premium-redesign:
+    if: github.event_name == 'pull_request' && github.head_ref == 'design/premium-home-share'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: design/premium-home-share
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply redesign once
+        run: |
+          if grep -q 'archive-highlight-card-1' src/archive.css; then
+            echo 'Premium redesign already applied.'
+            exit 0
+          fi
+          node scripts/apply-premium-home-share.mjs
+          npm run check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/archive.tsx src/archive.css src/main.tsx src/shareStudio.tsx src/shareStudio.css scripts/run-tests.mjs
+          git commit -m "Redesign homepage and share studio [premium-home-share-applied]"
+          git push origin HEAD:design/premium-home-share
+
   verify:
+    needs: prepare-premium-redesign
+    if: always() && (needs.prepare-premium-redesign.result == 'success' || needs.prepare-premium-redesign.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
