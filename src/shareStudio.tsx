@@ -2,7 +2,6 @@ import {
   Download,
   Github,
   Grid3X3,
-  Image as ImageIcon,
   LayoutTemplate,
   Palette,
   Rows3,
@@ -102,7 +101,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
     [records],
   );
   const earliestDate = eligibleRecords[0]?.date || "";
-  const latestDate = eligibleRecords.at(-1)?.date || "";
+  const latestDate = eligibleRecords.length ? eligibleRecords[eligibleRecords.length - 1].date : "";
   const [layout, setLayout] = useState<ShareLayout>("dense");
   const [palette, setPalette] = useState<SharePalette>("mint");
   const [headline, setHeadline] = useState("我的现场档案");
@@ -126,9 +125,9 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   );
 
   useEffect(() => {
-    setStartDate((current) => current || earliestDate);
-    setEndDate((current) => current || latestDate);
-    setSelectedIds((current) => {
+    setStartDate((current: string) => current || earliestDate);
+    setEndDate((current: string) => current || latestDate);
+    setSelectedIds((current: Set<string>) => {
       const valid = new Set(eligibleRecords.filter((record) => current.has(record.id)).map((record) => record.id));
       return valid.size ? valid : new Set(eligibleRecords.map((record) => record.id));
     });
@@ -186,7 +185,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   }, [selectedRecords]);
 
   function toggleRecord(recordId: string) {
-    setSelectedIds((current) => {
+    setSelectedIds((current: Set<string>) => {
       const next = new Set(current);
       if (next.has(recordId)) next.delete(recordId);
       else next.add(recordId);
@@ -272,7 +271,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
             <label><Search /><input value={selectionQuery} onChange={(event) => setSelectionQuery(event.target.value)} placeholder="搜索标题、城市、日期" /></label>
             <div className="share-selection-actions">
               <button type="button" onClick={() => setSelectedIds(new Set(visibleSelectionRecords.map((record) => record.id)))}>选择当前结果</button>
-              <button type="button" onClick={() => setSelectedIds(new Set())}>清空</button>
+              <button type="button" onClick={() => setSelectedIds(new Set<string>())}>清空</button>
             </div>
             <div className="share-selection-grid">
               {visibleSelectionRecords.map((record) => (
@@ -479,7 +478,7 @@ function formatPeriod(records: EventRecord[]) {
   if (!records.length) return "尚未选择";
   const dates = records.map((record) => record.date).filter(Boolean).sort();
   const first = dates[0];
-  const last = dates.at(-1) || first;
+  const last = dates[dates.length - 1] || first;
   if (first.slice(0, 4) === last.slice(0, 4)) return first.slice(0, 4);
   return `${first.slice(0, 4)}—${last.slice(0, 4)}`;
 }
