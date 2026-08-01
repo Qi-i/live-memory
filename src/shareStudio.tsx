@@ -348,8 +348,10 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
           <div className="share-preview-posters">
             {selectedRecords.map((record, index) => (
               <figure style={{ "--share-index": index } as CSSProperties} key={record.id}>
-                <SharePoster record={record} />
-                {showDetails && <figcaption><span>{record.date} · {record.city || "城市待补"}</span><b>{record.title}</b></figcaption>}
+                <div className="share-poster-frame">
+                  <SharePoster record={record} />
+                  {showDetails && <figcaption><span>{record.date} · {record.city || "城市待补"}</span><b>{record.title}</b></figcaption>}
+                </div>
               </figure>
             ))}
           </div>
@@ -368,7 +370,12 @@ function SharePoster({ record }: { record: EventRecord }) {
   const src = useCachedMediaSrc(media);
   const style = { "--poster-a": record.colors[0], "--poster-b": record.colors[1] } as CSSProperties;
   if (!src) return <span className="share-poster-fallback" style={style}>{record.title.slice(0, 4)}</span>;
-  return <img src={src} alt={record.title} decoding="async" />;
+  return (
+    <span className="share-poster-image">
+      <img className="share-poster-backdrop" src={src} alt="" aria-hidden="true" decoding="async" />
+      <img className="share-poster-foreground" src={src} alt={record.title} decoding="async" />
+    </span>
+  );
 }
 
 interface ExportOptions {
@@ -593,7 +600,22 @@ function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slo
 function drawContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, background: string) {
   context.fillStyle = background;
   context.fillRect(x, y, width, height);
+
+  context.save();
+  context.filter = "blur(" + Math.max(7, width * 0.05) + "px) brightness(0.7) saturate(0.86)";
+  drawCover(context, image, x - width * 0.08, y - height * 0.05, width * 1.16, height * 1.1);
+  context.restore();
+
+  context.fillStyle = "rgba(7, 15, 13, 0.08)";
+  context.fillRect(x, y, width, height);
   const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);

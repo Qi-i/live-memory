@@ -57,15 +57,16 @@ try {
   }, null, { timeout: 30000 });
 
   const shareMedia = await page.locator(".share-preview-posters figure").evaluateAll((figures) => figures.map((figure) => {
-    const rect = figure.getBoundingClientRect();
-    const image = figure.querySelector("img");
+    const frame = figure.querySelector(".share-poster-frame");
+    const image = figure.querySelector(".share-poster-foreground");
+    const rect = frame?.getBoundingClientRect();
     return {
-      cellRatio: rect.height / rect.width,
+      frameRatio: rect ? rect.height / rect.width : 0,
       objectFit: image ? getComputedStyle(image).objectFit : "fallback",
       naturalRatio: image && image.naturalWidth ? image.naturalHeight / image.naturalWidth : null,
     };
   }));
-  if (!shareMedia.length || shareMedia.some(({ cellRatio, objectFit, naturalRatio }) => cellRatio <= 1.05 || objectFit !== "contain" || (naturalRatio !== null && naturalRatio <= 1))) {
+  if (!shareMedia.length || shareMedia.some(({ frameRatio, objectFit, naturalRatio }) => Math.abs(frameRatio - 1.5) > 0.08 || objectFit !== "contain" || (naturalRatio !== null && naturalRatio <= 1))) {
     throw new Error(`Share preview cropped or flattened portrait posters: ${JSON.stringify(shareMedia)}`);
   }
   await page.screenshot({ path: `${outputDir}/04-share-all-dense-mint.png`, fullPage: true });
