@@ -1,0 +1,31 @@
+name: Import responsive hotfix
+
+on:
+  push:
+    branches: [fix/poster-themes-admin-v3]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[hotfix-imported]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/poster-themes-admin-v3
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/import-hotfix.mjs
+      - run: npm run check
+      - name: Commit hotfix import
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/statsPage.tsx
+          git commit -m "Import responsive audit hotfix [hotfix-imported]"
+          git push origin HEAD:fix/poster-themes-admin-v3
