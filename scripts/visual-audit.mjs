@@ -260,6 +260,8 @@ try {
   await mobileShareButton.scrollIntoViewIfNeeded();
   await mobileShareButton.click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".share-format-control button").filter({ hasText: "竖版 4:5" }).click();
+  await page.locator(".share-preview-area.is-fixed").waitFor({ state: "visible", timeout: 10000 });
   await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 15000 });
   await assertFixedPreviewFits("Mobile share wall");
   await page.screenshot({ path: `${outputDir}/17-share-mobile-fit.png`, fullPage: true });
