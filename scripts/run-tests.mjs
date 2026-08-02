@@ -118,7 +118,7 @@ try {
   assert.match(archive, /archive-highlight-card/);
   assert.doesNotMatch(archive, /Compact archive masthead v2/);
   assert.match(archiveBannerCss, /aspect-ratio:\s*4 \/ 5/);
-  assert.match(archiveBannerCss, /object-fit:\s*cover/);
+  assert.match(archiveBannerCss, /object-fit:\s*contain/);
   assert.match(posterFramesCss, /--poster-frame-ratio:\s*4 \/ 5/);
   assert.match(posterFramesCss, /object-fit:\s*cover/);
   assert.match(brand, /BrandLockup/);
@@ -132,12 +132,14 @@ try {
   assert.match(shareStudio, /ItemLimit = 12 \| 20 \| 30 \| "all"/);
   assert.match(shareStudio, /ShareFormat = "landscape" \| "portrait" \| "square" \| "long"/);
   assert.match(shareStudio, /ShareLayout = "wall" \| "timeline" \| "magazine" \| "cities"/);
-  assert.match(shareStudioCss, /share-preview-wall/);
-  assert.match(shareStudioCss, /share-preview-timeline/);
-  assert.match(shareStudioCss, /share-preview-magazine/);
-  assert.match(shareStudioCss, /share-preview-cities/);
-  assert.match(shareStudioCss, /aspect-ratio:\s*4 \/ 5/);
-  assert.match(shareStudioCss, /object-fit:\s*cover/);
+  assert.match(shareStudioCss, /share-layout-canvas/);
+  assert.match(shareStudioCss, /share-coordinate-field/);
+  assert.match(shareStudioCss, /share-preview-toolbar/);
+  assert.match(shareStudioCss, /object-fit:\s*contain/);
+  assert.match(shareStudio, /ResizeObserver/);
+  assert.match(shareStudio, /recordPosterRatio/);
+  assert.match(shareStudio, /drawContain/);
+  assert.match(shareStudio, /非地图示意/);
   assert.match(archive, /"poster"[\s\S]*"wallet"[\s\S]*"ticket"[\s\S]*"timeline"[\s\S]*"calendar"[\s\S]*"venue"[\s\S]*"price"[\s\S]*"summary"[\s\S]*"list"/);
   assert.match(experience, /https:\/\/github\.com\/Qi-i\/live-memory/);
   assert.match(experience, /experience-mobile-nav/);
@@ -150,7 +152,7 @@ try {
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
   assert.match(shareStudio, /正在准备海报/);
 
-  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, 4:5 filled poster frames, category-aware newest-first sharing, four distinct layouts, reusable branding, responsive navigation, cached media, GitHub entry, cloud upload guard, and clear auth errors.");
+  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, complete poster frames, fitted preview scaling, category-aware newest-first sharing, four geometry-driven layouts, reusable branding, responsive navigation, cached media, GitHub entry, cloud upload guard, and clear auth errors.");
 } finally {
   await server.close();
 }

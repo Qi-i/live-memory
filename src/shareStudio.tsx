@@ -1,16 +1,27 @@
 import {
   ArrowDownWideNarrow,
-  CalendarRange,
   Download,
   Grid3X3,
   LayoutTemplate,
   MapPinned,
+  Maximize2,
+  Minus,
   Palette,
+  Plus,
   Rows3,
   Search,
   X,
 } from "lucide-react";
-import { useEffect, useMemo, useState, type CSSProperties, type ReactNode } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+} from "react";
 import { BrandLockup } from "./brand";
 import type { EventCategory, EventRecord } from "./domain";
 import { categoryLabels, primaryMedia } from "./domain";
@@ -23,6 +34,12 @@ type SharePalette = "jade" | "midnight" | "paper" | "sunset";
 type ScopeMode = "all" | "range" | "manual";
 type ItemLimit = 12 | 20 | 30 | "all";
 type SortMode = "date-desc" | "date-asc";
+
+type Rect = { x: number; y: number; width: number; height: number };
+type PosterSlot = { record: EventRecord; rect: Rect; emphasis?: "hero" | "feature" | "normal" };
+type TimelineBand = { label: string; count: number; rect: Rect; slots: PosterSlot[] };
+type CityBand = { label: string; count: number; rect: Rect; slots: PosterSlot[] };
+type CityNode = { label: string; x: number; y: number; count: number };
 
 interface ShareStudioProps {
   records: EventRecord[];
@@ -42,6 +59,7 @@ interface PaletteDefinition {
 }
 
 interface CanvasSpec {
+  format: ShareFormat;
   width: number;
   height: number;
   padding: number;
@@ -64,10 +82,10 @@ interface ExportOptions {
 const categoryOptions: EventCategory[] = ["concert", "festival", "livehouse", "theatre", "other"];
 
 const layoutOptions: Array<{ value: ShareLayout; label: string; description: string; icon: ReactNode }> = [
-  { value: "wall", label: "密集海报墙", description: "高密度陈列，适合一次分享很多现场", icon: <Grid3X3 /> },
-  { value: "timeline", label: "时间长卷", description: "按年份分段，让观演经历形成时间脉络", icon: <Rows3 /> },
-  { value: "magazine", label: "编目杂志", description: "主海报与小海报错落，强调视觉重点", icon: <LayoutTemplate /> },
-  { value: "cities", label: "城市路线", description: "按城市串联场次，突出你的现场足迹", icon: <MapPinned /> },
+  { value: "wall", label: "密集海报墙", description: "按原比例紧密拼接，适合一次分享很多现场", icon: <Grid3X3 /> },
+  { value: "timeline", label: "时间长卷", description: "按年份分带，突出观演经历的时间脉络", icon: <Rows3 /> },
+  { value: "magazine", label: "编目杂志", description: "主视觉、次重点与密集补位形成清晰层级", icon: <LayoutTemplate /> },
+  { value: "cities", label: "城市路线", description: "用非地图坐标场呈现城市足迹与场次分布", icon: <MapPinned /> },
 ];
 
 const paletteOptions: Array<{ value: SharePalette; label: string }> = [
@@ -116,6 +134,18 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
   },
 };
 
+const cityCoordinateFallbacks: Record<string, [number, number]> = {
+  北京: [116.4, 39.9], 上海: [121.47, 31.23], 广州: [113.27, 23.13], 深圳: [114.06, 22.54],
+  成都: [104.07, 30.67], 重庆: [106.55, 29.56], 西安: [108.94, 34.34], 武汉: [114.31, 30.59],
+  南京: [118.8, 32.06], 杭州: [120.16, 30.27], 苏州: [120.58, 31.3], 天津: [117.2, 39.12],
+  郑州: [113.63, 34.75], 长沙: [112.94, 28.23], 青岛: [120.38, 36.07], 济南: [117.12, 36.65],
+  昆明: [102.83, 25.04], 厦门: [118.09, 24.48], 福州: [119.3, 26.08], 南昌: [115.86, 28.68],
+  合肥: [117.23, 31.82], 沈阳: [123.43, 41.8], 哈尔滨: [126.64, 45.76], 长春: [125.32, 43.82],
+  乌鲁木齐: [87.62, 43.83], 拉萨: [91.13, 29.65], 兰州: [103.84, 36.06], 西宁: [101.78, 36.62],
+  银川: [106.23, 38.49], 呼和浩特: [111.75, 40.84], 海口: [110.2, 20.04], 三亚: [109.51, 18.25],
+  香港: [114.17, 22.32], 澳门: [113.54, 22.2], 台北: [121.56, 25.04],
+};
+
 export function ShareStudio({ records, format, setFormat, onClose }: ShareStudioProps) {
   const eligibleRecords = useMemo(
     () => records
@@ -144,6 +174,9 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   const [saved, setSaved] = useState(false);
   const [preparing, setPreparing] = useState(true);
   const [error, setError] = useState("");
+  const [fitScale, setFitScale] = useState(0.5);
+  const [manualScale, setManualScale] = useState<number | null>(null);
+  const previewAreaRef = useRef<HTMLElement | null>(null);
 
   const years = useMemo(
     () => Array.from(new Set(eligibleRecords.map((record) => record.date.slice(0, 4)).filter(Boolean))).sort((a, b) => b.localeCompare(a)),
@@ -181,23 +214,51 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   const sortedRecords = useMemo(() => scopedRecords.slice().sort((a, b) => {
     const order = b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt);
     return sortMode === "date-desc" ? order : -order;
-  }), [scope, scopedRecords, sortMode]);
+  }), [scopedRecords, sortMode]);
 
-  const selectedRecords = useMemo(() => itemLimit === "all" ? sortedRecords : sortedRecords.slice(0, itemLimit), [itemLimit, sortedRecords]);
+  const selectedRecords = useMemo(
+    () => itemLimit === "all" ? sortedRecords : sortedRecords.slice(0, itemLimit),
+    [itemLimit, sortedRecords],
+  );
 
   const visibleSelectionRecords = useMemo(() => {
     const query = selectionQuery.trim().toLowerCase();
-    const source = categoryFilteredRecords;
-    if (!query) return source;
-    return source.filter((record) => [record.title, record.city, record.venue, record.artists.join(" "), record.date]
+    if (!query) return categoryFilteredRecords;
+    return categoryFilteredRecords.filter((record) => [record.title, record.city, record.venue, record.artists.join(" "), record.date]
       .join(" ").toLowerCase().includes(query));
   }, [categoryFilteredRecords, selectionQuery]);
 
   const period = useMemo(() => formatPeriod(selectedRecords), [selectedRecords]);
   const watched = selectedRecords.filter((record) => record.status === "watched").length;
   const cities = new Set(selectedRecords.map((record) => record.city).filter(Boolean)).size;
-  const spec = useMemo(() => getCanvasSpec(format, selectedRecords.length, layout, selectedRecords), [format, layout, selectedRecords]);
-  const previewStyle = { "--share-preview-ratio": `${spec.width} / ${spec.height}` } as CSSProperties;
+  const spec = useMemo(
+    () => getCanvasSpec(format, selectedRecords.length, layout, selectedRecords),
+    [format, layout, selectedRecords],
+  );
+  const effectiveScale = manualScale ?? fitScale;
+
+  const recalculateFit = useCallback(() => {
+    const area = previewAreaRef.current;
+    if (!area) return;
+    const bounds = area.getBoundingClientRect();
+    const availableWidth = Math.max(180, bounds.width - 52);
+    const toolbarHeight = 54;
+    const availableHeight = Math.max(180, bounds.height - toolbarHeight - 40);
+    const next = format === "long"
+      ? Math.min(1, availableWidth / spec.width)
+      : Math.min(1, availableWidth / spec.width, availableHeight / spec.height);
+    setFitScale(clamp(next, 0.14, 1));
+  }, [format, spec.height, spec.width]);
+
+  useLayoutEffect(() => {
+    const area = previewAreaRef.current;
+    if (!area) return;
+    setManualScale(null);
+    recalculateFit();
+    const observer = new ResizeObserver(recalculateFit);
+    observer.observe(area);
+    return () => observer.disconnect();
+  }, [format, layout, recalculateFit, selectedRecords.length]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
@@ -245,6 +306,10 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
     setEndDate(`${year}-12-31`);
   }
 
+  function nudgeScale(delta: number) {
+    setManualScale((current) => clamp((current ?? fitScale) + delta, 0.18, 1.35));
+  }
+
   async function savePng() {
     if (saving || !selectedRecords.length) return;
     setSaving(true);
@@ -271,6 +336,22 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
       setSaving(false);
     }
   }
+
+  const previewStyle = {
+    width: spec.width,
+    height: spec.height,
+    transform: `scale(${effectiveScale})`,
+    "--share-canvas-width": `${spec.width}px`,
+    "--share-canvas-height": `${spec.height}px`,
+    "--share-content-x": `${spec.padding}px`,
+    "--share-content-y": `${spec.padding + spec.headerHeight}px`,
+    "--share-content-width": `${spec.width - spec.padding * 2}px`,
+    "--share-content-height": `${spec.height - spec.padding * 2 - spec.headerHeight - spec.footerHeight}px`,
+  } as CSSProperties;
+  const viewportStyle = {
+    width: spec.width * effectiveScale,
+    height: spec.height * effectiveScale,
+  } as CSSProperties;
 
   return (
     <section className={`share-studio-stage share-theme-${palette}`} onMouseDown={(event) => {
@@ -302,13 +383,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
           <div className="share-category-control">
             <button className={!categories.size ? "is-active" : ""} type="button" onClick={() => setCategories(new Set<EventCategory>())}>全部 <i>{eligibleRecords.length}</i></button>
             {categoryOptions.map((category) => (
-              <button
-                className={categories.has(category) ? "is-active" : ""}
-                key={category}
-                type="button"
-                disabled={!categoryCounts.get(category)}
-                onClick={() => toggleCategory(category)}
-              >
+              <button className={categories.has(category) ? "is-active" : ""} key={category} type="button" disabled={!categoryCounts.get(category)} onClick={() => toggleCategory(category)}>
                 {categoryLabels[category]} <i>{categoryCounts.get(category) || 0}</i>
               </button>
             ))}
@@ -412,65 +487,89 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </button>
       </aside>
 
-      <main className="share-preview-area" onMouseDown={(event) => event.stopPropagation()}>
-        <article className={`share-preview share-preview-${format} share-layout-${layout}`} style={previewStyle}>
-          <span className="share-preview-aura" aria-hidden="true" />
-          <header>
-            <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
-            {showBrand ? <BrandLockup compact inverse={palette === "midnight"} size={44} /> : null}
-          </header>
-          <SharePreviewLayout records={selectedRecords} layout={layout} showDetails={showDetails} />
-          <footer>
-            {showBrand ? <span className="share-preview-github">GitHub · Qi-i/live-memory</span> : <span />}
-            {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
-          </footer>
-        </article>
+      <main ref={previewAreaRef} className={`share-preview-area ${format === "long" ? "is-long" : "is-fixed"}`} onMouseDown={(event) => event.stopPropagation()}>
+        <div className="share-preview-toolbar" aria-label="预览缩放">
+          <button type="button" className={manualScale === null ? "is-active" : ""} onClick={() => setManualScale(null)}><Maximize2 />适应窗口</button>
+          <button type="button" aria-label="缩小预览" onClick={() => nudgeScale(-0.08)}><Minus /></button>
+          <strong>{Math.round(effectiveScale * 100)}%</strong>
+          <button type="button" aria-label="放大预览" onClick={() => nudgeScale(0.08)}><Plus /></button>
+        </div>
+        <div className="share-preview-viewport" style={viewportStyle}>
+          <article className={`share-preview share-preview-${format} share-layout-${layout}`} style={previewStyle}>
+            <span className="share-preview-aura" aria-hidden="true" />
+            <header>
+              <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
+              {showBrand ? <BrandLockup compact inverse={palette === "midnight"} size={44} /> : null}
+            </header>
+            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} />
+            <footer>
+              {showBrand ? <span className="share-preview-github">GitHub · Qi-i/live-memory</span> : <span />}
+              {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
+            </footer>
+          </article>
+        </div>
       </main>
     </section>
   );
 }
 
-function SharePreviewLayout({ records, layout, showDetails }: { records: EventRecord[]; layout: ShareLayout; showDetails: boolean }) {
+function SharePreviewLayout({ records, layout, spec, showDetails }: { records: EventRecord[]; layout: ShareLayout; spec: CanvasSpec; showDetails: boolean }) {
+  const area = contentArea(spec);
+  if (!records.length) return <div className="share-preview-empty">请选择至少一张海报</div>;
+
   if (layout === "timeline") {
+    const bands = buildTimelineBands(records, area, spec);
     return (
-      <div className="share-preview-timeline">
-        {groupByYear(records).map((group) => (
-          <section key={group.label}>
-            <header><b>{group.label}</b><span>{group.records.length} 场</span></header>
-            <div>{group.records.map((record) => <PosterFigure key={record.id} record={record} showDetails={showDetails} />)}</div>
+      <div className="share-layout-canvas" style={rectStyle(area)}>
+        {bands.map((band) => (
+          <section className="share-timeline-band" key={band.label} style={localRectStyle(band.rect, area)}>
+            <header><b>{band.label}</b><span>{band.count} 场</span></header>
+            {band.slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={band.rect} showDetails={showDetails} />)}
           </section>
         ))}
       </div>
     );
   }
-  if (layout === "magazine") {
-    return (
-      <div className="share-preview-magazine">
-        {records.map((record, index) => <PosterFigure className={magazineClass(index)} key={record.id} record={record} showDetails={showDetails} />)}
-      </div>
-    );
-  }
+
   if (layout === "cities") {
+    const model = buildCityModel(records, area, spec);
     return (
-      <div className="share-preview-cities">
-        <span className="share-city-route" aria-hidden="true" />
-        {groupByCity(records).map((group, index) => (
-          <section key={group.label}>
-            <header><i>{String(index + 1).padStart(2, "0")}</i><span><b>{group.label}</b><small>{group.records.length} 场现场</small></span></header>
-            <div>{group.records.map((record) => <PosterFigure key={record.id} record={record} showDetails={showDetails} />)}</div>
-          </section>
-        ))}
+      <div className="share-layout-canvas" style={rectStyle(area)}>
+        <section className="share-coordinate-field" style={localRectStyle(model.mapRect, area)}>
+          <header><b>全国足迹坐标场</b><span>非地图示意 · 不绘制国界</span></header>
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+            <polyline points={model.nodes.map((node) => `${node.x},${node.y}`).join(" ")} />
+          </svg>
+          {model.nodes.map((node) => <i key={node.label} style={{ left: `${node.x}%`, top: `${node.y}%` } as CSSProperties}><b>{node.label}</b><small>{node.count}</small></i>)}
+          <footer>经纬度归一化显示，仅用于个人演出足迹排布</footer>
+        </section>
+        <div className="share-city-bands" style={localRectStyle(model.listRect, area)}>
+          {model.bands.map((band) => (
+            <section key={band.label} style={{ height: band.rect.height }}>
+              <header><b>{band.label}</b><span>{band.count} 场</span></header>
+              <div>
+                {band.slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={band.rect} showDetails={showDetails} />)}
+              </div>
+            </section>
+          ))}
+        </div>
       </div>
     );
   }
-  return <div className="share-preview-wall">{records.map((record) => <PosterFigure key={record.id} record={record} showDetails={showDetails} />)}</div>;
+
+  const slots = layout === "magazine" ? buildMagazineSlots(records, area, spec) : buildJustifiedSlots(records, area, spec);
+  return (
+    <div className={`share-layout-canvas share-layout-canvas-${layout}`} style={rectStyle(area)}>
+      {slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={area} showDetails={showDetails} />)}
+    </div>
+  );
 }
 
-function PosterFigure({ record, showDetails, className = "" }: { record: EventRecord; showDetails: boolean; className?: string }) {
+function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
   return (
-    <figure className={className}>
-      <SharePoster record={record} />
-      {showDetails ? <figcaption><span>{record.date} · {record.city || categoryLabels[record.category]}</span><b>{record.title}</b></figcaption> : null}
+    <figure className={`share-layout-poster is-${slot.emphasis || "normal"}`} style={localRectStyle(slot.rect, origin)}>
+      <SharePoster record={slot.record} />
+      {showDetails ? <figcaption><span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span><b>{slot.record.title}</b></figcaption> : null}
     </figure>
   );
 }
@@ -478,16 +577,212 @@ function PosterFigure({ record, showDetails, className = "" }: { record: EventRe
 function SharePoster({ record }: { record: EventRecord }) {
   const media = primaryMedia(record);
   const src = useCachedMediaSrc(media);
-  const style = { "--poster-a": record.colors[0], "--poster-b": record.colors[1] } as CSSProperties;
-  if (!src) return <span className="share-poster-frame"><span className="share-poster-fallback" style={style}>{record.title.slice(0, 4)}</span></span>;
-  return <span className="share-poster-frame"><img className="share-poster-foreground" src={src} alt={record.title} decoding="async" /></span>;
+  const style = {
+    "--poster-a": record.colors[0],
+    "--poster-b": record.colors[1],
+    aspectRatio: String(recordPosterRatio(record)),
+  } as CSSProperties;
+  if (!src) return <span className="share-poster-frame" style={style}><span className="share-poster-fallback">{record.title.slice(0, 4)}</span></span>;
+  return <span className="share-poster-frame" style={style}><img className="share-poster-foreground" src={src} alt={record.title} decoding="async" /></span>;
 }
 
-function magazineClass(index: number) {
-  if (index === 0) return "is-hero";
-  if (index === 1 || index === 6) return "is-wide";
-  if (index % 7 === 0) return "is-tall";
-  return "";
+function recordPosterRatio(record: EventRecord) {
+  const media = primaryMedia(record);
+  if (!media?.width || !media.height) return 0.8;
+  return clamp(media.width / media.height, 0.56, 1.32);
+}
+
+function contentArea(spec: CanvasSpec): Rect {
+  return {
+    x: spec.padding,
+    y: spec.padding + spec.headerHeight,
+    width: spec.width - spec.padding * 2,
+    height: spec.height - spec.padding * 2 - spec.headerHeight - spec.footerHeight,
+  };
+}
+
+function rectStyle(rect: Rect): CSSProperties {
+  return { left: rect.x, top: rect.y, width: rect.width, height: rect.height };
+}
+
+function localRectStyle(rect: Rect, origin: Rect): CSSProperties {
+  return { left: rect.x - origin.x, top: rect.y - origin.y, width: rect.width, height: rect.height };
+}
+
+function buildJustifiedSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
+  if (!records.length) return [];
+  const gap = spec.width >= 1500 ? 14 : 12;
+  const ratios = records.map(recordPosterRatio);
+  const totalRatio = ratios.reduce((sum, ratio) => sum + ratio, 0);
+  const maxRows = Math.min(records.length, spec.format === "long" ? 12 : 8);
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let best: PosterSlot[] = [];
+
+  for (let rowCount = 1; rowCount <= maxRows; rowCount += 1) {
+    const groups = partitionBalanced(records.length, rowCount);
+    const availableHeight = (area.height - gap * Math.max(0, rowCount - 1)) / rowCount;
+    let height = availableHeight;
+    groups.forEach(([start, end]) => {
+      const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
+      const widthHeight = (area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
+      height = Math.min(height, widthHeight);
+    });
+    if (!Number.isFinite(height) || height < 46) continue;
+
+    const totalHeight = height * rowCount + gap * Math.max(0, rowCount - 1);
+    let y = area.y + Math.max(0, (area.height - totalHeight) / 2);
+    const candidate: PosterSlot[] = [];
+    groups.forEach(([start, end]) => {
+      const rowRatios = ratios.slice(start, end);
+      const rowWidth = rowRatios.reduce((sum, ratio) => sum + ratio * height, 0) + gap * Math.max(0, rowRatios.length - 1);
+      let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
+      for (let index = start; index < end; index += 1) {
+        const width = ratios[index] * height;
+        candidate.push({ record: records[index], rect: { x, y, width, height } });
+        x += width + gap;
+      }
+      y += height + gap;
+    });
+
+    const occupiedArea = totalRatio * height * height;
+    const fill = occupiedArea / Math.max(1, area.width * area.height);
+    const readability = Math.min(1, height / (spec.format === "long" ? 190 : 150));
+    const score = fill * 0.88 + readability * 0.12;
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
+    }
+  }
+  return best;
+}
+
+function partitionBalanced(itemCount: number, rowCount: number): Array<[number, number]> {
+  const base = Math.floor(itemCount / rowCount);
+  const remainder = itemCount % rowCount;
+  const groups: Array<[number, number]> = [];
+  let start = 0;
+  for (let row = 0; row < rowCount; row += 1) {
+    const count = base + (row < remainder ? 1 : 0);
+    groups.push([start, start + count]);
+    start += count;
+  }
+  return groups;
+}
+
+function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
+  if (!records.length) return [];
+  const gap = spec.width >= 1500 ? 15 : 12;
+  let columns = records.length <= 8 ? 3 : records.length <= 24 ? 4 : 5;
+  if (spec.width >= 1500) columns += 1;
+  const columnWidth = (area.width - gap * (columns - 1)) / columns;
+  const heights = Array.from({ length: columns }, () => 0);
+  const slots: PosterSlot[] = [];
+
+  records.forEach((record, index) => {
+    const ratio = recordPosterRatio(record);
+    const compactMagazine = records.length <= 8;
+    const requestedSpan = index === 0 ? Math.min(compactMagazine ? 2 : 3, columns) : compactMagazine ? 1 : index < 3 ? Math.min(2, columns - 1) : 1;
+    const span = Math.max(1, Math.min(requestedSpan, columns));
+    let bestColumn = 0;
+    let bestY = Number.POSITIVE_INFINITY;
+    for (let start = 0; start <= columns - span; start += 1) {
+      const y = Math.max(...heights.slice(start, start + span));
+      if (y < bestY) { bestY = y; bestColumn = start; }
+    }
+    const width = columnWidth * span + gap * (span - 1);
+    const height = width / ratio;
+    const x = area.x + bestColumn * (columnWidth + gap);
+    const y = area.y + bestY;
+    const emphasis = index === 0 ? "hero" : index < 3 ? "feature" : "normal";
+    slots.push({ record, rect: { x, y, width, height }, emphasis });
+    for (let column = bestColumn; column < bestColumn + span; column += 1) heights[column] = bestY + height + gap;
+  });
+
+  const totalHeight = Math.max(...heights, 1) - gap;
+  if (totalHeight > area.height) {
+    const scale = area.height / totalHeight;
+    const scaledWidth = area.width * scale;
+    const offsetX = area.x + (area.width - scaledWidth) / 2;
+    return slots.map((slot) => ({
+      ...slot,
+      rect: {
+        x: offsetX + (slot.rect.x - area.x) * scale,
+        y: area.y + (slot.rect.y - area.y) * scale,
+        width: slot.rect.width * scale,
+        height: slot.rect.height * scale,
+      },
+    }));
+  }
+  const offsetY = (area.height - totalHeight) / 2;
+  return slots.map((slot) => ({ ...slot, rect: { ...slot.rect, y: slot.rect.y + offsetY } }));
+}
+
+function buildTimelineBands(records: EventRecord[], area: Rect, spec: CanvasSpec): TimelineBand[] {
+  const groups = groupByYear(records);
+  const gap = spec.format === "long" ? 22 : 14;
+  const bandHeight = (area.height - gap * Math.max(0, groups.length - 1)) / Math.max(1, groups.length);
+  return groups.map((group, index) => {
+    const rect = { x: area.x, y: area.y + index * (bandHeight + gap), width: area.width, height: bandHeight };
+    const labelWidth = clamp(area.width * 0.13, 104, 170);
+    const posterArea = { x: rect.x + labelWidth, y: rect.y + 10, width: rect.width - labelWidth - 10, height: rect.height - 20 };
+    const slots = fitSingleBand(group.records, posterArea, spec.width >= 1500 ? 11 : 9);
+    return { label: group.label, count: group.records.length, rect, slots };
+  });
+}
+
+function fitSingleBand(records: EventRecord[], area: Rect, gap: number): PosterSlot[] {
+  if (!records.length) return [];
+  const ratios = records.map(recordPosterRatio);
+  const ratioSum = ratios.reduce((sum, ratio) => sum + ratio, 0);
+  const heightByWidth = (area.width - gap * Math.max(0, records.length - 1)) / Math.max(0.01, ratioSum);
+  const height = Math.min(area.height, heightByWidth);
+  const totalWidth = ratios.reduce((sum, ratio) => sum + ratio * height, 0) + gap * Math.max(0, records.length - 1);
+  let x = area.x + Math.max(0, (area.width - totalWidth) / 2);
+  const y = area.y + (area.height - height) / 2;
+  return records.map((record, index) => {
+    const width = ratios[index] * height;
+    const slot = { record, rect: { x, y, width, height } };
+    x += width + gap;
+    return slot;
+  });
+}
+
+function buildCityModel(records: EventRecord[], area: Rect, spec: CanvasSpec) {
+  const groups = groupByCity(records);
+  const gap = spec.width >= 1500 ? 20 : 16;
+  const mapWidth = area.width * (spec.width >= 1500 ? 0.42 : 0.4);
+  const mapRect = { x: area.x, y: area.y, width: mapWidth, height: area.height };
+  const listRect = { x: area.x + mapWidth + gap, y: area.y, width: area.width - mapWidth - gap, height: area.height };
+  const bandGap = 10;
+  const bandHeight = (listRect.height - bandGap * Math.max(0, groups.length - 1)) / Math.max(1, groups.length);
+  const bands: CityBand[] = groups.map((group, index) => {
+    const rect = { x: listRect.x, y: listRect.y + index * (bandHeight + bandGap), width: listRect.width, height: bandHeight };
+    const labelWidth = clamp(rect.width * 0.22, 92, 150);
+    const posterArea = { x: rect.x + labelWidth, y: rect.y + 8, width: rect.width - labelWidth - 8, height: rect.height - 16 };
+    return { label: group.label, count: group.records.length, rect, slots: fitSingleBand(group.records, posterArea, 8) };
+  });
+  const nodes = groups.map((group) => {
+    const [lng, lat] = cityCoordinate(group.label, group.records);
+    return {
+      label: group.label,
+      x: clamp((lng - 73) / (135 - 73) * 82 + 9, 7, 93),
+      y: clamp((54 - lat) / (54 - 18) * 72 + 15, 12, 88),
+      count: group.records.length,
+    };
+  });
+  return { mapRect, listRect, bands, nodes };
+}
+
+function cityCoordinate(label: string, records: EventRecord[]): [number, number] {
+  const points = records.map((record) => record.coordinates).filter(Boolean);
+  if (points.length) {
+    const lng = points.reduce((sum, point) => sum + (point?.lng || 0), 0) / points.length;
+    const lat = points.reduce((sum, point) => sum + (point?.lat || 0), 0) / points.length;
+    return [lng, lat];
+  }
+  if (cityCoordinateFallbacks[label]) return cityCoordinateFallbacks[label];
+  const seed = Array.from(label).reduce((sum, char) => sum + char.charCodeAt(0), 0);
+  return [80 + (seed % 4800) / 100, 21 + (seed % 2900) / 100];
 }
 
 function groupByYear(records: EventRecord[]) {
@@ -517,6 +812,25 @@ function formatPeriod(records: EventRecord[]) {
   return `${first.slice(0, 4)}—${last.slice(0, 4)}`;
 }
 
+function getCanvasSpec(format: ShareFormat, count: number, layout: ShareLayout, records: EventRecord[]): CanvasSpec {
+  const width = format === "landscape" ? 1600 : 1200;
+  const padding = format === "landscape" ? 58 : 54;
+  const headerHeight = format === "landscape" ? 132 : 156;
+  const footerHeight = 66;
+  if (format !== "long") {
+    return { width, height: format === "landscape" ? 900 : format === "square" ? 1200 : 1500, padding, headerHeight, footerHeight, format };
+  }
+  const groupCount = layout === "timeline" ? groupByYear(records).length : layout === "cities" ? groupByCity(records).length : 0;
+  const contentHeight = layout === "timeline"
+    ? Math.max(960, groupCount * 300)
+    : layout === "cities"
+      ? Math.max(980, groupCount * 250)
+      : layout === "magazine"
+        ? Math.max(980, Math.ceil(Math.max(1, count) / 4) * 290)
+        : Math.max(980, Math.ceil(Math.max(1, count) / 4) * 265);
+  return { width, height: padding * 2 + headerHeight + footerHeight + contentHeight, padding, headerHeight, footerHeight, format };
+}
+
 async function exportSharePng(options: ExportOptions) {
   const spec = getCanvasSpec(options.format, options.records.length, options.layout, options.records);
   const canvas = document.createElement("canvas");
@@ -529,14 +843,16 @@ async function exportSharePng(options: ExportOptions) {
   const palette = palettes[options.palette];
   drawBackground(context, spec.width, spec.height, palette);
   drawShareHeader(context, spec, options, palette);
+  const area = contentArea(spec);
 
-  if (options.layout === "timeline") await drawTimelineCanvas(context, spec, options, palette);
-  else if (options.layout === "magazine") await drawMagazineCanvas(context, spec, options, palette);
-  else if (options.layout === "cities") await drawCitiesCanvas(context, spec, options, palette);
-  else await drawWallCanvas(context, spec, options, palette);
+  if (options.layout === "timeline") await drawTimelineCanvas(context, buildTimelineBands(options.records, area, spec), options, palette);
+  else if (options.layout === "cities") await drawCitiesCanvas(context, buildCityModel(options.records, area, spec), options, palette);
+  else {
+    const slots = options.layout === "magazine" ? buildMagazineSlots(options.records, area, spec) : buildJustifiedSlots(options.records, area, spec);
+    for (const slot of slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails, slot.emphasis);
+  }
 
   drawShareFooter(context, spec, options, palette);
-
   const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/png", 0.96));
   if (!blob) throw new Error("PNG export failed");
   const url = URL.createObjectURL(blob);
@@ -549,233 +865,151 @@ async function exportSharePng(options: ExportOptions) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
 
-function getCanvasSpec(format: ShareFormat, count: number, layout: ShareLayout, records: EventRecord[]): CanvasSpec {
-  const width = format === "landscape" ? 1600 : 1200;
-  const padding = format === "landscape" ? 64 : 58;
-  const headerHeight = format === "landscape" ? 150 : 180;
-  const footerHeight = 78;
-  if (format !== "long") {
-    return { width, height: format === "landscape" ? 900 : format === "square" ? 1200 : 1500, padding, headerHeight, footerHeight };
-  }
-  if (layout === "timeline") {
-    const years = Math.max(1, groupByYear(records).length);
-    return { width, height: padding + headerHeight + years * 310 + footerHeight + padding, padding, headerHeight, footerHeight };
-  }
-  if (layout === "cities") {
-    const cities = Math.max(1, groupByCity(records).length);
-    return { width, height: padding + headerHeight + cities * 300 + footerHeight + padding, padding, headerHeight, footerHeight };
-  }
-  const columns = layout === "magazine" ? 4 : 5;
-  const rows = Math.ceil(Math.max(1, count) / columns);
-  return { width, height: padding + headerHeight + rows * 285 + footerHeight + padding, padding, headerHeight, footerHeight };
-}
-
-function contentArea(spec: CanvasSpec) {
-  return {
-    x: spec.padding,
-    y: spec.padding + spec.headerHeight,
-    width: spec.width - spec.padding * 2,
-    height: spec.height - spec.padding * 2 - spec.headerHeight - spec.footerHeight,
-  };
-}
-
-async function drawWallCanvas(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
-  const area = contentArea(spec);
-  const count = Math.max(1, options.records.length);
-  const targetColumns = options.format === "landscape" ? (count <= 12 ? 6 : count <= 24 ? 8 : 10) : options.format === "square" ? (count <= 12 ? 4 : count <= 24 ? 6 : 7) : count <= 12 ? 4 : count <= 24 ? 5 : 6;
-  const slots = fitGrid(area, count, targetColumns, 4 / 5, 12);
-  for (let index = 0; index < options.records.length; index += 1) {
-    await drawPoster(context, options.records[index], slots[index], palette, options.showDetails, 0);
-  }
-}
-
-async function drawTimelineCanvas(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
-  const area = contentArea(spec);
-  const groups = groupByYear(options.records);
-  const bandGap = 22;
-  const bandHeight = (area.height - bandGap * Math.max(0, groups.length - 1)) / Math.max(1, groups.length);
-  context.strokeStyle = palette.accent;
-  context.lineWidth = 4;
-  context.beginPath();
-  context.moveTo(area.x + 52, area.y + 20);
-  context.lineTo(area.x + 52, area.y + area.height - 20);
-  context.stroke();
-
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const group = groups[groupIndex];
-    const y = area.y + groupIndex * (bandHeight + bandGap);
-    context.fillStyle = palette.accentSoft;
-    context.beginPath();
-    context.arc(area.x + 52, y + 30, 12, 0, Math.PI * 2);
+async function drawTimelineCanvas(context: CanvasRenderingContext2D, bands: TimelineBand[], options: ExportOptions, palette: PaletteDefinition) {
+  for (const band of bands) {
+    roundedPath(context, band.rect.x, band.rect.y, band.rect.width, band.rect.height, 18);
+    context.fillStyle = alphaSurface(palette.surface, 0.78);
     context.fill();
+    context.strokeStyle = palette.border;
+    context.stroke();
+    context.fillStyle = palette.accent;
+    context.fillRect(band.rect.x + 18, band.rect.y + 18, 5, band.rect.height - 36);
     context.fillStyle = palette.text;
-    context.font = `900 ${Math.max(26, spec.width * 0.025)}px system-ui, sans-serif`;
-    context.fillText(group.label, area.x + 82, y + 39);
+    context.font = "900 34px system-ui, sans-serif";
+    context.fillText(band.label, band.rect.x + 38, band.rect.y + 54);
     context.fillStyle = palette.muted;
-    context.font = `700 ${Math.max(13, spec.width * 0.011)}px system-ui, sans-serif`;
-    context.fillText(`${group.records.length} 场现场`, area.x + 82, y + 62);
-    const local = { x: area.x + 220, y: y + 2, width: area.width - 220, height: bandHeight - 4 };
-    const columns = Math.min(group.records.length || 1, options.format === "landscape" ? 8 : 6);
-    const slots = fitGrid(local, group.records.length, columns, 4 / 5, 10);
-    for (let index = 0; index < group.records.length; index += 1) {
-      await drawPoster(context, group.records[index], slots[index], palette, options.showDetails, 0);
-    }
+    context.font = "800 15px system-ui, sans-serif";
+    context.fillText(`${band.count} 场现场`, band.rect.x + 40, band.rect.y + 82);
+    for (const slot of band.slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails);
   }
 }
 
-async function drawMagazineCanvas(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
-  const area = contentArea(spec);
-  if (!options.records.length) return;
-  const gap = 18;
-  const heroWidth = options.format === "landscape" ? area.width * 0.31 : area.width * 0.43;
-  const heroHeight = Math.min(area.height, heroWidth / (4 / 5));
-  const heroY = area.y + Math.max(0, (area.height - heroHeight) / 2);
-  await drawPoster(context, options.records[0], { x: area.x, y: heroY, width: heroWidth, height: heroHeight }, palette, true, -0.012);
-  const remaining = options.records.slice(1);
-  if (!remaining.length) return;
-  const gridArea = { x: area.x + heroWidth + gap, y: area.y, width: area.width - heroWidth - gap, height: area.height };
-  const columns = options.format === "landscape" ? 5 : options.format === "square" ? 4 : 3;
-  const slots = fitGrid(gridArea, remaining.length, columns, 4 / 5, 12);
-  for (let index = 0; index < remaining.length; index += 1) {
-    const rotation = ((index % 5) - 2) * 0.008;
-    await drawPoster(context, remaining[index], slots[index], palette, options.showDetails, rotation);
+async function drawCitiesCanvas(
+  context: CanvasRenderingContext2D,
+  model: ReturnType<typeof buildCityModel>,
+  options: ExportOptions,
+  palette: PaletteDefinition,
+) {
+  const map = model.mapRect;
+  roundedPath(context, map.x, map.y, map.width, map.height, 22);
+  context.fillStyle = alphaSurface(palette.surface, 0.72);
+  context.fill();
+  context.save();
+  roundedPath(context, map.x, map.y, map.width, map.height, 22);
+  context.clip();
+  context.strokeStyle = `${palette.accent}25`;
+  context.lineWidth = 1;
+  for (let index = 1; index < 10; index += 1) {
+    const x = map.x + map.width * index / 10;
+    const y = map.y + map.height * index / 10;
+    context.beginPath(); context.moveTo(x, map.y); context.lineTo(x, map.y + map.height); context.stroke();
+    context.beginPath(); context.moveTo(map.x, y); context.lineTo(map.x + map.width, y); context.stroke();
   }
-  context.strokeStyle = palette.accent;
-  context.lineWidth = 2;
-  context.setLineDash([10, 12]);
-  context.strokeRect(area.x + heroWidth + gap / 2, area.y, 1, area.height);
-  context.setLineDash([]);
-}
-
-async function drawCitiesCanvas(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
-  const area = contentArea(spec);
-  const groups = groupByCity(options.records);
-  const bandGap = 18;
-  const bandHeight = (area.height - bandGap * Math.max(0, groups.length - 1)) / Math.max(1, groups.length);
-  const lineX = area.x + 46;
-  context.strokeStyle = palette.accent;
-  context.lineWidth = 5;
-  context.beginPath();
-  context.moveTo(lineX, area.y + 18);
-  context.bezierCurveTo(lineX + 36, area.y + area.height * 0.3, lineX - 30, area.y + area.height * 0.7, lineX + 18, area.y + area.height - 18);
-  context.stroke();
-
-  for (let groupIndex = 0; groupIndex < groups.length; groupIndex += 1) {
-    const group = groups[groupIndex];
-    const y = area.y + groupIndex * (bandHeight + bandGap);
-    context.fillStyle = palette.accentSoft;
+  if (model.nodes.length > 1) {
+    context.strokeStyle = palette.accent;
+    context.lineWidth = 3;
     context.beginPath();
-    context.arc(lineX + (groupIndex % 2 ? 10 : -4), y + 34, 14, 0, Math.PI * 2);
+    model.nodes.forEach((node, index) => {
+      const x = map.x + map.width * node.x / 100;
+      const y = map.y + map.height * node.y / 100;
+      if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
+    });
+    context.stroke();
+  }
+  model.nodes.forEach((node) => {
+    const x = map.x + map.width * node.x / 100;
+    const y = map.y + map.height * node.y / 100;
+    context.fillStyle = palette.accentSoft;
+    context.beginPath(); context.arc(x, y, 12, 0, Math.PI * 2); context.fill();
+    context.strokeStyle = palette.accent; context.lineWidth = 3; context.stroke();
+    context.fillStyle = palette.text; context.font = "900 15px system-ui, sans-serif"; context.fillText(node.label, x + 16, y + 5);
+  });
+  context.restore();
+  context.fillStyle = palette.text; context.font = "900 27px system-ui, sans-serif"; context.fillText("全国足迹坐标场", map.x + 24, map.y + 40);
+  context.fillStyle = palette.muted; context.font = "800 13px system-ui, sans-serif"; context.fillText("非地图示意 · 不绘制国界", map.x + 25, map.y + 64);
+  context.font = "750 11px system-ui, sans-serif"; context.fillText("经纬度归一化显示，仅用于个人演出足迹排布", map.x + 24, map.y + map.height - 22);
+
+  for (const band of model.bands) {
+    roundedPath(context, band.rect.x, band.rect.y, band.rect.width, band.rect.height, 16);
+    context.fillStyle = alphaSurface(palette.surface, 0.78);
     context.fill();
+    context.strokeStyle = palette.border;
+    context.stroke();
     context.fillStyle = palette.text;
-    context.font = `900 ${Math.max(24, spec.width * 0.023)}px system-ui, sans-serif`;
-    context.fillText(group.label, area.x + 82, y + 42);
+    context.font = "900 24px system-ui, sans-serif";
+    context.fillText(band.label, band.rect.x + 18, band.rect.y + 38);
     context.fillStyle = palette.muted;
-    context.font = `700 ${Math.max(12, spec.width * 0.011)}px system-ui, sans-serif`;
-    context.fillText(`${group.records.length} 场`, area.x + 84, y + 65);
-    const local = { x: area.x + 220, y: y + 2, width: area.width - 220, height: bandHeight - 4 };
-    const columns = Math.min(group.records.length || 1, options.format === "landscape" ? 8 : 6);
-    const slots = fitGrid(local, group.records.length, columns, 4 / 5, 10);
-    for (let index = 0; index < group.records.length; index += 1) {
-      await drawPoster(context, group.records[index], slots[index], palette, options.showDetails, 0);
-    }
-  }
-}
-
-function fitGrid(area: { x: number; y: number; width: number; height: number }, count: number, columns: number, ratio: number, gap: number) {
-  const safeCount = Math.max(1, count);
-  const safeColumns = Math.max(1, Math.min(columns, safeCount));
-  const rows = Math.ceil(safeCount / safeColumns);
-  const widthByColumns = (area.width - gap * (safeColumns - 1)) / safeColumns;
-  const heightByWidth = widthByColumns / ratio;
-  const heightByRows = (area.height - gap * Math.max(0, rows - 1)) / rows;
-  const height = Math.min(heightByWidth, heightByRows);
-  const width = height * ratio;
-  const gridWidth = width * safeColumns + gap * Math.max(0, safeColumns - 1);
-  const gridHeight = height * rows + gap * Math.max(0, rows - 1);
-  const startX = area.x + Math.max(0, (area.width - gridWidth) / 2);
-  const startY = area.y + Math.max(0, (area.height - gridHeight) / 2);
-  return Array.from({ length: count }, (_, index) => ({
-    x: startX + (index % safeColumns) * (width + gap),
-    y: startY + Math.floor(index / safeColumns) * (height + gap),
-    width,
-    height,
-  }));
-}
-
-function drawShareHeader(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
-  const x = spec.padding;
-  context.fillStyle = palette.accent;
-  context.font = `800 ${Math.max(17, Math.round(spec.width * 0.014))}px system-ui, sans-serif`;
-  context.fillText("LIVE MEMORY · CONCERT ARCHIVE", x, spec.padding * 0.72);
-  context.fillStyle = palette.text;
-  context.font = `900 ${Math.round(spec.width * (options.format === "landscape" ? 0.039 : 0.052))}px system-ui, sans-serif`;
-  context.fillText(trimText(context, options.headline, spec.width - spec.padding * 4.5), x, spec.padding + spec.headerHeight * 0.45);
-  context.fillStyle = palette.muted;
-  context.font = `700 ${Math.max(15, Math.round(spec.width * 0.013))}px system-ui, sans-serif`;
-  context.fillText(`${formatPeriod(options.records)} · ${options.records.length} 场演出 · ${options.sortMode === "date-desc" ? "最新在前" : "最早在前"}`, x, spec.padding + spec.headerHeight * 0.72);
-  if (options.showBrand) drawBrandLockup(context, spec.width - spec.padding - 260, spec.padding * 0.28, palette);
-}
-
-function drawShareFooter(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
-  const y = spec.height - spec.padding * 0.45;
-  if (options.showBrand) {
-    context.fillStyle = palette.text;
-    context.font = `850 ${Math.max(14, Math.round(spec.width * 0.013))}px system-ui, sans-serif`;
-    context.fillText("现场记 · Live Memory", spec.padding, y);
-    context.fillStyle = palette.muted;
-    context.font = `700 ${Math.max(11, Math.round(spec.width * 0.0095))}px system-ui, sans-serif`;
-    context.fillText("GitHub · Qi-i/live-memory", spec.padding + Math.round(spec.width * 0.15), y);
-  }
-  if (options.showStats) {
-    const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
-    const watched = options.records.filter((record) => record.status === "watched").length;
-    context.fillStyle = palette.muted;
-    context.font = `700 ${Math.max(11, Math.round(spec.width * 0.01))}px system-ui, sans-serif`;
-    context.textAlign = "right";
-    context.fillText(`${cities} 城市 · ${watched} 已看`, spec.width - spec.padding, y);
-    context.textAlign = "left";
+    context.font = "800 12px system-ui, sans-serif";
+    context.fillText(`${band.count} 场`, band.rect.x + 20, band.rect.y + 60);
+    for (const slot of band.slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails);
   }
 }
 
 async function drawPoster(
   context: CanvasRenderingContext2D,
   record: EventRecord,
-  slot: { x: number; y: number; width: number; height: number },
+  slot: Rect,
   palette: PaletteDefinition,
   showDetails: boolean,
-  rotation: number,
+  emphasis: PosterSlot["emphasis"] = "normal",
 ) {
   context.save();
-  context.translate(slot.x + slot.width / 2, slot.y + slot.height / 2);
-  context.rotate(rotation);
-  const x = -slot.width / 2;
-  const y = -slot.height / 2;
-  const radius = Math.max(4, slot.width * 0.04);
-  context.shadowColor = "rgba(0,0,0,.2)";
-  context.shadowBlur = Math.max(4, slot.width * 0.07);
-  context.shadowOffsetY = Math.max(2, slot.width * 0.025);
-  roundedPath(context, x, y, slot.width, slot.height, radius);
+  const radius = Math.max(5, Math.min(slot.width, slot.height) * 0.045);
+  context.shadowColor = emphasis === "hero" ? "rgba(0,0,0,.3)" : "rgba(0,0,0,.2)";
+  context.shadowBlur = emphasis === "hero" ? 28 : 14;
+  context.shadowOffsetY = emphasis === "hero" ? 12 : 6;
+  roundedPath(context, slot.x, slot.y, slot.width, slot.height, radius);
   context.fillStyle = palette.surface;
   context.fill();
   context.shadowColor = "transparent";
-  roundedPath(context, x, y, slot.width, slot.height, radius);
+  roundedPath(context, slot.x, slot.y, slot.width, slot.height, radius);
   context.clip();
 
   const image = await loadMediaImage(primaryMedia(record));
-  if (image) drawCover(context, image, x, y, slot.width, slot.height);
-  else drawFallback(context, record, x, y, slot.width, slot.height);
-  if (showDetails) drawDetails(context, record, { x, y, width: slot.width, height: slot.height }, palette);
+  if (image) drawContain(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
+  else drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
+  if (showDetails) drawDetails(context, record, slot, palette);
   context.restore();
 
-  context.save();
-  context.translate(slot.x + slot.width / 2, slot.y + slot.height / 2);
-  context.rotate(rotation);
   context.strokeStyle = palette.border;
-  context.lineWidth = Math.max(1, slot.width * 0.008);
-  roundedPath(context, -slot.width / 2, -slot.height / 2, slot.width, slot.height, radius);
+  context.lineWidth = emphasis === "hero" ? 3 : 1.5;
+  roundedPath(context, slot.x, slot.y, slot.width, slot.height, radius);
   context.stroke();
-  context.restore();
+}
+
+function drawShareHeader(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
+  const x = spec.padding;
+  context.fillStyle = palette.accent;
+  context.font = `800 ${Math.max(16, Math.round(spec.width * 0.013))}px system-ui, sans-serif`;
+  context.fillText("LIVE MEMORY · CONCERT ARCHIVE", x, spec.padding * 0.72);
+  context.fillStyle = palette.text;
+  context.font = `900 ${Math.round(spec.width * (options.format === "landscape" ? 0.037 : 0.049))}px system-ui, sans-serif`;
+  context.fillText(trimText(context, options.headline, spec.width - spec.padding * 4.5), x, spec.padding + spec.headerHeight * 0.46);
+  context.fillStyle = palette.muted;
+  context.font = `700 ${Math.max(14, Math.round(spec.width * 0.012))}px system-ui, sans-serif`;
+  context.fillText(`${formatPeriod(options.records)} · ${options.records.length} 场演出 · ${options.sortMode === "date-desc" ? "最新在前" : "最早在前"}`, x, spec.padding + spec.headerHeight * 0.72);
+  if (options.showBrand) drawBrandLockup(context, spec.width - spec.padding - 260, spec.padding * 0.28, palette);
+}
+
+function drawShareFooter(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
+  const y = spec.height - spec.padding * 0.42;
+  if (options.showBrand) {
+    context.fillStyle = palette.text;
+    context.font = `850 ${Math.max(14, Math.round(spec.width * 0.012))}px system-ui, sans-serif`;
+    context.fillText("现场记 · Live Memory", spec.padding, y);
+    context.fillStyle = palette.muted;
+    context.font = `700 ${Math.max(11, Math.round(spec.width * 0.009))}px system-ui, sans-serif`;
+    context.fillText("GitHub · Qi-i/live-memory", spec.padding + Math.round(spec.width * 0.15), y);
+  }
+  if (options.showStats) {
+    const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
+    const watched = options.records.filter((record) => record.status === "watched").length;
+    context.fillStyle = palette.muted;
+    context.font = `700 ${Math.max(11, Math.round(spec.width * 0.0095))}px system-ui, sans-serif`;
+    context.textAlign = "right";
+    context.fillText(`${cities} 城市 · ${watched} 已看`, spec.width - spec.padding, y);
+    context.textAlign = "left";
+  }
 }
 
 function drawBackground(context: CanvasRenderingContext2D, width: number, height: number, palette: PaletteDefinition) {
@@ -798,12 +1032,12 @@ function drawBackground(context: CanvasRenderingContext2D, width: number, height
   }
 }
 
-function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slot: { x: number; y: number; width: number; height: number }, palette: PaletteDefinition) {
-  const shade = context.createLinearGradient(0, slot.y + slot.height * 0.54, 0, slot.y + slot.height);
+function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slot: Rect, palette: PaletteDefinition) {
+  const shade = context.createLinearGradient(0, slot.y + slot.height * 0.55, 0, slot.y + slot.height);
   shade.addColorStop(0, "rgba(0,0,0,0)");
   shade.addColorStop(1, "rgba(0,0,0,.9)");
   context.fillStyle = shade;
-  context.fillRect(slot.x, slot.y + slot.height * 0.46, slot.width, slot.height * 0.54);
+  context.fillRect(slot.x, slot.y + slot.height * 0.45, slot.width, slot.height * 0.55);
   const inset = Math.max(5, slot.width * 0.055);
   context.fillStyle = palette.accentSoft;
   context.font = `800 ${Math.max(8, slot.width * 0.055)}px system-ui, sans-serif`;
@@ -813,8 +1047,10 @@ function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slo
   context.fillText(trimText(context, record.title, slot.width - inset * 2), slot.x + inset, slot.y + slot.height - inset * 1.15);
 }
 
-function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
-  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight);
+function drawContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, background: string) {
+  context.fillStyle = background;
+  context.fillRect(x, y, width, height);
+  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
@@ -876,4 +1112,18 @@ function trimText(context: CanvasRenderingContext2D, value: string, maxWidth: nu
   let output = value;
   while (output.length > 2 && context.measureText(`${output}…`).width > maxWidth) output = output.slice(0, -1);
   return `${output}…`;
+}
+
+function alphaSurface(value: string, alpha: number) {
+  if (value.startsWith("#") && value.length === 7) {
+    const r = Number.parseInt(value.slice(1, 3), 16);
+    const g = Number.parseInt(value.slice(3, 5), 16);
+    const b = Number.parseInt(value.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  }
+  return value;
+}
+
+function clamp(value: number, min: number, max: number) {
+  return Math.min(max, Math.max(min, value));
 }
