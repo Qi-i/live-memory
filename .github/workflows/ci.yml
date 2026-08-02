@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   verify:
@@ -27,8 +28,22 @@ jobs:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
 
+  live-deployment:
+    if: github.event_name == 'pull_request' && github.head_ref == 'verify/pages-share-v4'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Verify Pages deployment SHA and served assets
+        run: node scripts/verify-live-share-v4.mjs
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
   visual:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.head_ref != 'verify/pages-share-v4'
     needs: verify
     runs-on: ubuntu-latest
     timeout-minutes: 25
