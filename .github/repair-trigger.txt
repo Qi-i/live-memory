@@ -1,1 +1,1 @@
-Trigger the one-time verified repair for the share magazine and wallet layouts via pull request.
+Retry the one-time verified repair for the share magazine and wallet layouts after correcting the patch runner.
