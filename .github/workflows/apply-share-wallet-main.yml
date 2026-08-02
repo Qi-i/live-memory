@@ -52,9 +52,9 @@ jobs:
       - name: Commit verified repair
         shell: bash
         run: |
-          rm .github/workflows/apply-share-wallet-main.yml
+          rm -f .github/workflows/apply-share-wallet-main.yml .github/repair-trigger.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/shareStudio.tsx src/archive.css src/archiveBanner.css scripts/v5-layout-contracts.mjs scripts/visual-audit.mjs package.json package-lock.json CHANGELOG.md README.md .github/workflows/apply-share-wallet-main.yml
+          git add src/shareStudio.tsx src/archive.css src/archiveBanner.css scripts/v5-layout-contracts.mjs scripts/visual-audit.mjs package.json package-lock.json CHANGELOG.md README.md .github/workflows/apply-share-wallet-main.yml .github/repair-trigger.txt
           git commit -m "Fix share magazine and wallet layouts"
           git push origin HEAD:main
