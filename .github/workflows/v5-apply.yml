@@ -1,0 +1,10 @@
+name: Apply Live Memory V5
+on:
+  push:
+    branches: [design/home-share-studio-v5]
+jobs:
+  placeholder:
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo placeholder
