@@ -7,6 +7,7 @@
 <p align="center">
   <a href="https://github.com/Qi-i/live-memory/actions/workflows/deploy.yml"><img src="https://github.com/Qi-i/live-memory/actions/workflows/deploy.yml/badge.svg" alt="Deploy GitHub Pages" /></a>
   <a href="https://qi-i.github.io/live-memory/"><img src="https://img.shields.io/badge/GitHub%20Pages-打开现场记-159b88?logo=github&labelColor=10201b" alt="Live site" /></a>
+  <img src="https://img.shields.io/badge/Version-2.3.0-0b8f78.svg" alt="Version 2.3.0" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-315ed8.svg" alt="License: MIT" /></a>
 </p>
 
@@ -20,6 +21,17 @@
 - **访客示例**：使用内置公开演出数据体验全部视图，修改仅保存在当前标签页。
 
 未登录时不会读取浏览器中可能存在的私人档案。
+
+## 2.3.0 更新
+
+本版本重构首页档案 Banner、分享工作室和档案多视图，重点提升海报完整性、成图密度、移动端可读性及线上发布可验证性。
+
+- 首页改为编辑型视觉 Banner，保留 3 张完整悬浮的代表性海报，不再硬裁或突兀截断；
+- 分享工作室默认使用竖版 4:5，普通比例自动完整适配成图区，并提供适应窗口和手动缩放；
+- 密集海报墙、时间长卷和编目杂志按海报真实比例重新排版，减少无效留白并强化大小层级；
+- 城市路线使用明确标注的非地图坐标场，不绘制国界或行政区边界；
+- 优化票夹、票根和列表视图的桌面端与移动端信息密度；
+- GitHub Pages 构建产物新增 `build-info.json`，部署后自动核验线上提交 SHA。
 
 ## 为什么做“现场记”
 

@@ -81,3 +81,9 @@ Pages 尚未启用。回到 `Settings > Pages`，把 Source 设为 GitHub Action
 ## 回滚
 
 GitHub Pages 部署来自 `main`。需要回滚时，优先创建一个撤销问题提交的新 commit，再推送触发部署；不要重写公开分支历史。个人数据在 IndexedDB/Supabase，不应随前端代码回滚而删除。
+
+## 线上版本核验
+
+每次 GitHub Pages 构建会在 `dist/build-info.json` 写入当前提交 SHA 和 UTC 构建时间。部署任务完成后，工作流会轮询公开站点的 `/live-memory/build-info.json`；只有线上 SHA 与本次 `github.sha` 完全一致时才判定发布成功。
+
+最近一次核验结果保存在仓库独立的 `deployment-status` 分支 `latest.json` 中，避免仅凭 Actions 状态或浏览器缓存判断线上版本。
