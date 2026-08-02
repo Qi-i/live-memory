@@ -1,0 +1,50 @@
+:root {
+  --poster-frame-ratio: 4 / 5;
+}
+
+/* A shorter 4:5 frame matches the majority of current concert posters better
+   than the previous 3:4 / 2:3 slots. List and detail views keep the original
+   media available, while visual archive surfaces deliberately fill the frame. */
+.archive-poster-media,
+.showcase-card > button,
+.wallet-cover,
+.archive-ticket > div:first-child,
+.archive-timeline button > span:first-child,
+.share-selection-grid button > .share-poster-frame {
+  aspect-ratio: var(--poster-frame-ratio) !important;
+}
+
+.archive-poster-media img,
+.archive-poster-media > .record-media-fallback,
+.showcase-card > button img,
+.showcase-card > button > .record-media-fallback,
+.wallet-cover img,
+.wallet-cover > .record-media-fallback,
+.archive-ticket > div:first-child img,
+.archive-ticket > div:first-child > .record-media-fallback,
+.archive-timeline button > span:first-child img,
+.archive-timeline button > span:first-child > .record-media-fallback {
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
+  background: transparent !important;
+}
+
+.archive-poster-card,
+.showcase-card,
+.wallet-card,
+.archive-ticket,
+.archive-timeline button {
+  min-width: 0;
+}
+
+@media (max-width: 760px) {
+  .archive-poster-media,
+  .showcase-card > button,
+  .wallet-cover,
+  .archive-ticket > div:first-child,
+  .archive-timeline button > span:first-child {
+    aspect-ratio: 4 / 5 !important;
+  }
+}

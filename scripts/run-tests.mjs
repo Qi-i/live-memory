@@ -94,6 +94,9 @@ try {
   const access = await readFile(new URL("../src/access.tsx", import.meta.url), "utf8");
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
   const archiveBannerCss = await readFile(new URL("../src/archiveBanner.css", import.meta.url), "utf8");
+  const posterFramesCss = await readFile(new URL("../src/posterFrames.css", import.meta.url), "utf8");
+  const brand = await readFile(new URL("../src/brand.tsx", import.meta.url), "utf8");
+  const brandCss = await readFile(new URL("../src/brand.css", import.meta.url), "utf8");
   const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
   const experienceCss = await readFile(new URL("../src/experience.css", import.meta.url), "utf8");
   const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
@@ -102,7 +105,7 @@ try {
 
   assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
   assert.match(main, /<ExperienceThemeProvider>[\s\S]*<AccessGate>/);
-  assert.match(main, /archive\.css[\s\S]*archiveBanner\.css/);
+  assert.match(main, /archive\.css[\s\S]*archiveBanner\.css[\s\S]*posterFrames\.css[\s\S]*brand\.css/);
   assert.match(appRoot, /<ExperienceShell/);
   assert.doesNotMatch(appRoot, /className="rail"|className="hero"/);
   assert.match(access, /mode === "signed-out"/);
@@ -114,15 +117,27 @@ try {
   assert.match(archive, /制作分享图/);
   assert.match(archive, /archive-highlight-card/);
   assert.doesNotMatch(archive, /Compact archive masthead v2/);
-  assert.match(archiveBannerCss, /aspect-ratio:\s*2 \/ 3/);
-  assert.match(archiveBannerCss, /object-fit:\s*contain/);
+  assert.match(archiveBannerCss, /aspect-ratio:\s*4 \/ 5/);
+  assert.match(archiveBannerCss, /object-fit:\s*cover/);
+  assert.match(posterFramesCss, /--poster-frame-ratio:\s*4 \/ 5/);
+  assert.match(posterFramesCss, /object-fit:\s*cover/);
+  assert.match(brand, /BrandLockup/);
+  assert.match(brand, /现场记/);
+  assert.match(brand, /Live Memory/);
+  assert.match(brandCss, /experience-brand-mark/);
   assert.match(shareStudio, /ScopeMode/);
   assert.match(shareStudio, /selectedIds/);
+  assert.match(shareStudio, /Set<EventCategory>/);
+  assert.match(shareStudio, /date-desc/);
   assert.match(shareStudio, /ItemLimit = 12 \| 20 \| 30 \| "all"/);
   assert.match(shareStudio, /ShareFormat = "landscape" \| "portrait" \| "square" \| "long"/);
-  assert.match(shareStudioCss, /share-layout-dense/);
-  assert.match(shareStudioCss, /aspect-ratio:\s*2 \/ 3/);
-  assert.match(shareStudioCss, /object-fit:\s*contain/);
+  assert.match(shareStudio, /ShareLayout = "wall" \| "timeline" \| "magazine" \| "cities"/);
+  assert.match(shareStudioCss, /share-preview-wall/);
+  assert.match(shareStudioCss, /share-preview-timeline/);
+  assert.match(shareStudioCss, /share-preview-magazine/);
+  assert.match(shareStudioCss, /share-preview-cities/);
+  assert.match(shareStudioCss, /aspect-ratio:\s*4 \/ 5/);
+  assert.match(shareStudioCss, /object-fit:\s*cover/);
   assert.match(archive, /"poster"[\s\S]*"wallet"[\s\S]*"ticket"[\s\S]*"timeline"[\s\S]*"calendar"[\s\S]*"venue"[\s\S]*"price"[\s\S]*"summary"[\s\S]*"list"/);
   assert.match(experience, /https:\/\/github\.com\/Qi-i\/live-memory/);
   assert.match(experience, /experience-mobile-nav/);
@@ -135,7 +150,7 @@ try {
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
   assert.match(shareStudio, /正在准备海报/);
 
-  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, portrait banner, mass share selection, responsive navigation, share image, GitHub entry, cloud upload guard, and clear auth errors.");
+  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, 4:5 filled poster frames, category-aware newest-first sharing, four distinct layouts, reusable branding, responsive navigation, cached media, GitHub entry, cloud upload guard, and clear auth errors.");
 } finally {
   await server.close();
 }

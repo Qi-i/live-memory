@@ -1,9 +1,17 @@
-<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="回响册">
-  <rect width="256" height="256" rx="56" fill="#090d10"/>
-  <path d="M42 198 210 42" stroke="#dfff4f" stroke-width="38" stroke-linecap="round"/>
-  <path d="M74 214h108c18 0 32-14 32-32V74" fill="none" stroke="#5fe2d1" stroke-width="18" stroke-linecap="round"/>
-  <rect x="34" y="35" width="132" height="132" rx="26" fill="#fffdf2"/>
-  <text x="61" y="124" font-family="Arial, sans-serif" font-size="70" font-weight="800" fill="#101418">演</text>
-  <path d="M47 165h119v18H47z" fill="#ff6b8a"/>
-  <path d="M47 183h119v18H47z" fill="#42c8ff"/>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="现场记 Live Memory">
+  <defs>
+    <linearGradient id="brand" x1="34" y1="28" x2="220" y2="226" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#65E2CE"/>
+      <stop offset="0.48" stop-color="#159B88"/>
+      <stop offset="1" stop-color="#315ED8"/>
+    </linearGradient>
+    <filter id="shadow" x="0" y="0" width="256" height="256" filterUnits="userSpaceOnUse">
+      <feDropShadow dx="0" dy="14" stdDeviation="13" flood-color="#0B665A" flood-opacity="0.25"/>
+    </filter>
+  </defs>
+  <rect width="256" height="256" rx="62" fill="#F5FBF8"/>
+  <circle cx="128" cy="128" r="92" fill="url(#brand)" filter="url(#shadow)"/>
+  <path d="M57 120c22-33 49-47 81-43 23 3 42 13 61 31-21 1-39 10-53 25-20 22-45 31-75 28" fill="none" stroke="#fff" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M199 136c-22 33-49 47-81 43-23-3-42-13-61-31 21-1 39-10 53-25 20-22 45-31 75-28" fill="none" stroke="#fff" stroke-opacity="0.64" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="128" cy="128" r="15" fill="#DFFF4F" stroke="#fff" stroke-width="6"/>
 </svg>
