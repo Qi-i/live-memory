@@ -1,7 +1,7 @@
 name: Run verified share and wallet layout repair
 
 on:
-  push:
+  pull_request:
     branches: [main]
 
 permissions:
@@ -15,6 +15,7 @@ jobs:
     steps:
       - uses: actions/checkout@v5
         with:
+          ref: main
           fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
