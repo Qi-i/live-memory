@@ -1,0 +1,118 @@
+.brand-mark {
+  display: block;
+  width: var(--brand-mark-size, 44px);
+  height: var(--brand-mark-size, 44px);
+  flex: 0 0 auto;
+  overflow: visible;
+  filter: drop-shadow(0 8px 18px rgba(20, 116, 101, 0.2));
+}
+
+.brand-mark.is-monochrome {
+  filter: grayscale(1) brightness(1.4);
+}
+
+.brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 11px;
+  color: var(--experience-text, #111318);
+}
+
+.brand-lockup-copy {
+  display: grid;
+  min-width: 0;
+  line-height: 1;
+}
+
+.brand-lockup-copy strong {
+  font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+  font-size: 21px;
+  font-weight: 900;
+  letter-spacing: 0.09em;
+}
+
+.brand-lockup-copy small {
+  margin-top: 4px;
+  color: #168a78;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.brand-lockup-copy em {
+  margin-top: 7px;
+  color: var(--experience-muted, #69737d);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 760;
+  letter-spacing: 0.01em;
+}
+
+.brand-lockup.is-compact { gap: 8px; }
+.brand-lockup.is-compact .brand-lockup-copy strong { font-size: 16px; }
+.brand-lockup.is-compact .brand-lockup-copy small { margin-top: 3px; font-size: 7px; }
+.brand-lockup.is-inverse { color: #f8fffb; }
+.brand-lockup.is-inverse .brand-lockup-copy small,
+.brand-lockup.is-inverse .brand-lockup-copy em { color: rgba(241, 255, 249, 0.72); }
+
+/* Upgrade the existing shell and login marks without duplicating layout code. */
+.experience-brand-mark,
+.access-logo {
+  position: relative;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  overflow: hidden;
+  color: transparent !important;
+  background:
+    radial-gradient(circle at 50% 50%, #dfff4f 0 8%, transparent 9%),
+    linear-gradient(145deg, #66e3cf, #159b88 50%, #315ed8) !important;
+  box-shadow: 0 9px 22px rgba(20, 116, 101, 0.22) !important;
+}
+
+.experience-brand-mark::before,
+.experience-brand-mark::after,
+.access-logo::before,
+.access-logo::after {
+  content: "";
+  position: absolute;
+  width: 76%;
+  height: 42%;
+  border: 3px solid white;
+  border-right-color: transparent;
+  border-bottom-color: transparent;
+  border-radius: 70% 50% 60% 42%;
+  transform: rotate(-14deg);
+}
+
+.experience-brand-mark::after,
+.access-logo::after {
+  border-color: rgba(255, 255, 255, 0.62);
+  border-left-color: transparent;
+  border-top-color: transparent;
+  transform: rotate(-14deg) scale(-1);
+}
+
+.experience-brand > span:last-child small,
+.access-brand-line > div small {
+  font-size: 0 !important;
+}
+
+.experience-brand > span:last-child small::after,
+.access-brand-line > div small::after {
+  content: "Live Memory";
+  color: #168a78;
+  font-size: 8px;
+  font-weight: 900;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.experience-brand > span:last-child strong,
+.access-brand-line > div strong {
+  font-family: "Songti SC", "STSong", "Noto Serif SC", serif;
+  letter-spacing: 0.08em;
+}
