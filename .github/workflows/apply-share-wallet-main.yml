@@ -34,6 +34,10 @@ jobs:
           end = text.index("\n          PY", start)
           block = text[start:end]
           script = "\n".join(line[10:] if line.startswith("          ") else line for line in block.splitlines())
+          script = script.replace(
+              "updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)",
+              "updated, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)",
+          )
           exec(compile(script, '/tmp/prepared-fix.py', 'exec'))
           PY
       - name: Verify source and responsive geometry
