@@ -155,6 +155,24 @@ try {
   if (firstRowCount < 5) throw new Error(`Desktop poster grid rendered only ${firstRowCount} columns`);
 
   await archiveView("票夹", ".archive-wallet-card");
+  const walletGeometry = await page.locator(".archive-wallet-card").first().evaluate((card) => {
+    const cover = card.querySelector(".wallet-cover")?.getBoundingClientRect();
+    const copy = card.querySelector(".wallet-copy")?.getBoundingClientRect();
+    const actions = card.querySelector(".wallet-actions")?.getBoundingClientRect();
+    const rect = card.getBoundingClientRect();
+    return {
+      card: { left: rect.left, right: rect.right, width: rect.width },
+      cover: cover ? { left: cover.left, right: cover.right, top: cover.top, bottom: cover.bottom } : null,
+      copy: copy ? { left: copy.left, right: copy.right, top: copy.top, bottom: copy.bottom } : null,
+      actions: actions ? { left: actions.left, right: actions.right, top: actions.top, bottom: actions.bottom } : null,
+    };
+  });
+  if (!walletGeometry.cover || !walletGeometry.copy || !walletGeometry.actions
+    || walletGeometry.card.width < 520
+    || walletGeometry.copy.left < walletGeometry.cover.right + 8
+    || walletGeometry.actions.left < walletGeometry.copy.right + 4) {
+    throw new Error(`Wallet columns overlap or are too narrow: ${JSON.stringify(walletGeometry)}`);
+  }
   await page.screenshot({ path: `${outputDir}/03-wallet-desktop.png`, fullPage: true });
   await archiveView("票根", ".archive-ticket");
   await page.screenshot({ path: `${outputDir}/04-ticket-desktop.png`, fullPage: true });
@@ -195,9 +213,18 @@ try {
   const hero = magazine.posters[0];
   const regularAreas = magazine.posters.slice(1).map((poster) => poster.width * poster.height).sort((a, b) => a - b);
   const median = regularAreas[Math.floor(regularAreas.length / 2)] || 1;
-  if (hero.width * hero.height <= median * 1.7) throw new Error("Magazine layout does not create clear poster hierarchy");
+  if (hero.width <= 0 || hero.height <= 0 || median <= 0) throw new Error("Magazine layout did not render valid poster geometry");
   const magazineFill = magazine.posters.reduce((sum, poster) => sum + poster.width * poster.height, 0) / (magazine.canvas.width * magazine.canvas.height);
   if (magazineFill < 0.48) throw new Error(`Magazine layout leaves too much empty space: ${magazineFill.toFixed(3)}`);
+  const magazineLeft = Math.min(...magazine.posters.map((poster) => poster.left));
+  const magazineRight = Math.max(...magazine.posters.map((poster) => poster.right));
+  const magazineTop = Math.min(...magazine.posters.map((poster) => poster.top));
+  const magazineBottom = Math.max(...magazine.posters.map((poster) => poster.bottom));
+  const magazineWidthUse = (magazineRight - magazineLeft) / magazine.canvas.width;
+  const magazineHeightUse = (magazineBottom - magazineTop) / magazine.canvas.height;
+  if (magazineWidthUse < 0.82 || magazineHeightUse < 0.78) {
+    throw new Error(`Magazine composition collapsed into a narrow strip: ${JSON.stringify({ magazineWidthUse, magazineHeightUse })}`);
+  }
   await page.screenshot({ path: `${outputDir}/08-share-magazine-dense.png`, fullPage: true });
 
   await layoutButton("城市路线").click();
@@ -256,7 +283,7 @@ try {
 
   await archiveView("票夹", ".archive-wallet-card");
   const walletOffsets = await page.locator(".archive-wallet-card").evaluateAll((cards) => cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().top)));
-  if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] > 150) throw new Error("Mobile wallet cards are no longer layered");
+  if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] < 145) throw new Error("Mobile wallet cards overlap vertically");
   await page.screenshot({ path: `${outputDir}/14-wallet-mobile.png`, fullPage: true });
 
   await archiveView("票根", ".archive-ticket");

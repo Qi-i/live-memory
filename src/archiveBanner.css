@@ -227,11 +227,16 @@
 .archive-page .archive-highlight-feature { display: none; }
 
 /* Existing archive modes: higher-density interpretations of the same records. */
-.archive-page .archive-wallet-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }
-.archive-page .archive-wallet-card { min-height: 178px; grid-template-columns: 112px minmax(0, 1fr) 34px; border-radius: 18px; }
-.archive-page .wallet-cover { align-self: stretch; border-radius: 13px; background: color-mix(in srgb, var(--experience-surface-solid) 80%, #17201f); }
+.archive-page .archive-wallet-grid { grid-template-columns: repeat(auto-fill, minmax(540px, 1fr)); gap: 12px; }
+.archive-page .archive-wallet-card { min-height: 210px; grid-template-columns: 140px minmax(0, 1fr) 36px; gap: 14px; padding: 12px; border-radius: 18px; }
+.archive-page .wallet-cover { width: 140px; align-self: start; border-radius: 12px; background: color-mix(in srgb, var(--experience-surface-solid) 80%, #17201f); }
 .archive-page .wallet-cover img,
 .archive-page .wallet-cover > .record-media-fallback { object-fit: contain; }
+.archive-page .wallet-copy { padding: 2px 4px; overflow: hidden; }
+.archive-page .wallet-copy h3 { min-height: 2.45em; margin: 6px 0 3px; font-size: 18px; line-height: 1.22; }
+.archive-page .wallet-copy > p { margin-bottom: 7px; }
+.archive-page .wallet-copy dl { grid-template-columns: 38px minmax(0, 1fr); margin-top: 1px; }
+.archive-page .wallet-actions { padding-left: 2px; border-left: 1px solid var(--experience-border); }
 
 .archive-page .archive-ticket-grid { grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 10px; }
 .archive-page .archive-ticket { grid-template-columns: 120px minmax(0, 1fr); min-height: 180px; border-radius: 16px; }
@@ -279,13 +284,15 @@
   .archive-page .archive-highlight-card-4 { top: 34%; left: -4%; width: 20%; height: 45%; }
   .archive-page .archive-highlight-feature { display: none; }
 
-  .archive-page .archive-wallet-grid { display: block; }
-  .archive-page .archive-wallet-card { grid-template-columns: 88px minmax(0, 1fr) 30px; min-height: 146px; margin-top: -24px; border-radius: 18px; box-shadow: 0 -8px 20px color-mix(in srgb, var(--experience-text) 10%, transparent), var(--experience-shadow); transition: transform 180ms ease; }
-  .archive-page .archive-wallet-card:first-child { margin-top: 0; }
-  .archive-page .archive-wallet-card:hover,
-  .archive-page .archive-wallet-card:focus-within { z-index: 4; transform: translateY(-8px); }
-  .archive-page .archive-wallet-card dl { display: none; }
-  .archive-page .wallet-copy h3 { -webkit-line-clamp: 2; }
+  .archive-page .archive-wallet-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .archive-page .archive-wallet-card { grid-template-columns: 92px minmax(0, 1fr) 28px; min-height: 152px; gap: 10px; margin: 0; padding: 9px; border-radius: 16px; box-shadow: var(--experience-shadow); }
+  .archive-page .wallet-cover { width: 92px; align-self: start; border-radius: 10px; }
+  .archive-page .wallet-copy { padding: 1px 2px; }
+  .archive-page .wallet-copy h3 { min-height: 2.4em; margin: 4px 0 3px; font-size: 15px; line-height: 1.2; -webkit-line-clamp: 2; }
+  .archive-page .wallet-copy > p { margin-bottom: 3px; font-size: 10px; }
+  .archive-page .wallet-copy > strong { padding-top: 4px; }
+  .archive-page .wallet-actions { gap: 5px; padding-left: 0; border-left: 0; }
+  .archive-page .wallet-actions button { width: 28px; height: 28px; }
 
   .archive-page .archive-ticket-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
   .archive-page .archive-ticket { display: block; min-width: 0; min-height: 0; border-radius: 13px; }

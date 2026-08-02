@@ -1,8 +1,9 @@
 import { readFile } from "node:fs/promises";
 import assert from "node:assert/strict";
 
-const [appRoot, bannerCss, studio, studioCss, main, visualAudit] = await Promise.all([
+const [appRoot, archiveCss, bannerCss, studio, studioCss, main, visualAudit] = await Promise.all([
   readFile("src/AppRoot.tsx", "utf8"),
+  readFile("src/archive.css", "utf8"),
   readFile("src/archiveBanner.css", "utf8"),
   readFile("src/shareStudio.tsx", "utf8"),
   readFile("src/shareStudio.css", "utf8"),
@@ -16,9 +17,13 @@ assert.match(bannerCss, /white-space:\s*nowrap/);
 assert.match(bannerCss, /archive-highlight-card-4,[\s\S]*display:\s*none/);
 assert.match(studio, /function partitionBalanced/);
 assert.match(studio, /occupiedArea/);
-assert.match(studio, /records\.length <= 8 \? 3 : records\.length <= 24 \? 4 : 5/);
-assert.match(studio, /const compactMagazine = records\.length <= 8;/);
-assert.match(studio, /index === 0 \? Math\.min\(compactMagazine \? 2 : 3, columns\)/, "Compact magazine sets should use a two-column hero and one-column supporting posters");
+assert.match(studio, /function buildAdaptiveMagazineRows/);
+assert.match(studio, /spec\.format === "landscape"/);
+assert.match(studio, /const topCount = records\.length >= 14 \? 6/);
+assert.match(studio, /fill \* 0\.4 \+ verticalUse \* 0\.25 \+ scale \* 0\.3/);
+assert.doesNotMatch(studio, /const scaledWidth = area\.width \* scale/, "Magazine must not collapse the whole composition into a narrow centered strip");
+assert.match(archiveCss, /archive-wallet-grid[\s\S]*minmax\(560px, 1fr\)/);
+assert.match(bannerCss, /archive-wallet-grid[\s\S]*minmax\(540px, 1fr\)/);
 assert.match(studio, /useLayoutEffect\(\(\) => \{[\s\S]*setManualScale\(null\);[\s\S]*recalculateFit\(\);/, "Format changes must fit the preview before paint");
 assert.match(studio, /ResizeObserver/);
 assert.match(studio, /drawContain/);

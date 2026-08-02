@@ -7,7 +7,7 @@
 <p align="center">
   <a href="https://github.com/Qi-i/live-memory/actions/workflows/deploy.yml"><img src="https://github.com/Qi-i/live-memory/actions/workflows/deploy.yml/badge.svg" alt="Deploy GitHub Pages" /></a>
   <a href="https://qi-i.github.io/live-memory/"><img src="https://img.shields.io/badge/GitHub%20Pages-打开现场记-159b88?logo=github&labelColor=10201b" alt="Live site" /></a>
-  <img src="https://img.shields.io/badge/Version-2.3.0-0b8f78.svg" alt="Version 2.3.0" />
+  <img src="https://img.shields.io/badge/Version-2.3.1-0b8f78.svg" alt="Version 2.3.1" />
   <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-315ed8.svg" alt="License: MIT" /></a>
 </p>
 

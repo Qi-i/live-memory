@@ -672,49 +672,141 @@ function partitionBalanced(itemCount: number, rowCount: number): Array<[number, 
 function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length) return [];
   const gap = spec.width >= 1500 ? 15 : 12;
-  let columns = records.length <= 8 ? 3 : records.length <= 24 ? 4 : 5;
-  if (spec.width >= 1500) columns += 1;
-  const columnWidth = (area.width - gap * (columns - 1)) / columns;
-  const heights = Array.from({ length: columns }, () => 0);
-  const slots: PosterSlot[] = [];
 
-  records.forEach((record, index) => {
-    const ratio = recordPosterRatio(record);
-    const compactMagazine = records.length <= 8;
-    const requestedSpan = index === 0 ? Math.min(compactMagazine ? 2 : 3, columns) : compactMagazine ? 1 : index < 3 ? Math.min(2, columns - 1) : 1;
-    const span = Math.max(1, Math.min(requestedSpan, columns));
-    let bestColumn = 0;
-    let bestY = Number.POSITIVE_INFINITY;
-    for (let start = 0; start <= columns - span; start += 1) {
-      const y = Math.max(...heights.slice(start, start + span));
-      if (y < bestY) { bestY = y; bestColumn = start; }
-    }
-    const width = columnWidth * span + gap * (span - 1);
-    const height = width / ratio;
-    const x = area.x + bestColumn * (columnWidth + gap);
-    const y = area.y + bestY;
-    const emphasis = index === 0 ? "hero" : index < 3 ? "feature" : "normal";
-    slots.push({ record, rect: { x, y, width, height }, emphasis });
-    for (let column = bestColumn; column < bestColumn + span; column += 1) heights[column] = bestY + height + gap;
-  });
-
-  const totalHeight = Math.max(...heights, 1) - gap;
-  if (totalHeight > area.height) {
-    const scale = area.height / totalHeight;
-    const scaledWidth = area.width * scale;
-    const offsetX = area.x + (area.width - scaledWidth) / 2;
-    return slots.map((slot) => ({
+  if (records.length <= 6) {
+    return buildAdaptiveMagazineRows(records, area, gap, records.length <= 3 ? 1 : 2).map((slot, index) => ({
       ...slot,
-      rect: {
-        x: offsetX + (slot.rect.x - area.x) * scale,
-        y: area.y + (slot.rect.y - area.y) * scale,
-        width: slot.rect.width * scale,
-        height: slot.rect.height * scale,
-      },
+      emphasis: index === 0 ? "hero" : index < 3 ? "feature" : "normal",
     }));
   }
-  const offsetY = (area.height - totalHeight) / 2;
-  return slots.map((slot) => ({ ...slot, rect: { ...slot.rect, y: slot.rect.y + offsetY } }));
+
+  const hero = records[0];
+  const heroRatio = recordPosterRatio(hero);
+
+  if (spec.format === "landscape") {
+    const heroHeight = area.height;
+    const heroWidth = Math.min(area.width * 0.34, heroHeight * heroRatio);
+    const heroRect = {
+      x: area.x,
+      y: area.y + (area.height - heroHeight) / 2,
+      width: heroWidth,
+      height: heroHeight,
+    };
+    const supportingArea = {
+      x: heroRect.x + heroRect.width + gap,
+      y: area.y,
+      width: area.width - heroRect.width - gap,
+      height: area.height,
+    };
+    const supporting = buildAdaptiveMagazineRows(
+      records.slice(1),
+      supportingArea,
+      gap,
+      Math.min(4, Math.max(2, Math.ceil((records.length - 1) / 5))),
+    );
+    return [
+      { record: hero, rect: heroRect, emphasis: "hero" },
+      ...supporting.map((slot, index) => ({ ...slot, emphasis: index < 2 ? "feature" as const : "normal" as const })),
+    ];
+  }
+
+  const topCount = records.length >= 14 ? 6 : records.length >= 10 ? 5 : 4;
+  const topHeightRatio = spec.format === "square" ? 0.62 : records.length >= 14 ? 0.62 : 0.6;
+  const topHeight = area.height * topHeightRatio;
+  const heroHeight = topHeight;
+  const heroWidth = Math.min(area.width * 0.52, heroHeight * heroRatio);
+  const heroRect = {
+    x: area.x,
+    y: area.y + (topHeight - heroHeight) / 2,
+    width: heroWidth,
+    height: heroHeight,
+  };
+  const featureArea = {
+    x: heroRect.x + heroRect.width + gap,
+    y: area.y,
+    width: area.width - heroRect.width - gap,
+    height: topHeight,
+  };
+  const featureRecords = records.slice(1, topCount);
+  const featureSlots = buildAdaptiveMagazineRows(featureRecords, featureArea, gap, Math.min(3, featureRecords.length));
+
+  const bottomY = area.y + topHeight + gap;
+  const bottomArea = {
+    x: area.x,
+    y: bottomY,
+    width: area.width,
+    height: Math.max(0, area.y + area.height - bottomY),
+  };
+  const remainingRecords = records.slice(topCount);
+  const bottomSlots = remainingRecords.length
+    ? buildAdaptiveMagazineRows(
+        remainingRecords,
+        bottomArea,
+        gap,
+        Math.min(4, Math.max(1, Math.ceil(remainingRecords.length / 5))),
+      )
+    : [];
+
+  return [
+    { record: hero, rect: heroRect, emphasis: "hero" },
+    ...featureSlots.map((slot) => ({ ...slot, emphasis: "feature" as const })),
+    ...bottomSlots.map((slot) => ({ ...slot, emphasis: "normal" as const })),
+  ];
+}
+
+function buildAdaptiveMagazineRows(records: EventRecord[], area: Rect, gap: number, maxRows: number): PosterSlot[] {
+  if (!records.length || area.width <= 0 || area.height <= 0) return [];
+  const ratios = records.map(recordPosterRatio);
+  let bestGroups: Array<[number, number]> = [[0, records.length]];
+  let bestScale = 1;
+  let bestScore = Number.NEGATIVE_INFINITY;
+
+  for (let rowCount = 1; rowCount <= Math.min(records.length, Math.max(1, maxRows)); rowCount += 1) {
+    const groups = partitionBalanced(records.length, rowCount);
+    const naturalHeights = groups.map(([start, end]) => {
+      const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
+      return (area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
+    });
+    const naturalTotalHeight = naturalHeights.reduce((sum, height) => sum + height, 0) + gap * Math.max(0, rowCount - 1);
+    const scale = Math.min(1, area.height / Math.max(1, naturalTotalHeight));
+    const usedHeight = naturalTotalHeight * scale;
+    const occupiedArea = groups.reduce((sum, [start, end], index) => {
+      const ratioSum = ratios.slice(start, end).reduce((rowSum, ratio) => rowSum + ratio, 0);
+      const height = naturalHeights[index] * scale;
+      return sum + ratioSum * height * height;
+    }, 0);
+    const fill = occupiedArea / Math.max(1, area.width * area.height);
+    const verticalUse = usedHeight / Math.max(1, area.height);
+    const readability = Math.min(1, naturalHeights.reduce((sum, value) => sum + value, 0) * scale / rowCount / 170);
+    const score = fill * 0.4 + verticalUse * 0.25 + scale * 0.3 + readability * 0.05;
+    if (score > bestScore) {
+      bestScore = score;
+      bestGroups = groups;
+      bestScale = scale;
+    }
+  }
+
+  const scaledGap = gap * bestScale;
+  const rowHeights = bestGroups.map(([start, end]) => {
+    const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
+    return ((area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum)) * bestScale;
+  });
+  const usedHeight = rowHeights.reduce((sum, height) => sum + height, 0) + scaledGap * Math.max(0, bestGroups.length - 1);
+  let y = area.y + Math.max(0, (area.height - usedHeight) / 2);
+  const slots: PosterSlot[] = [];
+
+  bestGroups.forEach(([start, end], rowIndex) => {
+    const height = rowHeights[rowIndex];
+    const rowWidth = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio * height, 0) + scaledGap * Math.max(0, end - start - 1);
+    let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
+    for (let index = start; index < end; index += 1) {
+      const width = ratios[index] * height;
+      slots.push({ record: records[index], rect: { x, y, width, height } });
+      x += width + scaledGap;
+    }
+    y += height + scaledGap;
+  });
+  return slots;
 }
 
 function buildTimelineBands(records: EventRecord[], area: Rect, spec: CanvasSpec): TimelineBand[] {
