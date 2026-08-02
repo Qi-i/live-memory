@@ -2,9 +2,64 @@ name: Apply Live Memory V5
 on:
   push:
     branches: [design/home-share-studio-v5]
+permissions:
+  contents: write
 jobs:
-  placeholder:
-    if: ${{ false }}
+  apply:
+    if: ${{ !contains(github.event.head_commit.message, 'Apply archive and share studio V5') }}
     runs-on: ubuntu-latest
     steps:
-      - run: echo placeholder
+      - uses: actions/checkout@v4
+        with:
+          ref: design/home-share-studio-v5
+          fetch-depth: 0
+      - name: Rebuild source files from reviewed payload
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat .github/v5payload/part*.b64 | base64 --decode > /tmp/live-memory-v5.tar.gz
+          tar -xzf /tmp/live-memory-v5.tar.gz -C .
+          python - <<'PY'
+          from pathlib import Path
+
+          main = Path('src/main.tsx')
+          text = main.read_text()
+          text = text.replace('import "./shareStudioRefinement.css";\n', '')
+          main.write_text(text)
+
+          tests = Path('scripts/run-tests.mjs')
+          text = tests.read_text()
+          text = text.replace('assert.match(archiveBannerCss, /object-fit:\\s*cover/);', 'assert.match(archiveBannerCss, /object-fit:\\s*contain/);')
+          old = '''  assert.match(shareStudioCss, /share-preview-wall/);\n  assert.match(shareStudioCss, /share-preview-timeline/);\n  assert.match(shareStudioCss, /share-preview-magazine/);\n  assert.match(shareStudioCss, /share-preview-cities/);\n  assert.match(shareStudioCss, /aspect-ratio:\\s*4 \\/ 5/);\n  assert.match(shareStudioCss, /object-fit:\\s*cover/);'''
+          new = '''  assert.match(shareStudioCss, /share-layout-canvas/);\n  assert.match(shareStudioCss, /share-coordinate-field/);\n  assert.match(shareStudioCss, /share-preview-toolbar/);\n  assert.match(shareStudioCss, /object-fit:\\s*contain/);\n  assert.match(shareStudio, /ResizeObserver/);\n  assert.match(shareStudio, /recordPosterRatio/);\n  assert.match(shareStudio, /drawContain/);\n  assert.match(shareStudio, /非地图示意/);'''
+          if old not in text:
+              raise SystemExit('Expected share studio assertions were not found')
+          text = text.replace(old, new)
+          text = text.replace('4:5 filled poster frames, category-aware newest-first sharing, four distinct layouts', 'complete poster frames, fitted preview scaling, category-aware newest-first sharing, four geometry-driven layouts')
+          tests.write_text(text)
+          PY
+          rm -f src/shareStudioRefinement.css
+          rm -rf .github/v5payload
+          rm -f .github/codex-home-share-v5.md
+          rm -f .github/workflows/v5-apply.yml
+      - name: Install and verify
+        id: verify
+        shell: bash
+        run: |
+          set +e
+          npm ci
+          CI_STATUS=$?
+          if [ "$CI_STATUS" -eq 0 ]; then npm run check; CHECK_STATUS=$?; else CHECK_STATUS=$CI_STATUS; fi
+          echo "status=$CHECK_STATUS" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Commit implementation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "Apply archive and share studio V5"
+          git push origin HEAD:design/home-share-studio-v5
+      - name: Report local verification result
+        if: steps.verify.outputs.status != '0'
+        run: exit 1
