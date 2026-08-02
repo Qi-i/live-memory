@@ -75,6 +75,17 @@ async function assertSharePosters(label, canvasSelector) {
 }
 
 async function assertFixedPreviewFits(label) {
+  await page.waitForFunction(() => {
+    const area = document.querySelector(".share-preview-area.is-fixed");
+    const viewport = area?.querySelector(".share-preview-viewport");
+    if (!(area instanceof HTMLElement) || !(viewport instanceof HTMLElement)) return false;
+    const areaRect = area.getBoundingClientRect();
+    const viewportRect = viewport.getBoundingClientRect();
+    return viewportRect.left >= areaRect.left - 2
+      && viewportRect.top >= areaRect.top - 2
+      && viewportRect.right <= areaRect.right + 2
+      && viewportRect.bottom <= areaRect.bottom + 2;
+  }, null, { timeout: 5000 });
   const geometry = await page.locator(".share-preview-area.is-fixed").evaluate((area) => {
     const areaRect = area.getBoundingClientRect();
     const viewport = area.querySelector(".share-preview-viewport");

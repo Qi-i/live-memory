@@ -15,6 +15,7 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -249,18 +250,15 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
     setFitScale(clamp(next, 0.14, 1));
   }, [format, spec.height, spec.width]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const area = previewAreaRef.current;
     if (!area) return;
+    setManualScale(null);
     recalculateFit();
     const observer = new ResizeObserver(recalculateFit);
     observer.observe(area);
     return () => observer.disconnect();
-  }, [recalculateFit]);
-
-  useEffect(() => {
-    setManualScale(null);
-  }, [format, layout, selectedRecords.length]);
+  }, [format, layout, recalculateFit, selectedRecords.length]);
 
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
