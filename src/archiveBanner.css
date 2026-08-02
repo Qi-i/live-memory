@@ -39,8 +39,8 @@
 
 .archive-page .archive-highlight-card {
   width: auto;
-  height: 68%;
-  aspect-ratio: 2 / 3;
+  height: 66%;
+  aspect-ratio: 4 / 5;
   border-width: 4px;
   border-radius: 15px;
   background: color-mix(in srgb, var(--experience-surface-solid) 84%, #101a18);
@@ -48,35 +48,35 @@
 }
 
 .archive-page .archive-highlight-card-1 {
-  top: 2%;
-  left: 38%;
+  top: 4%;
+  left: 34%;
   width: auto;
-  height: 88%;
+  height: 84%;
   transform: rotate(-1deg) translateZ(78px);
 }
 
 .archive-page .archive-highlight-card-2 {
-  top: 16%;
-  left: 13%;
+  top: 18%;
+  left: 7%;
   width: auto;
-  height: 69%;
+  height: 66%;
   transform: rotate(-8deg) translateZ(18px);
 }
 
 .archive-page .archive-highlight-card-3 {
-  top: 15%;
-  right: 9%;
+  top: 17%;
+  right: 4%;
   left: auto;
   width: auto;
-  height: 72%;
+  height: 68%;
   transform: rotate(7deg) translateZ(28px);
 }
 
 .archive-page .archive-highlight-card-4 {
-  top: 27%;
-  left: 1%;
+  top: 33%;
+  left: -2%;
   width: auto;
-  height: 56%;
+  height: 49%;
   transform: rotate(-12deg);
 }
 
@@ -105,8 +105,9 @@
 .archive-page .archive-highlight-card > .record-media-fallback {
   width: 100%;
   height: 100%;
-  object-fit: contain;
-  background: color-mix(in srgb, var(--experience-surface-solid) 84%, #101a18);
+  object-fit: cover;
+  object-position: center;
+  background: transparent;
 }
 
 .archive-page .archive-highlight-card > span:last-child {
@@ -153,23 +154,23 @@
   }
 
   .archive-page .archive-highlight-card-1 {
-    left: 40%;
-    height: 88%;
+    left: 36%;
+    height: 84%;
   }
 
   .archive-page .archive-highlight-card-2 {
-    left: 16%;
+    left: 10%;
   }
 
   .archive-page .archive-highlight-card-3 {
-    right: 13%;
+    right: 7%;
   }
 }
 
 @media (max-width: 720px) {
   .archive-page .archive-highlights {
     display: block;
-    min-height: 265px;
+    min-height: 250px;
   }
 
   .archive-page .archive-highlight-stack {
@@ -182,32 +183,32 @@
   }
 
   .archive-page .archive-highlight-card-1 {
-    top: 3%;
-    left: 37%;
+    top: 5%;
+    left: 33%;
     width: auto;
-    height: 86%;
+    height: 80%;
   }
 
   .archive-page .archive-highlight-card-2 {
-    top: 18%;
-    left: 8%;
+    top: 20%;
+    left: 4%;
     width: auto;
-    height: 66%;
+    height: 62%;
   }
 
   .archive-page .archive-highlight-card-3 {
-    top: 17%;
-    right: 5%;
+    top: 19%;
+    right: 2%;
     left: auto;
     width: auto;
-    height: 67%;
+    height: 63%;
   }
 
   .archive-page .archive-highlight-card-4 {
-    top: 30%;
-    left: -3%;
+    top: 34%;
+    left: -6%;
     width: auto;
-    height: 50%;
+    height: 44%;
   }
 
   .archive-page .archive-highlight-card-5,
