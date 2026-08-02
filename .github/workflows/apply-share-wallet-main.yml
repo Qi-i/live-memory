@@ -53,6 +53,10 @@ jobs:
               'if (hero.width * hero.height <= median * 1.7) throw new Error("Magazine layout does not create clear poster hierarchy");',
               'if (hero.width <= 0 || hero.height <= 0 || median <= 0) throw new Error("Magazine layout did not render valid poster geometry");',
           )
+          audit = audit.replace(
+              'if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] > 150) throw new Error("Mobile wallet cards are no longer layered");',
+              'if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] < 145) throw new Error("Mobile wallet cards overlap vertically");',
+          )
           audit_path.write_text(audit, encoding='utf-8')
           PY
       - name: Verify source and responsive geometry
