@@ -1,1 +1,1 @@
-Trigger the one-time verified repair for the share magazine and wallet layouts.
+Trigger the one-time verified repair for the share magazine and wallet layouts via pull request.
