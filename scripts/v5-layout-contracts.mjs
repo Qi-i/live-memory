@@ -16,6 +16,7 @@ assert.match(bannerCss, /archive-highlight-card-4,[\s\S]*display:\s*none/);
 assert.match(studio, /function partitionBalanced/);
 assert.match(studio, /occupiedArea/);
 assert.match(studio, /records\.length <= 8 \? 3 : records\.length <= 24 \? 4 : 5/);
+assert.match(studio, /index === 0 \? \(records\.length <= 8 \? columns : Math\.min\(3, columns\)\)/, "Small magazine sets should give the hero the full row");
 assert.match(studio, /ResizeObserver/);
 assert.match(studio, /drawContain/);
 assert.match(studioCss, /share-preview-area\.is-long \{ overflow-x:\s*hidden; overflow-y:\s*auto;/);
