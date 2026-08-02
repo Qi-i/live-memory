@@ -1,1 +1,1 @@
-Run the density-focused final verification for magazine coverage and wallet separation.
+Run the final verification with separated mobile wallet cards and full-canvas magazine composition.
