@@ -1,0 +1,60 @@
+name: Run verified share and wallet layout repair
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  repair:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply prepared repair
+        shell: bash
+        run: |
+          git fetch origin fix/share-magazine-wallet-2.3.1
+          git show origin/fix/share-magazine-wallet-2.3.1:.github/workflows/apply-share-wallet-fix.yml > /tmp/prepared-fix.yml
+          python - <<'PY'
+          from pathlib import Path
+          text = Path('/tmp/prepared-fix.yml').read_text(encoding='utf-8')
+          marker = "          python - <<'PY'\n"
+          start = text.index(marker) + len(marker)
+          end = text.index("\n          PY", start)
+          block = text[start:end]
+          script = "\n".join(line[10:] if line.startswith("          ") else line for line in block.splitlines())
+          exec(compile(script, '/tmp/prepared-fix.py', 'exec'))
+          PY
+      - name: Verify source and responsive geometry
+        shell: bash
+        run: |
+          npm ci
+          npm run check
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+          npm run build
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/live-memory-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/live-memory/ >/dev/null; then break; fi
+            sleep 1
+          done
+          VISUAL_AUDIT_URL=http://127.0.0.1:4173/live-memory/ node scripts/visual-audit.mjs
+      - name: Commit verified repair
+        shell: bash
+        run: |
+          rm .github/workflows/apply-share-wallet-main.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/shareStudio.tsx src/archive.css src/archiveBanner.css scripts/v5-layout-contracts.mjs scripts/visual-audit.mjs package.json package-lock.json CHANGELOG.md README.md .github/workflows/apply-share-wallet-main.yml
+          git commit -m "Fix share magazine and wallet layouts"
+          git push origin HEAD:main
