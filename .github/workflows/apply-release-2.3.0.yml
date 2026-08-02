@@ -1,0 +1,78 @@
+name: Apply 2.3.0 release documentation
+
+on:
+  push:
+    branches: [release/2.3.0-docs]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: release/2.3.0-docs
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Bump package version
+        run: npm version 2.3.0 --no-git-tag-version
+
+      - name: Update release documentation
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          readme = Path("README.md")
+          text = readme.read_text(encoding="utf-8")
+          version_badge = '  <img src="https://img.shields.io/badge/Version-2.3.0-0b8f78.svg" alt="Version 2.3.0" />\n'
+          if "Version-2.3.0" not in text:
+              anchor = '  <a href="./LICENSE"><img src="https://img.shields.io/badge/License-MIT-315ed8.svg" alt="License: MIT" /></a>\n'
+              text = text.replace(anchor, version_badge + anchor)
+
+          release_section = '''## 2.3.0 更新\n\n本版本重构首页档案 Banner、分享工作室和档案多视图，重点提升海报完整性、成图密度、移动端可读性及线上发布可验证性。\n\n- 首页改为编辑型视觉 Banner，保留 3 张完整悬浮的代表性海报，不再硬裁或突兀截断；\n- 分享工作室默认使用竖版 4:5，普通比例自动完整适配成图区，并提供适应窗口和手动缩放；\n- 密集海报墙、时间长卷和编目杂志按海报真实比例重新排版，减少无效留白并强化大小层级；\n- 城市路线使用明确标注的非地图坐标场，不绘制国界或行政区边界；\n- 优化票夹、票根和列表视图的桌面端与移动端信息密度；\n- GitHub Pages 构建产物新增 `build-info.json`，部署后自动核验线上提交 SHA。\n\n'''
+          marker = "## 为什么做“现场记”"
+          if "## 2.3.0 更新" not in text:
+              text = text.replace(marker, release_section + marker)
+          readme.write_text(text, encoding="utf-8")
+
+          changelog = Path("CHANGELOG.md")
+          ctext = changelog.read_text(encoding="utf-8")
+          entry = '''## 2.3.0 - 2026-08-02\n\n### 新增\n\n- 分享工作室新增适应窗口、放大、缩小和重置控制，普通比例默认完整显示整张成图。\n- GitHub Pages 构建产物新增 `build-info.json`，记录部署提交 SHA 与 UTC 构建时间。\n- 部署完成后自动轮询线上版本，并将核验结果写入独立的 `deployment-status` 分支。\n\n### 调整\n\n- 首页 Banner 重构为编辑型视觉画面，使用“把现场，留在时间里”的单行主题，并仅保留 3 张完整悬浮海报。\n- 分享工作室默认格式改为竖版 4:5。\n- 密集海报墙、时间长卷和编目杂志改为基于海报真实比例的几何排版，显著压缩无效留白。\n- 编目杂志增加主视觉、次重点和密集补位层级，小样本与大样本采用不同的列宽策略。\n- 城市路线改为明确标注的非地图坐标场，不绘制国界或行政区边界。\n- 票夹、票根和列表视图重新调整桌面端与移动端的信息密度和阅读顺序。\n\n### 修复\n\n- 修复首页代表海报被硬裁、截断或画面边缘突然消失的问题。\n- 修复普通比例分享预览出现多余纵向滚动及移动端成图超出预览容器的问题。\n- 修复编目杂志海报过小、大小过于一致、局部遮挡和留空不合理的问题。\n- 统一分享预览与 PNG 导出的布局几何和 `contain` 绘制逻辑。\n\n### 工程\n\n- 删除冲突的末端覆盖样式和未使用布局辅助函数。\n- 增加布局契约检查及桌面端、2K 等效视口、移动端和 PNG 导出的自动视觉审查。\n- 同步 `package.json` 与 `package-lock.json` 版本号至 2.3.0。\n\n'''
+          if "## 2.3.0 - 2026-08-02" not in ctext:
+              ctext = ctext.replace("# 更新记录\n\n", "# 更新记录\n\n" + entry)
+          changelog.write_text(ctext, encoding="utf-8")
+
+          deployment = Path("docs/deployment.md")
+          if deployment.exists():
+              dtext = deployment.read_text(encoding="utf-8")
+              section = '''\n## 线上版本核验\n\n每次 GitHub Pages 构建会在 `dist/build-info.json` 写入当前提交 SHA 和 UTC 构建时间。部署任务完成后，工作流会轮询公开站点的 `/live-memory/build-info.json`；只有线上 SHA 与本次 `github.sha` 完全一致时才判定发布成功。\n\n最近一次核验结果保存在仓库独立的 `deployment-status` 分支 `latest.json` 中，避免仅凭 Actions 状态或浏览器缓存判断线上版本。\n'''
+              if "## 线上版本核验" not in dtext:
+                  dtext = dtext.rstrip() + "\n" + section
+              deployment.write_text(dtext, encoding="utf-8")
+          PY
+
+      - name: Remove temporary workflow
+        run: rm .github/workflows/apply-release-2.3.0.yml
+
+      - name: Verify release changes
+        run: |
+          npm ci
+          npm run check
+
+      - name: Commit release documentation
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add package.json package-lock.json README.md CHANGELOG.md docs/deployment.md .github/workflows/apply-release-2.3.0.yml
+          git commit -m "release: bump Live Memory to 2.3.0"
+          git push origin HEAD:release/2.3.0-docs
