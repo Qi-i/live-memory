@@ -682,7 +682,8 @@ function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
 
   records.forEach((record, index) => {
     const ratio = recordPosterRatio(record);
-    const requestedSpan = index === 0 ? (records.length <= 8 ? columns : Math.min(3, columns)) : index < 3 ? Math.min(2, columns - 1) : 1;
+    const compactMagazine = records.length <= 8;
+    const requestedSpan = index === 0 ? Math.min(compactMagazine ? 2 : 3, columns) : compactMagazine ? 1 : index < 3 ? Math.min(2, columns - 1) : 1;
     const span = Math.max(1, Math.min(requestedSpan, columns));
     let bestColumn = 0;
     let bestY = Number.POSITIVE_INFINITY;
