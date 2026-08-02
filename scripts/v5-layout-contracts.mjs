@@ -1,0 +1,25 @@
+import { readFile } from "node:fs/promises";
+import assert from "node:assert/strict";
+
+const [appRoot, bannerCss, studio, studioCss, main] = await Promise.all([
+  readFile("src/AppRoot.tsx", "utf8"),
+  readFile("src/archiveBanner.css", "utf8"),
+  readFile("src/shareStudio.tsx", "utf8"),
+  readFile("src/shareStudio.css", "utf8"),
+  readFile("src/main.tsx", "utf8"),
+]);
+
+assert.match(appRoot, /useState<ShareFormat>\("portrait"\)/, "Share studio should open in portrait format");
+assert.match(bannerCss, /content:\s*"把现场，留在时间里"/);
+assert.match(bannerCss, /white-space:\s*nowrap/);
+assert.match(bannerCss, /archive-highlight-card-4,[\s\S]*display:\s*none/);
+assert.match(studio, /function partitionBalanced/);
+assert.match(studio, /occupiedArea/);
+assert.match(studio, /records\.length <= 8 \? 3 : records\.length <= 24 \? 4 : 5/);
+assert.match(studio, /ResizeObserver/);
+assert.match(studio, /drawContain/);
+assert.match(studioCss, /share-preview-area\.is-long \{ overflow-x:\s*hidden; overflow-y:\s*auto;/);
+assert.match(studioCss, /share-poster-foreground,[\s\S]*object-fit:\s*contain/);
+assert.doesNotMatch(main, /shareStudioRefinement\.css/);
+
+console.log("V5 layout contracts passed.");
