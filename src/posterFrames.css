@@ -1,50 +1,50 @@
-:root {
-  --poster-frame-ratio: 4 / 5;
-}
+:root { --poster-frame-ratio: 4 / 5; }
 
-/* A shorter 4:5 frame matches the majority of current concert posters better
-   than the previous 3:4 / 2:3 slots. List and detail views keep the original
-   media available, while visual archive surfaces deliberately fill the frame. */
 .archive-poster-media,
 .showcase-card > button,
 .wallet-cover,
 .archive-ticket > div:first-child,
-.archive-timeline button > span:first-child,
-.share-selection-grid button > .share-poster-frame {
-  aspect-ratio: var(--poster-frame-ratio) !important;
+.archive-timeline button > time + span {
+  aspect-ratio: var(--poster-frame-ratio);
 }
 
 .archive-poster-media img,
 .archive-poster-media > .record-media-fallback,
 .showcase-card > button img,
-.showcase-card > button > .record-media-fallback,
+.showcase-card > button > .record-media-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  background: transparent;
+}
+
 .wallet-cover img,
 .wallet-cover > .record-media-fallback,
 .archive-ticket > div:first-child img,
 .archive-ticket > div:first-child > .record-media-fallback,
-.archive-timeline button > span:first-child img,
-.archive-timeline button > span:first-child > .record-media-fallback {
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
-  object-position: center !important;
-  background: transparent !important;
+.archive-timeline button > time + span img,
+.archive-timeline button > time + span > .record-media-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center;
+  background: color-mix(in srgb, var(--experience-surface-solid) 84%, #14201e);
 }
 
 .archive-poster-card,
-.showcase-card,
-.wallet-card,
+.archive-wallet-card,
 .archive-ticket,
-.archive-timeline button {
-  min-width: 0;
+.showcase-card,
+.archive-timeline button { min-width: 0; }
+
+.archive-timeline button > time + span {
+  width: 74px;
+  height: auto;
+  overflow: hidden;
+  border-radius: 10px;
 }
 
 @media (max-width: 760px) {
-  .archive-poster-media,
-  .showcase-card > button,
-  .wallet-cover,
-  .archive-ticket > div:first-child,
-  .archive-timeline button > span:first-child {
-    aspect-ratio: 4 / 5 !important;
-  }
+  .archive-timeline button > time + span { width: 58px; }
 }
