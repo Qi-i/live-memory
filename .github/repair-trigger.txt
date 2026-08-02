@@ -1,1 +1,1 @@
-Retry the verified repair with a larger magazine hero region and stricter wallet geometry.
+Run the final verified repair with full-canvas magazine coverage and non-overlapping wallet columns.
