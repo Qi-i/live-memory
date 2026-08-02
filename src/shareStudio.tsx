@@ -615,56 +615,66 @@ function buildJustifiedSlots(records: EventRecord[], area: Rect, spec: CanvasSpe
   if (!records.length) return [];
   const gap = spec.width >= 1500 ? 14 : 12;
   const ratios = records.map(recordPosterRatio);
-  let low = 70;
-  let high = Math.min(360, area.height);
+  const totalRatio = ratios.reduce((sum, ratio) => sum + ratio, 0);
+  const maxRows = Math.min(records.length, spec.format === "long" ? 12 : 8);
+  let bestScore = Number.NEGATIVE_INFINITY;
   let best: PosterSlot[] = [];
-  for (let iteration = 0; iteration < 28; iteration += 1) {
-    const target = (low + high) / 2;
-    const candidate = layoutJustifiedRows(records, ratios, area, target, gap);
-    const bottom = candidate.reduce((max, slot) => Math.max(max, slot.rect.y + slot.rect.height), area.y) - area.y;
-    if (bottom > area.height) high = target;
-    else { best = candidate; low = target; }
-  }
-  return centerSlots(best.length ? best : layoutJustifiedRows(records, ratios, area, low, gap), area);
-}
 
-function layoutJustifiedRows(records: EventRecord[], ratios: number[], area: Rect, targetHeight: number, gap: number): PosterSlot[] {
-  const rows: Array<{ indexes: number[]; ratios: number[] }> = [];
-  let indexes: number[] = [];
-  let rowRatios: number[] = [];
-  for (let index = 0; index < records.length; index += 1) {
-    indexes.push(index);
-    rowRatios.push(ratios[index]);
-    const projected = rowRatios.reduce((sum, ratio) => sum + ratio * targetHeight, 0) + gap * Math.max(0, rowRatios.length - 1);
-    if (projected >= area.width * 0.92 || index === records.length - 1) {
-      rows.push({ indexes, ratios: rowRatios });
-      indexes = [];
-      rowRatios = [];
+  for (let rowCount = 1; rowCount <= maxRows; rowCount += 1) {
+    const groups = partitionBalanced(records.length, rowCount);
+    const availableHeight = (area.height - gap * Math.max(0, rowCount - 1)) / rowCount;
+    let height = availableHeight;
+    groups.forEach(([start, end]) => {
+      const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
+      const widthHeight = (area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
+      height = Math.min(height, widthHeight);
+    });
+    if (!Number.isFinite(height) || height < 46) continue;
+
+    const totalHeight = height * rowCount + gap * Math.max(0, rowCount - 1);
+    let y = area.y + Math.max(0, (area.height - totalHeight) / 2);
+    const candidate: PosterSlot[] = [];
+    groups.forEach(([start, end]) => {
+      const rowRatios = ratios.slice(start, end);
+      const rowWidth = rowRatios.reduce((sum, ratio) => sum + ratio * height, 0) + gap * Math.max(0, rowRatios.length - 1);
+      let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
+      for (let index = start; index < end; index += 1) {
+        const width = ratios[index] * height;
+        candidate.push({ record: records[index], rect: { x, y, width, height } });
+        x += width + gap;
+      }
+      y += height + gap;
+    });
+
+    const occupiedArea = totalRatio * height * height;
+    const fill = occupiedArea / Math.max(1, area.width * area.height);
+    const readability = Math.min(1, height / (spec.format === "long" ? 190 : 150));
+    const score = fill * 0.88 + readability * 0.12;
+    if (score > bestScore) {
+      bestScore = score;
+      best = candidate;
     }
   }
+  return best;
+}
 
-  const result: PosterSlot[] = [];
-  let y = area.y;
-  rows.forEach((row, rowIndex) => {
-    const ratioSum = row.ratios.reduce((sum, ratio) => sum + ratio, 0);
-    const exactHeight = (area.width - gap * Math.max(0, row.ratios.length - 1)) / Math.max(0.01, ratioSum);
-    const height = rowIndex === rows.length - 1 ? Math.min(targetHeight, exactHeight) : exactHeight;
-    const rowWidth = row.ratios.reduce((sum, ratio) => sum + ratio * height, 0) + gap * Math.max(0, row.ratios.length - 1);
-    let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
-    row.indexes.forEach((recordIndex, itemIndex) => {
-      const width = row.ratios[itemIndex] * height;
-      result.push({ record: records[recordIndex], rect: { x, y, width, height } });
-      x += width + gap;
-    });
-    y += height + gap;
-  });
-  return result;
+function partitionBalanced(itemCount: number, rowCount: number): Array<[number, number]> {
+  const base = Math.floor(itemCount / rowCount);
+  const remainder = itemCount % rowCount;
+  const groups: Array<[number, number]> = [];
+  let start = 0;
+  for (let row = 0; row < rowCount; row += 1) {
+    const count = base + (row < remainder ? 1 : 0);
+    groups.push([start, start + count]);
+    start += count;
+  }
+  return groups;
 }
 
 function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length) return [];
   const gap = spec.width >= 1500 ? 15 : 12;
-  let columns = records.length <= 8 ? 4 : records.length <= 16 ? 5 : records.length <= 24 ? 6 : 7;
+  let columns = records.length <= 8 ? 3 : records.length <= 24 ? 4 : 5;
   if (spec.width >= 1500) columns += 1;
   const columnWidth = (area.width - gap * (columns - 1)) / columns;
   const heights = Array.from({ length: columns }, () => 0);

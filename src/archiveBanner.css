@@ -87,10 +87,11 @@
   content: "把现场，留在时间里";
   display: block;
   color: var(--experience-text);
-  font-size: clamp(42px, 4.1vw, 64px);
+  font-size: clamp(34px, 3.6vw, 54px);
   font-weight: 970;
   line-height: .98;
-  letter-spacing: -.07em;
+  letter-spacing: -.08em;
+  white-space: nowrap;
 }
 
 .archive-page .archive-masthead h2::after {
@@ -159,7 +160,7 @@
 
 .archive-page .archive-highlight-card-1 {
   top: 5%;
-  left: 37%;
+  left: 35%;
   z-index: 7;
   width: 30%;
   height: 84%;
@@ -167,21 +168,21 @@
 }
 
 .archive-page .archive-highlight-card-2 {
-  top: 19%;
-  left: 8%;
+  top: 18%;
+  left: 2%;
   z-index: 4;
-  width: 27%;
-  height: 65%;
+  width: 30%;
+  height: 68%;
   transform: rotate(-7deg) translateZ(18px);
 }
 
 .archive-page .archive-highlight-card-3 {
   top: 17%;
-  right: 4%;
+  right: 2%;
   left: auto;
   z-index: 5;
-  width: 27%;
-  height: 68%;
+  width: 30%;
+  height: 70%;
   transform: rotate(7deg) translateZ(28px);
 }
 
@@ -194,6 +195,7 @@
   transform: rotate(-11deg);
 }
 
+.archive-page .archive-highlight-card-4,
 .archive-page .archive-highlight-card-5,
 .archive-page .archive-highlight-card-6 { display: none; }
 
@@ -222,7 +224,7 @@
 
 .archive-page .archive-highlight-card > span b { font-size: 9px; }
 .archive-page .archive-highlight-card > span small { font-size: 8px; }
-.archive-page .archive-highlight-feature { right: 22px; bottom: 15px; max-width: 240px; padding: 10px 12px; border-radius: 12px; }
+.archive-page .archive-highlight-feature { display: none; }
 
 /* Existing archive modes: higher-density interpretations of the same records. */
 .archive-page .archive-wallet-grid { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); gap: 10px; }
@@ -264,7 +266,7 @@
   .archive-page .archive-masthead-copy { min-height: 310px; padding: 28px 27px 24px; }
   .archive-page .archive-masthead-copy::before { inset: 12px; border-radius: 20px; }
   .archive-page .archive-masthead-copy::after { top: 38px; right: 28px; width: 88px; height: 88px; }
-  .archive-page .archive-masthead h2::before { max-width: 330px; font-size: clamp(36px, 11vw, 48px); }
+  .archive-page .archive-masthead h2::before { max-width: 330px; font-size: clamp(32px, 9vw, 42px); }
   .archive-page .archive-masthead p { max-width: 330px; font-size: 12px; }
   .archive-page .archive-masthead-actions { margin-top: 14px; }
   .archive-page .archive-masthead-stats { margin-top: 16px; }

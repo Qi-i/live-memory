@@ -61,7 +61,7 @@ export default function AppRoot() {
   } = controller;
   const [layout, setLayout] = useState<ArchiveLayout>(settings.defaultView);
   const [shareMode, setShareMode] = useState(false);
-  const [shareFormat, setShareFormat] = useState<ShareFormat>("landscape");
+  const [shareFormat, setShareFormat] = useState<ShareFormat>("portrait");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
 
   useEffect(() => {
