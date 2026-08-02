@@ -34,7 +34,7 @@
     "dev:local": "vite --configLoader runner --host 127.0.0.1 --port 5173",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && vite build --configLoader runner",
-    "test": "node ./scripts/run-tests.mjs",
+    "test": "node ./scripts/run-tests.mjs && node ./scripts/v5-layout-contracts.mjs",
     "check": "npm run test && npm run build",
     "preview": "vite preview --configLoader runner --host 0.0.0.0 --port 5174"
   },
