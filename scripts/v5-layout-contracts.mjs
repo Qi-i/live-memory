@@ -21,6 +21,7 @@ assert.match(studio, /const compactMagazine = records\.length <= 8;/);
 assert.match(studio, /index === 0 \? Math\.min\(compactMagazine \? 2 : 3, columns\)/, "Compact magazine sets should use a two-column hero and one-column supporting posters");
 assert.match(studio, /ResizeObserver/);
 assert.match(studio, /drawContain/);
+assert.doesNotMatch(studio, /function centerSlots/, "Unused layout helpers must not remain in production code");
 assert.match(studioCss, /share-preview-area\.is-long \{ overflow-x:\s*hidden; overflow-y:\s*auto;/);
 assert.match(studioCss, /share-poster-foreground,[\s\S]*object-fit:\s*contain/);
 assert.match(visualAudit, /hasText:\s*"竖版 4:5"/);
