@@ -38,6 +38,14 @@ jobs:
               "updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)",
               "updated, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)",
           )
+          script = script.replace(
+              'const topHeightRatio = spec.format === "square" ? 0.56 : records.length >= 20 ? 0.5 : 0.54;',
+              'const topHeightRatio = spec.format === "square" ? 0.62 : records.length >= 14 ? 0.62 : 0.6;',
+          )
+          script = script.replace(
+              'const heroWidth = Math.min(area.width * 0.46, heroHeight * heroRatio);',
+              'const heroWidth = Math.min(area.width * 0.52, heroHeight * heroRatio);',
+          )
           exec(compile(script, '/tmp/prepared-fix.py', 'exec'))
           PY
       - name: Verify source and responsive geometry
