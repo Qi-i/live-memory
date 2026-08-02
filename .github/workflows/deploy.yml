@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
   pages: write
   id-token: write
 
@@ -59,7 +59,72 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     needs: build
+    outputs:
+      page_url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - name: Deploy Pages artifact
         id: deployment
         uses: actions/deploy-pages@v4
+
+  verify:
+    name: Verify live deployment SHA
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: deploy
+    env:
+      EXPECTED_SHA: ${{ github.sha }}
+      LIVE_URL: ${{ needs.deploy.outputs.page_url }}
+    steps:
+      - name: Wait for the deployed SHA
+        id: verify
+        shell: bash
+        run: |
+          set -euo pipefail
+          endpoint="${LIVE_URL%/}/build-info.json"
+          actual_sha=""
+          body=""
+          for attempt in $(seq 1 60); do
+            body="$(curl --fail --silent --show-error --location --max-time 15 \
+              -H 'Cache-Control: no-cache' \
+              "${endpoint}?expected=${EXPECTED_SHA}&attempt=${attempt}" || true)"
+            actual_sha="$(printf '%s' "$body" | node -e '
+              let input = "";
+              process.stdin.on("data", chunk => input += chunk);
+              process.stdin.on("end", () => {
+                try { process.stdout.write(JSON.parse(input).sha || ""); }
+                catch { process.stdout.write(""); }
+              });
+            ')"
+            if [ "$actual_sha" = "$EXPECTED_SHA" ]; then
+              break
+            fi
+            sleep 5
+          done
+          if [ "$actual_sha" != "$EXPECTED_SHA" ]; then
+            echo "Expected $EXPECTED_SHA but the live endpoint returned: $body" >&2
+            exit 1
+          fi
+          verified_at="$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+          node -e '
+            const fs = require("fs");
+            const [sha, verifiedAt, url] = process.argv.slice(1);
+            fs.writeFileSync("/tmp/live-deployment-status.json", JSON.stringify({ sha, verifiedAt, url, status: "verified" }, null, 2) + "\n");
+          ' "$EXPECTED_SHA" "$verified_at" "$LIVE_URL"
+
+      - name: Publish verification record
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+
+      - name: Update deployment-status branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan deployment-status-write
+          git rm -rf . >/dev/null 2>&1 || true
+          cp /tmp/live-deployment-status.json latest.json
+          git add latest.json
+          git commit -m "Record verified deployment ${EXPECTED_SHA}"
+          git push --force origin HEAD:deployment-status
