@@ -787,14 +787,6 @@ function cityCoordinate(label: string, records: EventRecord[]): [number, number]
   return [80 + (seed % 4800) / 100, 21 + (seed % 2900) / 100];
 }
 
-function centerSlots(slots: PosterSlot[], area: Rect) {
-  if (!slots.length) return slots;
-  const top = Math.min(...slots.map((slot) => slot.rect.y));
-  const bottom = Math.max(...slots.map((slot) => slot.rect.y + slot.rect.height));
-  const offsetY = Math.max(0, (area.height - (bottom - top)) / 2);
-  return slots.map((slot) => ({ ...slot, rect: { ...slot.rect, y: slot.rect.y + offsetY } }));
-}
-
 function groupByYear(records: EventRecord[]) {
   const groups = new Map<string, EventRecord[]>();
   records.forEach((record) => {

@@ -1,40 +1,68 @@
-name: Apply final V5 cleanup
+name: Validate pull request
 
 on:
   pull_request:
     branches: [main]
+  push:
+    branches: [refactor/experience-system-v3]
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  apply:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-          fetch-depth: 0
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-      - name: Remove unused layout helper
-        run: python .github/v5-cleanup.py
-      - name: Restore workflow and commit source
-        shell: bash
+      - run: npm ci
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - run: npm run check
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+
+  visual:
+    if: github.event_name == 'pull_request'
+    needs: verify
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Install visual audit browser
         run: |
-          set -euo pipefail
-          rm -f .github/v5-cleanup.py
-          git fetch origin main
-          git checkout origin/main -- .github/workflows/ci.yml
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add -A
-          git commit -m "Remove unused share layout helper"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-      - name: Verify cleaned source
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Build application
+        run: npm run build
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Start preview
         run: |
-          npm ci
-          npm run check
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/live-memory-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/live-memory/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/live-memory-preview.log
+          exit 1
+      - name: Capture responsive visual audit
+        run: node scripts/visual-audit.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: live-memory-visual-audit
+          path: visual-artifacts
+          if-no-files-found: warn
+          retention-days: 7
