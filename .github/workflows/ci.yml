@@ -24,7 +24,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cat .github/v5payload/part*.b64 | base64 --decode > /tmp/live-memory-v5.tar.gz
+          : > /tmp/live-memory-v5.tar.gz
+          for payload_part in .github/v5payload/bin*.b64; do
+            base64 --decode "$payload_part" >> /tmp/live-memory-v5.tar.gz
+          done
+          gzip -t /tmp/live-memory-v5.tar.gz
           tar -xzf /tmp/live-memory-v5.tar.gz -C .
           python - <<'PY'
           from pathlib import Path
@@ -50,10 +54,6 @@ jobs:
           rm -f .github/workflows/v5-apply.yml
           git fetch origin main
           git checkout origin/main -- .github/workflows/ci.yml
-      - name: Verify materialized source
-        run: |
-          npm ci
-          npm run check
       - name: Commit materialized implementation
         shell: bash
         run: |
@@ -62,3 +62,7 @@ jobs:
           git add -A
           git commit -m "Apply archive and share studio V5"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
+      - name: Verify materialized source
+        run: |
+          npm ci
+          npm run check
