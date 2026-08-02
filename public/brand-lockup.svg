@@ -1,0 +1,17 @@
+<svg width="760" height="220" viewBox="0 0 760 220" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="现场记 Live Memory">
+  <defs>
+    <linearGradient id="brand" x1="24" y1="20" x2="198" y2="204" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#65E2CE"/>
+      <stop offset="0.48" stop-color="#159B88"/>
+      <stop offset="1" stop-color="#315ED8"/>
+    </linearGradient>
+  </defs>
+  <rect width="760" height="220" rx="34" fill="#F5FBF8"/>
+  <circle cx="110" cy="110" r="74" fill="url(#brand)"/>
+  <path d="M52 103c18-27 40-38 66-35 18 2 34 10 49 25-17 1-31 8-43 20-16 18-37 25-61 23" fill="none" stroke="#fff" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M168 117c-18 27-40 38-66 35-18-2-34-10-49-25 17-1 31-8 43-20 16-18 37-25 61-23" fill="none" stroke="#fff" stroke-opacity="0.64" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="110" cy="110" r="12" fill="#DFFF4F" stroke="#fff" stroke-width="5"/>
+  <text x="220" y="104" fill="#10201B" font-size="62" font-weight="900" letter-spacing="8" font-family="Songti SC, STSong, Noto Serif SC, serif">现场记</text>
+  <text x="224" y="143" fill="#168A78" font-size="21" font-weight="800" letter-spacing="8" font-family="Inter, Arial, sans-serif">LIVE MEMORY</text>
+  <text x="224" y="176" fill="#687A74" font-size="17" font-weight="600" font-family="PingFang SC, Microsoft YaHei, sans-serif">把每一次现场，留成自己的档案</text>
+</svg>
