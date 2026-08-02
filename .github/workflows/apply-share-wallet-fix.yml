@@ -1,0 +1,342 @@
+name: Apply share magazine and wallet fix
+
+on:
+  push:
+    branches: [fix/share-magazine-wallet-2.3.1]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/share-magazine-wallet-2.3.1
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Rebuild magazine geometry and wallet layout
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import json
+          import re
+
+          def replace_once(text: str, pattern: str, replacement: str, label: str) -> str:
+              updated, count = re.subn(pattern, replacement, text, count=1, flags=re.S)
+              if count != 1:
+                  raise SystemExit(f"Expected one replacement for {label}, got {count}")
+              return updated
+
+          studio_path = Path("src/shareStudio.tsx")
+          studio = studio_path.read_text(encoding="utf-8")
+          magazine_code = r'''function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
+            if (!records.length) return [];
+            const gap = spec.width >= 1500 ? 15 : 12;
+
+            if (records.length <= 6) {
+              return buildAdaptiveMagazineRows(records, area, gap, records.length <= 3 ? 1 : 2).map((slot, index) => ({
+                ...slot,
+                emphasis: index === 0 ? "hero" : index < 3 ? "feature" : "normal",
+              }));
+            }
+
+            const hero = records[0];
+            const heroRatio = recordPosterRatio(hero);
+
+            if (spec.format === "landscape") {
+              const heroHeight = area.height;
+              const heroWidth = Math.min(area.width * 0.34, heroHeight * heroRatio);
+              const heroRect = {
+                x: area.x,
+                y: area.y + (area.height - heroHeight) / 2,
+                width: heroWidth,
+                height: heroHeight,
+              };
+              const supportingArea = {
+                x: heroRect.x + heroRect.width + gap,
+                y: area.y,
+                width: area.width - heroRect.width - gap,
+                height: area.height,
+              };
+              const supporting = buildAdaptiveMagazineRows(
+                records.slice(1),
+                supportingArea,
+                gap,
+                Math.min(4, Math.max(2, Math.ceil((records.length - 1) / 5))),
+              );
+              return [
+                { record: hero, rect: heroRect, emphasis: "hero" },
+                ...supporting.map((slot, index) => ({ ...slot, emphasis: index < 2 ? "feature" as const : "normal" as const })),
+              ];
+            }
+
+            const topCount = records.length >= 14 ? 6 : records.length >= 10 ? 5 : 4;
+            const topHeightRatio = spec.format === "square" ? 0.56 : records.length >= 20 ? 0.5 : 0.54;
+            const topHeight = area.height * topHeightRatio;
+            const heroHeight = topHeight;
+            const heroWidth = Math.min(area.width * 0.46, heroHeight * heroRatio);
+            const heroRect = {
+              x: area.x,
+              y: area.y + (topHeight - heroHeight) / 2,
+              width: heroWidth,
+              height: heroHeight,
+            };
+            const featureArea = {
+              x: heroRect.x + heroRect.width + gap,
+              y: area.y,
+              width: area.width - heroRect.width - gap,
+              height: topHeight,
+            };
+            const featureRecords = records.slice(1, topCount);
+            const featureSlots = buildAdaptiveMagazineRows(featureRecords, featureArea, gap, Math.min(3, featureRecords.length));
+
+            const bottomY = area.y + topHeight + gap;
+            const bottomArea = {
+              x: area.x,
+              y: bottomY,
+              width: area.width,
+              height: Math.max(0, area.y + area.height - bottomY),
+            };
+            const remainingRecords = records.slice(topCount);
+            const bottomSlots = remainingRecords.length
+              ? buildAdaptiveMagazineRows(
+                  remainingRecords,
+                  bottomArea,
+                  gap,
+                  Math.min(4, Math.max(1, Math.ceil(remainingRecords.length / 5))),
+                )
+              : [];
+
+            return [
+              { record: hero, rect: heroRect, emphasis: "hero" },
+              ...featureSlots.map((slot) => ({ ...slot, emphasis: "feature" as const })),
+              ...bottomSlots.map((slot) => ({ ...slot, emphasis: "normal" as const })),
+            ];
+          }
+
+          function buildAdaptiveMagazineRows(records: EventRecord[], area: Rect, gap: number, maxRows: number): PosterSlot[] {
+            if (!records.length || area.width <= 0 || area.height <= 0) return [];
+            const ratios = records.map(recordPosterRatio);
+            let bestGroups: Array<[number, number]> = [[0, records.length]];
+            let bestScale = 1;
+            let bestScore = Number.NEGATIVE_INFINITY;
+
+            for (let rowCount = 1; rowCount <= Math.min(records.length, Math.max(1, maxRows)); rowCount += 1) {
+              const groups = partitionBalanced(records.length, rowCount);
+              const naturalHeights = groups.map(([start, end]) => {
+                const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
+                return (area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
+              });
+              const naturalTotalHeight = naturalHeights.reduce((sum, height) => sum + height, 0) + gap * Math.max(0, rowCount - 1);
+              const scale = Math.min(1, area.height / Math.max(1, naturalTotalHeight));
+              const usedHeight = naturalTotalHeight * scale;
+              const occupiedArea = groups.reduce((sum, [start, end], index) => {
+                const ratioSum = ratios.slice(start, end).reduce((rowSum, ratio) => rowSum + ratio, 0);
+                const height = naturalHeights[index] * scale;
+                return sum + ratioSum * height * height;
+              }, 0);
+              const fill = occupiedArea / Math.max(1, area.width * area.height);
+              const verticalUse = usedHeight / Math.max(1, area.height);
+              const readability = Math.min(1, naturalHeights.reduce((sum, value) => sum + value, 0) * scale / rowCount / 170);
+              const score = fill * 0.4 + verticalUse * 0.25 + scale * 0.3 + readability * 0.05;
+              if (score > bestScore) {
+                bestScore = score;
+                bestGroups = groups;
+                bestScale = scale;
+              }
+            }
+
+            const scaledGap = gap * bestScale;
+            const rowHeights = bestGroups.map(([start, end]) => {
+              const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
+              return ((area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum)) * bestScale;
+            });
+            const usedHeight = rowHeights.reduce((sum, height) => sum + height, 0) + scaledGap * Math.max(0, bestGroups.length - 1);
+            let y = area.y + Math.max(0, (area.height - usedHeight) / 2);
+            const slots: PosterSlot[] = [];
+
+            bestGroups.forEach(([start, end], rowIndex) => {
+              const height = rowHeights[rowIndex];
+              const rowWidth = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio * height, 0) + scaledGap * Math.max(0, end - start - 1);
+              let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
+              for (let index = start; index < end; index += 1) {
+                const width = ratios[index] * height;
+                slots.push({ record: records[index], rect: { x, y, width, height } });
+                x += width + scaledGap;
+              }
+              y += height + scaledGap;
+            });
+            return slots;
+          }'''
+          studio = replace_once(
+              studio,
+              r'function buildMagazineSlots\(records: EventRecord\[\], area: Rect, spec: CanvasSpec\): PosterSlot\[\] \{.*?\n\}\n\nfunction buildTimelineBands',
+              magazine_code + '\n\nfunction buildTimelineBands',
+              'magazine layout',
+          )
+          studio_path.write_text(studio, encoding="utf-8")
+
+          archive_path = Path("src/archive.css")
+          archive = archive_path.read_text(encoding="utf-8")
+          wallet_css = r'''.archive-wallet-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+            gap: 14px;
+          }
+
+          .archive-wallet-card {
+            position: relative;
+            display: grid;
+            grid-template-columns: 148px minmax(0, 1fr) 38px;
+            min-width: 0;
+            min-height: 214px;
+            gap: 14px;
+            align-items: stretch;
+            padding: 12px;
+            overflow: hidden;
+          }
+
+          .archive-wallet-card::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            opacity: 0.13;
+            background: linear-gradient(135deg, var(--tone-a), var(--tone-b));
+            pointer-events: none;
+          }
+
+          .wallet-cover,
+          .wallet-copy,
+          .wallet-actions { position: relative; z-index: 1; min-width: 0; }
+          .wallet-cover { width: 148px; align-self: start; padding: 0; overflow: hidden; border: 0; border-radius: 10px; background: #101418; cursor: zoom-in; }
+          .wallet-copy { display: flex; min-width: 0; min-height: 0; overflow: hidden; flex-direction: column; padding: 2px 4px; border: 0; color: inherit; text-align: left; background: transparent; cursor: pointer; }
+          .wallet-copy > span { overflow: hidden; color: #108879; font-size: 10px; font-weight: 950; text-overflow: ellipsis; white-space: nowrap; }
+          .wallet-copy h3 { min-height: 2.45em; margin: 7px 0 4px; font-size: 18px; line-height: 1.22; }
+          .wallet-copy > p { margin: 0 0 8px; overflow: hidden; color: var(--experience-muted); font-size: 11px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+          .wallet-copy dl { grid-template-columns: 38px minmax(0, 1fr); gap: 4px 7px; margin: 2px 0 0; }
+          .wallet-copy > strong { margin-top: auto; padding-top: 8px; font-size: 11px; }
+          .wallet-actions { display: grid; align-content: start; gap: 7px; padding-left: 2px; border-left: 1px solid var(--experience-border); }
+          .wallet-actions button { display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid var(--experience-border); border-radius: 9px; color: inherit; background: var(--experience-surface-solid); cursor: pointer; }
+          .wallet-actions svg { width: 15px; height: 15px; }'''
+          archive = replace_once(
+              archive,
+              r'\.archive-wallet-grid \{.*?\.wallet-actions svg \{ width: 15px; height: 15px; \}',
+              wallet_css,
+              'archive wallet desktop css',
+          )
+          archive = archive.replace(
+              '.archive-wallet-card { grid-template-columns: 96px minmax(0,1fr) 32px; min-height: 160px; }',
+              '.archive-wallet-card { grid-template-columns: 94px minmax(0,1fr) 30px; min-height: 154px; gap: 10px; padding: 9px; }\n  .wallet-cover { width: 94px; }\n  .wallet-copy h3 { min-height: 2.4em; margin-block: 4px 3px; font-size: 15px; }\n  .wallet-copy > p { margin-bottom: 4px; }',
+          )
+          archive_path.write_text(archive, encoding="utf-8")
+
+          banner_path = Path("src/archiveBanner.css")
+          banner = banner_path.read_text(encoding="utf-8")
+          banner_wallet = r'''/* Existing archive modes: higher-density interpretations of the same records. */
+          .archive-page .archive-wallet-grid { grid-template-columns: repeat(auto-fill, minmax(540px, 1fr)); gap: 12px; }
+          .archive-page .archive-wallet-card { min-height: 210px; grid-template-columns: 140px minmax(0, 1fr) 36px; gap: 14px; padding: 12px; border-radius: 18px; }
+          .archive-page .wallet-cover { width: 140px; align-self: start; border-radius: 12px; background: color-mix(in srgb, var(--experience-surface-solid) 80%, #17201f); }
+          .archive-page .wallet-cover img,
+          .archive-page .wallet-cover > .record-media-fallback { object-fit: contain; }
+          .archive-page .wallet-copy { padding: 2px 4px; overflow: hidden; }
+          .archive-page .wallet-copy h3 { min-height: 2.45em; margin: 6px 0 3px; font-size: 18px; line-height: 1.22; }
+          .archive-page .wallet-copy > p { margin-bottom: 7px; }
+          .archive-page .wallet-copy dl { grid-template-columns: 38px minmax(0, 1fr); margin-top: 1px; }
+          .archive-page .wallet-actions { padding-left: 2px; border-left: 1px solid var(--experience-border); }
+
+          .archive-page .archive-ticket-grid'''
+          banner = replace_once(
+              banner,
+              r'/\* Existing archive modes: higher-density interpretations of the same records\. \*/\n\.archive-page \.archive-wallet-grid.*?\n\n\.archive-page \.archive-ticket-grid',
+              banner_wallet,
+              'archive banner wallet desktop override',
+          )
+          mobile_wallet = r'''.archive-page .archive-wallet-grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+            .archive-page .archive-wallet-card { grid-template-columns: 92px minmax(0, 1fr) 28px; min-height: 152px; gap: 10px; margin: 0; padding: 9px; border-radius: 16px; box-shadow: var(--experience-shadow); }
+            .archive-page .wallet-cover { width: 92px; align-self: start; border-radius: 10px; }
+            .archive-page .wallet-copy { padding: 1px 2px; }
+            .archive-page .wallet-copy h3 { min-height: 2.4em; margin: 4px 0 3px; font-size: 15px; line-height: 1.2; -webkit-line-clamp: 2; }
+            .archive-page .wallet-copy > p { margin-bottom: 3px; font-size: 10px; }
+            .archive-page .wallet-copy > strong { padding-top: 4px; }
+            .archive-page .wallet-actions { gap: 5px; padding-left: 0; border-left: 0; }
+            .archive-page .wallet-actions button { width: 28px; height: 28px; }'''
+          banner = replace_once(
+              banner,
+              r'\.archive-page \.archive-wallet-grid \{ display: block; \}.*?\.archive-page \.wallet-copy h3 \{ -webkit-line-clamp: 2; \}',
+              mobile_wallet,
+              'archive banner wallet mobile override',
+          )
+          banner_path.write_text(banner, encoding="utf-8")
+
+          contracts_path = Path("scripts/v5-layout-contracts.mjs")
+          contracts = contracts_path.read_text(encoding="utf-8")
+          contracts = contracts.replace(
+              'const [appRoot, bannerCss, studio, studioCss, main, visualAudit] = await Promise.all([',
+              'const [appRoot, archiveCss, bannerCss, studio, studioCss, main, visualAudit] = await Promise.all([',
+          ).replace(
+              '  readFile("src/archiveBanner.css", "utf8"),',
+              '  readFile("src/archive.css", "utf8"),\n  readFile("src/archiveBanner.css", "utf8"),',
+          )
+          contracts = replace_once(
+              contracts,
+              r'assert\.match\(studio, /records\\\.length <= 8.*?assert\.match\(studio, /index === 0 .*?\);',
+              '''assert.match(studio, /function buildAdaptiveMagazineRows/);\nassert.match(studio, /spec\\.format === "landscape"/);\nassert.match(studio, /const topCount = records\\.length >= 14 \\? 6/);\nassert.match(studio, /fill \\* 0\\.4 \\+ verticalUse \\* 0\\.25 \\+ scale \\* 0\\.3/);\nassert.doesNotMatch(studio, /const scaledWidth = area\\.width \\* scale/, "Magazine must not collapse the whole composition into a narrow centered strip");\nassert.match(archiveCss, /archive-wallet-grid[\\s\\S]*minmax\\(560px, 1fr\\)/);\nassert.match(bannerCss, /archive-wallet-grid[\\s\\S]*minmax\\(540px, 1fr\\)/);''',
+              'layout contract assertions',
+          )
+          contracts_path.write_text(contracts, encoding="utf-8")
+
+          audit_path = Path("scripts/visual-audit.mjs")
+          audit = audit_path.read_text(encoding="utf-8")
+          audit = audit.replace(
+              '  await archiveView("票夹", ".archive-wallet-card");\n  await page.screenshot({ path: `${outputDir}/03-wallet-desktop.png`, fullPage: true });',
+              '''  await archiveView("票夹", ".archive-wallet-card");\n  const walletGeometry = await page.locator(".archive-wallet-card").first().evaluate((card) => {\n    const cover = card.querySelector(".wallet-cover")?.getBoundingClientRect();\n    const copy = card.querySelector(".wallet-copy")?.getBoundingClientRect();\n    const actions = card.querySelector(".wallet-actions")?.getBoundingClientRect();\n    const rect = card.getBoundingClientRect();\n    return {\n      card: { left: rect.left, right: rect.right, width: rect.width },\n      cover: cover ? { left: cover.left, right: cover.right, top: cover.top, bottom: cover.bottom } : null,\n      copy: copy ? { left: copy.left, right: copy.right, top: copy.top, bottom: copy.bottom } : null,\n      actions: actions ? { left: actions.left, right: actions.right, top: actions.top, bottom: actions.bottom } : null,\n    };\n  });\n  if (!walletGeometry.cover || !walletGeometry.copy || !walletGeometry.actions\n    || walletGeometry.card.width < 520\n    || walletGeometry.copy.left < walletGeometry.cover.right + 8\n    || walletGeometry.actions.left < walletGeometry.copy.right + 4) {\n    throw new Error(`Wallet columns overlap or are too narrow: ${JSON.stringify(walletGeometry)}`);\n  }\n  await page.screenshot({ path: `${outputDir}/03-wallet-desktop.png`, fullPage: true });''',
+          )
+          audit = audit.replace(
+              '  if (magazineFill < 0.48) throw new Error(`Magazine layout leaves too much empty space: ${magazineFill.toFixed(3)}`);',
+              '''  if (magazineFill < 0.48) throw new Error(`Magazine layout leaves too much empty space: ${magazineFill.toFixed(3)}`);\n  const magazineLeft = Math.min(...magazine.posters.map((poster) => poster.left));\n  const magazineRight = Math.max(...magazine.posters.map((poster) => poster.right));\n  const magazineTop = Math.min(...magazine.posters.map((poster) => poster.top));\n  const magazineBottom = Math.max(...magazine.posters.map((poster) => poster.bottom));\n  const magazineWidthUse = (magazineRight - magazineLeft) / magazine.canvas.width;\n  const magazineHeightUse = (magazineBottom - magazineTop) / magazine.canvas.height;\n  if (magazineWidthUse < 0.82 || magazineHeightUse < 0.78) {\n    throw new Error(`Magazine composition collapsed into a narrow strip: ${JSON.stringify({ magazineWidthUse, magazineHeightUse })}`);\n  }''',
+          )
+          audit_path.write_text(audit, encoding="utf-8")
+
+          package_path = Path("package.json")
+          package = json.loads(package_path.read_text(encoding="utf-8"))
+          package["version"] = "2.3.1"
+          package_path.write_text(json.dumps(package, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+          lock_path = Path("package-lock.json")
+          lock = json.loads(lock_path.read_text(encoding="utf-8"))
+          lock["version"] = "2.3.1"
+          lock["packages"][""]["version"] = "2.3.1"
+          lock_path.write_text(json.dumps(lock, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+
+          changelog_path = Path("CHANGELOG.md")
+          changelog = changelog_path.read_text(encoding="utf-8")
+          entry = '''## 2.3.1 - 2026-08-02\n\n### 修复\n\n- 重写编目杂志的分区与行布局算法，避免整组海报因纵向超高被整体缩窄并集中在页面中轴。\n- 中等数量海报采用主视觉、顶部辅助组和底部满宽组的组合排版，提高横向与纵向版面利用率。\n- 票夹视图改为稳定的海报、正文、操作三区结构，桌面端限制为合理双列，避免标题和元数据挤压海报。\n- 移动端票夹取消负间距叠放，保证图片、文字和操作按钮互不覆盖。\n\n### 工程\n\n- 增加编目杂志宽高利用率检查，以及票夹图片、正文和操作栏的几何防重叠检查。\n\n'''
+          if "## 2.3.1 - 2026-08-02" not in changelog:
+              changelog = changelog.replace("# 更新记录\n\n", "# 更新记录\n\n" + entry, 1)
+          changelog_path.write_text(changelog, encoding="utf-8")
+
+          readme_path = Path("README.md")
+          readme = readme_path.read_text(encoding="utf-8")
+          readme = readme.replace("Version-2.3.0-0b8f78.svg", "Version-2.3.1-0b8f78.svg")
+          readme = readme.replace('alt="Version 2.3.0"', 'alt="Version 2.3.1"')
+          readme_path.write_text(readme, encoding="utf-8")
+          PY
+      - name: Verify source
+        run: |
+          npm ci
+          npm run check
+      - name: Commit verified fix
+        shell: bash
+        run: |
+          rm .github/workflows/apply-share-wallet-fix.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src/shareStudio.tsx src/archive.css src/archiveBanner.css scripts/v5-layout-contracts.mjs scripts/visual-audit.mjs package.json package-lock.json CHANGELOG.md README.md .github/workflows/apply-share-wallet-fix.yml
+          git commit -m "Fix magazine composition and wallet card layout"
+          git push origin HEAD:fix/share-magazine-wallet-2.3.1
