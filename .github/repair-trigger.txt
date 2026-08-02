@@ -1,1 +1,1 @@
-Retry the one-time verified repair for the share magazine and wallet layouts after correcting the patch runner.
+Retry the verified repair with a larger magazine hero region and stricter wallet geometry.
