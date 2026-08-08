@@ -1,0 +1,59 @@
+name: Supabase Keepalive
+
+on:
+  schedule:
+    # Daily; three lightweight PostgREST requests are enough to create regular project activity.
+    - cron: '17 3 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: true
+
+jobs:
+  keepalive:
+    name: Keep account Supabase active
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+      SUPABASE_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+    steps:
+      - name: Send lightweight database API requests
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_URL:-}" ] || [ -z "${SUPABASE_KEY:-}" ]; then
+            echo "Supabase repository variables are not configured." >&2
+            exit 1
+          fi
+
+          endpoint="${SUPABASE_URL%/}/rest/v1/"
+          headers=(-H "apikey: ${SUPABASE_KEY}" -H "Accept: application/openapi+json")
+          if [[ "${SUPABASE_KEY}" == eyJ* ]]; then
+            headers+=(-H "Authorization: Bearer ${SUPABASE_KEY}")
+          fi
+
+          for request in 1 2 3; do
+            http_code="$(curl \
+              --silent --show-error --location \
+              --retry 3 --retry-delay 2 --retry-all-errors \
+              --connect-timeout 15 --max-time 30 \
+              --output /dev/null --write-out '%{http_code}' \
+              "${headers[@]}" \
+              "${endpoint}?keepalive=${GITHUB_RUN_ID}-${request}")"
+
+            case "${http_code}" in
+              2*) echo "Supabase keepalive request ${request}/3 succeeded (${http_code})." ;;
+              *)  echo "Supabase keepalive request ${request}/3 failed (${http_code})." >&2; exit 1 ;;
+            esac
+
+            [ "${request}" -eq 3 ] || sleep 2
+          done
+
+          echo "### Supabase keepalive" >> "$GITHUB_STEP_SUMMARY"
+          echo "Three lightweight PostgREST requests completed successfully." >> "$GITHUB_STEP_SUMMARY"
