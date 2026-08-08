@@ -2,12 +2,13 @@ name: Supabase Keepalive
 
 on:
   schedule:
-    # Daily; three lightweight PostgREST requests are enough to create regular project activity.
+    # Daily; three lightweight database queries create regular project activity.
     - cron: '17 3 * * *'
   workflow_dispatch:
   pull_request:
     paths:
       - '.github/workflows/supabase-keepalive.yml'
+      - 'supabase/migrations/010_project_keepalive.sql'
 
 permissions:
   contents: read
@@ -25,7 +26,7 @@ jobs:
       SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
       SUPABASE_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
     steps:
-      - name: Send lightweight database API requests
+      - name: Run lightweight database keepalive queries
         shell: bash
         run: |
           set -euo pipefail
@@ -35,8 +36,12 @@ jobs:
             exit 1
           fi
 
-          endpoint="${SUPABASE_URL%/}/rest/v1/"
-          headers=(-H "apikey: ${SUPABASE_KEY}" -H "Accept: application/openapi+json")
+          endpoint="${SUPABASE_URL%/}/rest/v1/rpc/project_keepalive"
+          headers=(
+            -H "apikey: ${SUPABASE_KEY}"
+            -H "Content-Type: application/json"
+            -H "x-client-info: github-actions-supabase-keepalive/${GITHUB_RUN_ID}"
+          )
           if [[ "${SUPABASE_KEY}" == eyJ* ]]; then
             headers+=(-H "Authorization: Bearer ${SUPABASE_KEY}")
           fi
@@ -44,19 +49,20 @@ jobs:
           for request in 1 2 3; do
             http_code="$(curl \
               --silent --show-error --location \
+              --request POST --data '{}' \
               --retry 3 --retry-delay 2 --retry-all-errors \
               --connect-timeout 15 --max-time 30 \
-              --output /dev/null --write-out '%{http_code}' \
+              --output /tmp/supabase-keepalive-response.txt --write-out '%{http_code}' \
               "${headers[@]}" \
-              "${endpoint}?keepalive=${GITHUB_RUN_ID}-${request}")"
+              "${endpoint}")"
 
             case "${http_code}" in
-              2*) echo "Supabase keepalive request ${request}/3 succeeded (${http_code})." ;;
-              *)  echo "Supabase keepalive request ${request}/3 failed (${http_code})." >&2; exit 1 ;;
+              2*) echo "Supabase database keepalive ${request}/3 succeeded (${http_code})." ;;
+              *)  echo "Supabase database keepalive ${request}/3 failed (${http_code})." >&2; cat /tmp/supabase-keepalive-response.txt >&2; exit 1 ;;
             esac
 
             [ "${request}" -eq 3 ] || sleep 2
           done
 
           echo "### Supabase keepalive" >> "$GITHUB_STEP_SUMMARY"
-          echo "Three lightweight PostgREST requests completed successfully." >> "$GITHUB_STEP_SUMMARY"
+          echo "Three database RPC queries completed successfully." >> "$GITHUB_STEP_SUMMARY"
