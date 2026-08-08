@@ -5,12 +5,15 @@ on:
     # Daily; three lightweight PostgREST requests are enough to create regular project activity.
     - cron: '17 3 * * *'
   workflow_dispatch:
+  pull_request:
+    paths:
+      - '.github/workflows/supabase-keepalive.yml'
 
 permissions:
   contents: read
 
 concurrency:
-  group: supabase-keepalive
+  group: supabase-keepalive-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
