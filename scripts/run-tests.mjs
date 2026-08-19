@@ -14,10 +14,14 @@ try {
   const storage = await server.ssrLoadModule("/src/storage.ts");
   const syncModel = await server.ssrLoadModule("/src/syncModel.ts");
   const supabase = await server.ssrLoadModule("/src/supabase.ts");
+  const accountLogin = await server.ssrLoadModule("/src/accountLogin.ts");
 
   assert.equal(domain.validateUsername("Qi2026"), "qi2026");
   assert.throws(() => domain.validateUsername("abc"));
   assert.throws(() => domain.validateUsername("qi_name"));
+  assert.equal(accountLogin.validateLoginIdentifier("Qi2026"), "qi2026");
+  assert.equal(accountLogin.validateLoginIdentifier("Qi.User+live@example.com"), "qi.user+live@example.com");
+  assert.throws(() => accountLogin.validateLoginIdentifier("not an identifier"));
   assert.equal(domain.validatePassword("12345678"), "12345678");
   assert.throws(() => domain.validatePassword("1234567"));
   assert.equal(domain.validateRecoveryEmail("qi@example.com"), "qi@example.com");
@@ -102,6 +106,7 @@ try {
   const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
   const shareStudioCss = await readFile(new URL("../src/shareStudio.css", import.meta.url), "utf8");
   const mediaCache = await readFile(new URL("../src/mediaCache.ts", import.meta.url), "utf8");
+  const emailLoginMigration = await readFile(new URL("../supabase/migrations/012_email_login_identifier.sql", import.meta.url), "utf8");
 
   assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
   assert.match(main, /<ExperienceThemeProvider>[\s\S]*<AccessGate>/);
@@ -110,6 +115,10 @@ try {
   assert.doesNotMatch(appRoot, /className="rail"|className="hero"/);
   assert.match(access, /mode === "signed-out"/);
   assert.match(access, /先看看示例/);
+  assert.match(access, /用户名 \/ 邮箱/);
+  assert.match(access, /resolveLoginUsername/);
+  assert.match(emailLoginMigration, /echo_resolve_login_username/);
+  assert.match(emailLoginMigration, /recovery_email/);
   assert.match(appController, /guestDemoRecords/);
   assert.match(appController, /if \(isGuest\)/);
   assert.match(appController, /isGuest \? nextRecord : await saveRecord/);
@@ -152,7 +161,7 @@ try {
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
   assert.match(shareStudio, /正在准备海报/);
 
-  console.log("Core and architecture verification passed: account rules, safe URL cleanup, in-memory example mode, modular shell, archive view registry, complete poster frames, fitted preview scaling, category-aware newest-first sharing, four geometry-driven layouts, reusable branding, responsive navigation, cached media, GitHub entry, cloud upload guard, and clear auth errors.");
+  console.log("Core and architecture verification passed: account rules, username-or-email login compatibility, safe URL cleanup, in-memory example mode, modular shell, archive view registry, complete poster frames, fitted preview scaling, category-aware newest-first sharing, four geometry-driven layouts, reusable branding, responsive navigation, cached media, GitHub entry, cloud upload guard, and clear auth errors.");
 } finally {
   await server.close();
 }
