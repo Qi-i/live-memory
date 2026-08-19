@@ -8,6 +8,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { resolveLoginUsername } from "./accountLogin";
 import { AppSettings, defaultSettings, validatePassword, validateUsername } from "./domain";
 import { readSettings, writeSettings } from "./storage";
 import {
@@ -170,9 +171,10 @@ export function AccessGate({ children }: { children: ReactNode }) {
         <LoginGate
           onGuest={enterGuest}
           onGithub={() => signInWithGithub(readSettings()).then(() => undefined)}
-          onLogin={async (username, password) => {
+          onLogin={async (identifier, password) => {
             validatePassword(password);
-            const settings = settingsForCredentials(username);
+            const loginUsername = await resolveLoginUsername(identifier);
+            const settings = settingsForCredentials(loginUsername);
             await signInWithPassword(settings, password);
             const sessionUser = await currentUser(settings);
             if (!sessionUser) throw new Error("登录没有完成，请刷新页面后再试。");
@@ -228,7 +230,7 @@ function LoginGate({
 }: {
   onGuest: () => void;
   onGithub: () => Promise<void>;
-  onLogin: (username: string, password: string) => Promise<void>;
+  onLogin: (identifier: string, password: string) => Promise<void>;
   onRegister: (nickname: string, username: string, password: string) => Promise<void>;
 }) {
   const [registering, setRegistering] = useState(false);
@@ -291,14 +293,14 @@ function LoginGate({
         <header>
           <span>{registering ? "创建账号" : "欢迎回来"}</span>
           <h2>{registering ? "创建现场记账号" : "登录现场记"}</h2>
-          <p>{registering ? "创建后可保存个人资料，并按需连接自己的 Supabase。" : "使用之前创建的用户名和密码，或直接使用 GitHub。"}</p>
+          <p>{registering ? "创建后可保存个人资料，并按需连接自己的 Supabase。" : "使用之前创建的用户名或已绑定邮箱和密码，或直接使用 GitHub。"}</p>
         </header>
 
         <form onSubmit={submit}>
           {registering && (
             <label><span>昵称</span><input value={nickname} onChange={(event) => setNickname(event.target.value)} placeholder="页面上显示的名字" autoComplete="nickname" /></label>
           )}
-          <label><span>用户名</span><input value={username} onChange={(event) => setUsername(event.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))} placeholder="4–32 位英文字母或数字" autoComplete="username" /></label>
+          <label><span>{registering ? "用户名" : "用户名 / 邮箱"}</span><input value={username} onChange={(event) => setUsername(registering ? event.target.value.toLowerCase().replace(/[^a-z0-9]/g, "") : event.target.value.toLowerCase())} placeholder={registering ? "4–32 位英文字母或数字" : "用户名或已绑定邮箱"} autoComplete="username" /></label>
           <label><span>密码</span><input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" autoComplete={registering ? "new-password" : "current-password"} /></label>
           {message && <p className="access-error" role="alert">{message}</p>}
           <button className="access-primary" disabled={busy || !username || !password || (registering && !nickname)} type="submit">
