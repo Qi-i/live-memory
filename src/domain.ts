@@ -81,6 +81,7 @@ export interface ImportDraft {
   sourceChannel: SourceChannel;
   sourceUrl?: string;
   posterUrl?: string;
+  seatMapUrl?: string;
   note?: string;
   importConfidence: number;
 }
