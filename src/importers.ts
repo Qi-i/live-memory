@@ -95,6 +95,101 @@ export function parseDamaiReaderText(text: string, url: string): Partial<ImportD
   };
 }
 
+
+function jsonStringForKey(text: string, key: string) {
+  const match = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "i").exec(text);
+  if (!match) return "";
+  try {
+    return JSON.parse(`"${match[1]}"`) as string;
+  } catch {
+    return match[1].replace(/\\\//g, "/").replace(/\\n/g, " ").trim();
+  }
+}
+
+function allJsonStringsForKey(text: string, key: string) {
+  const values: string[] = [];
+  const regex = new RegExp(`"${key}"\\s*:\\s*"((?:\\\\.|[^"\\\\])*)"`, "gi");
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text))) {
+    try {
+      values.push(JSON.parse(`"${match[1]}"`) as string);
+    } catch {
+      values.push(match[1].replace(/\\\//g, "/"));
+    }
+  }
+  return values;
+}
+
+function findDamaiPoster(text: string) {
+  for (const key of ["itemPic", "posterUrl", "posterPic", "verticalPic", "projectPic"]) {
+    const value = cleanImageUrl(jsonStringForKey(text, key));
+    if (isUsablePoster(value)) return value;
+  }
+  const structured = allJsonStringsForKey(text, "picUrl").map(cleanImageUrl).find(isUsablePoster);
+  return structured || bestMarkdownImage(text, false);
+}
+
+function findDamaiSeatMap(text: string) {
+  for (const key of ["seatMapUrl", "seatMapPic", "seatPic", "seatImg", "venueMap", "venueMapUrl", "areaMap", "areaMapUrl", "mapPic"]) {
+    const value = cleanImageUrl(jsonStringForKey(text, key));
+    if (isUsableImage(value)) return value;
+  }
+  return bestMarkdownImage(text, true);
+}
+
+function bestMarkdownImage(text: string, seatMap: boolean) {
+  const candidates: Array<{ url: string; score: number }> = [];
+  const regex = /!\[[^\]]*]\((https?:\/\/[^)\s]+)\)/gi;
+  let match: RegExpExecArray | null;
+  while ((match = regex.exec(text))) {
+    const url = cleanImageUrl(match[1]);
+    if (!isUsableImage(url)) continue;
+    const nearby = text.slice(Math.max(0, match.index - 260), Math.min(text.length, regex.lastIndex + 260));
+    let score = /img\.alicdn\.com|gw\.alicdn\.com/i.test(url) ? 2 : 0;
+    if (/bao\/uploaded|item|perform|project|poster/i.test(url)) score += 4;
+    if (seatMap) {
+      score += /座位图|座位分布|票区图|座位示意|场馆图|看台分布|区域图/.test(nearby) ? 12 : -5;
+    } else {
+      if (/海报|项目图片|演出图片|itemPic|主图/.test(nearby)) score += 7;
+      if (/座位图|票区图|二维码|服务说明/.test(nearby)) score -= 8;
+    }
+    candidates.push({ url, score });
+  }
+  candidates.sort((a, b) => b.score - a.score);
+  return candidates[0]?.score > 0 ? candidates[0].url : "";
+}
+
+function cleanImageUrl(value: string) {
+  let url = String(value || "").trim().replace(/\\\//g, "/").replace(/&amp;/g, "&");
+  if (url.startsWith("//")) url = `https:${url}`;
+  const nestedHttps = url.lastIndexOf("https://");
+  if (nestedHttps > 8) url = url.slice(nestedHttps);
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : "";
+  } catch {
+    return "";
+  }
+}
+
+function isUsableImage(url: string) {
+  return Boolean(url) && !/qcode|qrcode|projqcode|logo|avatar|icon|45-45|service/i.test(url);
+}
+
+function isUsablePoster(url: string) {
+  return isUsableImage(url) && !/seat|area[_-]?map|venue[_-]?map/i.test(url);
+}
+
+function cleanVenue(value: string) {
+  const text = String(value || "").trim();
+  return (text.includes("|") ? text.split("|").pop() || text : text).trim();
+}
+
+function normalizeCity(value: string) {
+  const city = String(value || "").trim();
+  return city.replace(/市$/, "");
+}
+
 function basicUrlDraft(url: string, sourceChannel: ImportDraft["sourceChannel"] = ""): ImportDraft {
   return {
     id: createId("draft"),
