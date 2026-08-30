@@ -188,6 +188,10 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [loading, setLoading] = useState(false);
 
+  function updateDraft(id: string, patch: Partial<ImportDraft>) {
+    setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
+  }
+
   async function parse() {
     setLoading(true);
     try {
@@ -213,9 +217,28 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
     <div className="overlay-backdrop" onClick={onClose}>
       <aside className="import-drawer-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2></div><button type="button" onClick={onClose}><X /></button></header>
-        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴演出链接、票务页文字或手机识别文字。多条内容可一次生成草稿。" />
+        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦等演出链接、票务页文字或手机识别文字。多条内容可一次生成草稿。" />
         <div className="import-actions-v2"><button className="button primary" disabled={loading || !text.trim()} type="button" onClick={() => void parse()}>{loading ? <Loader2 className="spin" /> : <Sparkles />}识别草稿</button><label className="button ghost"><ImagePlus />批量图片<input type="file" accept="image/*" multiple onChange={(event) => void importImages(event.target.files)} /></label></div>
-        <div className="import-drafts-v2">{drafts.map((draft) => <article key={draft.id}>{draft.posterUrl && <img src={draft.posterUrl} alt="" />}<div><span>{categoryLabels[draft.category]} · 置信度 {Math.round(draft.importConfidence * 100)}%</span><h3>{draft.title}</h3><p>{draft.date} · {draft.city || "城市待补"} · {draft.venue || "场馆待补"}</p></div><button className="button primary" type="button" onClick={() => void onSave(draftToRecord(draft))}>加入档案</button></article>)}</div>
+        <div className="import-drafts-v2">
+          {drafts.map((draft) => (
+            <article key={draft.id}>
+              <div className="import-draft-poster-v2">
+                {draft.posterUrl ? <img src={draft.posterUrl} alt="" /> : <span><ImagePlus />海报待补</span>}
+              </div>
+              <div className="import-draft-copy-v2">
+                <span>{categoryLabels[draft.category]} · 置信度 {Math.round(draft.importConfidence * 100)}%{draft.seatMapUrl ? " · 已识别座位图" : ""}</span>
+                <input className="import-draft-title-v2" value={draft.title} onChange={(event) => updateDraft(draft.id, { title: event.target.value })} aria-label="演出名称" />
+                <p>{draft.city || "城市待补"} · {draft.venue || "场馆待补"}{draft.publicPriceRange ? ` · 公开票价 ${draft.publicPriceRange}` : ""}</p>
+                <div className="import-draft-fields-v2">
+                  <label>日期<input type="date" value={draft.date} onChange={(event) => updateDraft(draft.id, { date: event.target.value })} /></label>
+                  <label>时间<input type="time" value={draft.time || ""} onChange={(event) => updateDraft(draft.id, { time: event.target.value })} /></label>
+                  <label>本人票价<input type="number" min="0" value={draft.price ?? ""} onChange={(event) => updateDraft(draft.id, { price: event.target.value ? Number(event.target.value) : null })} placeholder="可修改" /></label>
+                </div>
+              </div>
+              <button className="button primary" type="button" onClick={() => void onSave(draftToRecord(draft))}>加入档案</button>
+            </article>
+          ))}
+        </div>
       </aside>
     </div>
   );
