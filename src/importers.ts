@@ -43,32 +43,55 @@ export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
   }
 }
 
-function parseDamaiReaderText(text: string, url: string): Partial<ImportDraft> {
-  const title =
+export function parseDamaiReaderText(text: string, url: string): Partial<ImportDraft> {
+  const structuredTitle = jsonStringForKey(text, "itemName");
+  const readerTitle =
     /Title:\s*(.+)/i.exec(text)?.[1]?.trim() ||
     /#\s+(.+)/.exec(text)?.[1]?.trim() ||
-    /项目名称[:：]\s*(.+)/.exec(text)?.[1]?.trim() ||
+    /项目名称[:：]\s*([^\n]+)/.exec(text)?.[1]?.trim() ||
     "";
-  const image = /!\[[^\]]*]\((https?:\/\/[^)]+)\)/.exec(text)?.[1] || /(https?:\/\/[^)\s"]+\.(?:jpg|jpeg|png|webp)[^)\s"]*)/i.exec(text)?.[1] || "";
-  const date = normalizeDate(/演出时间[:：]\s*([^\n]+)/.exec(text)?.[1] || /时间[:：]\s*([^\n]+)/.exec(text)?.[1] || "");
-  const venueLine = /演出场馆[:：]\s*([^\n]+)/.exec(text)?.[1] || /场馆[:：]\s*([^\n]+)/.exec(text)?.[1] || "";
-  const priceLine = /票档[:：]\s*([^\n]+)/.exec(text)?.[1] || /票价[:：]\s*([^\n]+)/.exec(text)?.[1] || "";
-  const city = inferCity(title || venueLine || url);
+  const title = cleanupDamaiTitle(structuredTitle || readerTitle);
+  const showTime =
+    jsonStringForKey(text, "showTime") ||
+    /演出时间[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    /时间[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    "";
+  const date = normalizeDate(showTime);
+  const venue = cleanVenue(
+    jsonStringForKey(text, "venueName") ||
+    /演出场馆[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    /场馆[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    "",
+  );
+  const city = normalizeCity(
+    jsonStringForKey(text, "venueCityName") ||
+    jsonStringForKey(text, "cityName") ||
+    inferCity(title || venue || text || url),
+  );
+  const priceLine =
+    jsonStringForKey(text, "priceRange") ||
+    /票档[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    /票价[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    "";
+  const posterUrl = findDamaiPoster(text);
+  const seatMapUrl = findDamaiSeatMap(text);
   const artists = inferArtists(title);
-  const category = /音乐节|festival/i.test(title) ? "festival" : "concert";
+  const structuredFields = [structuredTitle, venue, posterUrl].filter(Boolean).length;
 
   return {
     title: title || "大麦项目",
-    category,
+    category: /音乐节|festival/i.test(title) ? "festival" : "concert",
     status: normalizeStatus(undefined, date),
     date: date || new Date().toISOString().slice(0, 10),
-    time: normalizeTime(/(\d{1,2}:\d{2})/.exec(text)?.[1] || ""),
+    time: normalizeTime(showTime || text),
     city,
-    venue: venueLine.replace(/^.*?\|/, "").trim(),
+    venue,
+    address: jsonStringForKey(text, "venueAddr") || undefined,
     artists,
-    publicPriceRange: priceLine.slice(0, 80),
-    posterUrl: image,
-    importConfidence: title ? 0.78 : 0.42,
+    publicPriceRange: priceLine.slice(0, 120),
+    posterUrl: posterUrl || undefined,
+    seatMapUrl: seatMapUrl || undefined,
+    importConfidence: structuredFields >= 3 ? 0.96 : structuredFields >= 2 ? 0.9 : title ? 0.78 : 0.42,
   };
 }
 
