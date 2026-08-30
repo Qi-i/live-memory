@@ -279,5 +279,8 @@ function blankImportedRecord(title: string): EventRecord {
 
 function draftToRecord(draft: ImportDraft): EventRecord {
   const record = blankImportedRecord(draft.title);
-  return { ...record, category: draft.category, status: draft.status, date: draft.date, time: draft.time, city: draft.city, venue: draft.venue, address: draft.address, artists: draft.artists, lineup: draft.artists.map((name) => ({ name, role: "artist" })), price: draft.price ?? null, publicPriceRange: draft.publicPriceRange, note: draft.note, sourceChannel: draft.sourceChannel, sourceUrl: draft.sourceUrl, importConfidence: draft.importConfidence, media: draft.posterUrl ? [makeMedia(record.id, "poster", draft.posterUrl, "公开海报", "external")] : [] };
+  const media: MediaAsset[] = [];
+  if (draft.posterUrl) media.push(makeMedia(record.id, "poster", draft.posterUrl, "公开海报", "damai"));
+  if (draft.seatMapUrl) media.push(makeMedia(record.id, "seatMap", draft.seatMapUrl, "座位图", "damai"));
+  return { ...record, category: draft.category, status: draft.status, date: draft.date, time: draft.time, city: draft.city, venue: draft.venue, address: draft.address, artists: draft.artists, lineup: draft.artists.map((name) => ({ name, role: "artist" })), price: draft.price ?? null, publicPriceRange: draft.publicPriceRange, note: draft.note, sourceChannel: draft.sourceChannel, sourceUrl: draft.sourceUrl, importConfidence: draft.importConfidence, media };
 }
