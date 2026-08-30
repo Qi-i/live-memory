@@ -127,10 +127,13 @@
 }
 
 .detail-copy-v2 h2 {
-  margin: 8px 0 7px;
-  font-size: clamp(34px, 5vw, 66px);
-  line-height: 0.96;
-  letter-spacing: -0.06em;
+  max-width: 100%;
+  margin: 8px 0 9px;
+  font-size: clamp(28px, 3.2vw, 44px);
+  line-height: 1.08;
+  letter-spacing: -0.035em;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .detail-copy-v2 > p {
@@ -482,6 +485,78 @@
   font-weight: 800;
 }
 
+.import-draft-poster-v2 {
+  display: grid;
+  width: 70px;
+  height: 78px;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--experience-text) 5%, transparent);
+}
+
+.import-draft-poster-v2 > span {
+  display: grid;
+  gap: 4px;
+  place-items: center;
+  color: var(--experience-muted);
+  font-size: 9px;
+  font-weight: 850;
+  text-align: center;
+}
+
+.import-draft-poster-v2 svg {
+  width: 18px;
+  height: 18px;
+}
+
+.import-draft-copy-v2 {
+  min-width: 0;
+}
+
+.import-draft-title-v2 {
+  width: 100%;
+  margin: 4px 0;
+  padding: 0;
+  border: 0;
+  outline: 0;
+  color: var(--experience-text);
+  background: transparent;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 900;
+  line-height: 1.35;
+}
+
+.import-draft-fields-v2 {
+  display: grid;
+  grid-template-columns: 1.15fr 0.8fr 0.9fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.import-draft-fields-v2 label {
+  display: grid;
+  gap: 3px;
+  color: var(--experience-muted);
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.import-draft-fields-v2 input {
+  width: 100%;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid var(--experience-border);
+  border-radius: 6px;
+  outline: 0;
+  color: var(--experience-text);
+  background: color-mix(in srgb, var(--experience-text) 3%, transparent);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .image-zoom-v2 {
   display: grid;
   place-items: center;
@@ -636,7 +711,8 @@
   }
 
   .detail-copy-v2 h2 {
-    font-size: 38px;
+    font-size: clamp(26px, 8vw, 36px);
+    line-height: 1.1;
   }
 
   .detail-media-v2,
@@ -673,6 +749,21 @@
 
   .import-drafts-v2 article {
     grid-template-columns: 58px minmax(0,1fr);
+    align-items: start;
+  }
+
+  .import-draft-poster-v2,
+  .import-drafts-v2 img {
+    width: 58px;
+    height: 68px;
+  }
+
+  .import-draft-fields-v2 {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .import-draft-fields-v2 label:last-child {
+    grid-column: 1 / -1;
   }
 
   .import-drafts-v2 article > button {
