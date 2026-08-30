@@ -8,6 +8,14 @@ export function extractUrls(text: string) {
   return Array.from(new Set((text.match(/https?:\/\/[^\s"'<>]+/g) || []).map((url) => url.replace(/[),，。]+$/, ""))));
 }
 
+export function cleanupDamaiTitle(value: string) {
+  return String(value || "")
+    .replace(/[【〖\[]\s*网上订票\s*[】〗\]]/g, "")
+    .replace(/(?:\s*[-—–_|｜]\s*)?大麦网\s*$/i, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
 export async function createDraftsFromText(text: string): Promise<ImportDraft[]> {
   const urls = extractUrls(text);
   const drafts: ImportDraft[] = [];
