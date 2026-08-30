@@ -245,12 +245,15 @@ function inferCity(text: string) {
 }
 
 function inferArtists(title = "") {
-  const clean = title
-    .replace(/^【[^】]+】/, "")
+  const clean = cleanupDamaiTitle(title)
+    .replace(/^[【〖\[][^】〗\]]+[】〗\]]/, "")
+    .replace(/\d{4}\s*[「“]/, "「")
+    .replace(/世界巡回演唱会.*$/, "")
     .replace(/巡回演唱会.*$/, "")
     .replace(/演唱会.*$/, "")
     .replace(/音乐节.*$/, "")
     .replace(/[「“].*$/, "")
+    .replace(/\d{4}\s*$/, "")
     .trim();
   if (!clean || clean.length > 24) return [];
   return clean.split(/\s*\/\s*|\s*、\s*/).filter(Boolean);
