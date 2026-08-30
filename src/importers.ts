@@ -1,4 +1,5 @@
 import { EventCategory, EventStatus, ImportDraft, createId, normalizeStatus } from "./domain";
+import { knownDamaiMedia } from "./posterRegistry";
 
 export function getDamaiItemId(url: string) {
   return /(?:itemId=|item\.html\?id=|item\.htm\?id=)(\d+)/i.exec(url)?.[1] || "";
@@ -34,12 +35,26 @@ export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
   const itemId = getDamaiItemId(url);
   const fallback = basicUrlDraft(url, "damai");
   if (!itemId) return fallback;
+  const knownMedia = knownDamaiMedia(itemId);
   try {
     const response = await fetchWithTimeout(`https://r.jina.ai/http://detail.damai.cn/item.htm?id=${itemId}`, 14000);
+    if (!response.ok) throw new Error(`大麦页面读取失败：${response.status}`);
     const text = await response.text();
-    return { ...fallback, ...parseDamaiReaderText(text, url), sourceUrl: url, sourceChannel: "damai" };
+    const parsed = parseDamaiReaderText(text, url);
+    return {
+      ...fallback,
+      ...parsed,
+      posterUrl: parsed.posterUrl || knownMedia.posterUrl || undefined,
+      seatMapUrl: parsed.seatMapUrl || knownMedia.seatMapUrl || undefined,
+      sourceUrl: url,
+      sourceChannel: "damai",
+    };
   } catch {
-    return fallback;
+    return {
+      ...fallback,
+      posterUrl: knownMedia.posterUrl || undefined,
+      seatMapUrl: knownMedia.seatMapUrl || undefined,
+    };
   }
 }
 

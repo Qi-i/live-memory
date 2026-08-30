@@ -16,6 +16,7 @@ try {
   const supabase = await server.ssrLoadModule("/src/supabase.ts");
   const accountLogin = await server.ssrLoadModule("/src/accountLogin.ts");
   const importers = await server.ssrLoadModule("/src/importers.ts");
+  const posterRegistry = await server.ssrLoadModule("/src/posterRegistry.ts");
 
   assert.equal(domain.validateUsername("Qi2026"), "qi2026");
   assert.throws(() => domain.validateUsername("abc"));
@@ -58,6 +59,11 @@ try {
   assert.equal(damaiDraft.posterUrl, "https://img.alicdn.com/bao/uploaded/wang-beijing-poster.jpg");
   assert.equal(damaiDraft.seatMapUrl, "https://img.alicdn.com/bao/uploaded/wang-beijing-seat-map.jpg");
   assert.equal(damaiDraft.publicPriceRange, "¥380 - ¥1680");
+
+  assert.match(posterRegistry.knownDamaiMedia("1060966698015").posterUrl, /pRGMtzBCAN_/);
+  assert.match(posterRegistry.knownDamaiMedia("1064771079264").posterUrl, /Yxe44itf5e_/);
+  assert.match(posterRegistry.knownDamaiMedia("1064771079264").seatMapUrl, /inews\.gtimg\.com/);
+  assert.equal(posterRegistry.knownDamaiMedia("9999999999999").posterUrl, "");
 
   const baseRecord = {
     schemaVersion: 2,
