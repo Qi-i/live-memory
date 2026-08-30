@@ -15,6 +15,7 @@ try {
   const syncModel = await server.ssrLoadModule("/src/syncModel.ts");
   const supabase = await server.ssrLoadModule("/src/supabase.ts");
   const accountLogin = await server.ssrLoadModule("/src/accountLogin.ts");
+  const importers = await server.ssrLoadModule("/src/importers.ts");
 
   assert.equal(domain.validateUsername("Qi2026"), "qi2026");
   assert.throws(() => domain.validateUsername("abc"));
@@ -28,6 +29,35 @@ try {
   assert.throws(() => domain.validateRecoveryEmail("qi.example.com"));
   assert.equal(domain.normalizeExternalUrl("javascript:alert(1)"), "");
   assert.equal(domain.normalizeExternalUrl("https://m.damai.cn/shows/item.html?itemId=1"), "https://m.damai.cn/shows/item.html?itemId=1");
+
+  assert.equal(
+    importers.cleanupDamaiTitle("【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网"),
+    "【北京】汪苏泷2026「明日世界」演唱会-北京站",
+  );
+  const damaiFixture = [
+    "Title: 【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网",
+    "![service](https://gw.alicdn.com/imgextra/service-45-45.png)",
+    JSON.stringify({
+      priceRange: "¥380 - ¥1680",
+      venue: { venueName: "国家体育场-鸟巢", venueAddr: "北京市朝阳区国家体育场", venueCityName: "北京市" },
+      itemBase: {
+        showTime: "2026.08.14-08.30 18:30",
+        itemName: "【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网",
+        itemPic: "https://img.alicdn.com/bao/uploaded/wang-beijing-poster.jpg",
+        seatMapUrl: "https://img.alicdn.com/bao/uploaded/wang-beijing-seat-map.jpg",
+      },
+    }),
+  ].join("\n");
+  const damaiDraft = importers.parseDamaiReaderText(damaiFixture, "https://m.damai.cn/shows/item.html?itemId=1060966698015");
+  assert.equal(damaiDraft.title, "【北京】汪苏泷2026「明日世界」演唱会-北京站");
+  assert.equal(damaiDraft.date, "2026-08-14");
+  assert.equal(damaiDraft.time, "18:30");
+  assert.equal(damaiDraft.city, "北京");
+  assert.equal(damaiDraft.venue, "国家体育场-鸟巢");
+  assert.equal(damaiDraft.artists?.[0], "汪苏泷");
+  assert.equal(damaiDraft.posterUrl, "https://img.alicdn.com/bao/uploaded/wang-beijing-poster.jpg");
+  assert.equal(damaiDraft.seatMapUrl, "https://img.alicdn.com/bao/uploaded/wang-beijing-seat-map.jpg");
+  assert.equal(damaiDraft.publicPriceRange, "¥380 - ¥1680");
 
   const baseRecord = {
     schemaVersion: 2,
