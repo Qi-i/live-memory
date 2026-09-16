@@ -752,16 +752,51 @@ function partitionBalanced(itemCount: number, rowCount: number): Array<[number, 
   return groups;
 }
 
+function buildSmallMagazineSlots(records: EventRecord[], area: Rect, gap: number): PosterSlot[] {
+  if (!records.length) return [];
+  if (records.length === 1) return [{ record: records[0], rect: { ...area }, emphasis: "hero" }];
+
+  const heroWidth = area.width * (records.length <= 3 ? 0.48 : 0.38);
+  const heroRect = { x: area.x, y: area.y, width: heroWidth, height: area.height };
+  const rest = records.slice(1);
+  const restArea = {
+    x: area.x + heroWidth + gap,
+    y: area.y,
+    width: area.width - heroWidth - gap,
+    height: area.height,
+  };
+  const rowCount = rest.length <= 2 ? rest.length : 2;
+  const groups = partitionBalanced(rest.length, rowCount);
+  const rowHeight = (restArea.height - gap * Math.max(0, rowCount - 1)) / Math.max(1, rowCount);
+  const slots: PosterSlot[] = [{ record: records[0], rect: heroRect, emphasis: "hero" }];
+
+  groups.forEach(([start, end], rowIndex) => {
+    const count = Math.max(1, end - start);
+    const cellWidth = (restArea.width - gap * Math.max(0, count - 1)) / count;
+    for (let index = start; index < end; index += 1) {
+      const column = index - start;
+      slots.push({
+        record: rest[index],
+        rect: {
+          x: restArea.x + column * (cellWidth + gap),
+          y: restArea.y + rowIndex * (rowHeight + gap),
+          width: cellWidth,
+          height: rowHeight,
+        },
+        emphasis: index < 2 ? "feature" : "normal",
+      });
+    }
+  });
+  return slots;
+}
+
 function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length) return [];
   const gap = spec.width >= 1500 ? 15 : 12;
 
   if (records.length <= 6) {
-    return buildAdaptiveMagazineRows(records, area, gap, records.length <= 3 ? 1 : 2).map((slot, index) => ({
-      ...slot,
-      emphasis: index === 0 ? "hero" : index < 3 ? "feature" : "normal",
-    }));
-  }
+  return buildSmallMagazineSlots(records, area, gap);
+}
 
   const hero = records[0];
   const heroRatio = recordPosterRatio(hero);
