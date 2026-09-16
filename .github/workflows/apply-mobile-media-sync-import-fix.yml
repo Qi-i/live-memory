@@ -25,7 +25,18 @@ jobs:
           node-version: 22
           cache: npm
       - name: Apply repair
-        run: python scripts/apply-mobile-media-sync-import-fix.py
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('scripts/apply-mobile-media-sync-import-fix.py')
+          text = path.read_text(encoding='utf-8')
+          old = 'next_text, count = re.subn(pattern, replacement, text, count=1, flags=re.S)'
+          new = 'next_text, count = re.subn(pattern, lambda _match: replacement, text, count=1, flags=re.S)'
+          if old not in text:
+              raise SystemExit('repair helper target missing')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+          PY
+          python scripts/apply-mobile-media-sync-import-fix.py
       - run: npm ci
       - name: Verify repair
         run: npm run check
