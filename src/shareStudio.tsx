@@ -1023,7 +1023,7 @@ function getAdaptiveCanvasSpec(format: "adaptive-landscape" | "adaptive-portrait
     const rows = chooseAdaptiveRowCount(records, contentWidth, gap, landscape, width, chromeHeight);
     const measured = measureAdaptiveRows(records, contentWidth, gap, rows);
     const naturalHeight = Math.round(chromeHeight + measured.totalHeight);
-    const minHeight = landscape ? 820 : 1500;
+    const minHeight = landscape ? Math.round(width * 0.425) : Math.round(width * 1.12);
     return { width, height: Math.max(minHeight, naturalHeight), padding, headerHeight, footerHeight, format };
   }
 
