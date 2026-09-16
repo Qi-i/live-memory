@@ -19,7 +19,9 @@ assert.match(archiveCss, /\.archive-ticket-backdrop/);
 assert.match(archiveCss, /filter:\s*blur\(/);
 assert.match(archiveCss, /backdrop-filter:\s*blur\(/);
 assert.doesNotMatch(archive, /showcase-card-\$\{index % 7\}/);
-assert.match(archiveCss, /column-width|columns:/);
+assert.match(archive, /showcase-column/);
+assert.match(archive, /heights\.indexOf\(Math\.min\(\.\.\.heights\)\)/);
+assert.match(archiveCss, /--showcase-columns/);
 
 assert.match(controller, /async function syncNow|const syncNow\s*=/);
 assert.match(controller, /async function checkRemoteUpdates|const checkRemoteUpdates\s*=/);

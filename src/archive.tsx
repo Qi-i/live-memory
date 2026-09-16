@@ -411,24 +411,38 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
 }
 
 function ShowcaseView({ records, density, onOpen, onZoom }: { records: EventRecord[]; density: number; onOpen: (record: EventRecord) => void; onZoom: (media: MediaAsset) => void }) {
+  const columnCount = Math.min(Math.max(2, density), Math.max(1, records.length));
+  const columns = Array.from({ length: columnCount }, () => [] as EventRecord[]);
+  const heights = Array.from({ length: columnCount }, () => 0);
+  records.forEach((record) => {
+    const poster = primaryMedia(record);
+    const ratio = poster?.width && poster.height ? Math.max(0.58, Math.min(1.28, poster.width / poster.height)) : 0.8;
+    const target = heights.indexOf(Math.min(...heights));
+    columns[target].push(record);
+    heights[target] += 1 / ratio + 0.04;
+  });
   return (
-    <section className={`archive-showcase archive-showcase-density-${Math.min(5, Math.max(2, density))}`}>
-      {records.map((record) => {
-        const poster = primaryMedia(record);
-        const ratio = poster?.width && poster.height ? Math.max(0.58, Math.min(1.28, poster.width / poster.height)) : 0.8;
-        return (
-          <article className="showcase-card" style={{ aspectRatio: String(ratio) }} data-archive-record-id={record.id} key={record.id} onClick={() => onOpen(record)}>
-            <button type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); }}>
-              <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 3)} />
-            </button>
-            <div>
-              <span>{record.date.slice(0, 4)} · {record.city || categoryLabels[record.category]}</span>
-              <h3>{record.title}</h3>
-              <p>{record.artists.join(" / ") || record.venue || "演出记录"}</p>
-            </div>
-          </article>
-        );
-      })}
+    <section className="archive-showcase" style={{ "--showcase-columns": columnCount } as CSSProperties}>
+      {columns.map((items, columnIndex) => (
+        <div className="showcase-column" key={`column-${columnIndex}`}>
+          {items.map((record) => {
+            const poster = primaryMedia(record);
+            const ratio = poster?.width && poster.height ? Math.max(0.58, Math.min(1.28, poster.width / poster.height)) : 0.8;
+            return (
+              <article className="showcase-card" style={{ aspectRatio: String(ratio) }} data-archive-record-id={record.id} key={record.id} onClick={() => onOpen(record)}>
+                <button type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); }}>
+                  <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 3)} />
+                </button>
+                <div>
+                  <span>{record.date.slice(0, 4)} · {record.city || categoryLabels[record.category]}</span>
+                  <h3>{record.title}</h3>
+                  <p>{record.artists.join(" / ") || record.venue || "演出记录"}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ))}
     </section>
   );
 }

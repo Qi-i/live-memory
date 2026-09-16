@@ -214,8 +214,13 @@ try {
   if (!frostedTicket.backdrop || !frostedTicket.blur.includes("blur") || !frostedTicket.glass.includes("blur")) throw new Error(`Ticket is not frosted from its poster: ${JSON.stringify(frostedTicket)}`);
   await page.screenshot({ path: `${outputDir}/04-ticket-desktop.png`, fullPage: true });
   await archiveView("画报", ".showcase-card");
-  const showcase = await page.locator(".archive-showcase").evaluate((node) => ({ display: getComputedStyle(node).display, columnCount: getComputedStyle(node).columnCount, gap: getComputedStyle(node).columnGap }));
-  if (showcase.display !== "block" || Number(showcase.columnCount) < 2 || parseFloat(showcase.gap) > 10) throw new Error(`Showcase is not using compact columns: ${JSON.stringify(showcase)}`);
+  const showcase = await page.locator(".archive-showcase").evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    const columns = Array.from(node.querySelectorAll(":scope > .showcase-column")).filter((item) => getComputedStyle(item).display !== "none");
+    const last = columns.at(-1)?.getBoundingClientRect();
+    return { display: getComputedStyle(node).display, gridColumns: getComputedStyle(node).gridTemplateColumns, gap: getComputedStyle(node).gap, columnCount: columns.length, widthUse: last ? (last.right - rect.left) / rect.width : 0 };
+  });
+  if (showcase.display !== "grid" || showcase.columnCount < 2 || parseFloat(showcase.gap) > 10 || showcase.widthUse < 0.96) throw new Error(`Showcase is not using balanced full-width columns: ${JSON.stringify(showcase)}`);
   await page.screenshot({ path: `${outputDir}/04b-showcase-dense.png`, fullPage: true });
   await page.locator(".sync-pill").click();
   await page.locator(".sync-action-menu").waitFor({ state: "visible", timeout: 5000 });

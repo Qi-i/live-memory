@@ -599,15 +599,22 @@ function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec):
   const rows = Math.ceil(records.length / columns);
   const width = (area.width - gap * Math.max(0, columns - 1)) / columns;
   const height = (area.height - gap * Math.max(0, rows - 1)) / Math.max(1, rows);
-  return records.map((record, index) => ({
-    record,
-    rect: {
-      x: area.x + (index % columns) * (width + gap),
-      y: area.y + Math.floor(index / columns) * (height + gap),
-      width,
-      height,
-    },
-  }));
+  return records.map((record, index) => {
+    const row = Math.floor(index / columns);
+    const rowStart = row * columns;
+    const rowItemCount = Math.min(columns, records.length - rowStart);
+    const rowWidth = rowItemCount * width + gap * Math.max(0, rowItemCount - 1);
+    const rowOffset = Math.max(0, (area.width - rowWidth) / 2);
+    return {
+      record,
+      rect: {
+        x: area.x + rowOffset + (index - rowStart) * (width + gap),
+        y: area.y + row * (height + gap),
+        width,
+        height,
+      },
+    };
+  });
 }
 
 function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
