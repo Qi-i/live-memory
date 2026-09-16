@@ -45,6 +45,21 @@ function mediaPathFingerprint(records: EventRecord[]) {
   return records.flatMap((record) => record.media.filter((asset) => asset.storagePath).map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`)).join("|");
 }
 
+export function autoSyncFingerprint(records: EventRecord[], settings: AppSettings) {
+  const recordPart = recordFingerprint(records);
+  const mediaPart = records.flatMap((record) => record.media.map((asset) =>
+    `${record.id}:${asset.id}:${asset.storagePath || (asset.src.startsWith("data:") ? "local-data" : asset.src)}`,
+  )).join("|");
+  const cloudPart = [
+    hasPersonalCloudConnection(settings) ? "personal" : "",
+    settings.supabase.url.trim(),
+    settings.supabase.ownerKey ? "connected" : "",
+    settings.supabase.syncMedia ? "media" : "text",
+    hasAccountCloudConfig(settings) ? "account" : "",
+  ].join(":");
+  return `${recordPart}::${mediaPart}::${cloudPart}`;
+}
+
 function guestDemoRecords(): EventRecord[] {
   return seedRecords.map((record) => ({
     ...record,
@@ -122,7 +137,7 @@ export function useAppController() {
         setRecordState(nextRecords);
         setSettings(nextSettings);
         void preloadRecordMedia(nextRecords);
-        lastSyncFingerprint.current = recordFingerprint(nextRecords);
+        lastSyncFingerprint.current = "";
         initialized.current = true;
       })
       .catch((error) => {
@@ -152,7 +167,7 @@ export function useAppController() {
   useEffect(() => {
     if (!initialized.current || isGuest || !access.user || editing || syncing || records.length === 0) return;
     if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
-    const fingerprint = recordFingerprint(records);
+    const fingerprint = autoSyncFingerprint(records, settings);
     if (lastSyncFingerprint.current === fingerprint) return;
     const timer = window.setTimeout(() => {
       lastSyncFingerprint.current = fingerprint;
@@ -160,12 +175,14 @@ export function useAppController() {
       autoSyncAll(settings, recordsRef.current)
         .then(async (result) => {
           setSyncConflicts(result.conflicts);
-          const nextFingerprint = recordFingerprint(result.records);
+          const nextFingerprint = autoSyncFingerprint(result.records, settings);
           if (nextFingerprint !== fingerprint) {
             await replaceAllRecords(result.records);
             setRecords(result.records);
           }
           lastSyncFingerprint.current = nextFingerprint;
+          const syncedSettings = writeSettings({ ...settings, lastSyncAt: nowIso() });
+          setSettings(syncedSettings);
           if (result.message) flash(result.message);
         })
         .catch((error) => {

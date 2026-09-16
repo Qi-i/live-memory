@@ -2,7 +2,7 @@ export type EventCategory = "concert" | "festival" | "livehouse" | "theatre" | "
 export type EventStatus = "watched" | "planned" | "wish";
 export type RecordState = "normal" | "rescheduled" | "cancelled" | "refunded";
 export type MediaKind = "poster" | "ticket" | "seatMap" | "livePhoto" | "other";
-export type SourceChannel = "" | "damai" | "fenwandao" | "maoyan" | "official" | "onsite" | "transfer" | "other";
+export type SourceChannel = "" | "damai" | "fenwandao" | "piaoxingqiu" | "maoyan" | "official" | "onsite" | "transfer" | "other";
 
 export interface GeoPoint {
   lat: number;
@@ -201,6 +201,7 @@ export const sourceLabels: Record<SourceChannel, string> = {
   "": "未记录",
   damai: "大麦",
   fenwandao: "纷玩岛",
+  piaoxingqiu: "票星球",
   maoyan: "猫眼",
   official: "官方",
   onsite: "现场",

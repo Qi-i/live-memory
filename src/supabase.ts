@@ -831,12 +831,33 @@ export async function autoSyncAll(settings: AppSettings, localRecords: EventReco
   };
 }
 
+function canonicalSyncRecord(record: EventRecord, includeMedia: boolean) {
+  const { syncedAt: _syncedAt, updatedAt: _updatedAt, media, ...rest } = record;
+  const normalizedMedia = includeMedia
+    ? media.map((asset) => {
+      const { updatedAt: _assetUpdatedAt, source: _assetSource, src, ...stable } = asset;
+      return { ...stable, src: asset.storagePath ? "" : src };
+    }).sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    : [];
+  return { ...rest, media: normalizedMedia };
+}
+
+function sortForStableJson(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(sortForStableJson);
+  if (!value || typeof value !== "object") return value;
+  return Object.fromEntries(Object.entries(value as Record<string, unknown>)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, item]) => [key, sortForStableJson(item)]));
+}
+
+export function recordsSemanticallyEqual(local: EventRecord, cloud: EventRecord, includeMedia = true) {
+  return JSON.stringify(sortForStableJson(canonicalSyncRecord(local, includeMedia)))
+    === JSON.stringify(sortForStableJson(canonicalSyncRecord(cloud, includeMedia)));
+}
+
 async function syncAccountTextBackup(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
   const client = makeAccountClient(settings);
   const user = await requireUser(client);
-  const conflicts: SyncConflict[] = [];
-
-  // Pull all cloud records
   const { data, error } = await client
     .from("echo_text_backups")
     .select("payload, updated_at, deleted_at")
@@ -849,82 +870,47 @@ async function syncAccountTextBackup(settings: AppSettings, localRecords: EventR
     updatedAt: String(row.updated_at || (row.payload as EventRecord).updatedAt),
     deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
   }));
-
-  const localById = new Map(localRecords.map((r) => [r.id, r]));
-  const cloudById = new Map(cloudRecords.map((r) => [r.id, r]));
+  const localById = new Map(localRecords.map((record) => [record.id, record]));
+  const cloudById = new Map(cloudRecords.map((record) => [record.id, record]));
   const merged = new Map(localById);
   const toPush: EventRecord[] = [];
 
-  // Check each local record against cloud
+  // Account backup is secondary storage. Compare actual content/timestamps and do not
+  // reuse the personal-cloud syncedAt marker, otherwise one backend can suppress the other.
   for (const [id, local] of localById) {
     const cloud = cloudById.get(id);
     if (!cloud) {
-      // Only in local → push
       toPush.push(local);
       continue;
     }
-    // Exists in both → check for conflicts
-    const syncedAt = local.syncedAt;
-    if (syncedAt) {
-      const localChanged = local.updatedAt > syncedAt;
-      const cloudChanged = cloud.updatedAt > syncedAt;
-      if (localChanged && cloudChanged) {
-        conflicts.push({
-          recordId: id,
-          title: local.title,
-          localUpdatedAt: local.updatedAt,
-          cloudUpdatedAt: cloud.updatedAt,
-          localRecord: local,
-          cloudRecord: cloud,
-          source: "account",
-        });
-      } else if (!localChanged && cloudChanged) {
-        // Cloud wins
-        merged.set(id, normalizeRecord({ ...cloud, media: local.media, syncedAt: nowIso() }));
-      } else if (localChanged && !cloudChanged) {
-        toPush.push(local);
-      }
-      // Neither changed → skip
+    if (recordsSemanticallyEqual(local, cloud, false)) continue;
+    if (cloud.updatedAt > local.updatedAt) {
+      merged.set(id, normalizeRecord({ ...cloud, media: local.media, syncedAt: local.syncedAt }));
     } else {
-      // No syncedAt → last-write-wins
-      if (cloud.updatedAt > local.updatedAt) {
-        merged.set(id, normalizeRecord({ ...cloud, media: local.media, syncedAt: nowIso() }));
-      } else {
-        toPush.push(local);
-      }
+      toPush.push(local);
     }
   }
 
-  // Cloud-only records → pull
   for (const [id, cloud] of cloudById) {
-    if (!localById.has(id)) {
-      merged.set(id, normalizeRecord({ ...cloud, media: [], syncedAt: nowIso() }));
-    }
+    if (!localById.has(id)) merged.set(id, normalizeRecord({ ...cloud, media: [] }));
   }
 
-  // Push local changes
   if (toPush.length) {
     const rows = toPush.map((record) => ({
       id: record.id,
       user_id: user.id,
-      payload: withoutLocalMedia({ ...record, syncedAt: nowIso() }),
+      payload: withoutLocalMedia(record),
       updated_at: record.updatedAt,
       deleted_at: record.deletedAt || null,
     }));
     const { error: pushError } = await client.from("echo_text_backups").upsert(rows, { onConflict: "user_id,id" });
     if (pushError) throwTextBackupError(pushError);
-    // Update local syncedAt for pushed records
-    for (const record of toPush) {
-      const existing = merged.get(record.id);
-      if (existing) merged.set(record.id, { ...existing, syncedAt: nowIso() });
-    }
   }
 
-  const records = Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
   return {
-    records,
-    conflicts,
-    message: toPush.length ? `已同步 ${toPush.length} 条记录到账号备份` : "",
+    records: Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date)),
+    conflicts: [],
+    message: toPush.length ? `已备份 ${toPush.length} 条文字记录` : "",
   };
 }
 
@@ -943,6 +929,7 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
 
   const cloudRecords = (data || []).map((row) => normalizeRecord({
     ...(row.payload as EventRecord),
+    updatedAt: String(row.updated_at || (row.payload as EventRecord).updatedAt),
     deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
   }));
 
@@ -955,6 +942,10 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
     const cloud = cloudById.get(id);
     if (!cloud) {
       toPush.push(local);
+      continue;
+    }
+    if (recordsSemanticallyEqual(local, cloud, true)) {
+      merged.set(id, normalizeRecord({ ...local, syncedAt: nowIso() }));
       continue;
     }
     const syncedAt = local.syncedAt;
@@ -991,10 +982,22 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
     }
   }
 
-  // Push local changes
+  // Push local changes. Upload media first so the cloud payload and local state
+  // both receive storagePath values in the same transaction cycle.
   if (toPush.length) {
+    const bucket = mediaBucket(settings);
     for (const record of toPush) {
-      const syncedRecord = { ...record, syncedAt: nowIso() };
+      let media = record.media;
+      if (settings.supabase.syncMedia && !record.deletedAt) {
+        media = await Promise.all(record.media.map(async (asset) => {
+          try {
+            return await uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket);
+          } catch {
+            return asset;
+          }
+        }));
+      }
+      const syncedRecord = normalizeRecord({ ...record, media, syncedAt: nowIso() });
       const cloudPayload = settings.supabase.syncMedia ? cloudRecordPayload(syncedRecord) : withoutLocalMedia(syncedRecord);
       const { error: pushError } = await client.from("echo_passkey_records").upsert(
         {
@@ -1008,20 +1011,6 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
       );
       if (pushError) throwPersonalCloudError(pushError);
       merged.set(record.id, syncedRecord);
-
-      // Upload media if syncMedia is enabled
-      if (settings.supabase.syncMedia && !record.deletedAt) {
-        const bucket = mediaBucket(settings);
-        for (const asset of record.media) {
-          if (!asset.storagePath && asset.src.startsWith("data:")) {
-            try {
-              await uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket);
-            } catch {
-              // Individual media upload failure is non-fatal
-            }
-          }
-        }
-      }
     }
   }
 
@@ -1111,7 +1100,7 @@ async function pushRecordsToPasskeySupabase(settings: AppSettings, records: Even
     const media = record.deletedAt || !settings.supabase.syncMedia
       ? record.media
       : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket)));
-    const next = normalizeRecord({ ...record, media, updatedAt: nowIso() });
+    const next = normalizeRecord({ ...record, media, syncedAt: nowIso() });
     if (!next.deletedAt) uploaded += 1;
     const cloudPayload = next.deletedAt
       ? cloudRecordPayload({ ...next, media: next.media.filter((asset) => asset.storagePath) })
@@ -1450,6 +1439,6 @@ function cloudRecordPayload(record: EventRecord) {
     ...record,
     media: record.media.map((asset) => asset.storagePath
       ? { ...asset, src: "", source: "supabase" as const }
-      : asset),
+      : asset.src.startsWith("data:") ? { ...asset, src: "" } : asset),
   });
 }
