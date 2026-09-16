@@ -55,8 +55,8 @@ async function assertSharePosters(label, canvasSelector) {
   if (!canvas || posters.length < 3) throw new Error(`${label} did not render enough posters`);
   const parent = { left: canvas.x, top: canvas.y, right: canvas.x + canvas.width, bottom: canvas.y + canvas.height };
   posters.forEach((poster, index) => {
-    if (poster.objectFit !== "contain" && poster.objectFit !== "fallback") {
-      throw new Error(`${label} poster ${index + 1} is cropped with object-fit ${poster.objectFit}`);
+    if (poster.objectFit !== "cover" && poster.objectFit !== "fallback") {
+      throw new Error(`${label} poster ${index + 1} does not fill its frame with object-fit ${poster.objectFit}`);
     }
     assertContained(`${label} poster ${index + 1}`, poster, parent, 2);
   });
@@ -213,6 +213,10 @@ try {
 
   await page.getByRole("button", { name: "制作分享图", exact: true }).click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
+  const activeFormat = await page.locator(".share-format-control button.is-active").innerText();
+  if (!activeFormat.includes("智能横版")) throw new Error(`Share studio did not open in smart landscape mode: ${activeFormat}`);
+  const panelDensity = await page.locator(".share-studio-panel").evaluate((panel) => ({ scrollHeight: panel.scrollHeight, clientHeight: panel.clientHeight }));
+  if (panelDensity.scrollHeight > panelDensity.clientHeight + 4) throw new Error(`Default share controls still require scrolling: ${JSON.stringify(panelDensity)}`);
   await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 15000 });
   await page.waitForFunction(() => {
     const button = document.querySelector(".share-export-button");
@@ -222,8 +226,17 @@ try {
   await assertFixedPreviewFits("Wall");
   const wall = await assertSharePosters("Wall", ".share-layout-canvas-wall");
   const wallFill = wall.posters.reduce((sum, poster) => sum + poster.width * poster.height, 0) / (wall.canvas.width * wall.canvas.height);
-  if (wallFill < 0.5) throw new Error(`Wall layout leaves too much empty space: ${wallFill.toFixed(3)}`);
+  if (wallFill < 0.72) throw new Error(`Adaptive wall layout leaves too much empty space: ${wallFill.toFixed(3)}`);
   await page.screenshot({ path: `${outputDir}/06-share-wall-fit.png`, fullPage: true });
+
+  await page.locator(".share-format-control button").filter({ hasText: "智能竖版" }).click();
+  await page.waitForTimeout(120);
+  const portraitSmart = await page.locator(".share-preview").boundingBox();
+  if (!portraitSmart || portraitSmart.height <= portraitSmart.width) throw new Error(`Smart portrait did not produce a portrait canvas: ${JSON.stringify(portraitSmart)}`);
+  await page.locator(".share-format-control button").filter({ hasText: "智能横版" }).click();
+  await page.waitForTimeout(120);
+  const landscapeSmart = await page.locator(".share-preview").boundingBox();
+  if (!landscapeSmart || landscapeSmart.width <= landscapeSmart.height) throw new Error(`Smart landscape did not produce a landscape canvas: ${JSON.stringify(landscapeSmart)}`);
 
   const fitText = await page.locator(".share-preview-toolbar strong").textContent();
   await page.getByRole("button", { name: "放大预览", exact: true }).click();

@@ -28,9 +28,9 @@ import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
 import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
-export type ShareFormat = "landscape" | "portrait" | "square" | "long";
+export type ShareFormat = "adaptive-landscape" | "adaptive-portrait" | "landscape" | "portrait" | "square" | "long";
 type ShareLayout = "wall" | "timeline" | "magazine" | "cities";
-type SharePalette = "jade" | "midnight" | "paper" | "sunset";
+type SharePalette = "jade" | "midnight" | "paper" | "sunset" | "graphite" | "mist" | "forest" | "champagne" | "plum" | "silver";
 type ScopeMode = "all" | "range" | "manual";
 type ItemLimit = 12 | 20 | 30 | "all";
 type SortMode = "date-desc" | "date-asc";
@@ -93,44 +93,54 @@ const paletteOptions: Array<{ value: SharePalette; label: string }> = [
   { value: "midnight", label: "深海蓝" },
   { value: "paper", label: "极简白" },
   { value: "sunset", label: "暖砂金" },
+  { value: "graphite", label: "石墨黑" },
+  { value: "mist", label: "雾霭蓝灰" },
+  { value: "forest", label: "深林绿" },
+  { value: "champagne", label: "香槟米" },
+  { value: "plum", label: "午夜紫灰" },
+  { value: "silver", label: "冷银" },
 ];
 
 const palettes: Record<SharePalette, PaletteDefinition> = {
   jade: {
-    background: ["#e5f7ef", "#74bca9"],
-    surface: "#f5fbf8",
-    text: "#10201b",
-    muted: "#4d6f64",
-    accent: "#0b8f78",
-    accentSoft: "#dfff4f",
-    border: "rgba(11, 86, 73, .18)",
+    background: ["#e5f7ef", "#74bca9"], surface: "#f5fbf8", text: "#10201b", muted: "#4d6f64",
+    accent: "#0b8f78", accentSoft: "#dfff4f", border: "rgba(11, 86, 73, .18)",
   },
   midnight: {
-    background: ["#07151a", "#18384a"],
-    surface: "#102129",
-    text: "#f7fffb",
-    muted: "#9bb1b3",
-    accent: "#63dfca",
-    accentSoft: "#dfff4f",
-    border: "rgba(255, 255, 255, .22)",
+    background: ["#07151a", "#18384a"], surface: "#102129", text: "#f7fffb", muted: "#9bb1b3",
+    accent: "#63dfca", accentSoft: "#dfff4f", border: "rgba(255, 255, 255, .22)",
   },
   paper: {
-    background: ["#f8f4eb", "#dfd8ca"],
-    surface: "#fffdf7",
-    text: "#191d1c",
-    muted: "#6e7470",
-    accent: "#167e6e",
-    accentSoft: "#d8b17a",
-    border: "rgba(24, 31, 29, .16)",
+    background: ["#f8f4eb", "#dfd8ca"], surface: "#fffdf7", text: "#191d1c", muted: "#6e7470",
+    accent: "#167e6e", accentSoft: "#d8b17a", border: "rgba(24, 31, 29, .16)",
   },
   sunset: {
-    background: ["#f5e5d2", "#c78565"],
-    surface: "#fff5e9",
-    text: "#2d1c19",
-    muted: "#78584f",
-    accent: "#8e3d31",
-    accentSoft: "#f0be65",
-    border: "rgba(74, 35, 28, .2)",
+    background: ["#f5e5d2", "#c78565"], surface: "#fff5e9", text: "#2d1c19", muted: "#78584f",
+    accent: "#8e3d31", accentSoft: "#f0be65", border: "rgba(74, 35, 28, .2)",
+  },
+  graphite: {
+    background: ["#101416", "#303638"], surface: "#1c2224", text: "#f4f5f2", muted: "#aab2ae",
+    accent: "#91b7ad", accentSoft: "#d4dcc8", border: "rgba(255, 255, 255, .18)",
+  },
+  mist: {
+    background: ["#e5ecee", "#a7b7bd"], surface: "#f7f9f9", text: "#172126", muted: "#65767d",
+    accent: "#557d86", accentSoft: "#d5e8e4", border: "rgba(35, 61, 69, .16)",
+  },
+  forest: {
+    background: ["#0c211b", "#36574a"], surface: "#17342b", text: "#f4f7f1", muted: "#a8bbb3",
+    accent: "#79c5aa", accentSoft: "#d9d2a0", border: "rgba(255, 255, 255, .18)",
+  },
+  champagne: {
+    background: ["#f5efe5", "#c9baa4"], surface: "#fffaf2", text: "#2d2822", muted: "#7b6e60",
+    accent: "#8b7150", accentSoft: "#e0c88d", border: "rgba(72, 57, 40, .17)",
+  },
+  plum: {
+    background: ["#19151d", "#4c4050"], surface: "#29232e", text: "#faf7fb", muted: "#b6aabb",
+    accent: "#bba8c0", accentSoft: "#d8d0bd", border: "rgba(255, 255, 255, .18)",
+  },
+  silver: {
+    background: ["#eef1f2", "#bcc5ca"], surface: "#fbfcfc", text: "#1c2428", muted: "#69777e",
+    accent: "#617d89", accentSoft: "#d6e3df", border: "rgba(39, 60, 69, .16)",
   },
 };
 
@@ -390,6 +400,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
           </div>
         </section>
 
+        <div className="share-control-compact-grid">
         <section className="share-control-group">
           <strong>排序方式</strong>
           <button className="share-sort-button" type="button" onClick={() => setSortMode((current) => current === "date-desc" ? "date-asc" : "date-desc")}>
@@ -408,6 +419,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
             ))}
           </div>
         </section>
+        </div>
 
         {scope === "range" && (
           <section className="share-range-control">
@@ -435,6 +447,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
           </section>
         )}
 
+        <div className="share-control-compact-grid">
         <section className="share-control-group">
           <strong>最多使用</strong>
           <div className="share-count-control">
@@ -445,15 +458,16 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </section>
 
         <section className="share-control-group">
-          <strong>成图比例</strong>
+          <strong>成图比例 <small>智能尺寸会按海报数量自动计算</small></strong>
           <div className="share-format-control">
-            {(["portrait", "square", "landscape", "long"] as ShareFormat[]).map((item) => (
+            {(["adaptive-landscape", "adaptive-portrait", "landscape", "portrait", "square", "long"] as ShareFormat[]).map((item) => (
               <button className={format === item ? "is-active" : ""} key={item} type="button" onClick={() => setFormat(item)}>
-                {item === "portrait" ? "竖版 4:5" : item === "square" ? "方形 1:1" : item === "landscape" ? "横版 16:9" : "手机长图"}
+                {formatLabel(item)}
               </button>
             ))}
           </div>
         </section>
+        </div>
 
         <section className="share-control-group">
           <strong>分享布局 <small>四种布局会真实改变海报组织方式</small></strong>
@@ -499,7 +513,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
             <span className="share-preview-aura" aria-hidden="true" />
             <header>
               <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
-              {showBrand ? <BrandLockup compact inverse={palette === "midnight"} size={44} /> : null}
+              {showBrand ? <BrandLockup compact inverse={isDarkPalette(palette)} size={44} /> : null}
             </header>
             <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} />
             <footer>
@@ -557,7 +571,7 @@ function SharePreviewLayout({ records, layout, spec, showDetails }: { records: E
     );
   }
 
-  const slots = layout === "magazine" ? buildMagazineSlots(records, area, spec) : buildJustifiedSlots(records, area, spec);
+  const slots = layout === "magazine" ? buildMagazineSlots(records, area, spec) : isAdaptiveFormat(spec.format) ? buildAdaptiveWallSlots(records, area, spec) : buildJustifiedSlots(records, area, spec);
   return (
     <div className={`share-layout-canvas share-layout-canvas-${layout}`} style={rectStyle(area)}>
       {slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={area} showDetails={showDetails} />)}
@@ -607,6 +621,75 @@ function rectStyle(rect: Rect): CSSProperties {
 
 function localRectStyle(rect: Rect, origin: Rect): CSSProperties {
   return { left: rect.x - origin.x, top: rect.y - origin.y, width: rect.width, height: rect.height };
+}
+
+function buildAdaptiveWallSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
+  if (!records.length) return [];
+  const gap = spec.width >= 1500 ? 14 : 12;
+  const landscape = spec.format === "adaptive-landscape";
+  const chromeHeight = spec.height - area.height;
+  const rowCount = chooseAdaptiveRowCount(records, area.width, gap, landscape, spec.width, chromeHeight);
+  const { groups, heights, totalHeight } = measureAdaptiveRows(records, area.width, gap, rowCount);
+  let y = area.y + Math.max(0, (area.height - totalHeight) / 2);
+  const slots: PosterSlot[] = [];
+
+  groups.forEach(([start, end], rowIndex) => {
+    const height = heights[rowIndex];
+    let x = area.x;
+    for (let index = start; index < end; index += 1) {
+      const isLast = index === end - 1;
+      const width = isLast ? area.x + area.width - x : recordPosterRatio(records[index]) * height;
+      slots.push({ record: records[index], rect: { x, y, width: Math.max(1, width), height } });
+      x += width + gap;
+    }
+    y += height + gap;
+  });
+  return slots;
+}
+
+function measureAdaptiveRows(records: EventRecord[], width: number, gap: number, rowCount: number) {
+  const groups = partitionBalanced(records.length, rowCount);
+  const heights = groups.map(([start, end]) => {
+    const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
+    return (width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
+  });
+  const totalHeight = heights.reduce((sum, value) => sum + value, 0) + gap * Math.max(0, rowCount - 1);
+  return { groups, heights, totalHeight };
+}
+
+function chooseAdaptiveRowCount(
+  records: EventRecord[],
+  width: number,
+  gap: number,
+  landscape: boolean,
+  canvasWidth: number,
+  chromeHeight: number,
+) {
+  if (!records.length) return 1;
+  const targetAspect = landscape ? 1.55 : 0.72;
+  const maxRows = Math.min(records.length, landscape ? 7 : 11);
+  let bestRows = 1;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let rows = 1; rows <= maxRows; rows += 1) {
+    const measured = measureAdaptiveRows(records, width, gap, rows);
+    const canvasAspect = canvasWidth / Math.max(1, measured.totalHeight + chromeHeight);
+    const orientationPenalty = landscape
+      ? (canvasAspect < 1.12 ? 4 + (1.12 - canvasAspect) * 4 : 0)
+      : (canvasAspect > 0.92 ? 4 + (canvasAspect - 0.92) * 4 : 0);
+    const occupiedArea = measured.groups.reduce((sum, [start, end], index) => {
+      const ratioSum = records.slice(start, end).reduce((rowSum, record) => rowSum + recordPosterRatio(record), 0);
+      return sum + ratioSum * measured.heights[index] * measured.heights[index];
+    }, 0);
+    const fillRatio = occupiedArea / Math.max(1, width * measured.totalHeight);
+    const averageHeight = measured.heights.reduce((sum, value) => sum + value, 0) / measured.heights.length;
+    const readabilityPenalty = averageHeight < 125 ? (125 - averageHeight) / 125 : 0;
+    const score = Math.abs(Math.log(Math.max(0.01, canvasAspect / targetAspect))) + orientationPenalty + readabilityPenalty * 0.5 + (1 - fillRatio) * 0.08;
+    if (score < bestScore) {
+      bestScore = score;
+      bestRows = rows;
+    }
+  }
+  return bestRows;
 }
 
 function buildJustifiedSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
@@ -683,7 +766,7 @@ function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
   const hero = records[0];
   const heroRatio = recordPosterRatio(hero);
 
-  if (spec.format === "landscape") {
+  if (isLandscapeFormat(spec.format)) {
     const heroHeight = area.height;
     const heroWidth = Math.min(area.width * 0.34, heroHeight * heroRatio);
     const heroRect = {
@@ -904,7 +987,57 @@ function formatPeriod(records: EventRecord[]) {
   return `${first.slice(0, 4)}—${last.slice(0, 4)}`;
 }
 
+function formatLabel(format: ShareFormat) {
+  if (format === "adaptive-landscape") return "智能横版";
+  if (format === "adaptive-portrait") return "智能竖版";
+  if (format === "portrait") return "竖版 4:5";
+  if (format === "square") return "方形 1:1";
+  if (format === "landscape") return "横版 16:9";
+  return "手机长图";
+}
+
+function isAdaptiveFormat(format: ShareFormat) {
+  return format === "adaptive-landscape" || format === "adaptive-portrait";
+}
+
+function isLandscapeFormat(format: ShareFormat) {
+  return format === "landscape" || format === "adaptive-landscape";
+}
+
+function isDarkPalette(palette: SharePalette) {
+  return palette === "midnight" || palette === "graphite" || palette === "forest" || palette === "plum";
+}
+
+function getAdaptiveCanvasSpec(format: "adaptive-landscape" | "adaptive-portrait", records: EventRecord[], layout: ShareLayout): CanvasSpec {
+  const landscape = format === "adaptive-landscape";
+  const width = landscape ? 1600 : 1200;
+  const padding = landscape ? 48 : 44;
+  const headerHeight = landscape ? 112 : 124;
+  const footerHeight = 54;
+  const chromeHeight = padding * 2 + headerHeight + footerHeight;
+  if (!records.length) return { width, height: landscape ? 900 : 1500, padding, headerHeight, footerHeight, format };
+
+  if (layout === "wall") {
+    const gap = landscape ? 14 : 12;
+    const contentWidth = width - padding * 2;
+    const rows = chooseAdaptiveRowCount(records, contentWidth, gap, landscape, width, chromeHeight);
+    const measured = measureAdaptiveRows(records, contentWidth, gap, rows);
+    const naturalHeight = Math.round(chromeHeight + measured.totalHeight);
+    const minHeight = landscape ? 820 : 1500;
+    return { width, height: Math.max(minHeight, naturalHeight), padding, headerHeight, footerHeight, format };
+  }
+
+  const groupCount = layout === "timeline" ? groupByYear(records).length : layout === "cities" ? groupByCity(records).length : 0;
+  const contentHeight = layout === "timeline"
+    ? Math.max(landscape ? 680 : 1080, groupCount * (landscape ? 210 : 275))
+    : layout === "cities"
+      ? Math.max(landscape ? 700 : 1120, groupCount * (landscape ? 185 : 235))
+      : Math.max(landscape ? 700 : 1120, Math.ceil(records.length / (landscape ? 6 : 4)) * (landscape ? 230 : 275));
+  return { width, height: chromeHeight + contentHeight, padding, headerHeight, footerHeight, format };
+}
+
 function getCanvasSpec(format: ShareFormat, count: number, layout: ShareLayout, records: EventRecord[]): CanvasSpec {
+  if (format === "adaptive-landscape" || format === "adaptive-portrait") return getAdaptiveCanvasSpec(format, records, layout);
   const width = format === "landscape" ? 1600 : 1200;
   const padding = format === "landscape" ? 58 : 54;
   const headerHeight = format === "landscape" ? 132 : 156;
@@ -940,7 +1073,7 @@ async function exportSharePng(options: ExportOptions) {
   if (options.layout === "timeline") await drawTimelineCanvas(context, buildTimelineBands(options.records, area, spec), options, palette);
   else if (options.layout === "cities") await drawCitiesCanvas(context, buildCityModel(options.records, area, spec), options, palette);
   else {
-    const slots = options.layout === "magazine" ? buildMagazineSlots(options.records, area, spec) : buildJustifiedSlots(options.records, area, spec);
+    const slots = options.layout === "magazine" ? buildMagazineSlots(options.records, area, spec) : isAdaptiveFormat(spec.format) ? buildAdaptiveWallSlots(options.records, area, spec) : buildJustifiedSlots(options.records, area, spec);
     for (const slot of slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails, slot.emphasis);
   }
 
@@ -1058,7 +1191,7 @@ async function drawPoster(
   context.clip();
 
   const image = await loadMediaImage(primaryMedia(record));
-  if (image) drawContain(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
+  if (image) drawCover(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
   else drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
   if (showDetails) drawDetails(context, record, slot, palette);
   context.restore();
@@ -1075,7 +1208,7 @@ function drawShareHeader(context: CanvasRenderingContext2D, spec: CanvasSpec, op
   context.font = `800 ${Math.max(16, Math.round(spec.width * 0.013))}px system-ui, sans-serif`;
   context.fillText("LIVE MEMORY · CONCERT ARCHIVE", x, spec.padding * 0.72);
   context.fillStyle = palette.text;
-  context.font = `900 ${Math.round(spec.width * (options.format === "landscape" ? 0.037 : 0.049))}px system-ui, sans-serif`;
+  context.font = `900 ${Math.round(spec.width * (isLandscapeFormat(options.format) ? 0.037 : 0.049))}px system-ui, sans-serif`;
   context.fillText(trimText(context, options.headline, spec.width - spec.padding * 4.5), x, spec.padding + spec.headerHeight * 0.46);
   context.fillStyle = palette.muted;
   context.font = `700 ${Math.max(14, Math.round(spec.width * 0.012))}px system-ui, sans-serif`;
@@ -1139,10 +1272,11 @@ function drawDetails(context: CanvasRenderingContext2D, record: EventRecord, slo
   context.fillText(trimText(context, record.title, slot.width - inset * 2), slot.x + inset, slot.y + slot.height - inset * 1.15);
 }
 
-function drawContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, background: string) {
+function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number, background: string) {
   context.fillStyle = background;
   context.fillRect(x, y, width, height);
-  const scale = Math.min(width / image.naturalWidth, height / image.naturalHeight);
+  const overscan = 1.025;
+  const scale = Math.max(width / image.naturalWidth, height / image.naturalHeight) * overscan;
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);

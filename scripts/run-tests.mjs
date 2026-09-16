@@ -175,15 +175,15 @@ try {
   assert.match(shareStudio, /Set<EventCategory>/);
   assert.match(shareStudio, /date-desc/);
   assert.match(shareStudio, /ItemLimit = 12 \| 20 \| 30 \| "all"/);
-  assert.match(shareStudio, /ShareFormat = "landscape" \| "portrait" \| "square" \| "long"/);
+  assert.match(shareStudio, /ShareFormat = "adaptive-landscape" \| "adaptive-portrait" \| "landscape" \| "portrait" \| "square" \| "long"/);
   assert.match(shareStudio, /ShareLayout = "wall" \| "timeline" \| "magazine" \| "cities"/);
   assert.match(shareStudioCss, /share-layout-canvas/);
   assert.match(shareStudioCss, /share-coordinate-field/);
   assert.match(shareStudioCss, /share-preview-toolbar/);
-  assert.match(shareStudioCss, /object-fit:\s*contain/);
+  assert.match(shareStudioCss, /object-fit:\s*cover/);
   assert.match(shareStudio, /ResizeObserver/);
   assert.match(shareStudio, /recordPosterRatio/);
-  assert.match(shareStudio, /drawContain/);
+  assert.match(shareStudio, /drawCover/);
   assert.match(shareStudio, /非地图示意/);
   assert.match(archive, /"poster"[\s\S]*"wallet"[\s\S]*"ticket"[\s\S]*"timeline"[\s\S]*"calendar"[\s\S]*"venue"[\s\S]*"price"[\s\S]*"summary"[\s\S]*"list"/);
   assert.match(experience, /https:\/\/github\.com\/Qi-i\/live-memory/);
