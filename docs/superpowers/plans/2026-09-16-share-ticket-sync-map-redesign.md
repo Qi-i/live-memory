@@ -31,10 +31,10 @@
 - Consumes: existing source files as text plus existing browser audit setup.
 - Produces: failing assertions for `itemLimit="all"`, `tickets` layout, frosted ticket layers, compact showcase, global sync commands, and provider-specific map states.
 
-- [ ] Add source-contract assertions for the new behavior.
-- [ ] Add browser assertions for default All, ticket share preview, sync menu access, and provider-specific map state.
-- [ ] Add the contract script to `npm test`.
-- [ ] Trigger PR CI and verify the new tests fail for the intended missing behavior.
+- [x] Add source-contract assertions for the new behavior.
+- [x] Add browser assertions for default All, ticket share preview, sync menu access, and provider-specific map state.
+- [x] Add the contract script to `npm test`.
+- [x] Trigger PR CI and verify the new tests fail for the intended missing behavior.
 
 ### Task 2: Sharing and archive visual redesign
 
