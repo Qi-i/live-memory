@@ -1,0 +1,42 @@
+name: Apply mobile media sync import repair
+
+on:
+  push:
+    branches: [fix/mobile-media-sync-import-20260916]
+    paths:
+      - scripts/apply-mobile-media-sync-import-fix.py
+      - .github/workflows/apply-mobile-media-sync-import-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/mobile-media-sync-import-20260916
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply repair
+        run: python scripts/apply-mobile-media-sync-import-fix.py
+      - run: npm ci
+      - name: Verify repair
+        run: npm run check
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Commit verified repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm scripts/apply-mobile-media-sync-import-fix.py .github/workflows/apply-mobile-media-sync-import-fix.yml
+          git add src package.json scripts/mobile-media-sync-import-tests.mjs
+          git commit -m "Fix mobile media editing and automatic cloud sync"
+          git push origin HEAD:fix/mobile-media-sync-import-20260916
