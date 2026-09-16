@@ -10,7 +10,9 @@ const occurrences = [supabase, adminApi].reduce((count, source) => count + sourc
 
 assert.equal(occurrences, 1, "Only the shared account auth client may own the persisted session storage key");
 assert.doesNotMatch(adminApi, /createClient\s*\(/, "Admin API must not create a second Supabase auth client");
-assert.match(adminApi, /getAccountClient|invokeAccountFunction|accountClient/, "Admin API must reuse the shared account client");
+assert.match(supabase, /export function getAccountClient\(\)/);
+assert.match(adminApi, /import\s*\{\s*getAccountClient\s*\}\s*from\s*["']\.\/supabase["']/);
+assert.match(adminApi, /getAccountClient\(\)/, "Admin API must reuse the shared account client");
 assert.match(supabase, /persistSession:\s*true/);
 assert.match(supabase, /autoRefreshToken:\s*true/);
 assert.match(access, /currentUser\(readSettings\(\)\)/);
