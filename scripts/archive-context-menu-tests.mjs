@@ -70,6 +70,8 @@ try {
 
   const monthBoundary = actions.duplicateRecordForNextShow({ ...base, date: "2026-09-30" }, new Date("2026-09-30T12:00:00.000Z"));
   assert.equal(monthBoundary.date, "2026-10-01");
+  const yearBoundary = actions.duplicateRecordForNextShow({ ...base, date: "2026-12-31" }, new Date("2026-12-31T12:00:00.000Z"));
+  assert.equal(yearBoundary.date, "2027-01-01");
 
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
   const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
