@@ -132,6 +132,27 @@ export function ArchivePage({
   const activeFilterCount = filters.categories.length + filters.statuses.length + filters.years.length + filters.cities.length + filters.artists.length + filters.tags.length;
 
   useEffect(() => {
+    const open = (event: globalThis.MouseEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      const host = target?.closest<HTMLElement>("[data-archive-record-id]");
+      if (!host?.closest(".archive-page")) return;
+      const record = records.find((item) => item.id === host.dataset.archiveRecordId);
+      if (!record) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const width = 220;
+      const height = 222;
+      setContextMenu({
+        record,
+        x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
+        y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
+      });
+    };
+    document.addEventListener("contextmenu", open);
+    return () => document.removeEventListener("contextmenu", open);
+  }, [records]);
+
+  useEffect(() => {
     if (!contextMenu) return;
     const closeFromPointer = (event: PointerEvent) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -152,22 +173,6 @@ export function ArchivePage({
     };
   }, [contextMenu]);
 
-  function handleArchiveContextMenu(event: MouseEvent<HTMLElement>) {
-    const target = event.target instanceof Element ? event.target : null;
-    const host = target?.closest<HTMLElement>("[data-archive-record-id]");
-    const record = host ? records.find((item) => item.id === host.dataset.archiveRecordId) : undefined;
-    if (!record) return;
-    event.preventDefault();
-    event.stopPropagation();
-    const width = 220;
-    const height = 222;
-    setContextMenu({
-      record,
-      x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
-      y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
-    });
-  }
-
   if (shareMode) {
     return (
       <ShareStudio
@@ -180,7 +185,7 @@ export function ArchivePage({
   }
 
   return (
-    <section className="archive-page" onContextMenu={handleArchiveContextMenu}>
+    <section className="archive-page">
       <header className="archive-masthead">
         <div className="archive-masthead-copy">
           <span>LIVE MEMORY · 我的演出档案</span>

@@ -68,7 +68,7 @@ try {
   const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
   const css = await readFile(new URL("../src/archiveContextMenu.css", import.meta.url), "utf8");
 
-  assert.match(archive, /onContextMenu/);
+  assert.match(archive, /addEventListener\("contextmenu"/);
   assert.match(archive, /data-archive-record-id/);
   assert.match(archive, /复制为新场次/);
   assert.match(archive, /archive-context-menu/);
