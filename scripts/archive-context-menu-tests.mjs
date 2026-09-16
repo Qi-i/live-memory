@@ -45,6 +45,7 @@ try {
     updatedAt: "2026-09-26T23:00:00.000Z",
     syncedAt: "2026-09-27T00:00:00.000Z",
   };
+  const sourceSnapshot = structuredClone(base);
 
   const duplicate = actions.duplicateRecordForNextShow(base, new Date("2026-09-27T08:00:00.000Z"));
   assert.notEqual(duplicate.id, base.id);
@@ -53,12 +54,15 @@ try {
   assert.equal(duplicate.price, 699);
   assert.equal(duplicate.seat, undefined);
   assert.equal(duplicate.status, "planned");
+  assert.equal(duplicate.recordState, "normal");
   assert.equal(duplicate.syncedAt, undefined);
   assert.equal(duplicate.deletedAt, undefined);
   assert.deepEqual(duplicate.media.map((item) => item.kind), ["poster"]);
   assert.notEqual(duplicate.media[0].id, base.media[0].id);
+  assert.notEqual(duplicate.media[0], base.media[0]);
   assert.equal(duplicate.media[0].recordId, duplicate.id);
   assert.notEqual(duplicate.artists, base.artists);
+  assert.deepEqual(base, sourceSnapshot);
 
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
   const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
