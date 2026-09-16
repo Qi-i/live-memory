@@ -14,6 +14,7 @@ assert.match(archive, /cityCoordinateFallbacks/);
 assert.match(archive, /china-map-land/);
 assert.match(archive, /chinaMapHainanCoordinates/);
 assert.match(archive, /Natural Earth 1:110m/);
+assert.match(archive, /public-domain/);
 assert.match(archive, /不作为行政区划或边界表达/);
 assert.match(archiveCss, /\.china-static-map/);
 assert.match(archiveCss, /\.china-map-land/);
