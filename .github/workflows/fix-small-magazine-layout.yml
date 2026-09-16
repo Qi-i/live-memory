@@ -1,0 +1,109 @@
+name: Repair small magazine layout
+
+on:
+  push:
+    branches:
+      - feat/share-studio-adaptive-layout-20260916
+
+permissions:
+  contents: write
+
+jobs:
+  patch-and-verify:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/share-studio-adaptive-layout-20260916
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 20
+          cache: npm
+      - name: Repair small magazine composition
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          path = Path('src/shareStudio.tsx')
+          text = path.read_text(encoding='utf-8')
+          old = '''  if (records.length <= 6) {
+              return buildAdaptiveMagazineRows(records, area, gap, records.length <= 3 ? 1 : 2).map((slot, index) => ({
+                ...slot,
+                emphasis: index === 0 ? "hero" : index < 3 ? "feature" : "normal",
+              }));
+            }
+          '''
+          if old not in text:
+              old = '''  if (records.length <= 6) {
+            return buildAdaptiveMagazineRows(records, area, gap, records.length <= 3 ? 1 : 2).map((slot, index) => ({
+              ...slot,
+              emphasis: index === 0 ? "hero" : index < 3 ? "feature" : "normal",
+            }));
+          }
+          '''
+          if old not in text:
+              raise SystemExit('small magazine block not found')
+          new = '''  if (records.length <= 6) {
+            return buildSmallMagazineSlots(records, area, gap);
+          }
+          '''
+          text = text.replace(old, new, 1)
+          marker = 'function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {'
+          helper = '''function buildSmallMagazineSlots(records: EventRecord[], area: Rect, gap: number): PosterSlot[] {
+            if (!records.length) return [];
+            if (records.length === 1) return [{ record: records[0], rect: { ...area }, emphasis: "hero" }];
+
+            const heroWidth = area.width * (records.length <= 3 ? 0.48 : 0.38);
+            const heroRect = { x: area.x, y: area.y, width: heroWidth, height: area.height };
+            const rest = records.slice(1);
+            const restArea = {
+              x: area.x + heroWidth + gap,
+              y: area.y,
+              width: area.width - heroWidth - gap,
+              height: area.height,
+            };
+            const rowCount = rest.length <= 2 ? rest.length : 2;
+            const groups = partitionBalanced(rest.length, rowCount);
+            const rowHeight = (restArea.height - gap * Math.max(0, rowCount - 1)) / Math.max(1, rowCount);
+            const slots: PosterSlot[] = [{ record: records[0], rect: heroRect, emphasis: "hero" }];
+
+            groups.forEach(([start, end], rowIndex) => {
+              const count = Math.max(1, end - start);
+              const cellWidth = (restArea.width - gap * Math.max(0, count - 1)) / count;
+              for (let index = start; index < end; index += 1) {
+                const column = index - start;
+                slots.push({
+                  record: rest[index],
+                  rect: {
+                    x: restArea.x + column * (cellWidth + gap),
+                    y: restArea.y + rowIndex * (rowHeight + gap),
+                    width: cellWidth,
+                    height: rowHeight,
+                  },
+                  emphasis: index < 2 ? "feature" : "normal",
+                });
+              }
+            });
+            return slots;
+          }
+
+          '''
+          if marker not in text:
+              raise SystemExit('magazine function marker not found')
+          text = text.replace(marker, helper + marker, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify code
+        run: npm run check
+      - name: Remove temporary workflow
+        run: rm .github/workflows/fix-small-magazine-layout.yml
+      - name: Commit repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: fill small magazine compositions"
+          git push origin HEAD:feat/share-studio-adaptive-layout-20260916
