@@ -24,6 +24,7 @@ import {
 import type { ConfirmAction } from "./overlays";
 import { SyncConflictDialog } from "./syncConflictDialog";
 import { blankRecord } from "./seeds";
+import { duplicateRecordForNextShow } from "./recordActions";
 import { hasPersonalCloudConnection, isAdmin } from "./supabase";
 import { replaceAllRecords } from "./storage";
 
@@ -148,6 +149,18 @@ export default function AppRoot() {
           setShareFormat={setShareFormat}
           onOpen={setSelected}
           onEdit={setEditing}
+          onDuplicate={(record) => {
+            setSelected(null);
+            setEditing(duplicateRecordForNextShow(record));
+            flash("已复制为下一场：日期顺延 1 天，座位与单场图片已清空");
+          }}
+          onDelete={(record) => setConfirmAction({
+            title: "移到回收站？",
+            message: `“${record.title}”会保留在回收站，可随时恢复。`,
+            confirmLabel: "移到回收站",
+            danger: true,
+            onConfirm: () => moveToTrash(record),
+          })}
           onZoom={setZoomMedia}
         />
       )}

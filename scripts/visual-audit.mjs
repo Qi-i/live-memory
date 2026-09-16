@@ -156,6 +156,15 @@ try {
   const firstRowCount = posterTops.filter((top) => Math.abs(top - posterTops[0]) <= 3).length;
   if (firstRowCount < 5) throw new Error(`Desktop poster grid rendered only ${firstRowCount} columns`);
 
+  await page.locator(".archive-poster-card").first().click({ button: "right" });
+  await page.locator(".archive-context-menu").waitFor({ state: "visible" });
+  const contextLabels = await page.locator(".archive-context-menu [role=menuitem]").allTextContents();
+  for (const label of ["打开", "编辑", "复制为新场次", "删除"]) {
+    if (!contextLabels.some((value) => value.includes(label))) throw new Error(`Archive context menu is missing ${label}`);
+  }
+  await page.keyboard.press("Escape");
+  await page.locator(".archive-context-menu").waitFor({ state: "detached" });
+
   await archiveView("票夹", ".archive-wallet-card");
   const walletGeometry = await page.locator(".archive-wallet-card").first().evaluate((card) => {
     const cover = card.querySelector(".wallet-cover")?.getBoundingClientRect();

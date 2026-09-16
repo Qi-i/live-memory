@@ -2,6 +2,7 @@ import {
   Archive,
   CalendarDays,
   ChevronDown,
+  Copy,
   CircleDollarSign,
   Eye,
   Filter,
@@ -13,6 +14,7 @@ import {
   Share2,
   Sparkles,
   Ticket,
+  Trash2,
   X,
 } from "lucide-react";
 import {
@@ -36,6 +38,7 @@ import type {
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
 import { useCachedMediaSrc } from "./mediaCache";
+import "./archiveContextMenu.css";
 export type { ShareFormat } from "./shareStudio";
 import {
   categoryLabels,
@@ -98,6 +101,8 @@ export interface ArchivePageProps {
   setShareFormat: (value: ShareFormat) => void;
   onOpen: (record: EventRecord) => void;
   onEdit: (record: EventRecord) => void;
+  onDuplicate: (record: EventRecord) => void;
+  onDelete: (record: EventRecord) => void;
   onZoom: (media: MediaAsset) => void;
 }
 
@@ -112,16 +117,56 @@ export function ArchivePage({
   setShareFormat,
   onOpen,
   onEdit,
+  onDuplicate,
+  onDelete,
   onZoom,
 }: ArchivePageProps) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<"smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc">("smart");
   const [expanded, setExpanded] = useState(false);
+  const [contextMenu, setContextMenu] = useState<{ record: EventRecord; x: number; y: number } | null>(null);
   const preferredPosterColumns = Math.min(8, Math.max(5, settings.posterColumns || 5));
   const [density, setDensity] = useState(preferredPosterColumns);
   const facets = useMemo(() => buildFacets(records), [records]);
   const visibleRecords = useMemo(() => sortRecords(filterRecords(records, filters), sort), [filters, records, sort]);
   const activeFilterCount = filters.categories.length + filters.statuses.length + filters.years.length + filters.cities.length + filters.artists.length + filters.tags.length;
+
+  useEffect(() => {
+    if (!contextMenu) return;
+    const closeFromPointer = (event: PointerEvent) => {
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest(".archive-context-menu")) return;
+      setContextMenu(null);
+    };
+    const close = () => setContextMenu(null);
+    const closeFromKey = (event: KeyboardEvent) => { if (event.key === "Escape") close(); };
+    window.addEventListener("pointerdown", closeFromPointer);
+    window.addEventListener("resize", close);
+    window.addEventListener("scroll", close, true);
+    window.addEventListener("keydown", closeFromKey);
+    return () => {
+      window.removeEventListener("pointerdown", closeFromPointer);
+      window.removeEventListener("resize", close);
+      window.removeEventListener("scroll", close, true);
+      window.removeEventListener("keydown", closeFromKey);
+    };
+  }, [contextMenu]);
+
+  function handleArchiveContextMenu(event: MouseEvent<HTMLElement>) {
+    const target = event.target instanceof Element ? event.target : null;
+    const host = target?.closest<HTMLElement>("[data-archive-record-id]");
+    const record = host ? records.find((item) => item.id === host.dataset.archiveRecordId) : undefined;
+    if (!record) return;
+    event.preventDefault();
+    event.stopPropagation();
+    const width = 220;
+    const height = 222;
+    setContextMenu({
+      record,
+      x: Math.max(8, Math.min(event.clientX, window.innerWidth - width - 8)),
+      y: Math.max(8, Math.min(event.clientY, window.innerHeight - height - 8)),
+    });
+  }
 
   if (shareMode) {
     return (
@@ -135,7 +180,7 @@ export function ArchivePage({
   }
 
   return (
-    <section className="archive-page">
+    <section className="archive-page" onContextMenu={handleArchiveContextMenu}>
       <header className="archive-masthead">
         <div className="archive-masthead-copy">
           <span>LIVE MEMORY · 我的演出档案</span>
@@ -224,6 +269,21 @@ export function ArchivePage({
         onEdit={onEdit}
         onZoom={onZoom}
       />
+      {contextMenu && (
+        <div
+          className="archive-context-menu"
+          role="menu"
+          aria-label={`${contextMenu.record.title} 快捷操作`}
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onContextMenu={(event) => event.preventDefault()}
+        >
+          <header><strong>{contextMenu.record.title}</strong><span>{contextMenu.record.date} · {contextMenu.record.city || contextMenu.record.venue || "演出记录"}</span></header>
+          <button role="menuitem" type="button" onClick={() => { const record = contextMenu.record; setContextMenu(null); onOpen(record); }}><Eye />打开</button>
+          <button role="menuitem" type="button" onClick={() => { const record = contextMenu.record; setContextMenu(null); onEdit(record); }}><Pencil />编辑</button>
+          <button role="menuitem" type="button" onClick={() => { const record = contextMenu.record; setContextMenu(null); onDuplicate(record); }}><Copy />复制为新场次</button>
+          <button className="is-danger" role="menuitem" type="button" onClick={() => { const record = contextMenu.record; setContextMenu(null); onDelete(record); }}><Trash2 />删除</button>
+        </div>
+      )}
     </section>
   );
 }
@@ -260,14 +320,14 @@ function ArchiveHighlights({ records, onOpen }: { records: EventRecord[]; onOpen
       <span className="archive-highlight-orbit" aria-hidden="true" />
       <div className="archive-highlight-stack">
         {highlights.map((record, index) => (
-          <button className={`archive-highlight-card archive-highlight-card-${index + 1}`} key={record.id} type="button" onClick={() => onOpen(record)}>
+          <button className={`archive-highlight-card archive-highlight-card-${index + 1}`} data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
             <RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 4)} />
             <span><b>{record.city || categoryLabels[record.category]}</b><small>{record.date.slice(0, 4)}</small></span>
           </button>
         ))}
       </div>
       {featured && (
-        <button className="archive-highlight-feature" type="button" onClick={() => onOpen(featured)}>
+        <button className="archive-highlight-feature" data-archive-record-id={featured.id} type="button" onClick={() => onOpen(featured)}>
           <span>最近收录</span>
           <strong>{featured.title}</strong>
           <small>{featured.date} · {featured.city || featured.venue || "演出记录"}</small>
@@ -316,7 +376,7 @@ function PosterView({ records, density, onOpen, onZoom }: { records: EventRecord
 function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; index: number; onOpen: (record: EventRecord) => void; onZoom: (media: MediaAsset) => void }) {
   const poster = primaryMedia(record);
   return (
-    <article className="archive-poster-card" onClick={() => onOpen(record)}>
+    <article className="archive-poster-card" data-archive-record-id={record.id} onClick={() => onOpen(record)}>
       <span className="archive-rank">#{String(index + 1).padStart(2, "0")}</span>
       <button className="archive-poster-media" type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); else onOpen(record); }}>
         <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 4)} />
@@ -341,7 +401,7 @@ function ShowcaseView({ records, density, onOpen, onZoom }: { records: EventReco
       {records.map((record, index) => {
         const poster = primaryMedia(record);
         return (
-          <article className={`showcase-card showcase-card-${index % 7}`} key={record.id} onClick={() => onOpen(record)}>
+          <article className={`showcase-card showcase-card-${index % 7}`} data-archive-record-id={record.id} key={record.id} onClick={() => onOpen(record)}>
             <button type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); }}>
               <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 3)} />
             </button>
@@ -363,7 +423,7 @@ function WalletView({ records, onOpen, onEdit, onZoom }: { records: EventRecord[
       {records.map((record) => {
         const poster = primaryMedia(record);
         return (
-          <article className="archive-wallet-card" key={record.id} style={{ "--tone-a": record.colors[0], "--tone-b": record.colors[1] } as CSSProperties}>
+          <article className="archive-wallet-card" data-archive-record-id={record.id} key={record.id} style={{ "--tone-a": record.colors[0], "--tone-b": record.colors[1] } as CSSProperties}>
             <button className="wallet-cover" type="button" onClick={() => poster ? onZoom(poster) : onOpen(record)}><RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 2)} /></button>
             <button className="wallet-copy" type="button" onClick={() => onOpen(record)}>
               <span>{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</span>
@@ -384,7 +444,7 @@ function TicketView({ records, onOpen }: { records: EventRecord[]; onOpen: (reco
   return (
     <section className="archive-ticket-grid">
       {records.map((record) => (
-        <button className="archive-ticket" key={record.id} type="button" onClick={() => onOpen(record)}>
+        <button className="archive-ticket" data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
           <div><RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 2)} /></div>
           <section><span>{categoryLabels[record.category]}</span><h3>{record.title}</h3><p>{record.artists.join(" / ") || "艺人待补"}</p><dl><dt>DATE</dt><dd>{record.date}</dd><dt>VENUE</dt><dd>{record.city} · {record.venue}</dd><dt>SEAT</dt><dd>{record.seat || "座位待补"}</dd></dl></section>
         </button>
@@ -399,7 +459,7 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
   return (
     <section className="archive-timeline">
       {Object.entries(groups).map(([year, items]) => (
-        <div key={year}><h2>{year}</h2><div>{items.map((record) => <button key={record.id} type="button" onClick={() => onOpen(record)}><time>{record.date.slice(5).replace("-", ".")}</time><span><RecordMedia media={primaryMedia(record)} alt="" fallback="演" /></span><section><em>{categoryLabels[record.category]}</em><h3>{record.title}</h3><p>{record.artists.join(" / ")} · {record.city} · {record.venue}</p></section></button>)}</div></div>
+        <div key={year}><h2>{year}</h2><div>{items.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><time>{record.date.slice(5).replace("-", ".")}</time><span><RecordMedia media={primaryMedia(record)} alt="" fallback="演" /></span><section><em>{categoryLabels[record.category]}</em><h3>{record.title}</h3><p>{record.artists.join(" / ")} · {record.city} · {record.venue}</p></section></button>)}</div></div>
       ))}
     </section>
   );
@@ -407,7 +467,7 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
 
 function CalendarView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   const groups = groupBy(records, (record) => record.date.slice(0, 7));
-  return <section className="archive-calendar">{Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)).map(([month, items]) => <article key={month}><h2>{month.replace("-", " / ")}</h2><div>{items.sort((a, b) => a.date.localeCompare(b.date)).map((record) => <button key={record.id} type="button" onClick={() => onOpen(record)}><strong>{record.date.slice(8)}</strong><span>{record.title}</span><em>{record.city}</em></button>)}</div></article>)}</section>;
+  return <section className="archive-calendar">{Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)).map(([month, items]) => <article key={month}><h2>{month.replace("-", " / ")}</h2><div>{items.sort((a, b) => a.date.localeCompare(b.date)).map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><strong>{record.date.slice(8)}</strong><span>{record.title}</span><em>{record.city}</em></button>)}</div></article>)}</section>;
 }
 
 function VenueView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
@@ -427,7 +487,7 @@ function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (recor
   const max = Math.max(1, ...priced.map((record) => record.price || 0));
   const filled = priced.filter((record) => record.price);
   const average = Math.round(filled.reduce((sum, record) => sum + (record.price || 0), 0) / Math.max(1, filled.length));
-  return <section className="archive-price"><div className="price-metrics"><strong>{records.length}<span>记录</span></strong><strong>¥{average}<span>均价</span></strong><strong>¥{filled.reduce((sum, record) => sum + (record.price || 0), 0)}<span>总票价</span></strong></div><div>{priced.map((record, index) => <button key={record.id} type="button" onClick={() => onOpen(record)}><span>{String(index + 1).padStart(2, "0")}</span><section><h3>{record.title}</h3><p>{record.artists.join(" / ")} · {record.date} · {record.city}</p></section><i style={{ "--ratio": `${Math.max(4, ((record.price || 0) / max) * 100)}%` } as CSSProperties} /><strong>{record.price ? `¥${record.price}` : "待补"}</strong></button>)}</div></section>;
+  return <section className="archive-price"><div className="price-metrics"><strong>{records.length}<span>记录</span></strong><strong>¥{average}<span>均价</span></strong><strong>¥{filled.reduce((sum, record) => sum + (record.price || 0), 0)}<span>总票价</span></strong></div><div>{priced.map((record, index) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><span>{String(index + 1).padStart(2, "0")}</span><section><h3>{record.title}</h3><p>{record.artists.join(" / ")} · {record.date} · {record.city}</p></section><i style={{ "--ratio": `${Math.max(4, ((record.price || 0) / max) * 100)}%` } as CSSProperties} /><strong>{record.price ? `¥${record.price}` : "待补"}</strong></button>)}</div></section>;
 }
 
 function SummaryView({ records }: { records: EventRecord[] }) {
@@ -440,7 +500,7 @@ function SummaryPanel({ title, rows }: { title: string; rows: [string, number][]
 }
 
 function ListView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
-  return <section className="archive-list"><header><span>日期</span><span>演出</span><span>艺人</span><span>地点</span><span>票价</span></header>{records.map((record) => <button key={record.id} type="button" onClick={() => onOpen(record)}><span>{record.date}</span><strong>{record.title}</strong><em>{record.artists.join(" / ") || "待补"}</em><span>{record.city} · {record.venue}</span><b>{record.price ? `¥${record.price}` : "待补"}</b></button>)}</section>;
+  return <section className="archive-list"><header><span>日期</span><span>演出</span><span>艺人</span><span>地点</span><span>票价</span></header>{records.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><span>{record.date}</span><strong>{record.title}</strong><em>{record.artists.join(" / ") || "待补"}</em><span>{record.city} · {record.venue}</span><b>{record.price ? `¥${record.price}` : "待补"}</b></button>)}</section>;
 }
 
 function RecordMedia({ media, alt, fallback = "图片待补", onClick }: { media?: MediaAsset; alt?: string; fallback?: string; onClick?: (event: MouseEvent<HTMLImageElement | HTMLSpanElement>) => void }) {
