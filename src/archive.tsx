@@ -486,14 +486,36 @@ const cityCoordinateFallbacks: Record<string, [number, number]> = {
   银川: [106.23, 38.49], 呼和浩特: [111.75, 40.84], 海口: [110.2, 20.04], 三亚: [109.51, 18.25],
 };
 
+// Simplified from Natural Earth 1:110m public-domain country geometry.
+// This silhouette is only a fixed spatial reference for personal footprints, not an administrative-boundary product.
 const chinaOutlineCoordinates: Array<[number, number]> = [
-  [73.5, 39.5], [75.0, 35.5], [79.0, 31.2], [82.0, 29.3], [86.0, 28.2], [89.5, 27.5],
-  [92.5, 28.7], [96.0, 27.2], [99.2, 23.5], [102.5, 22.4], [105.0, 23.0], [108.1, 21.7],
-  [110.2, 20.9], [113.2, 21.8], [116.1, 22.8], [119.0, 25.2], [121.2, 28.1], [121.7, 31.1],
-  [122.1, 33.7], [121.0, 36.8], [122.0, 39.2], [124.5, 40.6], [128.0, 42.3], [131.0, 43.3],
-  [134.3, 47.0], [131.0, 48.6], [127.4, 49.6], [123.0, 53.0], [119.0, 50.9], [114.0, 49.6],
-  [110.0, 48.5], [105.0, 47.0], [101.0, 49.0], [97.0, 48.0], [93.0, 46.0], [88.0, 48.0],
-  [83.0, 47.0], [79.0, 45.0], [75.0, 43.0], [73.5, 39.5],
+  [75.16, 37.13], [74.98, 37.42], [74.26, 38.61], [73.68, 39.43], [74.78, 40.37], [76.53, 40.43],
+  [78.54, 41.58], [80.26, 42.35], [79.97, 44.92], [82.46, 45.54], [83.18, 47.33], [85.16, 47.00],
+  [85.77, 48.46], [87.36, 49.21], [88.01, 48.60], [90.28, 47.69], [90.97, 46.89], [90.95, 45.29],
+  [93.48, 44.98], [95.31, 44.24], [96.35, 42.73], [99.52, 42.52], [101.83, 42.51], [103.31, 41.91],
+  [104.96, 41.60], [107.74, 42.48], [110.41, 42.87], [111.83, 43.74], [111.35, 44.46], [113.46, 44.81],
+  [115.99, 45.73], [117.42, 46.67], [119.66, 46.69], [118.06, 48.07], [115.74, 47.73], [116.68, 49.89],
+  [119.29, 50.14], [120.74, 51.96], [120.18, 52.75], [123.57, 53.46], [125.95, 52.79], [127.29, 50.74],
+  [129.40, 49.44], [130.99, 47.79], [133.37, 48.18], [135.03, 48.48], [133.77, 46.12], [131.88, 45.32],
+  [131.03, 44.97], [131.14, 42.93], [130.64, 42.40], [129.60, 42.42], [128.05, 41.99], [127.34, 41.50],
+  [126.18, 41.11], [124.27, 39.93], [122.87, 39.64], [121.05, 38.90], [122.17, 40.42], [120.77, 40.59],
+  [119.64, 39.90], [117.53, 38.74], [118.88, 37.90], [119.70, 37.16], [120.82, 37.87], [122.36, 37.45],
+  [122.52, 36.93], [120.64, 36.11], [119.15, 34.91], [120.62, 33.38], [121.91, 31.69], [121.26, 30.68],
+  [122.09, 29.83], [121.68, 28.23], [120.40, 27.05], [119.59, 25.74], [118.66, 24.55], [117.28, 23.62],
+  [115.89, 22.78], [114.15, 22.22], [113.24, 22.05], [111.84, 21.55], [110.79, 21.40], [109.89, 20.28],
+  [109.63, 21.01], [108.05, 21.55], [106.57, 22.22], [106.73, 22.79], [105.33, 23.35], [104.48, 22.82],
+  [102.71, 22.71], [101.65, 22.32], [101.27, 21.20], [100.42, 21.56], [99.24, 22.12], [99.53, 22.95],
+  [98.66, 24.06], [97.60, 23.90], [97.72, 25.08], [98.71, 26.74], [98.25, 27.75], [97.33, 28.26],
+  [96.25, 28.41], [96.59, 28.83], [95.40, 29.03], [94.57, 29.28], [93.41, 28.64], [92.50, 27.90],
+  [91.26, 28.04], [90.02, 28.30], [88.81, 27.30], [88.12, 27.88], [86.95, 27.97], [85.82, 28.20],
+  [84.23, 28.84], [83.34, 29.46], [82.33, 30.12], [81.53, 30.42], [79.72, 30.88], [78.74, 31.52],
+  [78.46, 32.62], [79.21, 32.99], [78.81, 33.51], [78.91, 34.32], [77.84, 35.49], [76.19, 35.90],
+  [75.90, 36.67], [75.16, 37.13],
+];
+
+const chinaMapHainanCoordinates: Array<[number, number]> = [
+  [110.34, 18.68], [109.48, 18.20], [108.66, 18.51], [108.63, 19.37], [109.12, 19.82],
+  [110.21, 20.10], [110.79, 20.08], [111.01, 19.70], [110.57, 19.26], [110.34, 18.68],
 ];
 
 function projectChinaCoordinate(point: [number, number]) {
@@ -527,7 +549,10 @@ function VenueView({ records, onOpen }: { records: EventRecord[]; onOpen: (recor
     const projected = projectChinaCoordinate(point);
     return `${projected.x},${projected.y}`;
   }).join(" ");
-  const hainan = projectChinaCoordinate([110.2, 19.2]);
+  const hainanOutline = chinaMapHainanCoordinates.map((point) => {
+    const projected = projectChinaCoordinate(point);
+    return `${projected.x},${projected.y}`;
+  }).join(" ");
 
   return (
     <section className="archive-venue-view">
@@ -541,14 +566,14 @@ function VenueView({ records, onOpen }: { records: EventRecord[]; onOpen: (recor
           <rect className="china-map-water" x="0" y="0" width="100" height="100" rx="3" />
           <rect className="china-map-grid" x="0" y="0" width="100" height="100" fill="url(#china-map-grid)" />
           <polygon className="china-map-land" points={outline} filter="url(#china-map-soft-shadow)" />
-          <circle className="china-map-land china-map-island" cx={hainan.x} cy={hainan.y} r="1.55" />
+          <polygon className="china-map-land china-map-island" points={hainanOutline} />
         </svg>
         {rows.slice(0, 12).map(([name, count]) => {
           const point = footprintCoordinate(name, mode, records);
           if (!point) return null;
           return <button className="venue-map-marker" key={name} type="button" style={{ "--x": `${point.x}%`, "--y": `${point.y}%`, "--weight": count } as CSSProperties} onClick={() => { const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name); if (record) onOpen(record); }}><i /><b>{name}</b><em>{count}</em></button>;
         })}
-        <div className="venue-map-legend"><span><i />到访城市 / 场馆</span><small>优先使用档案坐标；无坐标时使用内置城市中心点。</small></div>
+        <div className="venue-map-legend"><span><i />到访城市 / 场馆</span><small>底图不作为行政区划或边界表达 · 优先使用档案坐标，无坐标时使用内置城市中心点。</small></div>
       </div>
       <div className="venue-ranking"><header><span>足迹整理</span><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button></div></header>{rows.map(([name, count]) => <p key={name} style={{ "--ratio": `${count / max * 100}%` } as CSSProperties}><span>{name}</span><i /><b>{count}</b></p>)}</div>
     </section>
