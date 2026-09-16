@@ -20,7 +20,7 @@ assert.match(shareStudio, /plum/);
 assert.match(shareStudio, /silver/);
 assert.match(shareCss, /share-control-compact-grid/);
 assert.match(shareCss, /object-fit:\s*cover/);
-assert.match(shareCss, /share-poster-foreground[^}]*transform:\s*scale\(1\.0[234]\)/s);
+assert.match(shareCss, /share-poster-foreground[^}]*transform:\s*scale\(1\.025\)/s);
 assert.match(settings, /lbs\.amap\.com/);
 assert.match(settings, /lbsyun\.baidu\.com/);
 assert.match(settings, /地图 API 获取说明|获取高德 Key|获取百度 AK/);
