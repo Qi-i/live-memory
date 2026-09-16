@@ -1,0 +1,32 @@
+name: Apply archive visual audit correction
+
+on:
+  push:
+    branches: [fix/archive-hero-ticket-status-20260916]
+    paths:
+      - scripts/fix-archive-visual-audit.py
+      - .github/workflows/apply-archive-visual-audit-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: fix/archive-hero-ticket-status-20260916
+          fetch-depth: 0
+      - name: Apply assertion correction
+        run: python scripts/fix-archive-visual-audit.py
+      - name: Commit correction
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -f scripts/fix-archive-visual-audit.py .github/workflows/apply-archive-visual-audit-fix.yml
+          git add scripts/visual-audit.mjs
+          git commit -m "Align archive visual audit with cover-filled posters"
+          git push origin HEAD:fix/archive-hero-ticket-status-20260916
