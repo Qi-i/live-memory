@@ -156,7 +156,7 @@ try {
   const firstRowCount = posterTops.filter((top) => Math.abs(top - posterTops[0]) <= 3).length;
   if (firstRowCount < 5) throw new Error(`Desktop poster grid rendered only ${firstRowCount} columns`);
 
-  await page.locator(".archive-poster-card").first().click({ button: "right" });
+  await page.locator(".archive-poster-card").first().dispatchEvent("contextmenu", { button: 2, bubbles: true, cancelable: true, clientX: 420, clientY: 320 });
   await page.locator(".archive-context-menu").waitFor({ state: "visible" });
   const contextLabels = await page.locator(".archive-context-menu [role=menuitem]").allTextContents();
   for (const label of ["打开", "编辑", "复制为新场次", "删除"]) {
