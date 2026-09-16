@@ -32,6 +32,7 @@ import { preloadRecordMedia } from "./mediaCache";
 
 const MEDIA_REFRESH_INTERVAL = 6 * 60 * 60 * 1000;
 const MEDIA_REFRESH_EVENT = "live-memory:cloud-media-refresh";
+const REMOTE_CHECK_INTERVAL = 5 * 60 * 1000;
 
 function recordFingerprint(records: EventRecord[]) {
   return records.map((record) => `${record.id}:${record.updatedAt}:${record.deletedAt || ""}`).join("|");
@@ -85,6 +86,7 @@ export function useAppController() {
   const [zoomMedia, setZoomMedia] = useState<MediaAsset | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
+  const [cloudRecoveryNotice, setCloudRecoveryNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const initialized = useRef(false);
@@ -93,6 +95,8 @@ export function useAppController() {
   const recordsRef = useRef<EventRecord[]>([]);
   const mediaRefreshInFlight = useRef(false);
   const lastMediaRefreshAt = useRef(0);
+  const lastRemoteCheckAt = useRef(0);
+  const syncOperationInFlight = useRef(false);
 
   function setRecords(next: EventRecord[] | ((current: EventRecord[]) => EventRecord[])) {
     setRecordState((current) => {
@@ -133,9 +137,12 @@ export function useAppController() {
           }
         }
         if (!active) return;
+        const loadedActiveCount = loadedRecords.filter((record) => !record.deletedAt).length;
+        const nextActiveCount = nextRecords.filter((record) => !record.deletedAt).length;
         recordsRef.current = nextRecords;
         setRecordState(nextRecords);
         setSettings(nextSettings);
+        if (access.user && nextActiveCount > loadedActiveCount) setCloudRecoveryNotice(`已从云端恢复 ${nextActiveCount - loadedActiveCount} 条其他设备记录，可直接刷新云端图片。`);
         void preloadRecordMedia(nextRecords);
         lastSyncFingerprint.current = "";
         initialized.current = true;
@@ -165,12 +172,13 @@ export function useAppController() {
   }, []);
 
   useEffect(() => {
-    if (!initialized.current || isGuest || !access.user || editing || syncing || records.length === 0) return;
+    if (!initialized.current || isGuest || !access.user || editing || syncing || syncOperationInFlight.current || records.length === 0) return;
     if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
     const fingerprint = autoSyncFingerprint(records, settings);
     if (lastSyncFingerprint.current === fingerprint) return;
     const timer = window.setTimeout(() => {
       lastSyncFingerprint.current = fingerprint;
+      syncOperationInFlight.current = true;
       setSyncing(true);
       autoSyncAll(settings, recordsRef.current)
         .then(async (result) => {
@@ -189,7 +197,7 @@ export function useAppController() {
           lastSyncFingerprint.current = "";
           flash(friendlySupabaseErrorMessage(error, "云同步暂时不可用"));
         })
-        .finally(() => setSyncing(false));
+        .finally(() => { syncOperationInFlight.current = false; setSyncing(false); });
     }, 900);
     return () => window.clearTimeout(timer);
   }, [access.user, editing, isGuest, records, settings, syncing]);
@@ -241,9 +249,95 @@ export function useAppController() {
   }, [access.user, cloudMediaPaths, isGuest, settings.supabase.anonKey, settings.supabase.mediaBucket, settings.supabase.ownerKey, settings.supabase.syncMedia, settings.supabase.url]);
 
   useEffect(() => {
+    if (isGuest || !access.user || (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings))) return;
+    const check = () => { if (document.visibilityState === "visible") void checkRemoteUpdates(true); };
+    const initial = window.setTimeout(check, 1800);
+    const interval = window.setInterval(check, REMOTE_CHECK_INTERVAL);
+    const onVisible = () => { if (document.visibilityState === "visible") check(); };
+    const onOnline = () => void checkRemoteUpdates(false);
+    window.addEventListener("focus", check);
+    window.addEventListener("online", onOnline);
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(interval);
+      window.removeEventListener("focus", check);
+      window.removeEventListener("online", onOnline);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [access.user, isGuest, settings.supabase.ownerKey, settings.supabase.url]);
+
+  useEffect(() => {
     if (isGuest || !access.user || !hasAccountCloudConfig(settings)) return;
     recordPageView(route, document.referrer || undefined).catch(() => undefined);
   }, [access.user, isGuest, route, settings]);
+
+  async function runCloudSync(label: string, silent = false) {
+    if (isGuest) { if (!silent) flash("示例模式无需云同步"); return false; }
+    if (!access.user || (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings))) { if (!silent) flash("尚未连接可用云端"); return false; }
+    if (syncOperationInFlight.current) return false;
+    syncOperationInFlight.current = true;
+    setSyncing(true);
+    const before = recordFingerprint(recordsRef.current);
+    try {
+      const result = await autoSyncAll(settings, recordsRef.current);
+      setSyncConflicts(result.conflicts);
+      const changed = recordFingerprint(result.records) !== before || mediaFingerprint(result.records) !== mediaFingerprint(recordsRef.current);
+      if (changed) {
+        await replaceAllRecords(result.records);
+        setRecords(result.records);
+        void preloadRecordMedia(result.records);
+      }
+      const syncedSettings = writeSettings({ ...settings, lastSyncAt: nowIso() });
+      setSettings(syncedSettings);
+      lastSyncFingerprint.current = autoSyncFingerprint(result.records, syncedSettings);
+      if (!silent) flash(changed ? `${label}：已合并其他设备更新` : `${label}：当前已是最新`);
+      return changed;
+    } catch (error) {
+      if (!silent) flash(friendlySupabaseErrorMessage(error, `${label}失败`));
+      return false;
+    } finally {
+      syncOperationInFlight.current = false;
+      setSyncing(false);
+    }
+  }
+
+  async function syncNow() {
+    return runCloudSync("立即同步");
+  }
+
+  async function checkRemoteUpdates(silent = false) {
+    if (silent && lastRemoteCheckAt.current && Date.now() - lastRemoteCheckAt.current < REMOTE_CHECK_INTERVAL) return false;
+    lastRemoteCheckAt.current = Date.now();
+    const changed = await runCloudSync("检查其他设备更新", silent);
+    if (changed && silent) flash("已自动合并其他设备的新记录");
+    return changed;
+  }
+
+  async function refreshCloudMedia() {
+    if (isGuest) { flash("示例模式没有云端图片"); return false; }
+    if (!hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia) { flash("当前未开启个人云端图片同步"); return false; }
+    if (mediaRefreshInFlight.current) return false;
+    mediaRefreshInFlight.current = true;
+    const snapshot = recordsRef.current;
+    const before = mediaFingerprint(snapshot);
+    try {
+      const next = await refreshSignedMediaUrls(settings, snapshot, { force: true });
+      void preloadRecordMedia(next);
+      lastMediaRefreshAt.current = Date.now();
+      if (mediaFingerprint(next) !== before) {
+        await replaceAllRecords(next);
+        setRecords(next);
+      }
+      flash("云端图片链接已刷新");
+      return true;
+    } catch (error) {
+      flash(friendlySupabaseErrorMessage(error, "云端图片刷新失败"));
+      return false;
+    } finally {
+      mediaRefreshInFlight.current = false;
+    }
+  }
 
   async function persistRecord(record: EventRecord) {
     const nextRecord = { ...record, updatedAt: nowIso() };
@@ -331,6 +425,11 @@ export function useAppController() {
     syncing,
     syncConflicts,
     setSyncConflicts,
+    cloudRecoveryNotice,
+    dismissCloudRecoveryNotice: () => setCloudRecoveryNotice(""),
+    syncNow,
+    checkRemoteUpdates,
+    refreshCloudMedia,
     busy,
     setBusy,
     toast,

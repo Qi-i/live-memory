@@ -25,6 +25,7 @@ import {
   SetStateAction,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import type {
@@ -38,6 +39,7 @@ import type {
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
 import { useCachedMediaSrc } from "./mediaCache";
+import { loadAmap, type AMapMapInstance } from "./amap";
 import "./archiveContextMenu.css";
 export type { ShareFormat } from "./shareStudio";
 import {
@@ -104,6 +106,7 @@ export interface ArchivePageProps {
   onDuplicate: (record: EventRecord) => void;
   onDelete: (record: EventRecord) => void;
   onZoom: (media: MediaAsset) => void;
+  onOpenMapSettings: () => void;
 }
 
 export function ArchivePage({
@@ -120,6 +123,7 @@ export function ArchivePage({
   onDuplicate,
   onDelete,
   onZoom,
+  onOpenMapSettings,
 }: ArchivePageProps) {
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<"smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc">("smart");
@@ -270,6 +274,8 @@ export function ArchivePage({
         records={visibleRecords}
         layout={layout}
         density={density}
+        mapSettings={settings.map}
+        onOpenMapSettings={onOpenMapSettings}
         onOpen={onOpen}
         onEdit={onEdit}
         onZoom={onZoom}
@@ -346,6 +352,8 @@ function ArchiveRenderer({
   records,
   layout,
   density,
+  mapSettings,
+  onOpenMapSettings,
   onOpen,
   onEdit,
   onZoom,
@@ -353,6 +361,8 @@ function ArchiveRenderer({
   records: EventRecord[];
   layout: ArchiveLayout;
   density: number;
+  mapSettings: AppSettings["map"];
+  onOpenMapSettings: () => void;
   onOpen: (record: EventRecord) => void;
   onEdit: (record: EventRecord) => void;
   onZoom: (media: MediaAsset) => void;
@@ -363,7 +373,7 @@ function ArchiveRenderer({
   if (layout === "ticket") return <TicketView records={records} onOpen={onOpen} />;
   if (layout === "timeline") return <TimelineView records={records} onOpen={onOpen} />;
   if (layout === "calendar") return <CalendarView records={records} onOpen={onOpen} />;
-  if (layout === "venue") return <VenueView records={records} onOpen={onOpen} />;
+  if (layout === "venue") return <VenueView records={records} mapSettings={mapSettings} onOpenMapSettings={onOpenMapSettings} onOpen={onOpen} />;
   if (layout === "price") return <PriceView records={records} onOpen={onOpen} />;
   if (layout === "summary") return <SummaryView records={records} />;
   if (layout === "list") return <ListView records={records} onOpen={onOpen} />;
@@ -401,23 +411,38 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
 }
 
 function ShowcaseView({ records, density, onOpen, onZoom }: { records: EventRecord[]; density: number; onOpen: (record: EventRecord) => void; onZoom: (media: MediaAsset) => void }) {
+  const columnCount = Math.min(Math.max(2, density), Math.max(1, records.length));
+  const columns = Array.from({ length: columnCount }, () => [] as EventRecord[]);
+  const heights = Array.from({ length: columnCount }, () => 0);
+  records.forEach((record) => {
+    const poster = primaryMedia(record);
+    const ratio = poster?.width && poster.height ? Math.max(0.58, Math.min(1.28, poster.width / poster.height)) : 0.8;
+    const target = heights.indexOf(Math.min(...heights));
+    columns[target].push(record);
+    heights[target] += 1 / ratio + 0.04;
+  });
   return (
-    <section className={`archive-showcase archive-showcase-density-${Math.min(5, Math.max(2, density))}`}>
-      {records.map((record, index) => {
-        const poster = primaryMedia(record);
-        return (
-          <article className={`showcase-card showcase-card-${index % 7}`} data-archive-record-id={record.id} key={record.id} onClick={() => onOpen(record)}>
-            <button type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); }}>
-              <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 3)} />
-            </button>
-            <div>
-              <span>{record.date.slice(0, 4)} · {record.city || categoryLabels[record.category]}</span>
-              <h3>{record.title}</h3>
-              <p>{record.artists.join(" / ") || record.venue || "演出记录"}</p>
-            </div>
-          </article>
-        );
-      })}
+    <section className="archive-showcase" style={{ "--showcase-columns": columnCount } as CSSProperties}>
+      {columns.map((items, columnIndex) => (
+        <div className="showcase-column" key={`column-${columnIndex}`}>
+          {items.map((record) => {
+            const poster = primaryMedia(record);
+            const ratio = poster?.width && poster.height ? Math.max(0.58, Math.min(1.28, poster.width / poster.height)) : 0.8;
+            return (
+              <article className="showcase-card" style={{ aspectRatio: String(ratio) }} data-archive-record-id={record.id} key={record.id} onClick={() => onOpen(record)}>
+                <button type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); }}>
+                  <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 3)} />
+                </button>
+                <div>
+                  <span>{record.date.slice(0, 4)} · {record.city || categoryLabels[record.category]}</span>
+                  <h3>{record.title}</h3>
+                  <p>{record.artists.join(" / ") || record.venue || "演出记录"}</p>
+                </div>
+              </article>
+            );
+          })}
+        </div>
+      ))}
     </section>
   );
 }
@@ -449,9 +474,13 @@ function TicketView({ records, onOpen }: { records: EventRecord[]; onOpen: (reco
   return (
     <section className="archive-ticket-grid">
       {records.map((record) => (
-        <button className="archive-ticket" data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
-          <div><RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 2)} /></div>
-          <section><span>{categoryLabels[record.category]}</span><h3>{record.title}</h3><p>{record.artists.join(" / ") || "艺人待补"}</p><dl><dt>DATE</dt><dd>{record.date}</dd><dt>VENUE</dt><dd>{record.city} · {record.venue}</dd><dt>SEAT</dt><dd>{record.seat || "座位待补"}</dd></dl></section>
+        <button className="archive-ticket" data-archive-record-id={record.id} key={record.id} type="button" style={{ "--tone-a": record.colors[0], "--tone-b": record.colors[1] } as CSSProperties} onClick={() => onOpen(record)}>
+          <div className="archive-ticket-cover"><RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 2)} /></div>
+          <section>
+            <span className="archive-ticket-backdrop" aria-hidden="true"><RecordMedia media={primaryMedia(record)} alt="" fallback="" /></span>
+            <span className="archive-ticket-tint" aria-hidden="true" />
+            <div className="archive-ticket-content"><span>{categoryLabels[record.category]}</span><h3>{record.title}</h3><p>{record.artists.join(" / ") || "艺人待补"}</p><dl><dt>DATE</dt><dd>{record.date}</dd><dt>VENUE</dt><dd>{record.city} · {record.venue}</dd><dt>SEAT</dt><dd>{record.seat || "座位待补"}</dd><dt>PRICE</dt><dd>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}</dd></dl></div>
+          </section>
         </button>
       ))}
     </section>
@@ -486,99 +515,78 @@ const cityCoordinateFallbacks: Record<string, [number, number]> = {
   银川: [106.23, 38.49], 呼和浩特: [111.75, 40.84], 海口: [110.2, 20.04], 三亚: [109.51, 18.25],
 };
 
-// Simplified from Natural Earth 1:110m public-domain country geometry.
-// This silhouette is only a fixed spatial reference for personal footprints, not an administrative-boundary product.
-const chinaOutlineCoordinates: Array<[number, number]> = [
-  [75.16, 37.13], [74.98, 37.42], [74.26, 38.61], [73.68, 39.43], [74.78, 40.37], [76.53, 40.43],
-  [78.54, 41.58], [80.26, 42.35], [79.97, 44.92], [82.46, 45.54], [83.18, 47.33], [85.16, 47.00],
-  [85.77, 48.46], [87.36, 49.21], [88.01, 48.60], [90.28, 47.69], [90.97, 46.89], [90.95, 45.29],
-  [93.48, 44.98], [95.31, 44.24], [96.35, 42.73], [99.52, 42.52], [101.83, 42.51], [103.31, 41.91],
-  [104.96, 41.60], [107.74, 42.48], [110.41, 42.87], [111.83, 43.74], [111.35, 44.46], [113.46, 44.81],
-  [115.99, 45.73], [117.42, 46.67], [119.66, 46.69], [118.06, 48.07], [115.74, 47.73], [116.68, 49.89],
-  [119.29, 50.14], [120.74, 51.96], [120.18, 52.75], [123.57, 53.46], [125.95, 52.79], [127.29, 50.74],
-  [129.40, 49.44], [130.99, 47.79], [133.37, 48.18], [135.03, 48.48], [133.77, 46.12], [131.88, 45.32],
-  [131.03, 44.97], [131.14, 42.93], [130.64, 42.40], [129.60, 42.42], [128.05, 41.99], [127.34, 41.50],
-  [126.18, 41.11], [124.27, 39.93], [122.87, 39.64], [121.05, 38.90], [122.17, 40.42], [120.77, 40.59],
-  [119.64, 39.90], [117.53, 38.74], [118.88, 37.90], [119.70, 37.16], [120.82, 37.87], [122.36, 37.45],
-  [122.52, 36.93], [120.64, 36.11], [119.15, 34.91], [120.62, 33.38], [121.91, 31.69], [121.26, 30.68],
-  [122.09, 29.83], [121.68, 28.23], [120.40, 27.05], [119.59, 25.74], [118.66, 24.55], [117.28, 23.62],
-  [115.89, 22.78], [114.15, 22.22], [113.24, 22.05], [111.84, 21.55], [110.79, 21.40], [109.89, 20.28],
-  [109.63, 21.01], [108.05, 21.55], [106.57, 22.22], [106.73, 22.79], [105.33, 23.35], [104.48, 22.82],
-  [102.71, 22.71], [101.65, 22.32], [101.27, 21.20], [100.42, 21.56], [99.24, 22.12], [99.53, 22.95],
-  [98.66, 24.06], [97.60, 23.90], [97.72, 25.08], [98.71, 26.74], [98.25, 27.75], [97.33, 28.26],
-  [96.25, 28.41], [96.59, 28.83], [95.40, 29.03], [94.57, 29.28], [93.41, 28.64], [92.50, 27.90],
-  [91.26, 28.04], [90.02, 28.30], [88.81, 27.30], [88.12, 27.88], [86.95, 27.97], [85.82, 28.20],
-  [84.23, 28.84], [83.34, 29.46], [82.33, 30.12], [81.53, 30.42], [79.72, 30.88], [78.74, 31.52],
-  [78.46, 32.62], [79.21, 32.99], [78.81, 33.51], [78.91, 34.32], [77.84, 35.49], [76.19, 35.90],
-  [75.90, 36.67], [75.16, 37.13],
-];
-
-const chinaMapHainanCoordinates: Array<[number, number]> = [
-  [110.34, 18.68], [109.48, 18.20], [108.66, 18.51], [108.63, 19.37], [109.12, 19.82],
-  [110.21, 20.10], [110.79, 20.08], [111.01, 19.70], [110.57, 19.26], [110.34, 18.68],
-];
-
-function projectChinaCoordinate(point: [number, number]) {
-  const [lng, lat] = point;
-  const x = 6 + ((lng - 73) / (135 - 73)) * 88;
-  const y = 6 + ((54 - lat) / (54 - 18)) * 86;
-  return {
-    x: Math.max(3, Math.min(97, x)),
-    y: Math.max(4, Math.min(96, y)),
-  };
-}
-
-function footprintCoordinate(name: string, mode: "city" | "venue", records: EventRecord[]) {
+function footprintLngLat(name: string, mode: "city" | "venue", records: EventRecord[]): [number, number] | undefined {
   const record = records.find((item) => mode === "city"
     ? item.city === name
     : [item.city, item.venue].filter(Boolean).join(" · ") === name);
   if (!record) return undefined;
-  const point: [number, number] | undefined = record.coordinates
+  return record.coordinates
     ? [record.coordinates.lng, record.coordinates.lat]
     : cityCoordinateFallbacks[record.city];
-  return point ? projectChinaCoordinate(point) : undefined;
 }
 
-function VenueView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
+function VenueView({ records, mapSettings, onOpenMapSettings, onOpen }: { records: EventRecord[]; mapSettings: AppSettings["map"]; onOpenMapSettings: () => void; onOpen: (record: EventRecord) => void }) {
   const [mode, setMode] = useState<"city" | "venue">("city");
   const rows = mode === "city"
     ? topRows(records.map((record) => record.city).filter(Boolean), 30)
     : topRows(records.map((record) => [record.city, record.venue].filter(Boolean).join(" · ")).filter(Boolean), 30);
   const max = Math.max(1, ...rows.map(([, count]) => count));
-  const outline = chinaOutlineCoordinates.map((point) => {
-    const projected = projectChinaCoordinate(point);
-    return `${projected.x},${projected.y}`;
-  }).join(" ");
-  const hainanOutline = chinaMapHainanCoordinates.map((point) => {
-    const projected = projectChinaCoordinate(point);
-    return `${projected.x},${projected.y}`;
-  }).join(" ");
+
+  let mapPanel: ReactNode;
+  if (mapSettings.provider === "amap" && !mapSettings.amapKey.trim()) {
+    mapPanel = <div className="venue-map-state" data-map-mode="amap-missing-key"><MapIcon /><strong>配置高德 Key 后显示真实足迹底图</strong><p>你已经选择高德地图，但当前设备没有可用的 Web 端 JS API Key。</p><button type="button" onClick={onOpenMapSettings}>配置高德 Key</button></div>;
+  } else if (mapSettings.provider === "amap") {
+    mapPanel = <AmapFootprintMap records={records} rows={rows} mode={mode} mapSettings={mapSettings} onOpen={onOpen} />;
+  } else if (mapSettings.provider === "baidu") {
+    mapPanel = <div className="venue-map-state" data-map-mode="baidu-not-ready"><MapIcon /><strong>百度地图尚未接入当前足迹视图</strong><p>为避免“切换了但底图没变化”的假状态，这里不再回退到其他地图。</p><button type="button" onClick={onOpenMapSettings}>切换地图来源</button></div>;
+  } else {
+    mapPanel = <div className="venue-map-art venue-offline-summary" data-map-mode="offline-summary"><div className="venue-map-heading"><span>MEMORY PLACES</span><strong>离线城市摘要</strong><small>无需 API · 只显示已记录城市，不模拟行政边界</small></div><div className="venue-offline-grid">{rows.slice(0, 18).map(([name, count]) => <button key={name} type="button" style={{ "--weight": count / max } as CSSProperties} onClick={() => { const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name); if (record) onOpen(record); }}><b>{name}</b><span>{count} 场</span></button>)}</div><button className="venue-enable-map" type="button" onClick={onOpenMapSettings}>启用高德地图</button></div>;
+  }
 
   return (
     <section className="archive-venue-view">
-      <div className="venue-map-art" data-map-mode="static-china">
-        <div className="venue-map-heading"><span>MEMORY MAP</span><strong>中国固定足迹底图</strong><small>无需 API · 不可拖动缩放 · 仅作个人足迹空间示意</small></div>
-        <svg className="china-static-map" viewBox="0 0 100 100" role="img" aria-label="中国固定足迹底图" preserveAspectRatio="xMidYMid meet">
-          <defs>
-            <pattern id="china-map-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" /></pattern>
-            <filter id="china-map-soft-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.6" floodOpacity="0.12" /></filter>
-          </defs>
-          <rect className="china-map-water" x="0" y="0" width="100" height="100" rx="3" />
-          <rect className="china-map-grid" x="0" y="0" width="100" height="100" fill="url(#china-map-grid)" />
-          <polygon className="china-map-land" points={outline} filter="url(#china-map-soft-shadow)" />
-          <polygon className="china-map-land china-map-island" points={hainanOutline} />
-        </svg>
-        {rows.slice(0, 12).map(([name, count]) => {
-          const point = footprintCoordinate(name, mode, records);
-          if (!point) return null;
-          return <button className="venue-map-marker" key={name} type="button" style={{ "--x": `${point.x}%`, "--y": `${point.y}%`, "--weight": count } as CSSProperties} onClick={() => { const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name); if (record) onOpen(record); }}><i /><b>{name}</b><em>{count}</em></button>;
-        })}
-        <div className="venue-map-legend"><span><i />到访城市 / 场馆</span><small>底图不作为行政区划或边界表达 · 优先使用档案坐标，无坐标时使用内置城市中心点。</small></div>
-      </div>
+      {mapPanel}
       <div className="venue-ranking"><header><span>足迹整理</span><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button></div></header>{rows.map(([name, count]) => <p key={name} style={{ "--ratio": `${count / max * 100}%` } as CSSProperties}><span>{name}</span><i /><b>{count}</b></p>)}</div>
     </section>
   );
 }
+
+function AmapFootprintMap({ records, rows, mode, mapSettings, onOpen }: { records: EventRecord[]; rows: [string, number][]; mode: "city" | "venue"; mapSettings: AppSettings["map"]; onOpen: (record: EventRecord) => void }) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+
+  useEffect(() => {
+    let disposed = false;
+    let instance: AMapMapInstance | null = null;
+    setStatus("loading");
+    loadAmap({ key: mapSettings.amapKey, securityCode: mapSettings.amapSecurityCode })
+      .then((AMap) => {
+        if (disposed || !hostRef.current) return;
+        const map = new AMap.Map(hostRef.current, { center: [104.2, 35.8], zoom: 4.1, viewMode: "2D", resizeEnable: true });
+        instance = map;
+        const markers = rows.slice(0, 30).flatMap(([name, count]) => {
+          const point = footprintLngLat(name, mode, records);
+          if (!point) return [];
+          const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name);
+          const marker = new AMap.Marker({ position: point, title: `${name} · ${count} 场` });
+          if (record) marker.on?.("click", () => onOpen(record));
+          return [marker];
+        });
+        map.add?.(markers);
+        if (markers.length) map.setFitView?.(markers, false, [70, 70, 70, 70], 11);
+        hostRef.current.dataset.amapReady = "true";
+        setStatus("ready");
+      })
+      .catch(() => { if (!disposed) setStatus("error"); });
+    return () => {
+      disposed = true;
+      instance?.destroy();
+    };
+  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, mode, onOpen, records, rows]);
+
+  return <div className="amap-map-shell" data-map-mode="amap"><div className="venue-map-heading"><span>AMAP · MEMORY MAP</span><strong>高德现场足迹</strong><small>{status === "ready" ? "已按档案坐标标出演出地点" : status === "error" ? "地图加载失败，请检查 Key、安全密钥或域名白名单" : "正在载入高德地图…"}</small></div><div ref={hostRef} className="amap-map-host" data-amap-status={status} />{status === "error" ? <button className="venue-enable-map" type="button" onClick={() => window.location.reload()}>重新载入</button> : null}</div>;
+}
+
 
 function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   const priced = [...records].sort((a, b) => (b.price || 0) - (a.price || 0));

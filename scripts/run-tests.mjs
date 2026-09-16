@@ -176,7 +176,7 @@ try {
   assert.match(shareStudio, /date-desc/);
   assert.match(shareStudio, /ItemLimit = 12 \| 20 \| 30 \| "all"/);
   assert.match(shareStudio, /ShareFormat = "adaptive-landscape" \| "adaptive-portrait" \| "landscape" \| "portrait" \| "square" \| "long"/);
-  assert.match(shareStudio, /ShareLayout = "wall" \| "timeline" \| "magazine" \| "cities"/);
+  assert.match(shareStudio, /ShareLayout = "wall" \| "tickets" \| "timeline" \| "magazine" \| "cities"/);
   assert.match(shareStudioCss, /share-layout-canvas/);
   assert.match(shareStudioCss, /share-coordinate-field/);
   assert.match(shareStudioCss, /share-preview-toolbar/);
