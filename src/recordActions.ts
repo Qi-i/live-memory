@@ -12,9 +12,10 @@ export function duplicateRecordForNextShow(record: EventRecord, now = new Date()
     seat: undefined,
     artists: [...record.artists],
     lineup: record.lineup.map((item) => ({ ...item })),
-    companions: [...record.companions],
+    companions: [],
     tags: [...record.tags],
-    setlist: [...record.setlist],
+    setlist: [],
+    note: undefined,
     media: record.media
       .filter((asset) => asset.kind === "poster")
       .map((asset) => ({
