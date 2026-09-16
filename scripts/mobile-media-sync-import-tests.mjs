@@ -16,6 +16,7 @@ try {
 
   assert.equal(domain.sourceLabels.piaoxingqiu, "票星球");
   assert.equal(domain.normalizeSource("piaoxingqiu"), "piaoxingqiu");
+  assert.equal(domain.normalizeSource("unsupported-ticketing"), "");
   assert.equal(importers.detectTicketingPlatform("https://m.damai.cn/shows/item.html?itemId=123"), "damai");
   assert.equal(importers.detectTicketingPlatform("https://m.livelab.com.cn/performance/abc"), "fenwandao");
   assert.equal(importers.detectTicketingPlatform("https://m.piaoxingqiu.com/content/67d107f499c2e800015fdcc9"), "piaoxingqiu");
