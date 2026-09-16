@@ -139,7 +139,7 @@ try {
   if (await page.locator(".archive-result-strip").count()) throw new Error("Redundant archive result strip is still rendered");
   const mastheadBounds = { left: masthead.x, top: masthead.y, right: masthead.x + masthead.width, bottom: masthead.y + masthead.height };
   bannerCards.forEach((card, index) => {
-    if (card.objectFit !== "contain") throw new Error(`Banner poster ${index + 1} is cropped with ${card.objectFit}`);
+    if (card.objectFit !== "cover") throw new Error(`Banner poster ${index + 1} does not fill its frame with ${card.objectFit}`);
     assertContained(`Banner poster ${index + 1}`, card, mastheadBounds, 3);
   });
   await page.screenshot({ path: `${outputDir}/02-premium-banner-desktop.png`, fullPage: true });
