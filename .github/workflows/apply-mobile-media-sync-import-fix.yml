@@ -47,7 +47,7 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git rm scripts/apply-mobile-media-sync-import-fix.py .github/workflows/apply-mobile-media-sync-import-fix.yml
+          git rm -f scripts/apply-mobile-media-sync-import-fix.py .github/workflows/apply-mobile-media-sync-import-fix.yml
           git add src package.json scripts/mobile-media-sync-import-tests.mjs
           git commit -m "Fix mobile media editing and automatic cloud sync"
           git push origin HEAD:fix/mobile-media-sync-import-20260916
