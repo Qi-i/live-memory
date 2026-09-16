@@ -11,6 +11,7 @@ assert.match(shareStudio, /智能横版/);
 assert.match(shareStudio, /智能竖版/);
 assert.match(shareStudio, /function getAdaptiveCanvasSpec/);
 assert.match(shareStudio, /function buildAdaptiveWallSlots/);
+assert.match(shareStudio, /function buildSmallMagazineSlots/);
 assert.match(shareStudio, /wallFill|fillRatio|occupiedRatio/);
 assert.match(shareStudio, /Math\.round\(width \* 0\.425\)/);
 assert.match(shareStudio, /Math\.round\(width \* 1\.12\)/);
