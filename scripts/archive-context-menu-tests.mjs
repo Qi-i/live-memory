@@ -52,7 +52,11 @@ try {
   assert.equal(duplicate.date, "2026-09-27");
   assert.equal(duplicate.time, "19:30");
   assert.equal(duplicate.price, 699);
+  assert.equal(duplicate.publicPriceRange, "399 / 699 / 999");
   assert.equal(duplicate.seat, undefined);
+  assert.deepEqual(duplicate.companions, []);
+  assert.deepEqual(duplicate.setlist, []);
+  assert.equal(duplicate.note, undefined);
   assert.equal(duplicate.status, "planned");
   assert.equal(duplicate.recordState, "normal");
   assert.equal(duplicate.syncedAt, undefined);
