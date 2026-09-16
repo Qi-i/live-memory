@@ -24,7 +24,7 @@ import {
 } from "react";
 import { BrandLockup } from "./brand";
 import type { EventCategory, EventRecord } from "./domain";
-import { categoryLabels, primaryMedia } from "./domain";
+import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
 import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
@@ -229,7 +229,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   }, [categoryFilteredRecords, selectionQuery]);
 
   const period = useMemo(() => formatPeriod(selectedRecords), [selectedRecords]);
-  const watched = selectedRecords.filter((record) => record.status === "watched").length;
+  const watched = selectedRecords.filter((record) => effectiveStatus(record) === "watched").length;
   const cities = new Set(selectedRecords.map((record) => record.city).filter(Boolean)).size;
   const spec = useMemo(
     () => getCanvasSpec(format, selectedRecords.length, layout, selectedRecords),

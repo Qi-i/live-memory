@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { AppSettings } from "./domain";
+import { effectiveStatus } from "./domain";
 import { useAppController } from "./appController";
 import { ArchivePage } from "./archive";
 import type { ArchiveLayout, ShareFormat } from "./archive";
@@ -78,7 +79,7 @@ export default function AppRoot() {
     if (route !== "archive" && shareMode) setShareMode(false);
   }, [route, shareMode]);
 
-  const watchedCount = activeRecords.filter((record) => record.status === "watched").length;
+  const watchedCount = activeRecords.filter((record) => effectiveStatus(record) === "watched").length;
   const cityCount = new Set(activeRecords.map((record) => record.city).filter(Boolean)).size;
   const yearCount = new Set(activeRecords.map((record) => record.date.slice(0, 4))).size;
   const archiveMediaKey = useMemo(() => activeRecords.flatMap((record) => record.media.map((asset) => `${asset.id}:${asset.src}`)).join("|"), [activeRecords]);
