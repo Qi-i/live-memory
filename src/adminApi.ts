@@ -1,4 +1,4 @@
-import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { getAccountClient } from "./supabase";
 import "./refinementV3Hotfix.css";
 
 export interface AdminUserRecord {
@@ -31,27 +31,8 @@ export interface AdminUserProfileInput {
   recoveryEmail: string;
 }
 
-let client: SupabaseClient | null = null;
-
-function adminClient() {
-  if (client) return client;
-  const url = import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "";
-  const key = import.meta.env.VITE_ACCOUNT_SUPABASE_ANON_KEY || "";
-  if (!url || !key) throw new Error("账号服务配置缺失");
-  client = createClient(url, key, {
-    auth: {
-      persistSession: true,
-      autoRefreshToken: true,
-      detectSessionInUrl: false,
-      flowType: "pkce",
-      storageKey: "live-memory-account-session",
-    },
-  });
-  return client;
-}
-
 async function invokeAdmin<T>(body: Record<string, unknown>): Promise<T> {
-  const supabase = adminClient();
+  const supabase = getAccountClient();
   const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
   if (sessionError) throw sessionError;
   const token = sessionData.session?.access_token;
