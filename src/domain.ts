@@ -341,7 +341,7 @@ export function effectiveStatus(record: Pick<EventRecord, "status" | "date" | "t
 
 export function normalizeSource(value: unknown): SourceChannel {
   const source = String(value || "");
-  if (source === "damai" || source === "fenwandao" || source === "maoyan" || source === "official" || source === "onsite" || source === "transfer" || source === "other") {
+  if (source === "damai" || source === "fenwandao" || source === "piaoxingqiu" || source === "maoyan" || source === "official" || source === "onsite" || source === "transfer" || source === "other") {
     return source;
   }
   return "";
