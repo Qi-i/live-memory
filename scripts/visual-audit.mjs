@@ -132,12 +132,14 @@ try {
 
   const masthead = await page.locator(".archive-masthead").boundingBox();
   const bannerCards = await posterGeometry(".archive-highlight-card:visible");
-  if (!masthead || bannerCards.length < 3 || bannerCards.length > 4) {
-    throw new Error(`Banner should show 3–4 representative posters, got ${bannerCards.length}`);
+  if (!masthead || bannerCards.length < 4 || bannerCards.length > 5) {
+    throw new Error(`Banner should show 4–5 representative posters, got ${bannerCards.length}`);
   }
+  if (masthead.height > 390) throw new Error(`Banner is still too tall: ${masthead.height}`);
+  if (await page.locator(".archive-result-strip").count()) throw new Error("Redundant archive result strip is still rendered");
   const mastheadBounds = { left: masthead.x, top: masthead.y, right: masthead.x + masthead.width, bottom: masthead.y + masthead.height };
   bannerCards.forEach((card, index) => {
-    if (card.objectFit !== "contain") throw new Error(`Banner poster ${index + 1} is cropped with ${card.objectFit}`);
+    if (card.objectFit !== "cover") throw new Error(`Banner poster ${index + 1} does not fill its frame with ${card.objectFit}`);
     assertContained(`Banner poster ${index + 1}`, card, mastheadBounds, 3);
   });
   await page.screenshot({ path: `${outputDir}/02-premium-banner-desktop.png`, fullPage: true });
@@ -175,6 +177,26 @@ try {
   }
   await page.screenshot({ path: `${outputDir}/03-wallet-desktop.png`, fullPage: true });
   await archiveView("票根", ".archive-ticket");
+  const ticketGeometry = await page.locator(".archive-ticket").first().evaluate((card) => {
+    const cover = card.querySelector(":scope > div");
+    const image = cover?.querySelector("img");
+    const cardRect = card.getBoundingClientRect();
+    const coverRect = cover?.getBoundingClientRect();
+    const sectionRect = card.querySelector(":scope > section")?.getBoundingClientRect();
+    return {
+      objectFit: image ? getComputedStyle(image).objectFit : "fallback",
+      card: { top: cardRect.top, bottom: cardRect.bottom, left: cardRect.left },
+      cover: coverRect ? { top: coverRect.top, bottom: coverRect.bottom, left: coverRect.left, right: coverRect.right } : null,
+      section: sectionRect ? { top: sectionRect.top, bottom: sectionRect.bottom, left: sectionRect.left } : null,
+    };
+  });
+  if (!ticketGeometry.cover || !ticketGeometry.section
+    || ticketGeometry.objectFit !== "cover"
+    || Math.abs(ticketGeometry.cover.top - ticketGeometry.card.top) > 2
+    || Math.abs(ticketGeometry.cover.bottom - ticketGeometry.card.bottom) > 2
+    || ticketGeometry.section.left < ticketGeometry.cover.right - 1) {
+    throw new Error(`Ticket cover crop/alignment is invalid: ${JSON.stringify(ticketGeometry)}`);
+  }
   await page.screenshot({ path: `${outputDir}/04-ticket-desktop.png`, fullPage: true });
   await archiveView("列表", ".archive-list button");
   await page.screenshot({ path: `${outputDir}/05-list-desktop.png`, fullPage: true });

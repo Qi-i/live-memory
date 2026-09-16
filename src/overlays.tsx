@@ -24,6 +24,7 @@ import type {
 import {
   categoryLabels,
   createId,
+  effectiveStatus,
   formatDateCn,
   mediaByKind,
   mediaKindLabels,
@@ -81,7 +82,7 @@ export function DetailDrawer({
         <section className="detail-hero-v2">
           <button className="detail-cover-v2" type="button" onClick={() => poster && onZoom(poster)}><OverlayMedia media={poster} alt={record.title} fallback={<ImagePlus />} /></button>
           <div className="detail-copy-v2">
-            <span>{categoryLabels[record.category]} · {statusLabels[record.status]}</span>
+            <span>{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</span>
             <h2>{record.title}</h2>
             <p>{record.artists.join(" / ") || "艺人待补"}</p>
             <div className="detail-facts-v2">
@@ -119,14 +120,14 @@ function MediaSection({ title, items, onZoom }: { title: string; items: MediaAss
 type MediaProcessState = "idle" | "processing" | "ready" | "error";
 
 export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord; onCancel: () => void; onSave: (record: EventRecord) => Promise<unknown> }) {
-  const [draft, setDraft] = useState(record);
+  const [draft, setDraft] = useState(() => ({ ...record, status: effectiveStatus(record) }));
   const [saving, setSaving] = useState(false);
   const [mediaStates, setMediaStates] = useState<Partial<Record<MediaKind, MediaProcessState>>>({});
   const [mediaErrors, setMediaErrors] = useState<Partial<Record<MediaKind, string>>>({});
   const [recognizing, setRecognizing] = useState(false);
   const [recognitionStatus, setRecognitionStatus] = useState("");
   useEffect(() => {
-    setDraft(record);
+    setDraft({ ...record, status: effectiveStatus(record) });
     setMediaStates({});
     setMediaErrors({});
     setRecognitionStatus("");

@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { AppSettings, EventRecord } from "./domain";
-import { categoryLabels } from "./domain";
+import { categoryLabels, effectiveStatus } from "./domain";
 import {
   fetchAdminUsers,
   resetAdminUserPassword,
@@ -28,8 +28,8 @@ import "./refinementV3Hotfix.css";
 import "./refinementV3Hotfix.css";
 
 export function StatsPage({ records }: { records: EventRecord[] }) {
-  const watched = records.filter((record) => record.status === "watched");
-  const planned = records.filter((record) => record.status !== "watched");
+  const watched = records.filter((record) => effectiveStatus(record) === "watched");
+  const planned = records.filter((record) => effectiveStatus(record) !== "watched");
   const totalPrice = watched.reduce((sum, record) => sum + (record.price || 0), 0);
   const averagePrice = Math.round(totalPrice / Math.max(1, watched.filter((record) => record.price).length));
   const years = unique(records.map((record) => record.date.slice(0, 4))).sort();

@@ -329,9 +329,19 @@ export function normalizeStatus(value: unknown, date?: string): EventStatus {
   return date && date < todayIso() ? "watched" : "planned";
 }
 
+export function effectiveStatus(record: Pick<EventRecord, "status" | "date" | "time">, now = new Date()): EventStatus {
+  if (record.status !== "planned" || !/^\d{4}-\d{2}-\d{2}$/.test(record.date || "")) return record.status;
+  const time = /^\d{1,2}:\d{2}/.exec(record.time || "")?.[0] || "23:59";
+  const [hour, minute] = time.split(":").map(Number);
+  const eventAt = new Date(`${record.date}T00:00:00`);
+  if (Number.isNaN(eventAt.getTime())) return record.status;
+  eventAt.setHours(hour, minute, 0, 0);
+  return now.getTime() > eventAt.getTime() ? "watched" : record.status;
+}
+
 export function normalizeSource(value: unknown): SourceChannel {
   const source = String(value || "");
-  if (source === "damai" || source === "fenwandao" || source === "maoyan" || source === "official" || source === "onsite" || source === "transfer" || source === "other") {
+  if (source === "damai" || source === "fenwandao" || source === "piaoxingqiu" || source === "maoyan" || source === "official" || source === "onsite" || source === "transfer" || source === "other") {
     return source;
   }
   return "";

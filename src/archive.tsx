@@ -40,6 +40,7 @@ export type { ShareFormat } from "./shareStudio";
 import {
   categoryLabels,
   daysFromToday,
+  effectiveStatus,
   formatDateCn,
   formatRelativeDay,
   primaryMedia,
@@ -146,7 +147,7 @@ export function ArchivePage({
           </div>
           <div className="archive-masthead-stats" aria-label="演出记录摘要">
             <strong>{records.length}<span>全部记录</span></strong>
-            <strong>{records.filter((record) => record.status === "watched").length}<span>已经看过</span></strong>
+            <strong>{records.filter((record) => effectiveStatus(record) === "watched").length}<span>已经看过</span></strong>
             <strong>{new Set(records.map((record) => record.city).filter(Boolean)).size}<span>到访城市</span></strong>
           </div>
         </div>
@@ -214,11 +215,6 @@ export function ArchivePage({
         </section>
       )}
 
-      <div className="archive-result-strip">
-        <strong>{visibleRecords.length}</strong>
-        <span>条档案</span>
-        <em>{layoutGroups.flatMap((group) => group.items).find((item) => item.value === layout)?.label}</em>
-      </div>
 
       <ArchiveRenderer
         records={visibleRecords}
@@ -232,8 +228,31 @@ export function ArchivePage({
   );
 }
 
+function pickArchiveHighlights(records: EventRecord[], limit = 5) {
+  const candidates = [...records]
+    .filter((record) => primaryMedia(record))
+    .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
+  const selected: EventRecord[] = [];
+  const usedArtists = new Set<string>();
+  const selectedIds = new Set<string>();
+  for (const record of candidates) {
+    const artists = record.artists.map((artist) => artist.trim().toLowerCase()).filter(Boolean);
+    if (artists.length && artists.some((artist) => usedArtists.has(artist))) continue;
+    selected.push(record);
+    selectedIds.add(record.id);
+    artists.forEach((artist) => usedArtists.add(artist));
+    if (selected.length >= limit) return selected;
+  }
+  for (const record of candidates) {
+    if (selectedIds.has(record.id)) continue;
+    selected.push(record);
+    if (selected.length >= limit) break;
+  }
+  return selected;
+}
+
 function ArchiveHighlights({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
-  const highlights = records.filter((record) => primaryMedia(record)).slice(0, 6);
+  const highlights = pickArchiveHighlights(records, 5);
   const featured = highlights[0];
   if (!highlights.length) return <div className="archive-highlight-empty"><span>把第一张演出海报放进来</span><small>这里会自动生成你的精选现场</small></div>;
   return (
@@ -303,7 +322,7 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
         <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 4)} />
       </button>
       <div className="archive-poster-copy">
-        <div><span>{categoryLabels[record.category]}</span><em>{statusLabels[record.status]}</em></div>
+        <div><span>{categoryLabels[record.category]}</span><em>{statusLabels[effectiveStatus(record)]}</em></div>
         <h3>{record.title}</h3>
         <p>{record.artists.join(" / ") || "艺人待补"}</p>
         <dl>
@@ -347,7 +366,7 @@ function WalletView({ records, onOpen, onEdit, onZoom }: { records: EventRecord[
           <article className="archive-wallet-card" key={record.id} style={{ "--tone-a": record.colors[0], "--tone-b": record.colors[1] } as CSSProperties}>
             <button className="wallet-cover" type="button" onClick={() => poster ? onZoom(poster) : onOpen(record)}><RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 2)} /></button>
             <button className="wallet-copy" type="button" onClick={() => onOpen(record)}>
-              <span>{categoryLabels[record.category]} · {statusLabels[record.status]}</span>
+              <span>{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</span>
               <h3>{record.title}</h3>
               <p>{record.artists.join(" / ") || "艺人待补"}</p>
               <dl><dt>日期</dt><dd>{formatDateCn(record.date, record.time)}</dd><dt>场馆</dt><dd>{record.city} · {record.venue}</dd><dt>票座</dt><dd>{record.price ? `¥${record.price}` : "票价待补"} · {record.seat || "座位待补"}</dd></dl>
@@ -462,7 +481,7 @@ function filterRecords(records: EventRecord[], filters: Filters) {
   return records.filter((record) => {
     if (query && ![record.title, record.city, record.venue, record.artists.join(" "), record.tags.join(" "), record.note].join(" ").toLowerCase().includes(query)) return false;
     if (filters.categories.length && !filters.categories.includes(record.category)) return false;
-    if (filters.statuses.length && !filters.statuses.includes(record.status)) return false;
+    if (filters.statuses.length && !filters.statuses.includes(effectiveStatus(record))) return false;
     if (filters.years.length && !filters.years.includes(record.date.slice(0, 4))) return false;
     if (filters.cities.length && !filters.cities.includes(record.city)) return false;
     if (filters.artists.length && !record.artists.some((artist) => filters.artists.includes(artist))) return false;
@@ -483,7 +502,7 @@ function sortRecords(records: EventRecord[], sort: "smart" | "date-desc" | "date
 function buildFacets(records: EventRecord[]) {
   return {
     categories: unique(records.map((record) => record.category)) as EventCategory[],
-    statuses: unique(records.map((record) => record.status)) as EventStatus[],
+    statuses: unique(records.map((record) => effectiveStatus(record))) as EventStatus[],
     years: unique(records.map((record) => record.date.slice(0, 4))).sort((a, b) => b.localeCompare(a)),
     cities: unique(records.map((record) => record.city).filter(Boolean)),
     artists: unique(records.flatMap((record) => record.artists)).slice(0, 30),
