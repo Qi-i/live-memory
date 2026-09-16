@@ -475,13 +475,81 @@ function CalendarView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
   return <section className="archive-calendar">{Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)).map(([month, items]) => <article key={month}><h2>{month.replace("-", " / ")}</h2><div>{items.sort((a, b) => a.date.localeCompare(b.date)).map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><strong>{record.date.slice(8)}</strong><span>{record.title}</span><em>{record.city}</em></button>)}</div></article>)}</section>;
 }
 
+const cityCoordinateFallbacks: Record<string, [number, number]> = {
+  北京: [116.4, 39.9], 上海: [121.47, 31.23], 广州: [113.27, 23.13], 深圳: [114.06, 22.54],
+  成都: [104.07, 30.67], 重庆: [106.55, 29.56], 西安: [108.94, 34.34], 武汉: [114.31, 30.59],
+  南京: [118.8, 32.06], 杭州: [120.16, 30.27], 苏州: [120.58, 31.3], 天津: [117.2, 39.12],
+  郑州: [113.63, 34.75], 长沙: [112.94, 28.23], 青岛: [120.38, 36.07], 济南: [117.12, 36.65],
+  昆明: [102.83, 25.04], 厦门: [118.09, 24.48], 福州: [119.3, 26.08], 南昌: [115.86, 28.68],
+  合肥: [117.23, 31.82], 沈阳: [123.43, 41.8], 哈尔滨: [126.64, 45.76], 长春: [125.32, 43.82],
+  乌鲁木齐: [87.62, 43.83], 拉萨: [91.13, 29.65], 兰州: [103.84, 36.06], 西宁: [101.78, 36.62],
+  银川: [106.23, 38.49], 呼和浩特: [111.75, 40.84], 海口: [110.2, 20.04], 三亚: [109.51, 18.25],
+};
+
+const chinaOutlineCoordinates: Array<[number, number]> = [
+  [73.5, 39.5], [75.0, 35.5], [79.0, 31.2], [82.0, 29.3], [86.0, 28.2], [89.5, 27.5],
+  [92.5, 28.7], [96.0, 27.2], [99.2, 23.5], [102.5, 22.4], [105.0, 23.0], [108.1, 21.7],
+  [110.2, 20.9], [113.2, 21.8], [116.1, 22.8], [119.0, 25.2], [121.2, 28.1], [121.7, 31.1],
+  [122.1, 33.7], [121.0, 36.8], [122.0, 39.2], [124.5, 40.6], [128.0, 42.3], [131.0, 43.3],
+  [134.3, 47.0], [131.0, 48.6], [127.4, 49.6], [123.0, 53.0], [119.0, 50.9], [114.0, 49.6],
+  [110.0, 48.5], [105.0, 47.0], [101.0, 49.0], [97.0, 48.0], [93.0, 46.0], [88.0, 48.0],
+  [83.0, 47.0], [79.0, 45.0], [75.0, 43.0], [73.5, 39.5],
+];
+
+function projectChinaCoordinate(point: [number, number]) {
+  const [lng, lat] = point;
+  const x = 6 + ((lng - 73) / (135 - 73)) * 88;
+  const y = 6 + ((54 - lat) / (54 - 18)) * 86;
+  return {
+    x: Math.max(3, Math.min(97, x)),
+    y: Math.max(4, Math.min(96, y)),
+  };
+}
+
+function footprintCoordinate(name: string, mode: "city" | "venue", records: EventRecord[]) {
+  const record = records.find((item) => mode === "city"
+    ? item.city === name
+    : [item.city, item.venue].filter(Boolean).join(" · ") === name);
+  if (!record) return undefined;
+  const point: [number, number] | undefined = record.coordinates
+    ? [record.coordinates.lng, record.coordinates.lat]
+    : cityCoordinateFallbacks[record.city];
+  return point ? projectChinaCoordinate(point) : undefined;
+}
+
 function VenueView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   const [mode, setMode] = useState<"city" | "venue">("city");
-  const rows = mode === "city" ? topRows(records.map((record) => record.city).filter(Boolean), 30) : topRows(records.map((record) => [record.city, record.venue].filter(Boolean).join(" · ")).filter(Boolean), 30);
+  const rows = mode === "city"
+    ? topRows(records.map((record) => record.city).filter(Boolean), 30)
+    : topRows(records.map((record) => [record.city, record.venue].filter(Boolean).join(" · ")).filter(Boolean), 30);
   const max = Math.max(1, ...rows.map(([, count]) => count));
+  const outline = chinaOutlineCoordinates.map((point) => {
+    const projected = projectChinaCoordinate(point);
+    return `${projected.x},${projected.y}`;
+  }).join(" ");
+  const hainan = projectChinaCoordinate([110.2, 19.2]);
+
   return (
     <section className="archive-venue-view">
-      <div className="venue-map-art"><span>MEMORY MAP</span>{rows.slice(0, 12).map(([name, count], index) => <button key={name} type="button" style={{ "--x": `${12 + (index * 23) % 78}%`, "--y": `${15 + (index * 31) % 68}%`, "--weight": count } as CSSProperties} onClick={() => { const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name); if (record) onOpen(record); }}><i /><b>{name}</b><em>{count}</em></button>)}</div>
+      <div className="venue-map-art" data-map-mode="static-china">
+        <div className="venue-map-heading"><span>MEMORY MAP</span><strong>中国固定足迹底图</strong><small>无需 API · 不可拖动缩放 · 仅作个人足迹空间示意</small></div>
+        <svg className="china-static-map" viewBox="0 0 100 100" role="img" aria-label="中国固定足迹底图" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <pattern id="china-map-grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" /></pattern>
+            <filter id="china-map-soft-shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1.5" stdDeviation="1.6" floodOpacity="0.12" /></filter>
+          </defs>
+          <rect className="china-map-water" x="0" y="0" width="100" height="100" rx="3" />
+          <rect className="china-map-grid" x="0" y="0" width="100" height="100" fill="url(#china-map-grid)" />
+          <polygon className="china-map-land" points={outline} filter="url(#china-map-soft-shadow)" />
+          <circle className="china-map-land china-map-island" cx={hainan.x} cy={hainan.y} r="1.55" />
+        </svg>
+        {rows.slice(0, 12).map(([name, count]) => {
+          const point = footprintCoordinate(name, mode, records);
+          if (!point) return null;
+          return <button className="venue-map-marker" key={name} type="button" style={{ "--x": `${point.x}%`, "--y": `${point.y}%`, "--weight": count } as CSSProperties} onClick={() => { const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name); if (record) onOpen(record); }}><i /><b>{name}</b><em>{count}</em></button>;
+        })}
+        <div className="venue-map-legend"><span><i />到访城市 / 场馆</span><small>优先使用档案坐标；无坐标时使用内置城市中心点。</small></div>
+      </div>
       <div className="venue-ranking"><header><span>足迹整理</span><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button></div></header>{rows.map(([name, count]) => <p key={name} style={{ "--ratio": `${count / max * 100}%` } as CSSProperties}><span>{name}</span><i /><b>{count}</b></p>)}</div>
     </section>
   );

@@ -208,8 +208,27 @@ try {
   }
   await page.screenshot({ path: `${outputDir}/04-ticket-desktop.png`, fullPage: true });
   await archiveView("列表", ".archive-list button");
-  await page.screenshot({ path: `${outputDir}/05-list-desktop.png`, fullPage: true });
-  await archiveView("海报", ".archive-poster-card");
+await page.screenshot({ path: `${outputDir}/05-list-desktop.png`, fullPage: true });
+await archiveView("城市/场馆", ".archive-venue-view");
+await page.locator(".china-static-map .china-map-land").first().waitFor({ state: "visible", timeout: 10000 });
+const staticChinaMap = await page.locator(".venue-map-art").evaluate((map) => {
+  const land = map.querySelector(".china-map-land");
+  const rect = map.getBoundingClientRect();
+  const landStyle = land ? getComputedStyle(land) : null;
+  return {
+    mode: map.getAttribute("data-map-mode"),
+    width: rect.width,
+    height: rect.height,
+    landFill: landStyle?.fill || "",
+    landStroke: landStyle?.stroke || "",
+    markerCount: map.querySelectorAll(".venue-map-marker").length,
+  };
+});
+if (staticChinaMap.mode !== "static-china" || staticChinaMap.width < 500 || staticChinaMap.height < 340 || !staticChinaMap.landFill || staticChinaMap.landFill === "rgb(16, 20, 24)" || staticChinaMap.markerCount < 1) {
+  throw new Error(`Fixed China footprint map is invalid: ${JSON.stringify(staticChinaMap)}`);
+}
+await page.screenshot({ path: `${outputDir}/05b-static-china-map.png`, fullPage: true });
+await archiveView("海报", ".archive-poster-card");
 
   await page.getByRole("button", { name: "制作分享图", exact: true }).click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
