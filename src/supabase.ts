@@ -123,8 +123,7 @@ export function makeSupabaseClient(settings: AppSettings) {
 
 let cachedAccountClient: SupabaseClient<LooseDatabase> | null = null;
 
-function makeAccountClient(settings: AppSettings) {
-  void settings;
+export function getAccountClient() {
   const url = accountUrl;
   const key = accountAnonKey;
   if (!url || !key) throw new Error("账号服务暂时不可用，请稍后再试");
@@ -140,6 +139,11 @@ function makeAccountClient(settings: AppSettings) {
     });
   }
   return cachedAccountClient;
+}
+
+function makeAccountClient(settings: AppSettings) {
+  void settings;
+  return getAccountClient();
 }
 
 const LIVE_MEMORY_PUBLIC_URL = "https://qi-i.github.io/live-memory/";
