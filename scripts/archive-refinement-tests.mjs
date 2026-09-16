@@ -44,6 +44,8 @@ try {
 
   assert.doesNotMatch(archive, /archive-result-strip/);
   assert.match(archive, /pickArchiveHighlights/);
+  assert.match(archive, /usedArtists/);
+  assert.match(archive, /artists\.some\(\(artist\) => usedArtists\.has\(artist\)\)/);
   assert.match(archive, /effectiveStatus\(record\)/);
   assert.match(appRoot, /effectiveStatus\(record\)/);
   assert.match(stats, /effectiveStatus\(record\)/);
