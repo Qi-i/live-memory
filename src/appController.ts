@@ -265,7 +265,7 @@ export function useAppController() {
       window.removeEventListener("online", onOnline);
       document.removeEventListener("visibilitychange", onVisible);
     };
-  }, [access.user, isGuest, settings.accountBackup.enabled, settings.supabase.ownerKey, settings.supabase.url]);
+  }, [access.user, isGuest, settings.supabase.ownerKey, settings.supabase.url]);
 
   useEffect(() => {
     if (isGuest || !access.user || !hasAccountCloudConfig(settings)) return;

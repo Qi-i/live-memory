@@ -39,7 +39,7 @@ import type {
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
 import { useCachedMediaSrc } from "./mediaCache";
-import { loadAmap } from "./amap";
+import { loadAmap, type AMapMapInstance } from "./amap";
 import "./archiveContextMenu.css";
 export type { ShareFormat } from "./shareStudio";
 import {
@@ -543,12 +543,13 @@ function AmapFootprintMap({ records, rows, mode, mapSettings, onOpen }: { record
 
   useEffect(() => {
     let disposed = false;
-    let instance: { destroy: () => void; add?: (items: unknown) => void; setFitView?: (...args: unknown[]) => void } | null = null;
+    let instance: AMapMapInstance | null = null;
     setStatus("loading");
     loadAmap({ key: mapSettings.amapKey, securityCode: mapSettings.amapSecurityCode })
       .then((AMap) => {
         if (disposed || !hostRef.current) return;
-        instance = new AMap.Map(hostRef.current, { center: [104.2, 35.8], zoom: 4.1, viewMode: "2D", resizeEnable: true });
+        const map = new AMap.Map(hostRef.current, { center: [104.2, 35.8], zoom: 4.1, viewMode: "2D", resizeEnable: true });
+        instance = map;
         const markers = rows.slice(0, 30).flatMap(([name, count]) => {
           const point = footprintLngLat(name, mode, records);
           if (!point) return [];
@@ -557,8 +558,8 @@ function AmapFootprintMap({ records, rows, mode, mapSettings, onOpen }: { record
           if (record) marker.on?.("click", () => onOpen(record));
           return [marker];
         });
-        instance.add?.(markers);
-        if (markers.length) instance.setFitView?.(markers, false, [70, 70, 70, 70], 11);
+        map.add?.(markers);
+        if (markers.length) map.setFitView?.(markers, false, [70, 70, 70, 70], 11);
         hostRef.current.dataset.amapReady = "true";
         setStatus("ready");
       })
