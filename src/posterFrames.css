@@ -60,6 +60,7 @@
 }
 
 @media (max-width: 760px) {
+  .archive-page .archive-ticket-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .archive-ticket > div:first-child { aspect-ratio: var(--poster-frame-ratio); }
   .archive-timeline button > time + span { width: 58px; }
 }
