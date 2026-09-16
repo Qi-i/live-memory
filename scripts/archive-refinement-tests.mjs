@@ -31,6 +31,7 @@ try {
   };
 
   assert.equal(domain.effectiveStatus(base, new Date("2026-09-16T19:29:00")), "planned");
+  assert.equal(domain.effectiveStatus(base, new Date("2026-09-16T19:30:00")), "planned");
   assert.equal(domain.effectiveStatus(base, new Date("2026-09-16T19:31:00")), "watched");
   assert.equal(domain.effectiveStatus({ ...base, time: "" }, new Date("2026-09-16T22:00:00")), "planned");
   assert.equal(domain.effectiveStatus({ ...base, time: "" }, new Date("2026-09-17T00:01:00")), "watched");
