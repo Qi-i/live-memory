@@ -6,6 +6,7 @@ const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "
 const archiveCss = await readFile(new URL("../src/archive.css", import.meta.url), "utf8");
 const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
 const controller = await readFile(new URL("../src/appController.ts", import.meta.url), "utf8");
+const amap = await readFile(new URL("../src/amap.ts", import.meta.url), "utf8");
 
 assert.match(share, /type ShareLayout = [^;]*"tickets"/);
 assert.match(share, /useState<ItemLimit>\("all"\)/);
@@ -33,5 +34,8 @@ assert.match(archive, /amap-map-host/);
 assert.match(archive, /配置高德 Key/);
 assert.match(archive, /百度地图尚未接入/);
 assert.doesNotMatch(archive, /china-map-land/);
+assert.match(amap, /encodeURIComponent\(trimmedKey\)/);
+assert.match(amap, /_AMapSecurityConfig/);
+assert.doesNotMatch(amap, /(?:const|let|var)\s+\w*[Kk]ey\w*\s*=\s*["'][A-Za-z0-9_-]{12,}["']/);
 
 console.log("Archive experience redesign contracts passed.");
