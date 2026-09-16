@@ -10,6 +10,7 @@ import {
   Plus,
   Rows3,
   Search,
+  Ticket,
   X,
 } from "lucide-react";
 import {
@@ -29,7 +30,7 @@ import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCa
 import "./shareStudio.css";
 
 export type ShareFormat = "adaptive-landscape" | "adaptive-portrait" | "landscape" | "portrait" | "square" | "long";
-type ShareLayout = "wall" | "timeline" | "magazine" | "cities";
+type ShareLayout = "wall" | "tickets" | "timeline" | "magazine" | "cities";
 type SharePalette = "jade" | "midnight" | "paper" | "sunset" | "graphite" | "mist" | "forest" | "champagne" | "plum" | "silver";
 type ScopeMode = "all" | "range" | "manual";
 type ItemLimit = 12 | 20 | 30 | "all";
@@ -83,6 +84,7 @@ const categoryOptions: EventCategory[] = ["concert", "festival", "livehouse", "t
 
 const layoutOptions: Array<{ value: ShareLayout; label: string; description: string; icon: ReactNode }> = [
   { value: "wall", label: "密集海报墙", description: "按原比例紧密拼接，适合一次分享很多现场", icon: <Grid3X3 /> },
+  { value: "tickets", label: "票根聚合", description: "把海报色彩、日期、场馆与座位整理成磨砂票根", icon: <Ticket /> },
   { value: "timeline", label: "时间长卷", description: "按年份分带，突出观演经历的时间脉络", icon: <Rows3 /> },
   { value: "magazine", label: "编目杂志", description: "主视觉、次重点与密集补位形成清晰层级", icon: <LayoutTemplate /> },
   { value: "cities", label: "城市路线", description: "用非地图坐标场呈现城市足迹与场次分布", icon: <MapPinned /> },
@@ -159,7 +161,6 @@ const cityCoordinateFallbacks: Record<string, [number, number]> = {
 export function ShareStudio({ records, format, setFormat, onClose }: ShareStudioProps) {
   const eligibleRecords = useMemo(
     () => records
-      .filter((record) => primaryMedia(record))
       .slice()
       .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt)),
     [records],
@@ -170,7 +171,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   const [palette, setPalette] = useState<SharePalette>("jade");
   const [headline, setHeadline] = useState("我的现场档案");
   const [scope, setScope] = useState<ScopeMode>("all");
-  const [itemLimit, setItemLimit] = useState<ItemLimit>(20);
+  const [itemLimit, setItemLimit] = useState<ItemLimit>("all");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
   const [categories, setCategories] = useState<Set<EventCategory>>(() => new Set<EventCategory>());
   const [startDate, setStartDate] = useState(earliestDate);
@@ -380,7 +381,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </div>
 
         <div className="share-studio-summary">
-          <strong>{selectedRecords.length}</strong><span>张海报进入成图</span><small>{period} · {cities} 个城市 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</small>
+          <strong>{selectedRecords.length}</strong><span>项档案进入成图</span><small>{period} · {cities} 个城市 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</small>
         </div>
 
         <section className="share-control-group">
@@ -470,7 +471,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         </div>
 
         <section className="share-control-group">
-          <strong>分享布局 <small>四种布局会真实改变海报组织方式</small></strong>
+          <strong>分享布局 <small>五种布局会真实改变内容组织方式</small></strong>
           <div className="share-layout-control">
             {layoutOptions.map((item) => (
               <button className={layout === item.value ? "is-active" : ""} key={item.value} type="button" onClick={() => setLayout(item.value)}>
@@ -497,7 +498,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
 
         {error && <p className="share-export-error">{error}</p>}
         <button className="share-export-button" type="button" disabled={saving || preparing || !selectedRecords.length} onClick={() => void savePng()}>
-          <Download />{preparing ? "正在准备海报…" : saving ? "正在生成…" : saved ? "已保存到下载目录" : `保存 ${selectedRecords.length} 张海报的 PNG`}
+          <Download />{preparing ? "正在准备海报…" : saving ? "正在生成…" : saved ? "已保存到下载目录" : `保存 ${selectedRecords.length} 项档案的 PNG`}
         </button>
       </aside>
 
@@ -530,6 +531,15 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
 function SharePreviewLayout({ records, layout, spec, showDetails }: { records: EventRecord[]; layout: ShareLayout; spec: CanvasSpec; showDetails: boolean }) {
   const area = contentArea(spec);
   if (!records.length) return <div className="share-preview-empty">请选择至少一张海报</div>;
+
+  if (layout === "tickets") {
+    const slots = buildTicketSlots(records, area, spec);
+    return (
+      <div className="share-layout-canvas share-layout-canvas-tickets share-ticket-grid" style={rectStyle(area)}>
+        {slots.map((slot) => <ShareTicketCard key={slot.record.id} slot={slot} origin={area} />)}
+      </div>
+    );
+  }
 
   if (layout === "timeline") {
     const bands = buildTimelineBands(records, area, spec);
@@ -576,6 +586,54 @@ function SharePreviewLayout({ records, layout, spec, showDetails }: { records: E
     <div className={`share-layout-canvas share-layout-canvas-${layout}`} style={rectStyle(area)}>
       {slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={area} showDetails={showDetails} />)}
     </div>
+  );
+}
+
+function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
+  if (!records.length) return [];
+  const gap = spec.width >= 1500 ? 16 : 12;
+  const landscape = isLandscapeFormat(spec.format);
+  const idealWidth = landscape ? 420 : 350;
+  const maxColumns = landscape ? 4 : 3;
+  const columns = Math.max(1, Math.min(maxColumns, records.length, Math.round((area.width + gap) / (idealWidth + gap))));
+  const rows = Math.ceil(records.length / columns);
+  const width = (area.width - gap * Math.max(0, columns - 1)) / columns;
+  const height = (area.height - gap * Math.max(0, rows - 1)) / Math.max(1, rows);
+  return records.map((record, index) => ({
+    record,
+    rect: {
+      x: area.x + (index % columns) * (width + gap),
+      y: area.y + Math.floor(index / columns) * (height + gap),
+      width,
+      height,
+    },
+  }));
+}
+
+function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
+  const media = primaryMedia(slot.record);
+  const src = useCachedMediaSrc(media);
+  const style = {
+    ...localRectStyle(slot.rect, origin),
+    "--ticket-a": slot.record.colors[0] || "#172229",
+    "--ticket-b": slot.record.colors[1] || "#47645d",
+  } as CSSProperties;
+  return (
+    <article className="share-ticket-card" style={style}>
+      <span className="share-ticket-backdrop" aria-hidden="true">{src ? <img src={src} alt="" decoding="async" /> : null}</span>
+      <span className="share-ticket-tint" aria-hidden="true" />
+      <div className="share-ticket-poster"><SharePoster record={slot.record} /></div>
+      <section>
+        <span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span>
+        <h3>{slot.record.title}</h3>
+        <p>{slot.record.artists.join(" / ") || "艺人待补"}</p>
+        <dl>
+          <dt>VENUE</dt><dd>{slot.record.venue || "场馆待补"}</dd>
+          <dt>SEAT</dt><dd>{slot.record.seat || "座位待补"}</dd>
+          <dt>PRICE</dt><dd>{slot.record.price ? `¥${slot.record.price}` : slot.record.publicPriceRange || "票价待补"}</dd>
+        </dl>
+      </section>
+    </article>
   );
 }
 
@@ -1052,6 +1110,14 @@ function getAdaptiveCanvasSpec(format: "adaptive-landscape" | "adaptive-portrait
   const chromeHeight = padding * 2 + headerHeight + footerHeight;
   if (!records.length) return { width, height: landscape ? 900 : 1500, padding, headerHeight, footerHeight, format };
 
+  if (layout === "tickets") {
+    const columns = landscape ? Math.min(4, Math.max(2, Math.ceil(Math.sqrt(records.length * 1.35)))) : Math.min(3, Math.max(1, Math.ceil(Math.sqrt(records.length * 0.72))));
+    const rows = Math.ceil(records.length / columns);
+    const ticketHeight = landscape ? 235 : 270;
+    const contentHeight = Math.max(landscape ? 560 : 940, rows * ticketHeight + Math.max(0, rows - 1) * 14);
+    return { width, height: chromeHeight + contentHeight, padding, headerHeight, footerHeight, format };
+  }
+
   if (layout === "wall") {
     const gap = landscape ? 14 : 12;
     const contentWidth = width - padding * 2;
@@ -1085,9 +1151,11 @@ function getCanvasSpec(format: ShareFormat, count: number, layout: ShareLayout, 
     ? Math.max(960, groupCount * 300)
     : layout === "cities"
       ? Math.max(980, groupCount * 250)
-      : layout === "magazine"
-        ? Math.max(980, Math.ceil(Math.max(1, count) / 4) * 290)
-        : Math.max(980, Math.ceil(Math.max(1, count) / 4) * 265);
+      : layout === "tickets"
+        ? Math.max(980, Math.ceil(Math.max(1, count) / 3) * 285)
+        : layout === "magazine"
+          ? Math.max(980, Math.ceil(Math.max(1, count) / 4) * 290)
+          : Math.max(980, Math.ceil(Math.max(1, count) / 4) * 265);
   return { width, height: padding * 2 + headerHeight + footerHeight + contentHeight, padding, headerHeight, footerHeight, format };
 }
 
@@ -1107,7 +1175,9 @@ async function exportSharePng(options: ExportOptions) {
 
   if (options.layout === "timeline") await drawTimelineCanvas(context, buildTimelineBands(options.records, area, spec), options, palette);
   else if (options.layout === "cities") await drawCitiesCanvas(context, buildCityModel(options.records, area, spec), options, palette);
-  else {
+  else if (options.layout === "tickets") {
+    for (const slot of buildTicketSlots(options.records, area, spec)) await drawTicket(context, slot.record, slot.rect, palette);
+  } else {
     const slots = options.layout === "magazine" ? buildMagazineSlots(options.records, area, spec) : isAdaptiveFormat(spec.format) ? buildAdaptiveWallSlots(options.records, area, spec) : buildJustifiedSlots(options.records, area, spec);
     for (const slot of slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails, slot.emphasis);
   }
@@ -1123,6 +1193,61 @@ async function exportSharePng(options: ExportOptions) {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+async function drawTicket(
+  context: CanvasRenderingContext2D,
+  record: EventRecord,
+  slot: Rect,
+  palette: PaletteDefinition,
+) {
+  context.save();
+  roundedPath(context, slot.x, slot.y, slot.width, slot.height, Math.max(12, slot.height * 0.06));
+  context.clip();
+  const image = await loadMediaImage(primaryMedia(record));
+  if (image) {
+    context.save();
+    context.filter = "blur(20px) saturate(1.15)";
+    drawCover(context, image, slot.x - 20, slot.y - 20, slot.width + 40, slot.height + 40, record.colors[0] || palette.surface);
+    context.restore();
+  } else {
+    drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
+  }
+  const tint = context.createLinearGradient(slot.x, slot.y, slot.x + slot.width, slot.y + slot.height);
+  tint.addColorStop(0, `${record.colors[0] || "#172229"}dc`);
+  tint.addColorStop(1, `${record.colors[1] || "#47645d"}b8`);
+  context.fillStyle = tint;
+  context.fillRect(slot.x, slot.y, slot.width, slot.height);
+
+  const posterWidth = Math.min(slot.width * 0.29, slot.height * 0.72);
+  const posterRect = { x: slot.x + 18, y: slot.y + 18, width: posterWidth, height: slot.height - 36 };
+  if (image) drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
+  else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
+  roundedPath(context, posterRect.x, posterRect.y, posterRect.width, posterRect.height, 10);
+  context.strokeStyle = "rgba(255,255,255,.42)";
+  context.lineWidth = 1.5;
+  context.stroke();
+
+  const copyX = posterRect.x + posterRect.width + 20;
+  const copyWidth = slot.x + slot.width - copyX - 18;
+  context.fillStyle = "rgba(255,255,255,.86)";
+  roundedPath(context, copyX - 10, slot.y + 18, copyWidth + 10, slot.height - 36, 12);
+  context.fill();
+  context.fillStyle = "#15201f";
+  context.font = `900 ${Math.max(16, slot.height * 0.105)}px system-ui, sans-serif`;
+  context.fillText(trimText(context, record.title, copyWidth - 8), copyX, slot.y + slot.height * 0.34);
+  context.fillStyle = "rgba(21,32,31,.66)";
+  context.font = `800 ${Math.max(10, slot.height * 0.055)}px system-ui, sans-serif`;
+  context.fillText(trimText(context, record.artists.join(" / ") || "艺人待补", copyWidth - 8), copyX, slot.y + slot.height * 0.48);
+  context.font = `750 ${Math.max(9, slot.height * 0.047)}px system-ui, sans-serif`;
+  context.fillText(trimText(context, `${record.date} · ${record.city || "城市待补"} · ${record.venue || "场馆待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.64);
+  context.fillText(trimText(context, `${record.seat || "座位待补"} · ${record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.78);
+  context.restore();
+
+  roundedPath(context, slot.x, slot.y, slot.width, slot.height, Math.max(12, slot.height * 0.06));
+  context.strokeStyle = palette.border;
+  context.lineWidth = 1.5;
+  context.stroke();
 }
 
 async function drawTimelineCanvas(context: CanvasRenderingContext2D, bands: TimelineBand[], options: ExportOptions, palette: PaletteDefinition) {

@@ -206,34 +206,44 @@ try {
     || ticketGeometry.section.left < ticketGeometry.cover.right - 1) {
     throw new Error(`Ticket cover crop/alignment is invalid: ${JSON.stringify(ticketGeometry)}`);
   }
+  const frostedTicket = await page.locator(".archive-ticket").first().evaluate((card) => ({
+    backdrop: Boolean(card.querySelector(".archive-ticket-backdrop")),
+    blur: getComputedStyle(card.querySelector(".archive-ticket-backdrop")).filter,
+    glass: getComputedStyle(card.querySelector(".archive-ticket-content")).backdropFilter,
+  }));
+  if (!frostedTicket.backdrop || !frostedTicket.blur.includes("blur") || !frostedTicket.glass.includes("blur")) throw new Error(`Ticket is not frosted from its poster: ${JSON.stringify(frostedTicket)}`);
   await page.screenshot({ path: `${outputDir}/04-ticket-desktop.png`, fullPage: true });
+  await archiveView("画报", ".showcase-card");
+  const showcase = await page.locator(".archive-showcase").evaluate((node) => ({ display: getComputedStyle(node).display, columnCount: getComputedStyle(node).columnCount, gap: getComputedStyle(node).columnGap }));
+  if (showcase.display !== "block" || Number(showcase.columnCount) < 2 || parseFloat(showcase.gap) > 10) throw new Error(`Showcase is not using compact columns: ${JSON.stringify(showcase)}`);
+  await page.screenshot({ path: `${outputDir}/04b-showcase-dense.png`, fullPage: true });
+  await page.locator(".sync-pill").click();
+  await page.locator(".sync-action-menu").waitFor({ state: "visible", timeout: 5000 });
+  const syncMenuText = await page.locator(".sync-action-menu").innerText();
+  for (const label of ["立即同步", "从云端恢复", "刷新云端图片"]) if (!syncMenuText.includes(label)) throw new Error(`Sync menu is missing ${label}`);
+  await page.locator(".sync-pill").click();
   await archiveView("列表", ".archive-list button");
 await page.screenshot({ path: `${outputDir}/05-list-desktop.png`, fullPage: true });
 await archiveView("城市/场馆", ".archive-venue-view");
-await page.locator(".china-static-map .china-map-land").first().waitFor({ state: "visible", timeout: 10000 });
-const staticChinaMap = await page.locator(".venue-map-art").evaluate((map) => {
-  const land = map.querySelector(".china-map-land");
-  const rect = map.getBoundingClientRect();
-  const landStyle = land ? getComputedStyle(land) : null;
-  return {
-    mode: map.getAttribute("data-map-mode"),
-    width: rect.width,
-    height: rect.height,
-    landFill: landStyle?.fill || "",
-    landStroke: landStyle?.stroke || "",
-    markerCount: map.querySelectorAll(".venue-map-marker").length,
-  };
-});
-if (staticChinaMap.mode !== "static-china" || staticChinaMap.width < 500 || staticChinaMap.height < 340 || !staticChinaMap.landFill || staticChinaMap.landFill === "rgb(16, 20, 24)" || staticChinaMap.markerCount < 1) {
-  throw new Error(`Fixed China footprint map is invalid: ${JSON.stringify(staticChinaMap)}`);
+await page.locator('[data-map-mode="offline-summary"]').waitFor({ state: "visible", timeout: 10000 });
+const offlineMap = await page.locator('[data-map-mode="offline-summary"]').evaluate((map) => ({
+  width: map.getBoundingClientRect().width,
+  height: map.getBoundingClientRect().height,
+  itemCount: map.querySelectorAll(".venue-offline-grid button").length,
+  hasChinaPolygon: Boolean(map.querySelector(".china-map-land, .china-static-map")),
+}));
+if (offlineMap.width < 500 || offlineMap.height < 300 || offlineMap.itemCount < 1 || offlineMap.hasChinaPolygon) {
+  throw new Error(`Offline city summary is invalid: ${JSON.stringify(offlineMap)}`);
 }
-await page.screenshot({ path: `${outputDir}/05b-static-china-map.png`, fullPage: true });
+await page.screenshot({ path: `${outputDir}/05b-offline-city-summary.png`, fullPage: true });
 await archiveView("海报", ".archive-poster-card");
 
   await page.getByRole("button", { name: "制作分享图", exact: true }).click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
   const activeFormat = await page.locator(".share-format-control button.is-active").innerText();
   if (!activeFormat.includes("智能横版")) throw new Error(`Share studio did not open in smart landscape mode: ${activeFormat}`);
+  const activeLimit = await page.locator(".share-count-control button.is-active").innerText();
+  if (!activeLimit.includes("全部")) throw new Error(`Share studio should default to all records, got: ${activeLimit}`);
   const panelDensity = await page.locator(".share-studio-panel").evaluate((panel) => ({ scrollHeight: panel.scrollHeight, clientHeight: panel.clientHeight }));
   if (panelDensity.scrollHeight > panelDensity.clientHeight + 4) throw new Error(`Default share controls still require scrolling: ${JSON.stringify(panelDensity)}`);
   await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 15000 });
@@ -247,6 +257,18 @@ await archiveView("海报", ".archive-poster-card");
   const wallFill = wall.posters.reduce((sum, poster) => sum + poster.width * poster.height, 0) / (wall.canvas.width * wall.canvas.height);
   if (wallFill < 0.72) throw new Error(`Adaptive wall layout leaves too much empty space: ${wallFill.toFixed(3)}`);
   await page.screenshot({ path: `${outputDir}/06-share-wall-fit.png`, fullPage: true });
+
+  await layoutButton("票根聚合").click();
+  await page.locator(".share-ticket-card").first().waitFor({ state: "visible", timeout: 10000 });
+  const ticketShareGeometry = await page.locator(".share-layout-canvas-tickets").evaluate((canvas) => ({
+    cardCount: canvas.querySelectorAll(".share-ticket-card").length,
+    backdropCount: canvas.querySelectorAll(".share-ticket-backdrop").length,
+    overflow: getComputedStyle(canvas).overflow,
+  }));
+  if (ticketShareGeometry.cardCount < 3 || ticketShareGeometry.backdropCount !== ticketShareGeometry.cardCount) throw new Error(`Ticket share layout is incomplete: ${JSON.stringify(ticketShareGeometry)}`);
+  await assertFixedPreviewFits("Ticket aggregation");
+  await page.screenshot({ path: `${outputDir}/06b-share-ticket-aggregation.png`, fullPage: true });
+  await layoutButton("密集海报墙").click();
 
   await page.locator(".share-format-control button").filter({ hasText: "智能竖版" }).click();
   await page.waitForTimeout(120);

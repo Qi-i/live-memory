@@ -245,3 +245,24 @@ img {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+.sync-action-wrap { position: relative; }
+.sync-pill { cursor: pointer; }
+.sync-pill > span { overflow: hidden; max-width: 150px; text-overflow: ellipsis; }
+.sync-pill > svg:last-child { width: 13px; height: 13px; color: currentColor; opacity: .62; }
+.sync-action-menu { position: absolute; top: calc(100% + 8px); right: 0; z-index: 180; display: grid; width: min(340px, calc(100vw - 24px)); gap: 6px; padding: 10px; border: 1px solid var(--experience-border); border-radius: 12px; color: var(--experience-text); background: color-mix(in srgb, var(--experience-surface-solid) 94%, transparent); box-shadow: 0 20px 50px color-mix(in srgb, var(--experience-text) 18%, transparent); backdrop-filter: blur(20px); }
+.sync-action-menu header { display: grid; gap: 2px; padding: 3px 4px 7px; }
+.sync-action-menu header strong { font-size: 13px; }
+.sync-action-menu header small, .sync-action-menu > small { color: var(--experience-muted); font-size: 9px; font-weight: 780; line-height: 1.45; }
+.sync-action-menu > button { display: flex; min-height: 38px; align-items: center; gap: 8px; padding: 0 10px; border: 1px solid var(--experience-border); border-radius: 9px; color: inherit; text-align: left; background: var(--experience-surface-solid); font-size: 11px; font-weight: 900; cursor: pointer; }
+.sync-action-menu > button:disabled { cursor: not-allowed; opacity: .46; }
+.sync-action-menu > button svg { width: 15px; height: 15px; color: #108879; }
+.cloud-recovery-banner { display: grid; grid-template-columns: auto minmax(0,1fr) auto auto; gap: 10px; align-items: center; margin: 0 0 10px; padding: 10px 12px; border: 1px solid color-mix(in srgb, #108879 32%, var(--experience-border)); border-radius: 11px; background: color-mix(in srgb, var(--experience-accent-2) 11%, var(--experience-surface-solid)); }
+.cloud-recovery-banner > svg { width: 20px; height: 20px; color: #108879; }
+.cloud-recovery-banner span { min-width: 0; }
+.cloud-recovery-banner strong, .cloud-recovery-banner small { display: block; }
+.cloud-recovery-banner strong { font-size: 12px; }
+.cloud-recovery-banner small { margin-top: 2px; color: var(--experience-muted); font-size: 10px; font-weight: 780; }
+.cloud-recovery-banner button { min-height: 32px; padding: 0 10px; border: 1px solid var(--experience-border); border-radius: 8px; color: inherit; background: var(--experience-surface-solid); font-weight: 900; cursor: pointer; }
+@media (max-width: 700px) { .sync-action-menu { position: fixed; top: auto; right: 8px; bottom: 74px; left: 8px; width: auto; } .cloud-recovery-banner { grid-template-columns: auto minmax(0,1fr) auto; } .cloud-recovery-banner > button:first-of-type { grid-column: 2 / 4; } }

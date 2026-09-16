@@ -1,9 +1,12 @@
 import {
   AlertTriangle,
   Cloud,
+  CloudDownload,
+  ChevronDown,
   Import,
   Loader2,
   Plus,
+  RefreshCw,
 } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 import type { AppSettings } from "./domain";
@@ -51,6 +54,11 @@ export default function AppRoot() {
     syncing,
     syncConflicts,
     setSyncConflicts,
+    cloudRecoveryNotice,
+    dismissCloudRecoveryNotice,
+    syncNow,
+    checkRemoteUpdates,
+    refreshCloudMedia,
     busy,
     setBusy,
     toast,
@@ -65,6 +73,7 @@ export default function AppRoot() {
   const [shareMode, setShareMode] = useState(false);
   const [shareFormat, setShareFormat] = useState<ShareFormat>("adaptive-landscape");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [syncMenuOpen, setSyncMenuOpen] = useState(false);
 
   useEffect(() => {
     if (settings.defaultView && layout !== "showcase") setLayout(settings.defaultView);
@@ -110,10 +119,21 @@ export default function AppRoot() {
 
   const utilityActions = (
     <>
-      <span className={`sync-pill${syncing ? " syncing" : ""}`}>
-        {syncing ? <Loader2 className="spin" /> : syncConflicts.length ? <AlertTriangle /> : <Cloud />}
-        {syncLabel}
-      </span>
+      <div className="sync-action-wrap">
+        <button className={`sync-pill${syncing ? " syncing" : ""}`} type="button" aria-expanded={syncMenuOpen} onClick={() => setSyncMenuOpen((value) => !value)}>
+          {syncing ? <Loader2 className="spin" /> : syncConflicts.length ? <AlertTriangle /> : <Cloud />}
+          <span>{syncLabel}</span><ChevronDown />
+        </button>
+        {syncMenuOpen && (
+          <div className="sync-action-menu" role="dialog" aria-label="云同步中心">
+            <header><strong>云同步中心</strong><small>{settings.lastSyncAt ? `最近同步 ${new Date(settings.lastSyncAt).toLocaleString()}` : "尚未完成同步"}</small></header>
+            <button type="button" disabled={syncing || isGuest} onClick={() => void syncNow()}><Cloud />立即同步</button>
+            <button type="button" disabled={syncing || isGuest} onClick={() => void checkRemoteUpdates(false)}><CloudDownload />从云端恢复 / 检查其他设备更新</button>
+            <button type="button" disabled={syncing || isGuest || !settings.supabase.syncMedia} onClick={() => void refreshCloudMedia()}><RefreshCw />刷新云端图片</button>
+            <small>{settings.supabase.syncMedia ? "图片同步已开启；网页恢复可见和网络恢复时也会自动刷新。" : "当前未开启云端图片同步。"}</small>
+          </div>
+        )}
+      </div>
       {route === "archive" && !shareMode && (
         <>
           <button className="button ghost" type="button" onClick={() => setImportOpen(true)}><Import />导入</button>
@@ -136,6 +156,9 @@ export default function AppRoot() {
       utilityActions={utilityActions}
       shareMode={shareMode}
     >
+      {cloudRecoveryNotice && !isGuest && (
+        <div className="cloud-recovery-banner"><CloudDownload /><span><strong>其他设备的数据已经到达这台设备</strong><small>{cloudRecoveryNotice}</small></span><button type="button" onClick={() => void refreshCloudMedia()}>刷新图片</button><button type="button" aria-label="关闭云端恢复提示" onClick={dismissCloudRecoveryNotice}>×</button></div>
+      )}
       {route === "archive" && (
         <ArchivePage
           key={archiveMediaKey}
@@ -162,6 +185,7 @@ export default function AppRoot() {
             onConfirm: () => moveToTrash(record),
           })}
           onZoom={setZoomMedia}
+          onOpenMapSettings={() => setRoute("settings")}
         />
       )}
       {route === "stats" && <StatsPage records={activeRecords} />}

@@ -535,3 +535,54 @@
   .share-layout-control button { min-height: 44px; }
   .share-palette-control button { min-height: 34px; }
 }
+
+
+/* Ticket aggregation: poster-derived color, glass surface, same geometry in smart canvases. */
+.share-layout-canvas-tickets { overflow: hidden; }
+.share-ticket-card {
+  position: absolute;
+  display: grid;
+  grid-template-columns: minmax(74px, 28%) minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, white 38%, transparent);
+  border-radius: 18px;
+  color: #12201d;
+  background: linear-gradient(135deg, var(--ticket-a), var(--ticket-b));
+  box-shadow: 0 16px 36px rgba(10, 20, 18, .18);
+  isolation: isolate;
+}
+.share-ticket-backdrop {
+  position: absolute;
+  inset: -24px;
+  z-index: -3;
+  overflow: hidden;
+  opacity: .58;
+  filter: blur(22px) saturate(1.18);
+  transform: scale(1.12);
+}
+.share-ticket-backdrop img { width: 100%; height: 100%; object-fit: cover; }
+.share-ticket-tint {
+  position: absolute;
+  inset: 0;
+  z-index: -2;
+  background: linear-gradient(125deg, color-mix(in srgb, var(--ticket-a) 86%, transparent), color-mix(in srgb, var(--ticket-b) 74%, rgba(255,255,255,.28)));
+}
+.share-ticket-poster { min-width: 0; margin: 14px 0 14px 14px; overflow: hidden; border-radius: 11px; box-shadow: 0 10px 22px rgba(0,0,0,.2); }
+.share-ticket-poster .share-poster-frame { width: 100%; height: 100%; aspect-ratio: auto !important; }
+.share-ticket-card > section {
+  min-width: 0;
+  margin: 12px;
+  padding: 13px 14px;
+  overflow: hidden;
+  border: 1px solid rgba(255,255,255,.34);
+  border-radius: 13px;
+  background: rgba(255,255,255,.72);
+  backdrop-filter: blur(18px) saturate(1.08);
+}
+.share-ticket-card section > span { color: rgba(18,32,29,.62); font-size: 11px; font-weight: 900; }
+.share-ticket-card h3 { margin: 6px 0 4px; overflow: hidden; font-size: clamp(15px, 1.35vw, 23px); line-height: 1.1; text-overflow: ellipsis; white-space: nowrap; }
+.share-ticket-card p { margin: 0 0 10px; overflow: hidden; color: rgba(18,32,29,.68); font-size: 11px; font-weight: 800; text-overflow: ellipsis; white-space: nowrap; }
+.share-ticket-card dl { display: grid; grid-template-columns: auto minmax(0,1fr); gap: 4px 8px; margin: 0; font-size: 10px; }
+.share-ticket-card dt { color: rgba(18,32,29,.58); font-weight: 950; }
+.share-ticket-card dd { min-width: 0; margin: 0; overflow: hidden; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
