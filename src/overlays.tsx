@@ -34,6 +34,7 @@ import {
 } from "./domain";
 import { createDraftsFromText } from "./importers";
 import { fileToMedia, makeMedia, nowIso } from "./media";
+import { recognizeTicketScreenshot } from "./ocr";
 import type { SyncConflict } from "./supabase";
 import { resolveAllConflicts, resolveSyncConflict } from "./supabase";
 import type { AppSettings } from "./domain";
@@ -115,24 +116,92 @@ function MediaSection({ title, items, onZoom }: { title: string; items: MediaAss
   return <section className="detail-media-v2"><header><span>{title}</span><strong>{items.length}</strong></header><div>{items.map((item) => <button key={item.id} type="button" onClick={() => onZoom(item)}><OverlayMedia media={item} alt={item.title || title} /></button>)}</div></section>;
 }
 
+type MediaProcessState = "idle" | "processing" | "ready" | "error";
+
 export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord; onCancel: () => void; onSave: (record: EventRecord) => Promise<unknown> }) {
   const [draft, setDraft] = useState(record);
   const [saving, setSaving] = useState(false);
-  useEffect(() => setDraft(record), [record]);
+  const [mediaStates, setMediaStates] = useState<Partial<Record<MediaKind, MediaProcessState>>>({});
+  const [mediaErrors, setMediaErrors] = useState<Partial<Record<MediaKind, string>>>({});
+  const [recognizing, setRecognizing] = useState(false);
+  const [recognitionStatus, setRecognitionStatus] = useState("");
+  useEffect(() => {
+    setDraft(record);
+    setMediaStates({});
+    setMediaErrors({});
+    setRecognitionStatus("");
+  }, [record]);
 
   async function addFiles(kind: MediaKind, files: FileList | null) {
     if (!files?.length) return;
-    const media = await Promise.all(Array.from(files).map((file) => fileToMedia(draft.id, kind, file)));
-    setDraft((current) => ({
-      ...current,
-      media: kind === "poster" || kind === "ticket" || kind === "seatMap"
-        ? current.media.filter((item) => item.kind !== kind).concat(media)
-        : current.media.concat(media),
-    }));
+    setMediaStates((current) => ({ ...current, [kind]: "processing" }));
+    setMediaErrors((current) => ({ ...current, [kind]: "" }));
+    try {
+      const media = await Promise.all(Array.from(files).map((file) => fileToMedia(draft.id, kind, file)));
+      setDraft((current) => ({
+        ...current,
+        media: kind === "poster" || kind === "ticket" || kind === "seatMap"
+          ? current.media.filter((item) => item.kind !== kind).concat(media)
+          : current.media.concat(media),
+      }));
+      setMediaStates((current) => ({ ...current, [kind]: "ready" }));
+    } catch (error) {
+      setMediaStates((current) => ({ ...current, [kind]: "error" }));
+      setMediaErrors((current) => ({ ...current, [kind]: error instanceof Error ? error.message : "图片处理失败" }));
+    }
+  }
+
+  function removeMedia(id: string) {
+    setDraft((current) => ({ ...current, media: current.media.filter((item) => item.id !== id) }));
+  }
+
+  function applyRecognizedDraft(imported: ImportDraft) {
+    setDraft((current) => mergeImportDraftIntoRecord(current, imported));
+    if (imported.importConfidence >= 0.4) {
+      setRecognitionStatus(`识别完成 · ${sourceLabels[imported.sourceChannel]} · 置信度 ${Math.round(imported.importConfidence * 100)}%`);
+    } else if (imported.posterUrl) {
+      setRecognitionStatus("已获取海报，页面其他字段受平台限制，请手动核对");
+    } else {
+      setRecognitionStatus("链接已保存，但暂未读取到足够的演出信息");
+    }
+  }
+
+  async function recognizeSourceLink() {
+    if (!draft.sourceUrl?.trim()) return;
+    setRecognizing(true);
+    setRecognitionStatus("正在读取票务页面…");
+    try {
+      const imported = (await createDraftsFromText(draft.sourceUrl.trim()))[0];
+      if (!imported) throw new Error("没有识别到演出信息");
+      applyRecognizedDraft(imported);
+    } catch (error) {
+      setRecognitionStatus(error instanceof Error ? error.message : "链接识别失败");
+    } finally {
+      setRecognizing(false);
+    }
+  }
+
+  async function recognizeScreenshot(file?: File) {
+    if (!file) return;
+    setRecognizing(true);
+    setRecognitionStatus("正在准备截图识别…");
+    try {
+      const recognized = await recognizeTicketScreenshot(file, (progress, status) => {
+        setRecognitionStatus(`${status} ${Math.round(progress * 100)}%`);
+      });
+      const imported = (await createDraftsFromText(recognized))[0];
+      if (!imported) throw new Error("截图中没有识别到演出信息");
+      applyRecognizedDraft(imported);
+    } catch (error) {
+      setRecognitionStatus(error instanceof Error ? error.message : "截图识别失败");
+    } finally {
+      setRecognizing(false);
+    }
   }
 
   async function submit(event: FormEvent) {
     event.preventDefault();
+    if (Object.values(mediaStates).some((state) => state === "processing")) return;
     setSaving(true);
     try {
       await onSave({ ...draft, lineup: draft.artists.map((name) => ({ name, role: "artist" })), updatedAt: nowIso() });
@@ -140,6 +209,9 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
       setSaving(false);
     }
   }
+
+  const mediaFor = (kind: MediaKind) => draft.media.filter((item) => item.kind === kind);
+  const mediaBusy = Object.values(mediaStates).some((state) => state === "processing");
 
   return (
     <div className="overlay-backdrop editor-backdrop-v2">
@@ -159,19 +231,25 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
           <EditorField className="is-wide" label="座位"><input value={draft.seat || ""} onChange={(event) => setDraft({ ...draft, seat: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="同行人"><input value={draft.companions.join(" / ")} onChange={(event) => setDraft({ ...draft, companions: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="标签"><input value={draft.tags.join(" / ")} onChange={(event) => setDraft({ ...draft, tags: splitTextList(event.target.value) })} /></EditorField>
-          <EditorField className="is-wide" label="来源链接"><input value={draft.sourceUrl || ""} onChange={(event) => setDraft({ ...draft, sourceUrl: event.target.value })} /></EditorField>
+          <EditorField className="is-wide" label="票务链接 / 来源">
+            <div className="editor-source-import-v2">
+              <input value={draft.sourceUrl || ""} onChange={(event) => setDraft({ ...draft, sourceUrl: event.target.value })} placeholder="粘贴大麦、纷玩岛或票星球演出链接" />
+              <button className="button ghost" type="button" disabled={recognizing || !draft.sourceUrl?.trim()} onClick={() => void recognizeSourceLink()}>{recognizing ? <Loader2 className="spin" /> : <Sparkles />}识别链接</button>
+              <label className="button ghost"><ImagePlus />截图识别<input type="file" accept="image/*" onChange={(event) => void recognizeScreenshot(event.target.files?.[0])} /></label>
+            </div>
+            {recognitionStatus && <small className="editor-recognition-status-v2">{recognitionStatus}</small>}
+          </EditorField>
 
           <div className="media-upload-grid-v2 is-wide">
-            <UploadField label="主海报" kind="poster" onFiles={addFiles} />
-            <UploadField label="电子票根" kind="ticket" onFiles={addFiles} />
-            <UploadField label="座位图" kind="seatMap" onFiles={addFiles} />
-            <UploadField label="现场精选" kind="livePhoto" multiple onFiles={addFiles} />
+            <MediaEditorCard label="主海报" kind="poster" items={mediaFor("poster")} state={mediaStates.poster} error={mediaErrors.poster} onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="电子票根" kind="ticket" items={mediaFor("ticket")} state={mediaStates.ticket} error={mediaErrors.ticket} onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="座位图" kind="seatMap" items={mediaFor("seatMap")} state={mediaStates.seatMap} error={mediaErrors.seatMap} onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="现场精选" kind="livePhoto" items={mediaFor("livePhoto")} state={mediaStates.livePhoto} error={mediaErrors.livePhoto} multiple onFiles={addFiles} onRemove={removeMedia} />
           </div>
-          {draft.media.length > 0 && <div className="editor-media-preview-v2 is-wide">{draft.media.map((item) => <figure key={item.id}><OverlayMedia media={item} alt={item.title || mediaKindLabels[item.kind]} /><figcaption>{mediaKindLabels[item.kind]}</figcaption></figure>)}</div>}
           <EditorField className="is-wide" label="曲目"><textarea value={draft.setlist.join("\n")} onChange={(event) => setDraft({ ...draft, setlist: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="演出记录"><textarea value={draft.note || ""} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></EditorField>
         </div>
-        <footer className="editor-footer-v2"><button className="button ghost" type="button" onClick={onCancel}>取消</button><button className="button primary" disabled={saving} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}保存记录</button></footer>
+        <footer className="editor-footer-v2"><button className="button ghost" type="button" onClick={onCancel}>取消</button><button className="button primary" disabled={saving || mediaBusy || recognizing} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}{mediaBusy ? "图片正在处理" : "保存记录"}</button></footer>
       </form>
     </div>
   );
@@ -179,14 +257,67 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
 
 function EditorField({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) { return <label className={`editor-field-v2 ${className}`}><span>{label}</span>{children}</label>; }
 
-function UploadField({ label, kind, multiple, onFiles }: { label: string; kind: MediaKind; multiple?: boolean; onFiles: (kind: MediaKind, files: FileList | null) => Promise<void> }) {
-  return <label><Upload /><span>{label}</span><input type="file" accept="image/*" multiple={multiple} onChange={(event) => void onFiles(kind, event.target.files)} /></label>;
+function mergeImportDraftIntoRecord(record: EventRecord, imported: ImportDraft): EventRecord {
+  const reliable = imported.importConfidence >= 0.4;
+  let media = record.media;
+  const mediaSource = imported.sourceChannel === "damai" ? "damai" as const : "external" as const;
+  if (imported.posterUrl) {
+    media = media.filter((item) => item.kind !== "poster").concat(makeMedia(record.id, "poster", imported.posterUrl, "公开海报", mediaSource));
+  }
+  if (imported.seatMapUrl) {
+    media = media.filter((item) => item.kind !== "seatMap").concat(makeMedia(record.id, "seatMap", imported.seatMapUrl, "座位图", mediaSource));
+  }
+  return {
+    ...record,
+    ...(reliable && imported.title ? { title: imported.title } : {}),
+    ...(reliable && imported.date ? { date: imported.date, status: imported.status } : {}),
+    ...(reliable && imported.time ? { time: imported.time } : {}),
+    ...(reliable && imported.city ? { city: imported.city } : {}),
+    ...(reliable && imported.venue ? { venue: imported.venue } : {}),
+    ...(reliable && imported.address ? { address: imported.address } : {}),
+    ...(reliable && imported.artists.length ? { artists: imported.artists, lineup: imported.artists.map((name) => ({ name, role: "artist" as const })) } : {}),
+    ...(reliable && imported.publicPriceRange ? { publicPriceRange: imported.publicPriceRange } : {}),
+    sourceChannel: imported.sourceChannel || record.sourceChannel,
+    sourceUrl: imported.sourceUrl || record.sourceUrl,
+    importConfidence: imported.importConfidence,
+    media,
+  };
+}
+
+function MediaEditorCard({
+  label, kind, items, state = "idle", error, multiple, onFiles, onRemove,
+}: {
+  label: string;
+  kind: MediaKind;
+  items: MediaAsset[];
+  state?: MediaProcessState;
+  error?: string;
+  multiple?: boolean;
+  onFiles: (kind: MediaKind, files: FileList | null) => Promise<void>;
+  onRemove: (id: string) => void;
+}) {
+  const status = state === "processing" ? "正在处理…" : state === "error" ? "处理失败" : items.length ? `已就绪 · ${items.length} 张` : "尚未添加";
+  return <article className={`media-editor-card-v2 is-${state}`}>
+    <header><strong>{label}</strong><span>{status}</span></header>
+    <div className="media-editor-thumbs-v2">
+      {items.length ? items.slice(0, 3).map((item) => <figure key={item.id}>
+        <OverlayMedia media={item} alt={item.title || label} />
+        <button type="button" aria-label={`移除${label}`} onClick={() => onRemove(item.id)}><X /></button>
+      </figure>) : <span className="media-editor-empty-v2"><ImagePlus />暂无{label}</span>}
+      {items.length > 3 && <span className="media-editor-more-v2">+{items.length - 3}</span>}
+    </div>
+    <footer>
+      <label><Upload />{items.length && kind !== "livePhoto" ? "更换" : "选择图片"}<input type="file" accept="image/*" multiple={multiple} onChange={(event) => void onFiles(kind, event.target.files)} /></label>
+      {error && <small>{error}</small>}
+    </footer>
+  </article>;
 }
 
 export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; onSave: (record: EventRecord) => Promise<unknown>; flash: (message: string) => void }) {
   const [text, setText] = useState("");
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [loading, setLoading] = useState(false);
+  const [ocrProgress, setOcrProgress] = useState("");
 
   function updateDraft(id: string, patch: Partial<ImportDraft>) {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
@@ -213,12 +344,31 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
     flash(`已导入 ${files.length} 张图片草稿`);
   }
 
+
+  async function importScreenshots(files: FileList | null) {
+    if (!files?.length) return;
+    setLoading(true);
+    setOcrProgress("正在准备截图识别…");
+    try {
+      const nextDrafts: ImportDraft[] = [];
+      for (const file of Array.from(files)) {
+        const recognized = await recognizeTicketScreenshot(file, (progress, status) => setOcrProgress(`${status} ${Math.round(progress * 100)}%`));
+        nextDrafts.push(...await createDraftsFromText(recognized));
+      }
+      setDrafts(nextDrafts);
+      flash(`已从 ${files.length} 张截图识别 ${nextDrafts.length} 条草稿`);
+    } finally {
+      setLoading(false);
+      setOcrProgress("");
+    }
+  }
+
   return (
     <div className="overlay-backdrop" onClick={onClose}>
       <aside className="import-drawer-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2></div><button type="button" onClick={onClose}><X /></button></header>
-        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦等演出链接、票务页文字或手机识别文字。多条内容可一次生成草稿。" />
-        <div className="import-actions-v2"><button className="button primary" disabled={loading || !text.trim()} type="button" onClick={() => void parse()}>{loading ? <Loader2 className="spin" /> : <Sparkles />}识别草稿</button><label className="button ghost"><ImagePlus />批量图片<input type="file" accept="image/*" multiple onChange={(event) => void importImages(event.target.files)} /></label></div>
+        <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦、纷玩岛、票星球演出链接，或票务页文字。也可直接使用下方截图识别。" />
+        <div className="import-actions-v2"><button className="button primary" disabled={loading || !text.trim()} type="button" onClick={() => void parse()}>{loading ? <Loader2 className="spin" /> : <Sparkles />}识别链接/文字</button><label className="button ghost"><ImagePlus />截图识别<input type="file" accept="image/*" multiple onChange={(event) => void importScreenshots(event.target.files)} /></label><label className="button ghost"><Upload />海报导入<input type="file" accept="image/*" multiple onChange={(event) => void importImages(event.target.files)} /></label>{ocrProgress && <span className="import-ocr-progress-v2">{ocrProgress}</span>}</div>
         <div className="import-drafts-v2">
           {drafts.map((draft) => (
             <article key={draft.id}>
@@ -267,7 +417,7 @@ function OverlayMedia({ media, alt, fallback = "图片待补" }: { media?: Media
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [media?.src]);
   if (!media?.src || failed) return <span className="overlay-media-fallback">{media?.storagePath ? "云端图片待刷新" : fallback}</span>;
-  return <img src={media.src} alt={alt || ""} onError={() => { setFailed(true); if (media.storagePath) window.dispatchEvent(new Event("live-memory:cloud-media-refresh")); }} />;
+  return <img src={media.src} alt={alt || ""} loading="lazy" decoding="async" onError={() => { setFailed(true); if (media.storagePath) window.dispatchEvent(new Event("live-memory:cloud-media-refresh")); }} />;
 }
 
 function Info({ label, value }: { label: string; value: string }) { return <p><span>{label}</span><strong>{value}</strong></p>; }
@@ -280,7 +430,8 @@ function blankImportedRecord(title: string): EventRecord {
 function draftToRecord(draft: ImportDraft): EventRecord {
   const record = blankImportedRecord(draft.title);
   const media: MediaAsset[] = [];
-  if (draft.posterUrl) media.push(makeMedia(record.id, "poster", draft.posterUrl, "公开海报", "damai"));
-  if (draft.seatMapUrl) media.push(makeMedia(record.id, "seatMap", draft.seatMapUrl, "座位图", "damai"));
+  const mediaSource = draft.sourceChannel === "damai" ? "damai" as const : "external" as const;
+  if (draft.posterUrl) media.push(makeMedia(record.id, "poster", draft.posterUrl, "公开海报", mediaSource));
+  if (draft.seatMapUrl) media.push(makeMedia(record.id, "seatMap", draft.seatMapUrl, "座位图", mediaSource));
   return { ...record, category: draft.category, status: draft.status, date: draft.date, time: draft.time, city: draft.city, venue: draft.venue, address: draft.address, artists: draft.artists, lineup: draft.artists.map((name) => ({ name, role: "artist" })), price: draft.price ?? null, publicPriceRange: draft.publicPriceRange, note: draft.note, sourceChannel: draft.sourceChannel, sourceUrl: draft.sourceUrl, importConfidence: draft.importConfidence, media };
 }

@@ -47,25 +47,60 @@ export async function fileToAvatar(file: File) {
 }
 
 export async function compressImage(file: File, maxEdge = 1800, quality = 0.88) {
-  const src = await readAsDataUrl(file);
-  const image = await loadImage(src);
-  const ratio = Math.min(1, maxEdge / Math.max(image.naturalWidth, image.naturalHeight));
-  const width = Math.round(image.naturalWidth * ratio);
-  const height = Math.round(image.naturalHeight * ratio);
+  let source: CanvasImageSource | null = null;
+  let sourceWidth = 0;
+  let sourceHeight = 0;
+  let bitmap: ImageBitmap | null = null;
+  let fallbackSrc = "";
+
+  if (typeof createImageBitmap === "function") {
+    try {
+      bitmap = await createImageBitmap(file);
+      source = bitmap;
+      sourceWidth = bitmap.width;
+      sourceHeight = bitmap.height;
+    } catch {
+      bitmap = null;
+    }
+  }
+
+  if (!source) {
+    fallbackSrc = await readAsDataUrl(file);
+    const image = await loadImage(fallbackSrc);
+    source = image;
+    sourceWidth = image.naturalWidth;
+    sourceHeight = image.naturalHeight;
+  }
+
+  const ratio = Math.min(1, maxEdge / Math.max(sourceWidth, sourceHeight));
+  const width = Math.max(1, Math.round(sourceWidth * ratio));
+  const height = Math.max(1, Math.round(sourceHeight * ratio));
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const context = canvas.getContext("2d");
   if (!context) {
-    return { src, width: image.naturalWidth, height: image.naturalHeight, mimeType: file.type, size: file.size };
+    bitmap?.close();
+    const src = fallbackSrc || await readAsDataUrl(file);
+    return { src, width: sourceWidth, height: sourceHeight, mimeType: file.type, size: file.size };
   }
-  context.drawImage(image, 0, 0, width, height);
+  context.drawImage(source, 0, 0, width, height);
   const mimeType = file.type === "image/png" ? "image/png" : "image/jpeg";
-  const dataUrl = canvas.toDataURL(mimeType, quality);
-  return { src: dataUrl, width, height, mimeType, size: Math.round((dataUrl.length * 3) / 4) };
+  const blob = await canvasToBlob(canvas, mimeType, quality);
+  bitmap?.close();
+  if (!blob) {
+    const src = fallbackSrc || await readAsDataUrl(file);
+    return { src, width, height, mimeType: file.type, size: file.size };
+  }
+  const dataUrl = await readAsDataUrl(blob);
+  return { src: dataUrl, width, height, mimeType: blob.type || mimeType, size: blob.size };
 }
 
-export function readAsDataUrl(file: File): Promise<string> {
+function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: number) {
+  return new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, mimeType, quality));
+}
+
+export function readAsDataUrl(file: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.onload = () => resolve(String(reader.result || ""));

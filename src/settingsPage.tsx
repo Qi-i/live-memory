@@ -23,7 +23,6 @@ import {
   hasSupabaseConfig,
   linkGithubIdentity,
   pullRecordsFromSupabase,
-  pushRecordsToSupabase,
   refreshSignedMediaUrls,
   signInStorageWithAccount,
   updateAccountPassword,
@@ -103,14 +102,6 @@ export function SettingsPage({
     await onSave(connected.settings, connected.message);
   }
 
-  async function uploadCloud() {
-    const result = await pushRecordsToSupabase(draft, records);
-    await replaceAllRecords(result.records);
-    setRecords(result.records);
-    const next = { ...draft, lastSyncAt: nowIso() };
-    setDraft(next);
-    await onSave(next, result.message);
-  }
 
   async function restoreCloud() {
     const result = await pullRecordsFromSupabase(draft, records);
@@ -170,7 +161,7 @@ export function SettingsPage({
           </section>
 
           <section className="settings-module cloud-module-v2">
-            <ModuleHeader eyebrow="同步" title="个人 Supabase" description="连接自己的 Supabase 后，文字和图片可以在电脑与手机之间同步。" />
+            <ModuleHeader eyebrow="同步" title="个人 Supabase" description="连接自己的 Supabase 后，新增与修改会自动同步；无需手动上传整份档案。" />
             <div className="cloud-status-v2">
               <span className={cloudConnected ? "is-connected" : ""}><i />{cloudConnected ? "个人云端已连接" : cloudReady ? "配置已保存，等待连接" : "尚未填写连接信息"}</span>
               <strong>{health.remoteMedia} 个云端图片</strong>
@@ -184,7 +175,6 @@ export function SettingsPage({
             <p className="settings-help-v2">项目 URL 和公开密钥可在 Supabase 的 Project Settings → API 中找到。这里只能填写 anon 或 publishable key。</p>
             <div className="settings-actions-v2">
               <button className="button primary" type="button" disabled={busy || !cloudReady} onClick={() => void run(connectPersonalCloud)}>{busy ? <Loader2 className="spin" /> : <ShieldCheck />}{cloudConnected ? "重新连接" : "连接个人云端"}</button>
-              <button className="button ghost" type="button" disabled={busy || !cloudConnected} onClick={() => void run(uploadCloud)}><Upload />上传当前档案</button>
               <button className="button ghost" type="button" disabled={busy || !cloudConnected} onClick={() => void run(restoreCloud)}><Download />从云端恢复</button>
               <button className="button ghost" type="button" disabled={busy || !cloudConnected || !draft.supabase.syncMedia} onClick={() => void run(refreshCloudMedia)}><RefreshCw />刷新图片链接</button>
               <button className="button ghost" type="button" onClick={() => void onSave(draft)}><Check />保存连接设置</button>

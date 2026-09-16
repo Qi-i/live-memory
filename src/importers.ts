@@ -17,12 +17,24 @@ export function cleanupDamaiTitle(value: string) {
     .trim();
 }
 
+export type TicketingPlatform = "damai" | "fenwandao" | "piaoxingqiu";
+
+export function detectTicketingPlatform(url: string): TicketingPlatform | "" {
+  if (/damai\.cn/i.test(url)) return "damai";
+  if (/livelab\.com\.cn|fenwandao/i.test(url)) return "fenwandao";
+  if (/piaoxingqiu\.com/i.test(url)) return "piaoxingqiu";
+  return "";
+}
+
 export async function createDraftsFromText(text: string): Promise<ImportDraft[]> {
   const urls = extractUrls(text);
   const drafts: ImportDraft[] = [];
   for (const url of urls) {
-    if (/damai\.cn/i.test(url)) {
+    const platform = detectTicketingPlatform(url);
+    if (platform === "damai") {
       drafts.push(await fetchDamaiDraft(url));
+    } else if (platform) {
+      drafts.push(await fetchTicketingDraft(url, platform));
     } else {
       drafts.push(basicUrlDraft(url));
     }
@@ -56,6 +68,90 @@ export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
       seatMapUrl: knownMedia.seatMapUrl || undefined,
     };
   }
+}
+
+async function fetchTicketingDraft(url: string, platform: Exclude<TicketingPlatform, "damai">): Promise<ImportDraft> {
+  const fallback = basicUrlDraft(url, platform);
+  try {
+    const readerUrl = `https://r.jina.ai/http://${url.replace(/^https?:\/\//i, "")}`;
+    const response = await fetchWithTimeout(readerUrl, 14000);
+    if (!response.ok) throw new Error(`${platform} 页面读取失败：${response.status}`);
+    const pageText = await response.text();
+    return {
+      ...fallback,
+      ...parseTicketingReaderText(pageText, url, platform),
+      sourceUrl: url,
+      sourceChannel: platform,
+    };
+  } catch {
+    return fallback;
+  }
+}
+
+export function parseTicketingReaderText(text: string, url: string, platform: TicketingPlatform): Partial<ImportDraft> {
+  if (platform === "damai") {
+    return { ...parseDamaiReaderText(text, url), sourceChannel: "damai", sourceUrl: url };
+  }
+  const structuredTitle =
+    jsonStringForKey(text, "itemName") ||
+    jsonStringForKey(text, "performanceName") ||
+    jsonStringForKey(text, "showName") ||
+    jsonStringForKey(text, "projectName");
+  const readerTitle =
+    /Title:\s*(.+)/i.exec(text)?.[1]?.trim() ||
+    /#\s+(.+)/.exec(text)?.[1]?.trim() ||
+    /(?:演出名称|项目名称)[:：]\s*([^\n]+)/.exec(text)?.[1]?.trim() ||
+    "";
+  const title = cleanupTicketingTitle(structuredTitle || readerTitle, platform);
+  const showTime =
+    jsonStringForKey(text, "showTime") ||
+    jsonStringForKey(text, "startTime") ||
+    jsonStringForKey(text, "performanceTime") ||
+    jsonStringForKey(text, "showDate") ||
+    /(?:演出时间|演出日期|时间)[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    "";
+  const venue = cleanVenue(
+    jsonStringForKey(text, "venueName") ||
+    jsonStringForKey(text, "stadiumName") ||
+    jsonStringForKey(text, "venueTitle") ||
+    /(?:演出场馆|场馆|演出地点|地点)[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    "",
+  );
+  const city = normalizeCity(
+    jsonStringForKey(text, "venueCityName") ||
+    jsonStringForKey(text, "cityName") ||
+    inferCity(`${title} ${venue} ${text}`),
+  );
+  const priceLine =
+    jsonStringForKey(text, "priceRange") ||
+    /(?:票档|票价)[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    "";
+  const posterUrl = findTicketingPoster(text);
+  const date = normalizeDate(showTime || text);
+  const fields = [title, date, venue, posterUrl].filter(Boolean).length;
+  return {
+    title: title || (platform === "fenwandao" ? "纷玩岛项目" : "票星球项目"),
+    category: /音乐节|festival/i.test(title) ? "festival" : "concert",
+    status: normalizeStatus(undefined, date),
+    date: date || new Date().toISOString().slice(0, 10),
+    time: normalizeTime(showTime || text),
+    city,
+    venue,
+    artists: inferArtists(title),
+    publicPriceRange: priceLine.slice(0, 120),
+    posterUrl: posterUrl || undefined,
+    sourceChannel: platform,
+    sourceUrl: url,
+    importConfidence: fields >= 4 ? 0.94 : fields >= 3 ? 0.86 : fields >= 2 ? 0.72 : 0.3,
+  };
+}
+
+function cleanupTicketingTitle(value: string, platform: TicketingPlatform) {
+  const platformName = platform === "fenwandao" ? "纷玩岛" : platform === "piaoxingqiu" ? "票星球" : "大麦";
+  return cleanupDamaiTitle(value)
+    .replace(new RegExp(`(?:\\s*[-—–_|｜]\\s*)?${platformName}(?:官网|官方)?\\s*$`, "i"), "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
 }
 
 export function parseDamaiReaderText(text: string, url: string): Partial<ImportDraft> {
@@ -135,6 +231,18 @@ function allJsonStringsForKey(text: string, key: string) {
   return values;
 }
 
+function findTicketingPoster(text: string) {
+  for (const key of ["itemPic", "posterUrl", "posterPic", "verticalPic", "projectPic", "coverUrl", "coverImage", "imageUrl", "performancePic"]) {
+    const value = cleanImageUrl(jsonStringForKey(text, key));
+    if (isUsablePoster(value)) return value;
+  }
+  for (const key of ["picUrl", "image", "url"]) {
+    const value = allJsonStringsForKey(text, key).map(cleanImageUrl).find(isUsablePoster);
+    if (value) return value;
+  }
+  return bestMarkdownImage(text, false);
+}
+
 function findDamaiPoster(text: string) {
   for (const key of ["itemPic", "posterUrl", "posterPic", "verticalPic", "projectPic"]) {
     const value = cleanImageUrl(jsonStringForKey(text, key));
@@ -206,26 +314,33 @@ function normalizeCity(value: string) {
 }
 
 function basicUrlDraft(url: string, sourceChannel: ImportDraft["sourceChannel"] = ""): ImportDraft {
+  const platform = sourceChannel || detectTicketingPlatform(url);
+  const title = platform === "damai" ? "大麦项目" : platform === "fenwandao" ? "纷玩岛项目" : platform === "piaoxingqiu" ? "票星球项目" : "链接导入项目";
   return {
     id: createId("draft"),
-    title: /damai\.cn/i.test(url) ? "大麦项目" : "链接导入项目",
+    title,
     category: "concert",
     status: "planned",
     date: new Date().toISOString().slice(0, 10),
     city: "",
     venue: "",
     artists: [],
-    sourceChannel,
+    sourceChannel: platform,
     sourceUrl: url,
     importConfidence: 0.25,
   };
 }
 
 function parsePlainTextDraft(text: string): ImportDraft {
-  const firstLine = text.split(/\n/).map((line) => line.trim()).find(Boolean) || "文本导入项目";
+  const lines = text.split(/\n/).map((line) => line.trim()).filter(Boolean);
+  const firstLine = lines.find((line) => !/^(大麦|纷玩岛|票星球|演出详情|订单详情)$/.test(line)) || "文本导入项目";
   const date = normalizeDate(text) || new Date().toISOString().slice(0, 10);
   const category: EventCategory = /音乐节/i.test(text) ? "festival" : "concert";
   const status: EventStatus = normalizeStatus(undefined, date);
+  const venue = /(?:演出场馆|场馆|演出地点|地点)[:：]?\s*([^\n]+)/.exec(text)?.[1]?.trim() || "";
+  const publicPriceRange = /(?:票档|票价)[:：]?\s*([^\n]+)/.exec(text)?.[1]?.trim() || "";
+  const sourceChannel: ImportDraft["sourceChannel"] = /纷玩岛/.test(text) ? "fenwandao" : /票星球/.test(text) ? "piaoxingqiu" : /大麦/.test(text) ? "damai" : "";
+  const usefulFields = [date, venue, inferCity(text)].filter(Boolean).length;
   return {
     id: createId("draft"),
     title: firstLine.slice(0, 80),
@@ -234,10 +349,11 @@ function parsePlainTextDraft(text: string): ImportDraft {
     date,
     time: normalizeTime(text),
     city: inferCity(text),
-    venue: "",
+    venue,
     artists: inferArtists(firstLine),
-    sourceChannel: "",
-    importConfidence: 0.45,
+    publicPriceRange: publicPriceRange.slice(0, 120),
+    sourceChannel,
+    importConfidence: usefulFields >= 2 ? 0.62 : 0.45,
   };
 }
 
