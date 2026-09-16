@@ -60,6 +60,34 @@ try {
   assert.equal(supabase.recordsSemanticallyEqual(baseRecord, sameCloud, false), true);
   assert.equal(supabase.recordsSemanticallyEqual(baseRecord, { ...sameCloud, venue: "另一个场馆" }, false), false);
 
+  const localWithUploadedPoster = {
+    ...baseRecord,
+    media: [{
+      id: "media-1",
+      recordId: "r1",
+      kind: "poster",
+      src: "data:image/jpeg;base64,local-preview",
+      storagePath: "owner/r1/media-1.jpg",
+      source: "local",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-15T12:00:00.000Z",
+    }],
+  };
+  const cloudWithSignedPoster = {
+    ...sameCloud,
+    media: [{
+      id: "media-1",
+      recordId: "r1",
+      kind: "poster",
+      src: "https://example.supabase.co/storage/v1/object/sign/echo-media/owner/r1/media-1.jpg?token=rotating",
+      storagePath: "owner/r1/media-1.jpg",
+      source: "supabase",
+      createdAt: "2026-09-01T00:00:00.000Z",
+      updatedAt: "2026-09-16T00:00:00.000Z",
+    }],
+  };
+  assert.equal(supabase.recordsSemanticallyEqual(localWithUploadedPoster, cloudWithSignedPoster, true), true);
+
   const overlays = await readFile(new URL("../src/overlays.tsx", import.meta.url), "utf8");
   const overlayCss = await readFile(new URL("../src/overlays.css", import.meta.url), "utf8");
   const media = await readFile(new URL("../src/media.ts", import.meta.url), "utf8");
