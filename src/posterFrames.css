@@ -3,7 +3,6 @@
 .archive-poster-media,
 .showcase-card > button,
 .wallet-cover,
-.archive-ticket > div:first-child,
 .archive-timeline button > time + span {
   aspect-ratio: var(--poster-frame-ratio);
 }
@@ -21,8 +20,6 @@
 
 .wallet-cover img,
 .wallet-cover > .record-media-fallback,
-.archive-ticket > div:first-child img,
-.archive-ticket > div:first-child > .record-media-fallback,
 .archive-timeline button > time + span img,
 .archive-timeline button > time + span > .record-media-fallback {
   width: 100%;
@@ -30,6 +27,23 @@
   object-fit: contain;
   object-position: center;
   background: color-mix(in srgb, var(--experience-surface-solid) 84%, #14201e);
+}
+
+.archive-ticket > div:first-child {
+  width: 100%;
+  min-width: 0;
+  aspect-ratio: auto;
+  overflow: hidden;
+  background: #101418;
+}
+
+.archive-ticket > div:first-child img,
+.archive-ticket > div:first-child > .record-media-fallback {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 18%;
+  background: #101418;
 }
 
 .archive-poster-card,
@@ -46,5 +60,6 @@
 }
 
 @media (max-width: 760px) {
+  .archive-ticket > div:first-child { aspect-ratio: var(--poster-frame-ratio); }
   .archive-timeline button > time + span { width: 58px; }
 }
