@@ -21,6 +21,7 @@ import {
   purgeTextBackupFromAccount,
   recordPageView,
   refreshSignedMediaUrls,
+  restorePersonalCloudMedia,
   saveUserProfileBinding,
   signInStorageWithAccount,
   syncAfterLogin,
@@ -197,7 +198,8 @@ export function useAppController() {
           const connectedSettings = writeSettings(connected.settings);
           let nextRecords = recordsRef.current;
           if (connectedSettings.supabase.syncMedia) {
-            nextRecords = await refreshSignedMediaUrls(connectedSettings, nextRecords, { force: true });
+            const restored = await restorePersonalCloudMedia(connectedSettings, nextRecords);
+            nextRecords = restored.records;
             await replaceAllRecords(nextRecords);
             setRecords(nextRecords);
             void preloadRecordMedia(nextRecords);
@@ -205,7 +207,7 @@ export function useAppController() {
           }
           setSettings(connectedSettings);
           setPersonalCloudStatus("connected");
-          setCloudRecoveryNotice(connectedSettings.supabase.syncMedia ? "个人云端已经自动恢复，图片链接已重新签名。" : "个人云端已经自动恢复。");
+          setCloudRecoveryNotice(connectedSettings.supabase.syncMedia ? "个人云端已经自动恢复，海报与图片引用已重新载入。" : "个人云端已经自动恢复。");
           if (!silent) flash("个人云端已恢复");
           return true;
         } catch (error) {

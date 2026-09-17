@@ -595,12 +595,14 @@ export async function syncAfterLogin(
     messages.push("文字备份暂未恢复");
   }
 
-  // 4. Once the saved personal project is connected, immediately renew media URLs.
-  // This is intentionally after text recovery so restored local storage paths are signed too.
+  // 4. Once the saved personal project is connected, restore the full personal-cloud
+  // record/media catalog before renewing signed URLs. Account text backup intentionally
+  // omits media, so a new device cannot recover posters by signing local references alone.
   if (personalCloudStatus === "connected" && nextSettings.supabase.syncMedia) {
     try {
-      nextRecords = await refreshSignedMediaUrls(nextSettings, nextRecords, { force: true });
-      messages.push("云端图片已恢复");
+      const restored = await restorePersonalCloudMedia(nextSettings, nextRecords);
+      nextRecords = restored.records;
+      messages.push(restored.message);
     } catch {
       personalCloudStatus = "reconnect-needed";
       messages.push("云端图片待恢复");
@@ -780,6 +782,36 @@ export async function refreshSignedMediaUrls(
       return cached ? { ...asset, src: cached.url, source: "supabase" as const } : asset;
     }),
   }));
+}
+
+export function mergePersonalCloudMedia(baseRecords: EventRecord[], personalRecords: EventRecord[]) {
+  const merged = new Map(baseRecords.map((record) => [record.id, record]));
+  for (const personal of personalRecords) {
+    const base = merged.get(personal.id);
+    if (!base) {
+      merged.set(personal.id, normalizeRecord(personal));
+      continue;
+    }
+    const textSource = personal.updatedAt > base.updatedAt ? personal : base;
+    const media = personal.media.length ? personal.media : base.media;
+    merged.set(personal.id, normalizeRecord({
+      ...textSource,
+      media,
+      syncedAt: personal.syncedAt || base.syncedAt,
+    }));
+  }
+  return Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export async function restorePersonalCloudMedia(settings: AppSettings, baseRecords: EventRecord[]): Promise<SyncResult> {
+  if (!settings.supabase.ownerKey) throw new Error("请先连接个人云端");
+  const personal = await pullRecordsFromPasskeySupabase(settings, []);
+  const merged = mergePersonalCloudMedia(baseRecords, personal.records);
+  const records = settings.supabase.syncMedia
+    ? await refreshSignedMediaUrls(settings, merged, { force: true })
+    : merged;
+  const mediaCount = records.reduce((count, record) => count + record.media.filter((asset) => Boolean(asset.storagePath)).length, 0);
+  return { records, message: `已恢复个人云端媒体 ${mediaCount} 项` };
 }
 
 export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {
