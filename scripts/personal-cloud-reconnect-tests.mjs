@@ -1,0 +1,16 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const supabase = await readFile(new URL("../src/supabase.ts", import.meta.url), "utf8");
+const controller = await readFile(new URL("../src/appController.ts", import.meta.url), "utf8");
+const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
+
+assert.match(supabase, /personalCloudStatus|personalCloudRecovery/, "Post-login sync must expose personal cloud recovery status");
+assert.match(supabase, /signInStorageWithAccount\(nextSettings\)/, "Saved personal cloud must reconnect after login");
+assert.match(supabase, /refreshSignedMediaUrls\(nextSettings|refreshSignedMediaUrls\(connected\.settings/, "Successful reconnect must immediately refresh signed media URLs");
+assert.match(controller, /recoverPersonalCloud/, "Controller must expose a retryable personal cloud recovery action");
+assert.match(controller, /addEventListener\("focus"[\s\S]*recoverPersonalCloud|recoverPersonalCloud[\s\S]*addEventListener\("focus"/, "Focus recovery path must retry personal cloud reconnect");
+assert.match(controller, /addEventListener\("online"[\s\S]*recoverPersonalCloud|recoverPersonalCloud[\s\S]*addEventListener\("online"/, "Online recovery path must retry personal cloud reconnect");
+assert.match(appRoot, /个人云端.*恢复|恢复个人云端|个人云端需恢复/, "Cloud center must surface personal cloud recovery state");
+
+console.log("Personal cloud reconnect contracts passed.");
