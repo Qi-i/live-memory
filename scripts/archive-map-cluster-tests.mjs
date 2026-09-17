@@ -7,17 +7,21 @@ const css = await readFile(new URL("../src/archive.css", import.meta.url), "utf8
 
 assert.match(archive, /buildPlaceGroups/, "Archive map must aggregate records into place groups");
 assert.match(archive, /heat:\s*count\s*\/\s*maxCount|heat\s*=\s*count\s*\/\s*maxCount/, "Place groups must expose normalized heat");
+assert.match(archive, /placeHeatColor/, "Map and ranking must derive their emphasis from the same visit heat scale");
 assert.match(archive, /selectedPlaceKey/, "Map and ranking must share selected place state");
 assert.match(archive, /hoveredPlaceKey/, "Map and ranking must share hover state");
 assert.match(archive, /venue-place-picker/, "First place click must open a place picker");
 assert.match(archive, /amap-poster-marker/, "AMap markers must render poster-stack content");
+assert.match(archive, /amap-poster-count/, "Poster-stack markers must expose the number of shows at that place");
 assert.match(archive, /content:\s*markerContent|content:\s*build/, "AMap marker must use custom HTML content");
 assert.doesNotMatch(archive, /marker\.on\?\("click",\s*\(\)\s*=>\s*onOpen\(record\)\)/, "Map marker click must not directly open record detail");
 assert.match(archive, /onMouseEnter=.*setHoveredPlaceKey|setHoveredPlaceKey\(/, "Ranking hover must update shared map highlight");
+assert.match(archive, /setSelectedPlaceKey\(group\.key\)[\s\S]*setFocusPlaceKey\(group\.key\)/, "Ranking click must select and focus the corresponding map place");
 assert.match(archive, /focusPlace|setZoomAndCenter|setCenter/, "Ranking click must focus the map place");
 assert.match(amap, /content\??:/, "AMap wrapper types must support custom marker content");
 assert.match(css, /\.amap-poster-marker/, "Poster markers require dedicated styling");
 assert.match(css, /\.venue-place-picker/, "Place picker requires dedicated styling");
+assert.match(css, /--heat-color/, "Map markers and ranking must share heat-driven color styling");
 assert.match(css, /venue-heat-legend|map-heat-legend/, "Map must explain low-to-high visit heat");
 
 console.log("Archive map cluster contracts passed.");
