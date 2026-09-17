@@ -31,3 +31,4 @@ replace_once(controller,
 
 print("Applied full personal-cloud media restore patch")
 # Trigger the one-shot workflow after the workflow file itself exists.
+# Retry after widening the regression assertion to the helper boundary.
