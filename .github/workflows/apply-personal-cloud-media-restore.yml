@@ -1,0 +1,42 @@
+name: Apply personal cloud media restore
+
+on:
+  push:
+    branches:
+      - feat/map-poster-clusters-cloud-reconnect-20260917
+    paths:
+      - scripts/apply-personal-cloud-media-restore.py
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/map-poster-clusters-cloud-reconnect-20260917
+          token: ${{ secrets.GITHUB_TOKEN }}
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - name: Apply patch
+        run: python scripts/apply-personal-cloud-media-restore.py
+      - name: Install dependencies
+        run: npm ci
+      - name: Verify
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ secrets.VITE_ACCOUNT_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ secrets.VITE_ACCOUNT_SUPABASE_ANON_KEY }}
+        run: npm run check
+      - name: Remove one-shot applicator
+        run: rm scripts/apply-personal-cloud-media-restore.py .github/workflows/apply-personal-cloud-media-restore.yml
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -m "fix: restore personal cloud media catalog after login"
+          git push origin HEAD:feat/map-poster-clusters-cloud-reconnect-20260917
