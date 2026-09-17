@@ -30,3 +30,4 @@ replace_once(controller,
 '''          let nextRecords = recordsRef.current;\n          if (connectedSettings.supabase.syncMedia) {\n            const restored = await restorePersonalCloudMedia(connectedSettings, nextRecords);\n            nextRecords = restored.records;\n            await replaceAllRecords(nextRecords);\n            setRecords(nextRecords);\n            void preloadRecordMedia(nextRecords);\n            lastMediaRefreshAt.current = Date.now();\n          }\n          setSettings(connectedSettings);\n          setPersonalCloudStatus("connected");\n          setCloudRecoveryNotice(connectedSettings.supabase.syncMedia ? "个人云端已经自动恢复，海报与图片引用已重新载入。" : "个人云端已经自动恢复。");\n''')
 
 print("Applied full personal-cloud media restore patch")
+# Trigger the one-shot workflow after the workflow file itself exists.
