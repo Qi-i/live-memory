@@ -538,10 +538,13 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
   return data ? profileFromRow(data) : null;
 }
 
+export type PersonalCloudRecoveryStatus = "not-configured" | "connected" | "reconnect-needed";
+
 export interface PostLoginSyncResult {
   settings: AppSettings;
   records: EventRecord[];
   message: string;
+  personalCloudStatus: PersonalCloudRecoveryStatus;
 }
 
 export async function syncAfterLogin(
@@ -562,13 +565,17 @@ export async function syncAfterLogin(
   }
 
   // 2. Personal Supabase: restore saved project settings, then reconnect using the Live Memory account.
+  // A transient cold-start/network failure must remain visible to the controller so it can retry later.
+  let personalCloudStatus: PersonalCloudRecoveryStatus = "not-configured";
   if (nextSettings.storageMode === "supabase" && hasSupabaseConfig(nextSettings)) {
     try {
       const connected = await signInStorageWithAccount(nextSettings);
       nextSettings = connected.settings;
+      personalCloudStatus = "connected";
       messages.push("个人云端已连接");
     } catch {
-      messages.push("个人云端配置已恢复");
+      personalCloudStatus = "reconnect-needed";
+      messages.push("个人云端待恢复");
     }
   }
 
@@ -588,10 +595,23 @@ export async function syncAfterLogin(
     messages.push("文字备份暂未恢复");
   }
 
+  // 4. Once the saved personal project is connected, immediately renew media URLs.
+  // This is intentionally after text recovery so restored local storage paths are signed too.
+  if (personalCloudStatus === "connected" && nextSettings.supabase.syncMedia) {
+    try {
+      nextRecords = await refreshSignedMediaUrls(nextSettings, nextRecords, { force: true });
+      messages.push("云端图片已恢复");
+    } catch {
+      personalCloudStatus = "reconnect-needed";
+      messages.push("云端图片待恢复");
+    }
+  }
+
   return {
     settings: nextSettings,
     records: nextRecords,
     message: messages.join("，") || "同步完成",
+    personalCloudStatus,
   };
 }
 

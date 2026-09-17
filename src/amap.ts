@@ -1,16 +1,30 @@
+export interface AMapMarkerOptions {
+  position?: [number, number];
+  title?: string;
+  content?: string | HTMLElement;
+  anchor?: string;
+  offset?: unknown;
+  zIndex?: number;
+}
+
 export interface AMapMarkerInstance {
-  on?: (event: string, handler: () => void) => void;
+  on?: (event: string, handler: (event?: unknown) => void) => void;
+  setContent?: (content: string | HTMLElement) => void;
+  setPosition?: (position: [number, number]) => void;
 }
 
 export interface AMapMapInstance {
   add?: (items: AMapMarkerInstance[] | AMapMarkerInstance) => void;
   setFitView?: (...args: unknown[]) => void;
+  setCenter?: (center: [number, number], immediately?: boolean, duration?: number) => void;
+  setZoomAndCenter?: (zoom: number, center: [number, number], immediately?: boolean, duration?: number) => void;
+  on?: (event: string, handler: (event?: unknown) => void) => void;
   destroy: () => void;
 }
 
 export interface AMapNamespace {
   Map: new (container: HTMLElement | string, options?: Record<string, unknown>) => AMapMapInstance;
-  Marker: new (options?: Record<string, unknown>) => AMapMarkerInstance;
+  Marker: new (options?: AMapMarkerOptions) => AMapMarkerInstance;
 }
 
 declare global {

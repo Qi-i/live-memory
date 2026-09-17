@@ -22,9 +22,10 @@ import {
   recordPageView,
   refreshSignedMediaUrls,
   saveUserProfileBinding,
+  signInStorageWithAccount,
   syncAfterLogin,
 } from "./supabase";
-import type { SyncConflict } from "./supabase";
+import type { PersonalCloudRecoveryStatus, SyncConflict } from "./supabase";
 import { makeGuestSettings, useAccess } from "./access";
 import type { AppRoute } from "./experience";
 import { seedRecords } from "./seeds";
@@ -87,6 +88,7 @@ export function useAppController() {
   const [syncing, setSyncing] = useState(false);
   const [syncConflicts, setSyncConflicts] = useState<SyncConflict[]>([]);
   const [cloudRecoveryNotice, setCloudRecoveryNotice] = useState("");
+  const [personalCloudStatus, setPersonalCloudStatus] = useState<PersonalCloudRecoveryStatus>("not-configured");
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const initialized = useRef(false);
@@ -97,6 +99,7 @@ export function useAppController() {
   const lastMediaRefreshAt = useRef(0);
   const lastRemoteCheckAt = useRef(0);
   const syncOperationInFlight = useRef(false);
+  const personalCloudRecoveryInFlight = useRef(false);
 
   function setRecords(next: EventRecord[] | ((current: EventRecord[]) => EventRecord[])) {
     setRecordState((current) => {
@@ -131,6 +134,10 @@ export function useAppController() {
             const initialSync = await syncAfterLogin({ ...loadedSettings, onboardingComplete: true }, loadedRecords);
             nextRecords = initialSync.records;
             nextSettings = writeSettings({ ...initialSync.settings, onboardingComplete: true });
+            setPersonalCloudStatus(initialSync.personalCloudStatus);
+            if (initialSync.personalCloudStatus === "reconnect-needed") {
+              setCloudRecoveryNotice("个人云端连接尚未恢复，系统会在当前页面自动重试；文字档案不受影响。");
+            }
             await replaceAllRecords(nextRecords);
           } catch {
             nextSettings = writeSettings({ ...loadedSettings, onboardingComplete: true });
@@ -170,6 +177,61 @@ export function useAppController() {
   useEffect(() => () => {
     if (toastTimer.current !== null) window.clearTimeout(toastTimer.current);
   }, []);
+
+  async function recoverPersonalCloud(silent = false) {
+    if (isGuest || !access.user || settings.storageMode !== "supabase" || !hasSupabaseConfig(settings)) {
+      setPersonalCloudStatus("not-configured");
+      return false;
+    }
+    if (hasPersonalCloudConnection(settings) && personalCloudStatus === "connected") return true;
+    if (personalCloudRecoveryInFlight.current) return false;
+    personalCloudRecoveryInFlight.current = true;
+    setPersonalCloudStatus("reconnect-needed");
+    const delays = [0, 650, 1800];
+    let lastError: unknown = null;
+    try {
+      for (const delay of delays) {
+        if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+        try {
+          const connected = await signInStorageWithAccount(settings);
+          const connectedSettings = writeSettings(connected.settings);
+          let nextRecords = recordsRef.current;
+          if (connectedSettings.supabase.syncMedia) {
+            nextRecords = await refreshSignedMediaUrls(connectedSettings, nextRecords, { force: true });
+            await replaceAllRecords(nextRecords);
+            setRecords(nextRecords);
+            void preloadRecordMedia(nextRecords);
+            lastMediaRefreshAt.current = Date.now();
+          }
+          setSettings(connectedSettings);
+          setPersonalCloudStatus("connected");
+          setCloudRecoveryNotice(connectedSettings.supabase.syncMedia ? "个人云端已经自动恢复，图片链接已重新签名。" : "个人云端已经自动恢复。");
+          if (!silent) flash("个人云端已恢复");
+          return true;
+        } catch (error) {
+          lastError = error;
+        }
+      }
+      setPersonalCloudStatus("reconnect-needed");
+      if (!silent && lastError) flash(friendlySupabaseErrorMessage(lastError, "个人云端恢复失败"));
+      return false;
+    } finally {
+      personalCloudRecoveryInFlight.current = false;
+    }
+  }
+
+  useEffect(() => {
+    if (isGuest || !access.user || settings.storageMode !== "supabase" || !hasSupabaseConfig(settings) || personalCloudStatus === "connected") return;
+    const retryPersonalCloud = () => void recoverPersonalCloud(true);
+    const initial = window.setTimeout(retryPersonalCloud, 1200);
+    window.addEventListener("focus", retryPersonalCloud);
+    window.addEventListener("online", retryPersonalCloud);
+    return () => {
+      window.clearTimeout(initial);
+      window.removeEventListener("focus", retryPersonalCloud);
+      window.removeEventListener("online", retryPersonalCloud);
+    };
+  }, [access.user, isGuest, personalCloudStatus, settings.storageMode, settings.supabase.anonKey, settings.supabase.url]);
 
   useEffect(() => {
     if (!initialized.current || isGuest || !access.user || editing || syncing || syncOperationInFlight.current || records.length === 0) return;
@@ -427,6 +489,8 @@ export function useAppController() {
     setSyncConflicts,
     cloudRecoveryNotice,
     dismissCloudRecoveryNotice: () => setCloudRecoveryNotice(""),
+    personalCloudStatus,
+    recoverPersonalCloud,
     syncNow,
     checkRemoteUpdates,
     refreshCloudMedia,

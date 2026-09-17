@@ -1025,3 +1025,137 @@
   .showcase-column { gap: 6px; }
   .showcase-column:nth-child(n+3) { display: contents; }
 }
+
+
+/* Poster-cluster venue map */
+.amap-map-shell { overflow: hidden; border-radius: 18px; }
+.amap-map-host { height: 500px; }
+.amap-poster-marker {
+  --heat: .2;
+  --heat-color: hsl(160 62% 49%);
+  position: relative;
+  display: block;
+  width: 58px;
+  height: 78px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+  transform: scale(calc(.88 + var(--heat) * .18));
+  transform-origin: 50% 100%;
+  transition: transform 160ms ease, filter 160ms ease;
+  filter: drop-shadow(0 8px 12px rgb(15 23 42 / .22));
+}
+.amap-poster-marker.is-hovered,
+.amap-poster-marker:hover { transform: scale(calc(.98 + var(--heat) * .2)) translateY(-2px); z-index: 20; }
+.amap-poster-marker.is-selected { transform: scale(calc(1.04 + var(--heat) * .2)) translateY(-4px); z-index: 30; }
+.amap-poster-stack { position: absolute; inset: 0 5px 8px 5px; display: block; }
+.amap-poster-layer {
+  --poster-index: 0;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  border: 2px solid color-mix(in srgb, white 88%, var(--heat-color));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--heat-color) 18%, var(--experience-surface-solid));
+  color: var(--experience-text);
+  font-weight: 800;
+  display: grid;
+  place-items: center;
+  transform: translateX(calc((var(--poster-index) - 1) * 7px)) rotate(calc((var(--poster-index) - 1) * 5deg));
+  box-shadow: 0 4px 10px rgb(15 23 42 / .15);
+}
+.amap-poster-layer:first-child { z-index: 3; transform: none; }
+.amap-poster-layer img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.amap-poster-count {
+  position: absolute;
+  right: -4px;
+  bottom: 0;
+  z-index: 8;
+  min-width: 25px;
+  height: 25px;
+  padding: 0 6px;
+  display: grid;
+  place-items: center;
+  border: 2px solid white;
+  border-radius: 99px;
+  background: var(--heat-color);
+  color: white;
+  font-size: 12px;
+  font-weight: 900;
+  box-shadow: 0 4px 9px rgb(15 23 42 / .22);
+}
+.amap-poster-marker.is-selected::after {
+  content: "";
+  position: absolute;
+  inset: -7px -10px 0;
+  border: 3px solid var(--heat-color);
+  border-radius: 13px;
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--heat-color) 20%, transparent);
+}
+.venue-place-picker {
+  position: absolute;
+  left: 18px;
+  bottom: 18px;
+  z-index: 7;
+  width: min(540px, calc(100% - 36px));
+  max-height: 310px;
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--experience-border) 82%, white);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--experience-surface-solid) 86%, transparent);
+  backdrop-filter: blur(22px) saturate(1.18);
+  box-shadow: 0 18px 42px rgb(15 23 42 / .20);
+}
+.venue-place-picker > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; margin-bottom: 10px; }
+.venue-place-picker > header div { display: grid; gap: 2px; }
+.venue-place-picker > header span { color: var(--experience-accent); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.venue-place-picker > header strong { font-size: 18px; }
+.venue-place-picker > header small { color: var(--experience-muted); }
+.venue-place-picker > header > button { border: 0; background: transparent; font-size: 22px; cursor: pointer; color: var(--experience-muted); }
+.venue-place-picker > div { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.venue-place-picker > div.is-single { grid-template-columns: minmax(0, 220px); }
+.venue-place-picker > div > button { min-width: 0; padding: 6px; border: 1px solid var(--experience-border); border-radius: 12px; background: color-mix(in srgb, var(--experience-surface-solid) 92%, transparent); text-align: left; cursor: pointer; }
+.venue-place-picker > div > button > span { display: block; aspect-ratio: 3 / 4; overflow: hidden; border-radius: 8px; background: color-mix(in srgb, var(--experience-text) 7%, transparent); }
+.venue-place-picker > div > button img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.venue-place-picker > div > button section { display: grid; gap: 2px; padding: 6px 2px 2px; }
+.venue-place-picker > div > button strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
+.venue-place-picker > div > button small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--experience-muted); font-size: 10px; }
+.venue-ranking-list { display: grid; gap: 3px; }
+.venue-ranking-list > button {
+  --heat-color: var(--experience-accent-2);
+  display: grid;
+  grid-template-columns: minmax(72px, 1fr) 90px 28px;
+  gap: 10px;
+  align-items: center;
+  width: 100%;
+  padding: 7px 4px;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--experience-text);
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease, transform 140ms ease;
+}
+.venue-ranking-list > button:hover,
+.venue-ranking-list > button.is-hovered { background: color-mix(in srgb, var(--heat-color) 9%, transparent); }
+.venue-ranking-list > button.is-selected { background: color-mix(in srgb, var(--heat-color) 15%, transparent); transform: translateX(-3px); }
+.venue-ranking-list > button span { font-weight: 650; }
+.venue-ranking-list > button i { height: 6px; border-radius: 99px; background: linear-gradient(90deg, var(--heat-color) var(--ratio), color-mix(in srgb, var(--experience-text) 8%, transparent) var(--ratio)); }
+.venue-ranking-list > button b { text-align: right; }
+.venue-heat-legend,
+.map-heat-legend { display: flex; align-items: center; gap: 7px; color: var(--experience-muted); font-size: 10px; }
+.venue-heat-legend { justify-content: flex-end; padding-top: 8px; }
+.venue-heat-legend i,
+.map-heat-legend i { width: 82px; height: 5px; border-radius: 99px; background: linear-gradient(90deg, hsl(178 58% 48%), hsl(92 66% 49%), hsl(24 76% 52%)); }
+.map-heat-legend { position: absolute; right: 14px; bottom: 14px; z-index: 5; padding: 7px 9px; border-radius: 99px; background: color-mix(in srgb, var(--experience-surface-solid) 84%, transparent); backdrop-filter: blur(12px); }
+.venue-offline-grid > button { border-color: color-mix(in srgb, var(--heat-color, var(--experience-accent-2)) 24%, var(--experience-border)); }
+
+@media (max-width: 820px) {
+  .amap-map-host { height: 430px; }
+  .venue-place-picker { left: 10px; bottom: 10px; width: calc(100% - 20px); max-height: 260px; }
+  .venue-ranking-list > button { grid-template-columns: minmax(70px, 1fr) 70px 26px; }
+  .map-heat-legend { right: 10px; bottom: 10px; }
+}

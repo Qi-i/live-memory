@@ -56,6 +56,8 @@ export default function AppRoot() {
     setSyncConflicts,
     cloudRecoveryNotice,
     dismissCloudRecoveryNotice,
+    personalCloudStatus,
+    recoverPersonalCloud,
     syncNow,
     checkRemoteUpdates,
     refreshCloudMedia,
@@ -109,13 +111,15 @@ export default function AppRoot() {
 
   const syncLabel = isGuest
     ? "示例数据"
-    : syncing
-      ? "同步中…"
-      : syncConflicts.length
-        ? `${syncConflicts.length} 条冲突`
-        : hasPersonalCloudConnection(settings)
-          ? "个人云端已连接"
-          : "设备数据";
+    : personalCloudStatus === "reconnect-needed"
+      ? "个人云端需恢复"
+      : syncing
+        ? "同步中…"
+        : syncConflicts.length
+          ? `${syncConflicts.length} 条冲突`
+          : hasPersonalCloudConnection(settings)
+            ? "个人云端已连接"
+            : "设备数据";
 
   const utilityActions = (
     <>
@@ -129,8 +133,9 @@ export default function AppRoot() {
             <header><strong>云同步中心</strong><small>{settings.lastSyncAt ? `最近同步 ${new Date(settings.lastSyncAt).toLocaleString()}` : "尚未完成同步"}</small></header>
             <button type="button" disabled={syncing || isGuest} onClick={() => void syncNow()}><Cloud />立即同步</button>
             <button type="button" disabled={syncing || isGuest} onClick={() => void checkRemoteUpdates(false)}><CloudDownload />从云端恢复 / 检查其他设备更新</button>
+            {personalCloudStatus === "reconnect-needed" && <button type="button" disabled={syncing || isGuest} onClick={() => void recoverPersonalCloud(false)}><RefreshCw />恢复个人云端</button>}
             <button type="button" disabled={syncing || isGuest || !settings.supabase.syncMedia} onClick={() => void refreshCloudMedia()}><RefreshCw />刷新云端图片</button>
-            <small>{settings.supabase.syncMedia ? "图片同步已开启；网页恢复可见和网络恢复时也会自动刷新。" : "当前未开启云端图片同步。"}</small>
+            <small>{personalCloudStatus === "reconnect-needed" ? "个人云端连接尚未恢复；系统会在网页重新聚焦或恢复网络时自动重试。" : settings.supabase.syncMedia ? "图片同步已开启；网页恢复可见和网络恢复时也会自动刷新。" : "当前未开启云端图片同步。"}</small>
           </div>
         )}
       </div>
