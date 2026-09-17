@@ -1,0 +1,35 @@
+name: Apply map and cloud reconnect implementation
+
+on:
+  push:
+    branches:
+      - feat/map-poster-clusters-cloud-reconnect-20260917
+    paths:
+      - scripts/apply-map-cloud-reconnect.py
+      - .github/workflows/apply-map-cloud-reconnect.yml
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: feat/map-poster-clusters-cloud-reconnect-20260917
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - run: python scripts/apply-map-cloud-reconnect.py
+      - run: npm ci
+      - run: npm run check
+      - name: Remove one-shot applicator
+        run: rm scripts/apply-map-cloud-reconnect.py .github/workflows/apply-map-cloud-reconnect.yml
+      - name: Commit implementation
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add src package.json scripts docs .github/workflows || true
+          git commit -m "feat: add map poster clusters and cloud reconnect" || exit 0
+          git push origin HEAD:feat/map-poster-clusters-cloud-reconnect-20260917
