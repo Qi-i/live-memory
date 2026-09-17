@@ -11,12 +11,15 @@ This change fixes two production problems:
 
 The account profile already stores the linked Supabase URL, anon/publishable key, media bucket, storage mode, and media-sync preference. `settingsFromProfileBinding()` intentionally clears `ownerKey`, so every new browser session must derive a fresh owner key from the current Live Memory account before personal cloud media can be restored.
 
+A truly new device has an additional constraint: the account text backup intentionally omits `media`. Reconnecting and merely renewing signed URLs is therefore insufficient because there may be no local `storagePath` references to sign. Recovery must first pull the full personal-cloud record/media catalog, merge those media references into the newest available text records, and only then renew signed URLs.
+
 `syncAfterLogin()` must therefore treat reconnecting the saved personal cloud as a required recovery step when `storageMode === "supabase"` and a linked Supabase configuration is available.
 
 Behavior:
 
 - Attempt personal-cloud reconnect during post-login recovery.
-- If it succeeds, immediately refresh signed media URLs before presenting the recovered records.
+- If it succeeds, pull the full personal-cloud media catalog before refreshing signed URLs.
+- Preserve whichever text version is newer while restoring personal-cloud media references.
 - If the first reconnect fails because of a transient network/cold-start condition, keep a reconnect-needed state rather than silently pretending recovery is complete.
 - Retry reconnect on a bounded backoff and again when the page regains focus or network connectivity.
 - Do not require the user to open Settings and press “重新连接”.
@@ -63,7 +66,7 @@ Map and ranking share a single selected/hovered place key.
 
 - Hover/focus on a ranking row highlights the corresponding map marker.
 - Clicking a ranking row focuses the map on that place and opens the same floating poster picker.
-- Clicking a map marker highlights/scrolls the matching ranking row.
+- Clicking a map marker highlights the matching ranking row.
 - Ranking bars use the same heat color scale as map markers, so the highest-frequency city is immediately visible in both views.
 
 ## AMap wrapper changes
@@ -75,20 +78,22 @@ Map and ranking share a single selected/hovered place key.
 - Missing AMap key keeps the existing explicit configuration state.
 - AMap load failure keeps the existing retry/error state.
 - Personal cloud reconnect failure must not block text records from loading.
-- A failed media-sign refresh must retain the recovered records and surface a reconnect/refresh state instead of reporting “当前已是最新”.
+- A failed media-catalog pull or media-sign refresh must retain the recovered text records and surface a reconnect/refresh state instead of reporting “当前已是最新”.
 
 ## Testing
 
 Add regression coverage for:
 
 - Saved personal Supabase configuration automatically reconnects after login without manual Settings interaction.
+- A new device restores the personal-cloud media catalog before renewing signed URLs.
+- Newer account/local text fields are preserved while media references are restored from personal Supabase.
 - Reconnect failure is retained as retryable state and is retried on focus/online.
 - Successful reconnect immediately refreshes signed media URLs.
 - Map groups records by city/venue and produces heat values.
 - AMap uses custom poster-stack markers rather than generic `title` pins.
 - First marker click selects a place/picker; individual poster click opens detail.
-- Ranking click/hover shares selection/highlight state with map.
-- Desktop visual audit covers poster clusters, selected picker, heat legend, and ranking linkage.
+- Ranking click/hover shares selection/highlight state and heat encoding with map.
+- General desktop/mobile visual regression remains green. The credentialed AMap branch is covered by source/type interaction contracts because CI does not contain a personal AMap credential.
 
 ## Non-goals
 
