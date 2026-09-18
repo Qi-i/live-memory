@@ -14,7 +14,6 @@ import {
 } from "./domain";
 import { makeMedia, nowIso } from "./media";
 import { normalizeLegacyAssetUrl } from "./posterRegistry";
-import { seedRecords } from "./seeds";
 
 const DB_NAME = "echo-archive-v2";
 const DB_VERSION = 1;
@@ -100,10 +99,9 @@ export async function loadRecordsWithMigration() {
   if (current.length > 0) return current;
 
   const migrated = localStorage.getItem(MIGRATION_DONE_KEY) ? [] : await readLegacyRecords();
-  const records = migrated.length ? migrated : seedRecords;
-  await replaceAllRecords(records);
+  if (migrated.length) await replaceAllRecords(migrated);
   localStorage.setItem(MIGRATION_DONE_KEY, "1");
-  return listRecords();
+  return migrated.length ? listRecords() : [];
 }
 
 export async function listRecords() {
@@ -280,9 +278,35 @@ function legacyToRecord(row: Record<string, unknown>): EventRecord {
   });
 }
 
+function normalizeMediaTombstones(value: EventRecord["mediaTombstones"]) {
+  const byId = new Map<string, NonNullable<EventRecord["mediaTombstones"]>[number]>();
+  for (const item of value || []) {
+    const id = String(item?.id || "").trim();
+    const deletedAt = String(item?.deletedAt || "").trim();
+    if (!id || !deletedAt) continue;
+    const previous = byId.get(id);
+    if (!previous || deletedAt > previous.deletedAt) {
+      byId.set(id, {
+        id,
+        storagePath: item.storagePath ? String(item.storagePath) : undefined,
+        deletedAt,
+      });
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => a.id.localeCompare(b.id));
+}
+
 export function normalizeRecord(record: EventRecord): EventRecord {
   const timestamp = record.updatedAt || nowIso();
   const artists = splitTextList(record.artists).slice(0, 80);
+  const mediaTombstones = normalizeMediaTombstones(record.mediaTombstones);
+  const tombstoneById = new Map(mediaTombstones.map((item) => [item.id, item]));
+  const media = (record.media || [])
+    .map((asset) => ({ ...asset, src: normalizeLegacyAssetUrl(asset.src), recordId: record.id }))
+    .filter((asset) => {
+      const tombstone = tombstoneById.get(asset.id);
+      return !tombstone || tombstone.deletedAt < asset.updatedAt;
+    });
   return {
     ...record,
     schemaVersion: 2,
@@ -301,7 +325,8 @@ export function normalizeRecord(record: EventRecord): EventRecord {
     setlist: splitTextList(record.setlist).slice(0, 120),
     sourceChannel: normalizeSource(record.sourceChannel),
     sourceUrl: normalizeExternalUrl(record.sourceUrl) || undefined,
-    media: (record.media || []).map((asset) => ({ ...asset, src: normalizeLegacyAssetUrl(asset.src), recordId: record.id })),
+    media,
+    mediaTombstones,
     favorite: Boolean(record.favorite),
     colors: [record.colors?.[0] || "#101418", record.colors?.[1] || "#dfff4f"],
     createdAt: record.createdAt || timestamp,
