@@ -1,0 +1,377 @@
+/* Archive information hierarchy refinement — loaded last on purpose. */
+
+.archive-card-artist {
+  color: color-mix(in srgb, #0b8f78 88%, var(--experience-text));
+  font-weight: 930;
+  letter-spacing: -0.015em;
+}
+
+.archive-card-facts {
+  line-height: 1.38;
+}
+
+.archive-ticket-line {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+  overflow: hidden;
+}
+
+.archive-ticket-line > b {
+  flex: 0 0 auto;
+  color: var(--experience-text);
+  font-size: 1.03em;
+  font-weight: 950;
+}
+
+.archive-ticket-line > span {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--experience-muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Poster cards */
+.archive-page .archive-poster-copy {
+  padding: 11px 5px 5px;
+}
+
+.archive-page .archive-poster-copy h3 {
+  min-height: 2.35em;
+  margin: 7px 0 4px;
+  font-size: clamp(16px, 1.28vw, 20px);
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+}
+
+.archive-page .archive-poster-copy > .archive-card-artist {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.3;
+}
+
+.archive-page .archive-poster-copy dl {
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 5px 8px;
+  font-size: 12px;
+}
+
+.archive-page .archive-poster-copy dt {
+  font-size: 10px;
+  letter-spacing: .04em;
+}
+
+.archive-page .archive-poster-copy dd {
+  color: color-mix(in srgb, var(--experience-text) 68%, var(--experience-muted));
+}
+
+/* Magazine / showcase */
+.archive-page .showcase-card > div {
+  padding: 56px 15px 15px;
+}
+
+.archive-page .showcase-card h3 {
+  margin-bottom: 4px;
+}
+
+.archive-page .showcase-card .archive-card-artist {
+  margin: 0;
+  color: rgba(255,255,255,.94);
+  font-size: 12px;
+}
+
+.archive-page .showcase-card small {
+  display: block;
+  margin-top: 4px;
+  overflow: hidden;
+  color: rgba(255,255,255,.68);
+  font-size: 10px;
+  font-weight: 760;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Wallet */
+.archive-page .wallet-copy > .archive-card-artist {
+  margin: 0 0 9px;
+  color: color-mix(in srgb, #0b8f78 88%, var(--experience-text));
+  font-size: 13px;
+  line-height: 1.25;
+}
+
+.archive-page .wallet-copy dl {
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 5px 8px;
+  font-size: 12px;
+}
+
+.archive-page .wallet-copy dt {
+  font-size: 10px;
+}
+
+/* Ticket */
+.archive-page .archive-ticket-content > .archive-card-artist {
+  margin: 0 0 9px;
+  color: color-mix(in srgb, #0b8f78 88%, var(--experience-text));
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.archive-page .archive-ticket-content dl {
+  grid-template-columns: 44px minmax(0, 1fr);
+  gap: 4px 7px;
+  font-size: 11px;
+}
+
+.archive-page .archive-ticket-content dt {
+  font-size: 9px;
+  letter-spacing: .05em;
+}
+
+/* Timeline */
+.archive-page .archive-timeline button {
+  grid-template-columns: 64px 78px minmax(0, 1fr);
+  min-height: 106px;
+  gap: 13px;
+  padding: 10px 12px;
+}
+
+.archive-page .archive-timeline section h3 {
+  margin: 3px 0 2px;
+  font-size: 15px;
+  line-height: 1.22;
+}
+
+.archive-page .archive-timeline section > .archive-card-artist {
+  display: block;
+  margin-top: 1px;
+  font-size: 12.5px;
+  line-height: 1.25;
+}
+
+.archive-page .archive-timeline section p {
+  margin: 5px 0 0;
+  color: var(--experience-muted);
+  font-size: 11.5px;
+  font-weight: 760;
+}
+
+/* Calendar */
+.archive-page .archive-calendar > article {
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px;
+}
+
+.archive-page .archive-calendar > article > h2 {
+  margin: 4px 0;
+  font-size: 19px;
+  letter-spacing: -.035em;
+}
+
+.archive-page .archive-calendar > article > div {
+  display: grid;
+  gap: 7px;
+}
+
+.archive-page .archive-calendar button {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr) minmax(150px, auto);
+  gap: 12px;
+  align-items: center;
+  min-height: 58px;
+  padding: 8px 11px;
+}
+
+.archive-page .archive-calendar button > strong {
+  color: #0b8f78;
+  font-size: 17px;
+  text-align: center;
+}
+
+.archive-page .archive-calendar button > span {
+  display: grid;
+  min-width: 0;
+  gap: 3px;
+  text-align: left;
+}
+
+.archive-page .archive-calendar button > span > b {
+  overflow: hidden;
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-page .archive-calendar button > span > small {
+  overflow: hidden;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.archive-page .archive-calendar button > em {
+  color: var(--experience-muted);
+  font-size: 11px;
+  font-style: normal;
+  font-weight: 800;
+  text-align: right;
+}
+
+/* Price */
+.archive-page .archive-price > div:last-child button {
+  min-height: 66px;
+  padding-block: 9px;
+}
+
+.archive-page .archive-price > div:last-child button section h3 {
+  margin-bottom: 2px;
+  font-size: 14px;
+}
+
+.archive-page .archive-price > div:last-child button section > .archive-card-artist {
+  display: block;
+  font-size: 12px;
+  line-height: 1.25;
+}
+
+.archive-page .archive-price > div:last-child button section p {
+  margin-top: 4px;
+  font-size: 10.5px;
+}
+
+/* List */
+.archive-page .archive-list > header,
+.archive-page .archive-list > button {
+  grid-template-columns: 98px minmax(220px, 1.4fr) minmax(150px, .9fr) minmax(190px, 1fr) minmax(150px, .85fr);
+}
+
+.archive-page .archive-list button {
+  min-height: 62px;
+}
+
+.archive-page .archive-list button > .archive-card-artist {
+  color: color-mix(in srgb, #0b8f78 88%, var(--experience-text));
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 920;
+}
+
+.archive-page .archive-list-ticket {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: 7px;
+  overflow: hidden;
+}
+
+.archive-page .archive-list-ticket > span {
+  flex: 0 0 auto;
+  color: var(--experience-text);
+  font-size: 12px;
+  font-weight: 950;
+}
+
+.archive-page .archive-list-ticket > small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--experience-muted);
+  font-size: 10px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Summary and city/venue views: improve legibility without adding visual bulk. */
+.archive-page .archive-summary > article h2,
+.archive-page .venue-ranking h2 {
+  letter-spacing: -.025em;
+}
+
+.archive-page .archive-summary > article p {
+  min-height: 36px;
+  font-size: 12px;
+}
+
+.archive-page .venue-ranking-list button {
+  min-height: 40px;
+  font-size: 12px;
+}
+
+.archive-page .venue-ranking-list button > span {
+  font-weight: 880;
+}
+
+.record-media-fallback {
+  font-size: clamp(13px, .9vw, 16px);
+  font-weight: 880;
+  letter-spacing: -.01em;
+}
+
+@media (max-width: 720px) {
+  .archive-page .archive-poster-copy > .archive-card-artist { font-size: 12px; }
+  .archive-page .archive-poster-copy dl { font-size: 11px; }
+
+  .archive-page .wallet-copy > .archive-card-artist {
+    margin-bottom: 5px;
+    font-size: 11.5px;
+  }
+  .archive-page .wallet-copy dl { gap: 3px 6px; font-size: 10.5px; }
+
+  .archive-page .archive-ticket-content > .archive-card-artist {
+    margin-bottom: 5px;
+    font-size: 11px;
+  }
+  .archive-page .archive-ticket-content dl { font-size: 10px; }
+
+  .archive-page .archive-timeline button {
+    grid-template-columns: 52px 60px minmax(0, 1fr);
+    min-height: 88px;
+    gap: 9px;
+    padding: 8px;
+  }
+  .archive-page .archive-timeline section h3 { font-size: 13px; }
+  .archive-page .archive-timeline section > .archive-card-artist { font-size: 11px; }
+  .archive-page .archive-timeline section p { margin-top: 3px; font-size: 9.5px; }
+
+  .archive-page .archive-calendar > article {
+    grid-template-columns: 1fr;
+    gap: 7px;
+    padding: 10px;
+  }
+  .archive-page .archive-calendar > article > h2 { font-size: 16px; }
+  .archive-page .archive-calendar button {
+    grid-template-columns: 36px minmax(0, 1fr);
+    gap: 8px;
+    min-height: 60px;
+  }
+  .archive-page .archive-calendar button > em {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .archive-page .archive-list button {
+    grid-template-columns: 82px minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto;
+    min-height: 92px;
+  }
+  .archive-page .archive-list button > strong { grid-column: 2 / span 2; }
+  .archive-page .archive-list button > .archive-card-artist { grid-column: 2 / span 2; }
+  .archive-page .archive-list button > span:nth-of-type(2) { grid-column: 2; }
+  .archive-page .archive-list-ticket {
+    grid-column: 2 / span 2;
+    justify-content: flex-start;
+  }
+}
+
+@media (max-width: 420px) {
+  .archive-ticket-line {
+    gap: 5px;
+  }
+  .archive-page .archive-ticket-content dl {
+    grid-template-columns: 40px minmax(0, 1fr);
+  }
+}
