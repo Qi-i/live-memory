@@ -184,6 +184,7 @@ export function ArchivePage({
         format={shareFormat}
         setFormat={setShareFormat}
         mapSettings={settings.map}
+        onOpenMapSettings={onOpenMapSettings}
         onClose={() => setShareMode(false)}
       />
     );
