@@ -1122,10 +1122,7 @@ function ShareAmapMap({
           });
           map.add?.(route);
         }
-        if (markers.length) {
-          map.add?.(markers);
-          map.setFitView?.(markers, false, [54, 54, 54, 54], 12);
-        }
+        if (markers.length) map.add?.(markers);
         setResolvedCount(points.length);
         setState(points.length ? "ready" : "empty");
       })
@@ -1143,57 +1140,57 @@ function ShareAmapMap({
   return (
     <section className="share-amap-panel" style={localRectStyle(rect, origin)}>
       <div className="share-amap-map" ref={hostRef} aria-label="高德地图城市足迹" />
-      <header><b>高德城市路线</b><span>{resolvedCount ? `${resolvedCount} 个真实地点` : "AMap · 真实地理坐标"}</span></header>
-      {!configured ? <div className="share-amap-state"><b>需要高德地图</b><span>请先在设置中选择高德并配置 Web 端 JS API Key。</span><button type="button" onClick={onOpenMapSettings}>去配置高德地图</button></div> : null}
-      {configured && state === "loading" ? <div className="share-amap-state"><b>正在解析真实地点…</b><span>优先使用档案坐标，其余场馆由高德地理编码。</span></div> : null}
-      {configured && state === "empty" ? <div className="share-amap-state"><b>暂无可定位地点</b><span>请补充城市、场馆或地址后再生成路线。</span></div> : null}
+      <header><b>全国城市足迹</b><span>{resolvedCount ? `${resolvedCount} 个城市` : "AMap · 固定全国视野"}</span></header>
+      {!configured ? <div className="share-amap-state"><b>需要高德地图</b><span>这里直接复用个人内容中已保存的高德 Web JS API Key。</span><button type="button" onClick={onOpenMapSettings}>去配置高德地图</button></div> : null}
+      {configured && state === "loading" ? <div className="share-amap-state"><b>正在匹配城市…</b><span>地图保持固定全国视野，仅由高德匹配演出城市位置。</span></div> : null}
+      {configured && state === "empty" ? <div className="share-amap-state"><b>暂无可定位城市</b><span>请先为演出记录补充城市名称。</span></div> : null}
       {configured && state === "error" ? <div className="share-amap-state"><b>高德地图加载失败</b><span>请检查 Key、安全密钥与域名白名单。</span></div> : null}
     </section>
   );
 }
 
+const SHARE_CHINA_MAP_CENTER: [number, number] = [104.2, 35.8];
+const SHARE_CHINA_MAP_ZOOM = 3.55;
+
 function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
   return new AMap.Map(host, {
     resizeEnable: true,
     viewMode: "2D",
-    zoom: 4,
+    center: SHARE_CHINA_MAP_CENTER,
+    zoom: SHARE_CHINA_MAP_ZOOM,
     mapStyle: "amap://styles/whitesmoke",
+    zoomEnable: false,
+    dragEnable: false,
+    scrollWheel: false,
+    doubleClickZoom: false,
+    keyboardEnable: false,
+    touchZoom: false,
+    rotateEnable: false,
+    pitchEnable: false,
   });
 }
 
 async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]): Promise<ShareMapPoint[]> {
-  const unique = new Map<string, EventRecord>();
+  const cities = new Map<string, { label: string; date: string }>();
   for (const record of records) {
-    const key = record.coordinates
-      ? `coord:${record.coordinates.lng.toFixed(5)},${record.coordinates.lat.toFixed(5)}`
-      : `place:${record.city}|${record.venue}|${record.address || ""}`;
-    if (!unique.has(key)) unique.set(key, record);
+    const label = record.city.trim();
+    if (!label) continue;
+    const key = label.replace(/市$/u, "").trim().toLowerCase();
+    const current = cities.get(key);
+    if (!current || record.date.localeCompare(current.date) < 0) cities.set(key, { label, date: record.date });
   }
-
-  const points: ShareMapPoint[] = [];
-  const unresolved: EventRecord[] = [];
-  for (const record of unique.values()) {
-    const lng = Number(record.coordinates?.lng);
-    const lat = Number(record.coordinates?.lat);
-    if (Number.isFinite(lng) && Number.isFinite(lat)) {
-      points.push({ position: [lng, lat], title: [record.city, record.venue].filter(Boolean).join(" · "), date: record.date });
-    } else {
-      unresolved.push(record);
-    }
-  }
-  if (!unresolved.length) return points;
+  if (!cities.size) return [];
 
   if (!AMap.Geocoder && AMap.plugin) {
     await new Promise<void>((resolve) => AMap.plugin?.("AMap.Geocoder", resolve));
   }
-  if (!AMap.Geocoder) return points;
-  const geocoder = new AMap.Geocoder();
+  if (!AMap.Geocoder) return [];
+  const geocoder = new AMap.Geocoder({ city: "全国" });
 
-  for (const record of unresolved.slice(0, 40)) {
-    const query = [record.city, record.address || record.venue].filter(Boolean).join(" ");
-    if (!query.trim()) continue;
-    const position = await geocodeAmapPlace(geocoder, query);
-    if (position) points.push({ position, title: [record.city, record.venue].filter(Boolean).join(" · "), date: record.date });
+  const points: ShareMapPoint[] = [];
+  for (const city of Array.from(cities.values()).slice(0, 40)) {
+    const position = await geocodeAmapPlace(geocoder, city.label);
+    if (position) points.push({ position, title: city.label, date: city.date });
   }
   return points;
 }
@@ -1247,6 +1244,19 @@ function captureShareAmapSurface() {
         rect.width * density,
         rect.height * density,
       );
+    }
+    const markerElements = Array.from(host.querySelectorAll<HTMLElement>(".amap-marker"));
+    for (const marker of markerElements) {
+      const rect = marker.getBoundingClientRect();
+      const x = (rect.left + rect.width / 2 - hostRect.left) * density;
+      const y = (rect.top + rect.height / 2 - hostRect.top) * density;
+      context.beginPath();
+      context.arc(x, y, 7 * density, 0, Math.PI * 2);
+      context.fillStyle = "#0b8f78";
+      context.fill();
+      context.lineWidth = 3 * density;
+      context.strokeStyle = "#ffffff";
+      context.stroke();
     }
     context.getImageData(0, 0, 1, 1);
     return snapshot;
