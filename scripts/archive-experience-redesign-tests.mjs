@@ -13,7 +13,9 @@ assert.match(share, /useState<ItemLimit>\("all"\)/);
 assert.match(share, /value:\s*"tickets"/);
 assert.match(share, /share-ticket-grid/);
 assert.match(share, /drawTicket/i);
-assert.match(share, /rowOffset/);
+assert.match(share, /function buildFilledGridRects/);
+assert.match(share, /function buildWallFillSlots/);
+assert.doesNotMatch(share, /rowOffset/);
 
 assert.match(archive, /archive-ticket-backdrop/);
 assert.match(archiveCss, /\.archive-ticket-backdrop/);
