@@ -15,5 +15,6 @@ assert.match(controller, /restorePersonalCloudMedia|pullRecordsFromSupabase/, "C
 assert.match(controller, /addEventListener\("focus"[\s\S]*recoverPersonalCloud|recoverPersonalCloud[\s\S]*addEventListener\("focus"/, "Focus recovery path must retry personal cloud reconnect");
 assert.match(controller, /addEventListener\("online"[\s\S]*recoverPersonalCloud|recoverPersonalCloud[\s\S]*addEventListener\("online"/, "Online recovery path must retry personal cloud reconnect");
 assert.match(appRoot, /个人云端.*恢复|恢复个人云端|个人云端需恢复/, "Cloud center must surface personal cloud recovery state");
+assert.match(appRoot, /AccountStatus[\s\S]*personalCloudStatus[\s\S]*个人云端需恢复/, "Account chip must not claim cloud is connected while personal media recovery is pending");
 
 console.log("Personal cloud reconnect contracts passed.");
