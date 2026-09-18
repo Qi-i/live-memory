@@ -10,6 +10,9 @@ assert.match(supabase, /signInStorageWithAccount\(nextSettings\)/, "Saved person
 assert.match(supabase, /restorePersonalCloudMedia|pullRecordsFromSupabase\(nextSettings/, "New-device recovery must pull the personal cloud media catalog, not only renew URLs already present locally");
 assert.match(supabase, /refreshSignedMediaUrls\((?:settings|nextSettings|connected\.settings)/, "Successful reconnect must immediately refresh signed media URLs after restoring the media catalog");
 assert.match(supabase, /mergePersonalCloudMedia/, "Personal cloud media recovery must merge media references without blindly replacing newer text data");
+assert.match(supabase, /pullRecordsFromPasskeySupabase\(settings, \[\], false\)/, "Startup media restore should pull descriptors without issuing per-asset signed URL requests");
+assert.match(supabase, /refreshSignedMediaUrls\(settings, merged\)/, "Startup media restore should batch only the cloud URLs that are actually missing");
+assert.doesNotMatch(supabase, /refreshSignedMediaUrls\(settings, merged, \{ force: true \}\)/, "Startup must not force-renew every signed media URL");
 assert.match(controller, /recoverPersonalCloud/, "Controller must expose a retryable personal cloud recovery action");
 assert.match(controller, /restorePersonalCloudMedia|pullRecordsFromSupabase/, "Controller retry must be able to restore missing media references from personal cloud");
 assert.match(controller, /addEventListener\("focus"[\s\S]*recoverPersonalCloud|recoverPersonalCloud[\s\S]*addEventListener\("focus"/, "Focus recovery path must retry personal cloud reconnect");
