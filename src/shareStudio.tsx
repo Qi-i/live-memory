@@ -1149,15 +1149,39 @@ function ShareAmapMap({
   );
 }
 
-const SHARE_CHINA_MAP_CENTER: [number, number] = [104.2, 35.8];
-const SHARE_CHINA_MAP_ZOOM = 3.55;
+const SHARE_CHINA_MAP_CENTER: [number, number] = [104.3, 35.85];
+const SHARE_CHINA_BOUNDS = {
+  west: 73.4,
+  east: 135.2,
+  south: 18.1,
+  north: 53.6,
+} as const;
+
+function mercatorY(latitude: number) {
+  const clamped = clamp(latitude, -85.05112878, 85.05112878);
+  const radians = clamped * Math.PI / 180;
+  return (1 - Math.log(Math.tan(radians) + 1 / Math.cos(radians)) / Math.PI) / 2;
+}
+
+function chinaViewportZoom(host: HTMLElement) {
+  const width = Math.max(1, host.clientWidth);
+  const height = Math.max(1, host.clientHeight);
+  const padding = Math.min(52, Math.max(20, Math.min(width, height) * 0.06));
+  const usableWidth = Math.max(1, width - padding * 2);
+  const usableHeight = Math.max(1, height - padding * 2);
+  const xSpan = (SHARE_CHINA_BOUNDS.east - SHARE_CHINA_BOUNDS.west) / 360;
+  const ySpan = Math.abs(mercatorY(SHARE_CHINA_BOUNDS.north) - mercatorY(SHARE_CHINA_BOUNDS.south));
+  const zoomX = Math.log2(usableWidth / (256 * xSpan));
+  const zoomY = Math.log2(usableHeight / (256 * ySpan));
+  return clamp(Math.min(zoomX, zoomY), 2.4, 4.8);
+}
 
 function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
   return new AMap.Map(host, {
     resizeEnable: true,
     viewMode: "2D",
     center: SHARE_CHINA_MAP_CENTER,
-    zoom: SHARE_CHINA_MAP_ZOOM,
+    zoom: chinaViewportZoom(host),
     mapStyle: "amap://styles/whitesmoke",
     zoomEnable: false,
     dragEnable: false,
@@ -1188,7 +1212,7 @@ async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]
   const geocoder = new AMap.Geocoder({ city: "全国" });
 
   const points: ShareMapPoint[] = [];
-  for (const city of Array.from(cities.values()).slice(0, 40)) {
+  for (const city of cities.values()) {
     const position = await geocodeAmapPlace(geocoder, city.label);
     if (position) points.push({ position, title: city.label, date: city.date });
   }
@@ -1540,7 +1564,7 @@ async function drawCitiesCanvas(
   context.fillRect(map.x, map.y, map.width, map.height * 0.35);
   context.fillStyle = "#ffffff";
   context.font = `900 ${Math.max(22, Math.round(map.width * 0.045))}px system-ui, sans-serif`;
-  context.fillText("高德城市路线", map.x + 26, map.y + 42);
+  context.fillText("全国城市足迹", map.x + 26, map.y + 42);
   context.restore();
   context.strokeStyle = palette.border;
   context.lineWidth = 2;

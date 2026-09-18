@@ -205,7 +205,7 @@ export function SettingsPage({
           </section>
 
           <section className="settings-module compact-settings-v2">
-            <ModuleHeader eyebrow="地图" title="城市与场馆足迹" description="中国固定足迹图无需密钥；启用在线地图时按下方指引申请浏览器端 API。" />
+            <ModuleHeader eyebrow="地图" title="城市与场馆足迹" description="离线摘要无需密钥；全国城市分享图会直接复用个人账号中已保存的高德 Web JS API Key，并固定为不可交互的全国视野。" />
             <label title="离线城市摘要无需 API；高德地图会真实加载 JS API，百度暂未接入足迹视图。">地图来源<select value={draft.map.provider} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, provider: event.target.value as AppSettings["map"]["provider"] } })}><option value="none">离线城市摘要（无需 API）</option><option value="amap">高德地图</option><option value="baidu">百度地图</option></select></label>
             {draft.map.provider === "amap" && <><label title="在高德开放平台创建 Web端（JS API）Key。">高德 Key<input type="password" value={draft.map.amapKey} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapKey: event.target.value } })} /></label><label title="高德 JS API 2.0 新 Key 通常需要同时配置安全密钥。">安全密钥<input type="password" value={draft.map.amapSecurityCode} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, amapSecurityCode: event.target.value } })} /></label></>}
             {draft.map.provider === "baidu" && <label title="在百度地图开放平台创建浏览器端应用并获取 AK。">百度 AK<input type="password" value={draft.map.baiduAk} onChange={(event) => setDraft({ ...draft, map: { ...draft.map, baiduAk: event.target.value } })} /></label>}
