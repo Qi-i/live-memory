@@ -1093,7 +1093,7 @@ function ShareAmapMap({
   const [resolvedCount, setResolvedCount] = useState(0);
 
   useEffect(() => {
-    if (mapSettings.provider !== "amap" || !mapSettings.amapKey.trim()) {
+    if (!mapSettings.amapKey.trim()) {
       setState("idle");
       setResolvedCount(0);
       return;
@@ -1134,9 +1134,9 @@ function ShareAmapMap({
       disposed = true;
       map?.destroy();
     };
-  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, mapSettings.provider, records]);
+  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, records]);
 
-  const configured = mapSettings.provider === "amap" && Boolean(mapSettings.amapKey.trim());
+  const configured = Boolean(mapSettings.amapKey.trim());
   return (
     <section className="share-amap-panel" style={localRectStyle(rect, origin)}>
       <div className="share-amap-map" ref={hostRef} aria-label="高德地图城市足迹" />
