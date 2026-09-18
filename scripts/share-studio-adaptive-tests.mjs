@@ -33,6 +33,8 @@ assert.match(shareStudio, /scrollWheel:\s*false/);
 assert.match(shareStudio, /doubleClickZoom:\s*false/);
 assert.match(shareStudio, /geocodeAmapPlace\(geocoder, city\.label\)/);
 assert.doesNotMatch(shareStudio, /map\.setFitView/);
+assert.match(shareStudio, /const configured = Boolean\(mapSettings\.amapKey\.trim\(\)\)/);
+assert.doesNotMatch(shareStudio, /mapSettings\.provider !== "amap"/);
 assert.match(amap, /plugin\?:/);
 assert.match(amap, /Geocoder\?:/);
 assert.match(archive, /mapSettings=\{settings\.map\}/);
