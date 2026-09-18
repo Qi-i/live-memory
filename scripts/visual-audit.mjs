@@ -306,20 +306,28 @@ await archiveView("海报", ".archive-poster-card");
     await page.waitForTimeout(80);
     const ticketGeometry = await page.locator(".share-ticket-card").evaluateAll((cards) => cards.map((card) => {
       const rect = card.getBoundingClientRect();
-      const poster = card.querySelector(".share-ticket-poster")?.getBoundingClientRect();
+      const posterNode = card.querySelector(".share-ticket-poster");
+      const poster = posterNode?.getBoundingClientRect();
+      const image = posterNode?.querySelector("img");
       const title = card.querySelector("h3");
       const meta = card.querySelector("dl");
+      const frameRatio = poster ? poster.width / Math.max(1, poster.height) : 0;
+      const sourceRatio = image instanceof HTMLImageElement && image.naturalWidth && image.naturalHeight
+        ? image.naturalWidth / image.naturalHeight
+        : null;
       return {
         width: rect.width,
         height: rect.height,
-        posterRatio: poster ? poster.height / Math.max(1, poster.width) : 0,
+        frameRatio,
+        sourceRatio,
+        ratioError: sourceRatio ? Math.abs(Math.log(Math.max(0.01, frameRatio / sourceRatio))) : 0,
         titleSize: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
         metaSize: meta ? parseFloat(getComputedStyle(meta).fontSize) : 0,
       };
     }));
     if (!ticketGeometry.length
-      || ticketGeometry.some((item) => item.posterRatio < 1.05 || item.titleSize < 18 || item.metaSize < 11 || item.height < 70)) {
-      throw new Error(`${label} ticket layout became unreadable or flattened: ${JSON.stringify(ticketGeometry)}`);
+      || ticketGeometry.some((item) => item.ratioError > 0.2 || item.titleSize < 18 || item.metaSize < 11 || item.height < 70)) {
+      throw new Error(`${label} ticket layout became unreadable or distorted: ${JSON.stringify(ticketGeometry)}`);
     }
     await assertFixedPreviewFits(`Ticket ${label}`);
   }
