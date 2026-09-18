@@ -916,15 +916,55 @@ function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
     return 1.38;
   });
   const rects = buildWeightedMosaic(weights, area, gap);
+  const assignedRects = assignMagazineRectsByAspect(ordered, rects, featuredIds);
   return ordered.map((record, index) => ({
     record,
-    rect: rects[index],
+    rect: assignedRects[index],
     emphasis: index === 0
       ? "hero"
       : index < Math.min(featuredCount, 6)
         ? "feature"
         : "normal",
   }));
+}
+
+function assignMagazineRectsByAspect(records: EventRecord[], rects: Rect[], featuredIds: Set<string>) {
+  const byArea = rects
+    .map((rect, index) => ({ rect, index, area: rect.width * rect.height }))
+    .sort((a, b) => b.area - a.area);
+  const featuredRecords = records.filter((record) => featuredIds.has(record.id));
+  const regularRecords = records.filter((record) => !featuredIds.has(record.id));
+  const featuredPool = byArea.slice(0, featuredRecords.length);
+  const regularPool = byArea.slice(featuredRecords.length);
+  const assignments = new Map<string, Rect>();
+
+  function assignGroup(group: EventRecord[], pool: typeof byArea, feature: boolean) {
+    const remaining = pool.slice();
+    for (let recordIndex = 0; recordIndex < group.length; recordIndex += 1) {
+      const record = group[recordIndex];
+      const posterRatio = recordPosterRatio(record);
+      const maxArea = Math.max(1, ...remaining.map((item) => item.area));
+      let bestIndex = 0;
+      let bestScore = Number.POSITIVE_INFINITY;
+      remaining.forEach((item, index) => {
+        const rectRatio = item.rect.width / Math.max(1, item.rect.height);
+        const ratioPenalty = Math.abs(Math.log(Math.max(0.01, rectRatio / posterRatio)));
+        const areaPenalty = 1 - item.area / maxArea;
+        const sizeWeight = feature ? (recordIndex === 0 ? 0.9 : 0.24) : 0.04;
+        const score = ratioPenalty + areaPenalty * sizeWeight;
+        if (score < bestScore) {
+          bestScore = score;
+          bestIndex = index;
+        }
+      });
+      const [chosen] = remaining.splice(bestIndex, 1);
+      if (chosen) assignments.set(record.id, chosen.rect);
+    }
+  }
+
+  assignGroup(featuredRecords, featuredPool, true);
+  assignGroup(regularRecords, regularPool, false);
+  return records.map((record, index) => assignments.get(record.id) || rects[index]);
 }
 
 function buildWeightedMosaic(weights: number[], area: Rect, gap: number): Rect[] {
