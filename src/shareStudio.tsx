@@ -608,8 +608,9 @@ function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec):
     area,
     gap,
     targetAspect,
-    isLandscapeFormat(spec.format) ? 5 : 4,
+    isLandscapeFormat(spec.format) ? Math.min(records.length, 7) : Math.min(records.length, 12),
     138 * scale,
+    1.55,
   );
   return records.map((record, index) => ({ record, rect: rects[index] }));
 }
@@ -619,7 +620,7 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
   const src = useCachedMediaSrc(media);
   const ticketPad = clamp(slot.rect.height * 0.065, 10, 22);
   const posterHeight = Math.max(1, slot.rect.height - ticketPad * 2);
-  const posterWidth = Math.min(slot.rect.width * 0.34, posterHeight * recordPosterRatio(slot.record));
+  const posterWidth = Math.min(slot.rect.width * 0.46, posterHeight * recordPosterRatio(slot.record));
   const style = {
     ...localRectStyle(slot.rect, origin),
     "--ticket-a": slot.record.colors[0] || "#172229",
@@ -700,6 +701,7 @@ function buildBalancedRowRects(
   targetAspect: number,
   maxRows: number,
   minHeight = 0,
+  minCardAspect = 1.4,
 ): Rect[] {
   if (!itemCount) return [];
   let bestRows = 1;
@@ -713,7 +715,9 @@ function buildBalancedRowRects(
     for (const [start, end] of groups) {
       const count = Math.max(1, end - start);
       const cardWidth = (area.width - gap * Math.max(0, count - 1)) / count;
-      aspectPenalty += Math.abs(Math.log(Math.max(0.01, cardWidth / rowHeight / targetAspect)));
+      const cardAspect = cardWidth / Math.max(1, rowHeight);
+      aspectPenalty += Math.abs(Math.log(Math.max(0.01, cardAspect / targetAspect)));
+      if (cardAspect < minCardAspect) aspectPenalty += (minCardAspect - cardAspect) * 2.4;
       imbalancePenalty += Math.abs(count - itemCount / rows) * 0.04;
     }
     const heightPenalty = rowHeight < minHeight ? (minHeight - rowHeight) / Math.max(1, minHeight) * 1.8 : 0;
@@ -1439,7 +1443,7 @@ async function drawTicket(
 
   const inset = clamp(slot.height * 0.065, 12, 24);
   const posterHeight = Math.max(1, slot.height - inset * 2);
-  const posterWidth = Math.min(slot.width * 0.34, posterHeight * recordPosterRatio(record));
+  const posterWidth = Math.min(slot.width * 0.46, posterHeight * recordPosterRatio(record));
   const posterRect = { x: slot.x + inset, y: slot.y + inset, width: posterWidth, height: posterHeight };
   if (image) drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
   else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
