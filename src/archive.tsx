@@ -579,7 +579,13 @@ function buildPosterMarkerContent(group: PlaceGroup) {
       const image = document.createElement("img");
       image.src = poster.src;
       image.alt = "";
+      image.loading = "lazy";
       image.decoding = "async";
+      image.addEventListener("error", () => {
+        image.remove();
+        frame.classList.add("is-fallback");
+        frame.textContent = record.title.slice(0, 1);
+      }, { once: true });
       frame.appendChild(image);
     } else {
       frame.textContent = record.title.slice(0, 1);
