@@ -190,7 +190,8 @@ try {
   assert.match(experience, /experience-mobile-nav/);
   assert.match(experienceCss, /@media \(max-width: 920px\)/);
   assert.match(experienceCss, /is-share-mode/);
-  assert.match(mediaCache, /caches\.open\(CACHE_NAME\)/);
+  assert.match(mediaCache, /caches\.open\(currentCacheName\(\)\)/);
+  assert.match(mediaCache, /CACHE_PREFIX = "live-memory-media-v3"/);
   assert.match(mediaCache, /storage:\$\{asset\.storagePath\}/);
   assert.match(appController, /preloadRecordMedia/);
   assert.match(appController, /CustomEvent<\{ storagePath\?: string \}>/);
