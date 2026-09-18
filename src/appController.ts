@@ -434,15 +434,20 @@ export function useAppController() {
       flash("已从当前示例中删除");
       return;
     }
-    if (access.user && hasAccountCloudConfig(settings)) {
-      await purgeTextBackupFromAccount(settings, record.id).catch(() => undefined);
+
+    try {
+      if (access.user && hasAccountCloudConfig(settings)) {
+        await purgeTextBackupFromAccount(settings, record.id);
+      }
+      if (settings.storageMode === "supabase" && hasSupabaseConfig(settings)) {
+        await purgeRecordFromSupabase(settings, record.id);
+      }
+      await deleteRecord(record.id);
+      setRecords((current) => current.filter((item) => item.id !== record.id));
+      flash("记录已永久删除");
+    } catch (error) {
+      flash(friendlySupabaseErrorMessage(error, "永久删除失败，本机记录已保留"));
     }
-    if (settings.storageMode === "supabase" && hasSupabaseConfig(settings)) {
-      await purgeRecordFromSupabase(settings, record.id).catch(() => undefined);
-    }
-    await deleteRecord(record.id);
-    setRecords((current) => current.filter((item) => item.id !== record.id));
-    flash("记录已永久删除");
   }
 
   async function updateSettings(next: AppSettings, message = "设置已保存") {
