@@ -622,11 +622,11 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
     ...localRectStyle(slot.rect, origin),
     "--ticket-a": slot.record.colors[0] || "#172229",
     "--ticket-b": slot.record.colors[1] || "#47645d",
-    "--ticket-poster-width": \`\${Math.max(84, posterWidth)}px\`,
-    "--ticket-pad": \`\${clamp(slot.rect.height * 0.065, 10, 22)}px\`,
-    "--ticket-title-size": \`\${clamp(slot.rect.height * 0.105, 18, 34)}px\`,
-    "--ticket-artist-size": \`\${clamp(slot.rect.height * 0.06, 12, 20)}px\`,
-    "--ticket-meta-size": \`\${clamp(slot.rect.height * 0.052, 11, 18)}px\`,
+    "--ticket-poster-width": `${Math.max(84, posterWidth)}px`,
+    "--ticket-pad": `${clamp(slot.rect.height * 0.065, 10, 22)}px`,
+    "--ticket-title-size": `${clamp(slot.rect.height * 0.105, 18, 34)}px`,
+    "--ticket-artist-size": `${clamp(slot.rect.height * 0.06, 12, 20)}px`,
+    "--ticket-meta-size": `${clamp(slot.rect.height * 0.052, 11, 18)}px`,
   } as CSSProperties;
   return (
     <article className="share-ticket-card" style={style}>
@@ -640,7 +640,7 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
         <dl>
           <dt>VENUE</dt><dd>{slot.record.venue || "场馆待补"}</dd>
           <dt>SEAT</dt><dd>{slot.record.seat || "座位待补"}</dd>
-          <dt>PRICE</dt><dd>{slot.record.price ? \`¥\${slot.record.price}\` : slot.record.publicPriceRange || "票价待补"}</dd>
+          <dt>PRICE</dt><dd>{slot.record.price ? `¥${slot.record.price}` : slot.record.publicPriceRange || "票价待补"}</dd>
         </dl>
       </section>
     </article>
@@ -649,7 +649,7 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
 
 function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
   return (
-    <figure className={\`share-layout-poster is-\${slot.emphasis || "normal"}\`} style={localRectStyle(slot.rect, origin)}>
+    <figure className={`share-layout-poster is-${slot.emphasis || "normal"}`} style={localRectStyle(slot.rect, origin)}>
       <SharePoster record={slot.record} />
       {showDetails ? <figcaption><span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span><b>{slot.record.title}</b></figcaption> : null}
     </figure>
@@ -820,7 +820,7 @@ function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
 }
 
 function magazineArtistKey(record: EventRecord) {
-  return record.artists.map((artist) => artist.trim().toLowerCase()).find(Boolean) || \`__record__\${record.id}\`;
+  return record.artists.map((artist) => artist.trim().toLowerCase()).find(Boolean) || `__record__${record.id}`;
 }
 
 function orderMagazineRecords(records: EventRecord[]) {
@@ -1033,7 +1033,7 @@ function ShareAmapMap({
   return (
     <section className="share-amap-panel" style={localRectStyle(rect, origin)}>
       <div className="share-amap-map" ref={hostRef} aria-label="高德地图城市足迹" />
-      <header><b>高德城市路线</b><span>{resolvedCount ? \`\${resolvedCount} 个真实地点\` : "AMap · 真实地理坐标"}</span></header>
+      <header><b>高德城市路线</b><span>{resolvedCount ? `${resolvedCount} 个真实地点` : "AMap · 真实地理坐标"}</span></header>
       {!configured ? <div className="share-amap-state"><b>需要高德地图</b><span>请先在设置中选择高德并配置 Web 端 JS API Key。</span></div> : null}
       {configured && state === "loading" ? <div className="share-amap-state"><b>正在解析真实地点…</b><span>优先使用档案坐标，其余场馆由高德地理编码。</span></div> : null}
       {configured && state === "empty" ? <div className="share-amap-state"><b>暂无可定位地点</b><span>请补充城市、场馆或地址后再生成路线。</span></div> : null}
@@ -1055,8 +1055,8 @@ async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]
   const unique = new Map<string, EventRecord>();
   for (const record of records) {
     const key = record.coordinates
-      ? \`coord:\${record.coordinates.lng.toFixed(5)},\${record.coordinates.lat.toFixed(5)}\`
-      : \`place:\${record.city}|\${record.venue}|\${record.address || ""}\`;
+      ? `coord:${record.coordinates.lng.toFixed(5)},${record.coordinates.lat.toFixed(5)}`
+      : `place:${record.city}|${record.venue}|${record.address || ""}`;
     if (!unique.has(key)) unique.set(key, record);
   }
 
@@ -1398,10 +1398,10 @@ async function drawCitiesCanvas(
     context.fillStyle = alphaSurface(palette.surface, 0.9);
     context.fillRect(map.x, map.y, map.width, map.height);
     context.fillStyle = palette.text;
-    context.font = \`900 \${Math.max(24, Math.round(map.width * 0.05))}px system-ui, sans-serif\`;
+    context.font = `900 ${Math.max(24, Math.round(map.width * 0.05))}px system-ui, sans-serif`;
     context.fillText("高德地图 · AMap", map.x + 28, map.y + 56);
     context.fillStyle = palette.muted;
-    context.font = \`800 \${Math.max(14, Math.round(map.width * 0.025))}px system-ui, sans-serif\`;
+    context.font = `800 ${Math.max(14, Math.round(map.width * 0.025))}px system-ui, sans-serif`;
     context.fillText("在线预览使用真实高德底图", map.x + 28, map.y + 88);
     context.fillText("当前浏览器未提供可安全导出的地图画布", map.x + 28, map.y + 114);
   }
@@ -1411,7 +1411,7 @@ async function drawCitiesCanvas(
   context.fillStyle = shade;
   context.fillRect(map.x, map.y, map.width, map.height * 0.35);
   context.fillStyle = "#ffffff";
-  context.font = \`900 \${Math.max(22, Math.round(map.width * 0.045))}px system-ui, sans-serif\`;
+  context.font = `900 ${Math.max(22, Math.round(map.width * 0.045))}px system-ui, sans-serif`;
   context.fillText("高德城市路线", map.x + 26, map.y + 42);
   context.restore();
   context.strokeStyle = palette.border;
@@ -1424,9 +1424,9 @@ async function drawCitiesCanvas(
   let chipX = model.listRect.x;
   let chipY = chipTop;
   const lineHeight = Math.max(32, (chipBottom - chipTop) / 2);
-  context.font = \`850 \${Math.max(13, Math.round(model.listRect.width * 0.018))}px system-ui, sans-serif\`;
+  context.font = `850 ${Math.max(13, Math.round(model.listRect.width * 0.018))}px system-ui, sans-serif`;
   for (const chip of model.chips) {
-    const label = \`\${chip.label} · \${chip.count}\`;
+    const label = `${chip.label} · ${chip.count}`;
     const chipWidth = Math.min(model.listRect.width, context.measureText(label).width + 30);
     if (chipX + chipWidth > model.listRect.x + model.listRect.width && chipX > model.listRect.x) {
       chipX = model.listRect.x;
