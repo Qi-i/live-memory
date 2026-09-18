@@ -785,18 +785,19 @@ export async function refreshSignedMediaUrls(
 }
 
 export function mergePersonalCloudMedia(baseRecords: EventRecord[], personalRecords: EventRecord[]) {
-  const merged = new Map(baseRecords.map((record) => [record.id, record]));
-  for (const personal of personalRecords) {
+  const merged = new Map(baseRecords.map((record) => [record.id, normalizeRecord(record)]));
+  for (const personalRecord of personalRecords) {
+    const personal = normalizeRecord(personalRecord);
     const base = merged.get(personal.id);
     if (!base) {
-      merged.set(personal.id, normalizeRecord(personal));
+      merged.set(personal.id, personal);
       continue;
     }
     const textSource = personal.updatedAt > base.updatedAt ? personal : base;
-    const media = personal.media.length ? personal.media : base.media;
+    const mediaState = mergeMediaState(base, personal);
     merged.set(personal.id, normalizeRecord({
       ...textSource,
-      media,
+      ...mediaState,
       syncedAt: personal.syncedAt || base.syncedAt,
     }));
   }
@@ -815,7 +816,9 @@ export async function restorePersonalCloudMedia(settings: AppSettings, baseRecor
 }
 
 export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {
-  if (!settings.supabase.ownerKey) return;
+  if (!settings.supabase.ownerKey) {
+    throw new Error("个人云端尚未恢复，已取消永久删除以避免记录稍后从云端重新出现");
+  }
   await purgePasskeyRecordFromSupabase(settings, recordId);
 }
 
@@ -973,6 +976,7 @@ async function syncAccountTextBackup(settings: AppSettings, localRecords: EventR
 async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
   const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
+  const bucket = mediaBucket(settings);
   const conflicts: SyncConflict[] = [];
 
   // Pull all cloud records
@@ -1041,17 +1045,15 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
   // Push local changes. Upload media first so the cloud payload and local state
   // both receive storagePath values in the same transaction cycle.
   if (toPush.length) {
-    const bucket = mediaBucket(settings);
     for (const record of toPush) {
+      if (settings.supabase.syncMedia && record.mediaTombstones?.length) {
+        await applyMediaTombstones(client, settings, ownerKey, record, bucket);
+      }
       let media = record.media;
       if (settings.supabase.syncMedia && !record.deletedAt) {
-        media = await Promise.all(record.media.map(async (asset) => {
-          try {
-            return await uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket);
-          } catch {
-            return asset;
-          }
-        }));
+        media = await Promise.all(record.media.map(
+          (asset) => uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket),
+        ));
       }
       const syncedRecord = normalizeRecord({ ...record, media, syncedAt: nowIso() });
       const cloudPayload = settings.supabase.syncMedia ? cloudRecordPayload(syncedRecord) : withoutLocalMedia(syncedRecord);
@@ -1083,33 +1085,53 @@ export async function resolveSyncConflict(
   conflict: SyncConflict,
   choice: "local" | "cloud",
 ): Promise<EventRecord> {
-  const resolved = choice === "local"
-    ? { ...conflict.localRecord, syncedAt: nowIso() }
-    : { ...conflict.cloudRecord, syncedAt: nowIso(), media: choice === "cloud" ? conflict.localRecord.media : conflict.cloudRecord.media };
+  let resolved: EventRecord;
+  if (choice === "local") {
+    resolved = normalizeRecord({ ...conflict.localRecord, syncedAt: nowIso() });
+  } else if (conflict.source === "account") {
+    resolved = normalizeRecord({
+      ...conflict.cloudRecord,
+      ...mergeMediaState(conflict.localRecord, conflict.cloudRecord),
+      syncedAt: nowIso(),
+    });
+  } else {
+    resolved = normalizeRecord({ ...conflict.cloudRecord, syncedAt: nowIso() });
+  }
 
   if (choice === "local") {
-    // Push local version to cloud
     if (conflict.source === "account") {
       const client = makeAccountClient(settings);
       const user = await requireUser(client);
-      await client.from("echo_text_backups").upsert({
+      const pushed = await client.from("echo_text_backups").upsert({
         id: resolved.id,
         user_id: user.id,
         payload: withoutLocalMedia(resolved),
         updated_at: resolved.updatedAt,
         deleted_at: resolved.deletedAt || null,
       }, { onConflict: "user_id,id" });
+      if (pushed.error) throwTextBackupError(pushed.error);
     } else {
       const ownerKey = requireOwnerKey(settings);
       const client = makeSupabaseClient(settings);
+      const bucket = mediaBucket(settings);
+      if (settings.supabase.syncMedia) {
+        await applyMediaTombstones(client, settings, ownerKey, resolved, bucket);
+        if (!resolved.deletedAt) {
+          const media = await Promise.all(resolved.media.map(
+            (asset) => uploadMediaIfNeeded(client, ownerKey, resolved.id, asset, bucket),
+          ));
+          resolved = normalizeRecord({ ...resolved, media });
+        }
+      }
       const cloudPayload = settings.supabase.syncMedia ? cloudRecordPayload(resolved) : withoutLocalMedia(resolved);
-      await client.from("echo_passkey_records").upsert({
+      const pushed = await client.from("echo_passkey_records").upsert({
         id: resolved.id,
         owner_key: ownerKey,
         payload: cloudPayload,
         updated_at: resolved.updatedAt,
         deleted_at: resolved.deletedAt || null,
       }, { onConflict: "owner_key,id" });
+      if (pushed.error) throwPersonalCloudError(pushed.error);
     }
   }
 
@@ -1153,6 +1175,9 @@ async function pushRecordsToPasskeySupabase(settings: AppSettings, records: Even
       continue;
     }
     const bucket = mediaBucket(settings);
+    if (settings.supabase.syncMedia && record.mediaTombstones?.length) {
+      await applyMediaTombstones(client, settings, ownerKey, record, bucket);
+    }
     const media = record.deletedAt || !settings.supabase.syncMedia
       ? record.media
       : await Promise.all(record.media.map((asset) => uploadMediaIfNeeded(client, ownerKey, record.id, asset, bucket)));
@@ -1234,9 +1259,14 @@ async function pullRecordsFromPasskeySupabase(settings: AppSettings, localRecord
 async function purgePasskeyRecordFromSupabase(settings: AppSettings, recordId: string) {
   const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
-  const listed = await client.storage.from(mediaBucket(settings)).list(`${ownerKey}/${recordId}`);
-  if (!listed.error && listed.data?.length) {
-    await client.storage.from(mediaBucket(settings)).remove(listed.data.map((item) => `${ownerKey}/${recordId}/${item.name}`));
+  const bucket = mediaBucket(settings);
+  const listed = await client.storage.from(bucket).list(`${ownerKey}/${recordId}`, { limit: 1000 });
+  if (listed.error) throwPersonalCloudError(listed.error);
+  if (listed.data?.length) {
+    const removed = await client.storage.from(bucket).remove(
+      listed.data.map((item) => `${ownerKey}/${recordId}/${item.name}`),
+    );
+    if (removed.error) throwPersonalCloudError(removed.error);
   }
   const { error } = await client.from(passkeyRecordTable(settings)).delete().eq("owner_key", ownerKey).eq("id", recordId);
   if (error) throwPersonalCloudError(error);
@@ -1497,4 +1527,72 @@ function cloudRecordPayload(record: EventRecord) {
       ? { ...asset, src: "", source: "supabase" as const }
       : asset.src.startsWith("data:") ? { ...asset, src: "" } : asset),
   });
+}
+
+function mergeMediaState(...records: EventRecord[]) {
+  const mediaById = new Map<string, MediaAsset>();
+  const tombstoneById = new Map<string, NonNullable<EventRecord["mediaTombstones"]>[number]>();
+
+  for (const record of records) {
+    for (const asset of record.media || []) {
+      const previous = mediaById.get(asset.id);
+      if (
+        !previous
+        || asset.updatedAt > previous.updatedAt
+        || (asset.updatedAt === previous.updatedAt && Boolean(asset.storagePath) && !previous.storagePath)
+      ) {
+        mediaById.set(asset.id, asset);
+      }
+    }
+    for (const tombstone of record.mediaTombstones || []) {
+      const previous = tombstoneById.get(tombstone.id);
+      if (
+        !previous
+        || tombstone.deletedAt > previous.deletedAt
+        || (tombstone.deletedAt === previous.deletedAt && Boolean(tombstone.storagePath) && !previous.storagePath)
+      ) {
+        tombstoneById.set(tombstone.id, tombstone);
+      }
+    }
+  }
+
+  for (const [id, tombstone] of tombstoneById) {
+    const asset = mediaById.get(id);
+    if (!asset || tombstone.deletedAt >= asset.updatedAt) mediaById.delete(id);
+  }
+
+  return {
+    media: Array.from(mediaById.values()).sort((a, b) => a.id.localeCompare(b.id)),
+    mediaTombstones: Array.from(tombstoneById.values()).sort((a, b) => a.id.localeCompare(b.id)),
+  };
+}
+
+async function applyMediaTombstones(
+  client: SupabaseClient<LooseDatabase>,
+  settings: AppSettings,
+  ownerKey: string,
+  record: EventRecord,
+  bucket: string,
+) {
+  const tombstones = record.mediaTombstones || [];
+  if (!tombstones.length) return;
+
+  const prefix = `${ownerKey}/${record.id}/`;
+  const paths = Array.from(new Set(tombstones
+    .map((item) => item.storagePath || "")
+    .filter((path) => path.startsWith(prefix))));
+  if (paths.length) {
+    const removed = await client.storage.from(bucket).remove(paths);
+    if (removed.error) throwPersonalCloudError(removed.error);
+  }
+
+  const ids = Array.from(new Set(tombstones.map((item) => item.id).filter(Boolean)));
+  if (ids.length) {
+    const removedRows = await client
+      .from(passkeyMediaTable(settings))
+      .delete()
+      .eq("owner_key", ownerKey)
+      .in("id", ids);
+    if (removedRows.error) throwPersonalCloudError(removedRows.error);
+  }
 }

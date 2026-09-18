@@ -31,6 +31,12 @@ export interface MediaAsset {
   updatedAt: string;
 }
 
+export interface MediaTombstone {
+  id: string;
+  storagePath?: string;
+  deletedAt: string;
+}
+
 export interface EventRecord {
   schemaVersion: 2;
   id: string;
@@ -57,6 +63,7 @@ export interface EventRecord {
   sourceUrl?: string;
   importConfidence?: number;
   media: MediaAsset[];
+  mediaTombstones?: MediaTombstone[];
   favorite: boolean;
   colors: [string, string];
   createdAt: string;

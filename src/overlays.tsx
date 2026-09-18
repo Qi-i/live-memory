@@ -40,6 +40,25 @@ import type { SyncConflict } from "./supabase";
 import { resolveAllConflicts, resolveSyncConflict } from "./supabase";
 import type { AppSettings } from "./domain";
 
+function mediaTombstonesAfterRemoval(
+  existing: EventRecord["mediaTombstones"],
+  removed: MediaAsset[],
+) {
+  const removedAt = nowIso();
+  const byId = new Map((existing || []).map((item) => [item.id, item]));
+  for (const asset of removed) {
+    const previous = byId.get(asset.id);
+    if (!previous || removedAt > previous.deletedAt) {
+      byId.set(asset.id, {
+        id: asset.id,
+        storagePath: asset.storagePath,
+        deletedAt: removedAt,
+      });
+    }
+  }
+  return Array.from(byId.values());
+}
+
 export interface ConfirmAction {
   title: string;
   message: string;
@@ -139,12 +158,19 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
     setMediaErrors((current) => ({ ...current, [kind]: "" }));
     try {
       const media = await Promise.all(Array.from(files).map((file) => fileToMedia(draft.id, kind, file)));
-      setDraft((current) => ({
-        ...current,
-        media: kind === "poster" || kind === "ticket" || kind === "seatMap"
-          ? current.media.filter((item) => item.kind !== kind).concat(media)
-          : current.media.concat(media),
-      }));
+      setDraft((current) => {
+        const replacesExisting = kind === "poster" || kind === "ticket" || kind === "seatMap";
+        const removed = replacesExisting ? current.media.filter((item) => item.kind === kind) : [];
+        return {
+          ...current,
+          media: replacesExisting
+            ? current.media.filter((item) => item.kind !== kind).concat(media)
+            : current.media.concat(media),
+          mediaTombstones: removed.length
+            ? mediaTombstonesAfterRemoval(current.mediaTombstones, removed)
+            : current.mediaTombstones,
+        };
+      });
       setMediaStates((current) => ({ ...current, [kind]: "ready" }));
     } catch (error) {
       setMediaStates((current) => ({ ...current, [kind]: "error" }));
@@ -153,7 +179,16 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
   }
 
   function removeMedia(id: string) {
-    setDraft((current) => ({ ...current, media: current.media.filter((item) => item.id !== id) }));
+    setDraft((current) => {
+      const removed = current.media.filter((item) => item.id === id);
+      return {
+        ...current,
+        media: current.media.filter((item) => item.id !== id),
+        mediaTombstones: removed.length
+          ? mediaTombstonesAfterRemoval(current.mediaTombstones, removed)
+          : current.mediaTombstones,
+      };
+    });
   }
 
   function applyRecognizedDraft(imported: ImportDraft) {
