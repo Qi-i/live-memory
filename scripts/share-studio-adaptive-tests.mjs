@@ -19,6 +19,8 @@ assert.match(shareStudio, /partitionByAspect/);
 assert.match(shareStudio, /function buildFilledGridRects/);
 assert.match(shareStudio, /function orderMagazineRecords/);
 assert.match(shareStudio, /function buildWeightedMosaic/);
+assert.match(shareStudio, /function assignMagazineRectsByAspect/);
+assert.match(shareStudio, /rectRatio \/ posterRatio/);
 assert.match(shareStudio, /featuredIds/);
 assert.match(shareStudio, /function ShareAmapMap/);
 assert.match(shareStudio, /resolveShareMapPoints/);
