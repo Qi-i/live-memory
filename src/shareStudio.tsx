@@ -1212,7 +1212,7 @@ async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]
   const geocoder = new AMap.Geocoder({ city: "全国" });
 
   const points: ShareMapPoint[] = [];
-  for (const city of Array.from(cities.values()).slice(0, 40)) {
+  for (const city of cities.values()) {
     const position = await geocodeAmapPlace(geocoder, city.label);
     if (position) points.push({ position, title: city.label, date: city.date });
   }
