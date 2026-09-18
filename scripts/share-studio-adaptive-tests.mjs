@@ -6,6 +6,7 @@ const shareCss = await readFile(new URL("../src/shareStudio.css", import.meta.ur
 const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
 const amap = await readFile(new URL("../src/amap.ts", import.meta.url), "utf8");
 const settings = await readFile(new URL("../src/settingsPage.tsx", import.meta.url), "utf8");
+const supabase = await readFile(new URL("../src/supabase.ts", import.meta.url), "utf8");
 
 assert.match(shareStudio, /adaptive-landscape/);
 assert.match(shareStudio, /adaptive-portrait/);
@@ -37,9 +38,13 @@ assert.match(shareStudio, /geocodeAmapPlace\(geocoder, city\.label\)/);
 assert.doesNotMatch(shareStudio, /map\.setFitView/);
 assert.match(shareStudio, /const configured = Boolean\(mapSettings\.amapKey\.trim\(\)\)/);
 assert.doesNotMatch(shareStudio, /mapSettings\.provider !== "amap"/);
+assert.doesNotMatch(shareStudio, /cities\.values\(\)\)\.slice\(/);
 assert.match(amap, /plugin\?:/);
 assert.match(amap, /Geocoder\?:/);
 assert.match(archive, /mapSettings=\{settings\.map\}/);
+assert.match(supabase, /amap_key:\s*settings\.map\.amapKey/);
+assert.match(supabase, /amapSecurityCode:\s*settings\.map\.amapSecurityCode/);
+assert.match(supabase, /amapKey:\s*mapPreferences\.amapKey\s*\|\|\s*profile\.amapKey/);
 assert.doesNotMatch(shareStudio, /cityCoordinateFallbacks|function cityCoordinate|非地图示意/);
 assert.doesNotMatch(shareCss, /share-coordinate-field|share-city-bands/);
 assert.match(shareCss, /share-amap-panel/);
