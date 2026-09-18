@@ -300,6 +300,30 @@ await archiveView("海报", ".archive-poster-card");
   }
   await assertFixedPreviewFits("Ticket aggregation");
   await page.screenshot({ path: `${outputDir}/06b-share-ticket-aggregation.png`, fullPage: true });
+
+  for (const label of ["智能竖版", "横版 4:3", "横版 16:9", "竖版 3:4", "竖版 9:16", "方形 1:1"]) {
+    await page.locator(".share-format-control button").filter({ hasText: label }).click();
+    await page.waitForTimeout(80);
+    const ticketGeometry = await page.locator(".share-ticket-card").evaluateAll((cards) => cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      const poster = card.querySelector(".share-ticket-poster")?.getBoundingClientRect();
+      const title = card.querySelector("h3");
+      const meta = card.querySelector("dl");
+      return {
+        width: rect.width,
+        height: rect.height,
+        posterRatio: poster ? poster.height / Math.max(1, poster.width) : 0,
+        titleSize: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
+        metaSize: meta ? parseFloat(getComputedStyle(meta).fontSize) : 0,
+      };
+    }));
+    if (!ticketGeometry.length
+      || ticketGeometry.some((item) => item.posterRatio < 1.05 || item.titleSize < 18 || item.metaSize < 11 || item.height < 70)) {
+      throw new Error(`${label} ticket layout became unreadable or flattened: ${JSON.stringify(ticketGeometry)}`);
+    }
+    await assertFixedPreviewFits(`Ticket ${label}`);
+  }
+  await page.locator(".share-format-control button").filter({ hasText: "智能横版" }).click();
   await layoutButton("密集海报墙").click();
 
   await page.locator(".share-format-control button").filter({ hasText: "智能竖版" }).click();
@@ -316,6 +340,7 @@ await archiveView("海报", ".archive-poster-card");
     ["横版 16:9", 16 / 9],
     ["竖版 3:4", 3 / 4],
     ["竖版 9:16", 9 / 16],
+    ["方形 1:1", 1],
   ];
   for (const [label, expectedRatio] of fixedFormats) {
     await page.locator(".share-format-control button").filter({ hasText: label }).click();
@@ -349,6 +374,10 @@ await archiveView("海报", ".archive-poster-card");
 
   await layoutButton("时间长卷").click();
   await page.locator(".share-timeline-band").first().waitFor({ state: "visible", timeout: 10000 });
+  const timelineTypography = await page.locator(".share-timeline-band > header b").evaluateAll((labels) => labels.map((label) => parseFloat(getComputedStyle(label).fontSize)));
+  if (!timelineTypography.length || timelineTypography.some((size) => size < 28)) {
+    throw new Error(`Timeline year labels are too small: ${timelineTypography.join(",")}`);
+  }
   await assertFixedPreviewFits("Timeline");
   await assertSharePosters("Timeline", ".share-layout-timeline .share-layout-canvas");
   await page.screenshot({ path: `${outputDir}/07-share-timeline.png`, fullPage: true });
@@ -382,6 +411,9 @@ await archiveView("海报", ".archive-poster-card");
   if (cityPosterCount < 3) throw new Error(`City route poster field is too sparse: ${cityPosterCount}`);
   const mapCopy = await page.locator(".share-amap-panel").innerText();
   if (!mapCopy.includes("高德")) throw new Error(`City route does not identify the AMap surface: ${mapCopy}`);
+  if (mapCopy.includes("需要高德地图") && !mapCopy.includes("去配置高德地图")) {
+    throw new Error("City route missing-key state has no direct configuration action");
+  }
   await assertFixedPreviewFits("City route");
   await page.screenshot({ path: `${outputDir}/09-share-city-amap.png`, fullPage: true });
 
