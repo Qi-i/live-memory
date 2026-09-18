@@ -156,7 +156,7 @@ export default function AppRoot() {
       accountAvatar={<AccountAvatar settings={settings} guest={isGuest} />}
       accountLabel={isGuest ? "访客" : accountLabel(settings)}
       accountSecondary={isGuest ? "临时本地" : `@${settings.account.username || "account"}`}
-      accountStatus={<AccountStatus settings={settings} syncing={syncing} conflicts={syncConflicts.length} guest={isGuest} onClick={() => isGuest ? access.leaveGuest() : setRoute("settings")} />}
+      accountStatus={<AccountStatus settings={settings} syncing={syncing} conflicts={syncConflicts.length} guest={isGuest} personalCloudStatus={personalCloudStatus} onClick={() => isGuest ? access.leaveGuest() : setRoute("settings")} />}
       metrics={metrics}
       utilityActions={utilityActions}
       shareMode={shareMode}
@@ -265,8 +265,8 @@ function AccountAvatar({ settings, guest }: { settings: AppSettings; guest: bool
   return <span className="account-avatar">{settings.account.avatarUrl && !guest ? <img src={settings.account.avatarUrl} alt={accountLabel(settings)} /> : <b>{label}</b>}</span>;
 }
 
-function AccountStatus({ settings, syncing, conflicts, guest, onClick }: { settings: AppSettings; syncing: boolean; conflicts: number; guest: boolean; onClick: () => void }) {
-  const status = guest ? "临时会话" : syncing ? "同步中…" : conflicts ? `${conflicts} 条冲突` : hasPersonalCloudConnection(settings) ? "云同步已连接" : "已登录";
+function AccountStatus({ settings, syncing, conflicts, guest, personalCloudStatus, onClick }: { settings: AppSettings; syncing: boolean; conflicts: number; guest: boolean; personalCloudStatus: "not-configured" | "connected" | "reconnect-needed"; onClick: () => void }) {
+  const status = guest ? "临时会话" : personalCloudStatus === "reconnect-needed" ? "个人云端需恢复" : syncing ? "同步中…" : conflicts ? `${conflicts} 条冲突` : hasPersonalCloudConnection(settings) ? "云同步已连接" : "已登录";
   return <button className="account-chip" type="button" onClick={onClick}><AccountAvatar settings={settings} guest={guest} /><span><strong>{guest ? "访客" : accountLabel(settings)}</strong><small>{status}</small></span></button>;
 }
 
