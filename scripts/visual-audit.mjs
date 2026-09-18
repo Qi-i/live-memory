@@ -363,6 +363,12 @@ await archiveView("海报", ".archive-poster-card");
   await page.screenshot({ path: `${outputDir}/12-desktop-2k-150-equivalent.png`, fullPage: true });
 
   await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(260);
+  const mobileRail = await page.locator(".experience-rail").boundingBox();
+  if (mobileRail && mobileRail.x + mobileRail.width > 1) {
+    throw new Error(`Mobile navigation rail is covering content by default: ${JSON.stringify(mobileRail)}`);
+  }
+  await page.locator(".experience-mobile-nav").waitFor({ state: "visible", timeout: 5000 });
   await page.locator(".archive-highlight-card-1").waitFor({ state: "visible", timeout: 15000 });
   const mobileCards = await posterGeometry(".archive-highlight-card:visible");
   const mobileMasthead = await page.locator(".archive-masthead").boundingBox();

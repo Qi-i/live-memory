@@ -538,10 +538,13 @@ export async function loadUserProfileBinding(settings: AppSettings): Promise<Use
   return data ? profileFromRow(data) : null;
 }
 
+export type PersonalCloudRecoveryStatus = "not-configured" | "connected" | "reconnect-needed";
+
 export interface PostLoginSyncResult {
   settings: AppSettings;
   records: EventRecord[];
   message: string;
+  personalCloudStatus: PersonalCloudRecoveryStatus;
 }
 
 export async function syncAfterLogin(
@@ -562,13 +565,17 @@ export async function syncAfterLogin(
   }
 
   // 2. Personal Supabase: restore saved project settings, then reconnect using the Live Memory account.
+  // A transient cold-start/network failure must remain visible to the controller so it can retry later.
+  let personalCloudStatus: PersonalCloudRecoveryStatus = "not-configured";
   if (nextSettings.storageMode === "supabase" && hasSupabaseConfig(nextSettings)) {
     try {
       const connected = await signInStorageWithAccount(nextSettings);
       nextSettings = connected.settings;
+      personalCloudStatus = "connected";
       messages.push("个人云端已连接");
     } catch {
-      messages.push("个人云端配置已恢复");
+      personalCloudStatus = "reconnect-needed";
+      messages.push("个人云端待恢复");
     }
   }
 
@@ -588,10 +595,25 @@ export async function syncAfterLogin(
     messages.push("文字备份暂未恢复");
   }
 
+  // 4. Once the saved personal project is connected, restore the full personal-cloud
+  // record/media catalog before renewing signed URLs. Account text backup intentionally
+  // omits media, so a new device cannot recover posters by signing local references alone.
+  if (personalCloudStatus === "connected" && nextSettings.supabase.syncMedia) {
+    try {
+      const restored = await restorePersonalCloudMedia(nextSettings, nextRecords);
+      nextRecords = restored.records;
+      messages.push(restored.message);
+    } catch {
+      personalCloudStatus = "reconnect-needed";
+      messages.push("云端图片待恢复");
+    }
+  }
+
   return {
     settings: nextSettings,
     records: nextRecords,
     message: messages.join("，") || "同步完成",
+    personalCloudStatus,
   };
 }
 
@@ -760,6 +782,36 @@ export async function refreshSignedMediaUrls(
       return cached ? { ...asset, src: cached.url, source: "supabase" as const } : asset;
     }),
   }));
+}
+
+export function mergePersonalCloudMedia(baseRecords: EventRecord[], personalRecords: EventRecord[]) {
+  const merged = new Map(baseRecords.map((record) => [record.id, record]));
+  for (const personal of personalRecords) {
+    const base = merged.get(personal.id);
+    if (!base) {
+      merged.set(personal.id, normalizeRecord(personal));
+      continue;
+    }
+    const textSource = personal.updatedAt > base.updatedAt ? personal : base;
+    const media = personal.media.length ? personal.media : base.media;
+    merged.set(personal.id, normalizeRecord({
+      ...textSource,
+      media,
+      syncedAt: personal.syncedAt || base.syncedAt,
+    }));
+  }
+  return Array.from(merged.values()).sort((a, b) => b.date.localeCompare(a.date));
+}
+
+export async function restorePersonalCloudMedia(settings: AppSettings, baseRecords: EventRecord[]): Promise<SyncResult> {
+  if (!settings.supabase.ownerKey) throw new Error("请先连接个人云端");
+  const personal = await pullRecordsFromPasskeySupabase(settings, []);
+  const merged = mergePersonalCloudMedia(baseRecords, personal.records);
+  const records = settings.supabase.syncMedia
+    ? await refreshSignedMediaUrls(settings, merged, { force: true })
+    : merged;
+  const mediaCount = records.reduce((count, record) => count + record.media.filter((asset) => Boolean(asset.storagePath)).length, 0);
+  return { records, message: `已恢复个人云端媒体 ${mediaCount} 项` };
 }
 
 export async function purgeRecordFromSupabase(settings: AppSettings, recordId: string) {

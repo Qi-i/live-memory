@@ -515,76 +515,232 @@ const cityCoordinateFallbacks: Record<string, [number, number]> = {
   银川: [106.23, 38.49], 呼和浩特: [111.75, 40.84], 海口: [110.2, 20.04], 三亚: [109.51, 18.25],
 };
 
-function footprintLngLat(name: string, mode: "city" | "venue", records: EventRecord[]): [number, number] | undefined {
-  const record = records.find((item) => mode === "city"
-    ? item.city === name
-    : [item.city, item.venue].filter(Boolean).join(" · ") === name);
-  if (!record) return undefined;
-  return record.coordinates
-    ? [record.coordinates.lng, record.coordinates.lat]
-    : cityCoordinateFallbacks[record.city];
+type PlaceMode = "city" | "venue";
+
+type PlaceGroup = {
+  key: string;
+  label: string;
+  count: number;
+  heat: number;
+  point?: [number, number];
+  records: EventRecord[];
+};
+
+function placeKey(record: EventRecord, mode: PlaceMode) {
+  return mode === "city" ? record.city : [record.city, record.venue].filter(Boolean).join(" · ");
+}
+
+function buildPlaceGroups(records: EventRecord[], mode: PlaceMode): PlaceGroup[] {
+  const grouped = new Map<string, EventRecord[]>();
+  records.forEach((record) => {
+    const key = placeKey(record, mode);
+    if (!key) return;
+    grouped.set(key, [...(grouped.get(key) || []), record]);
+  });
+  const maxCount = Math.max(1, ...Array.from(grouped.values(), (items) => items.length));
+  return Array.from(grouped.entries()).map(([key, items]) => {
+    const ordered = [...items].sort((a, b) => b.date.localeCompare(a.date));
+    const count = ordered.length;
+    const explicit = ordered.find((record) => record.coordinates)?.coordinates;
+    const point: [number, number] | undefined = explicit
+      ? [explicit.lng, explicit.lat]
+      : cityCoordinateFallbacks[ordered[0]?.city || ""];
+    return { key, label: key, count, heat: count / maxCount, point, records: ordered };
+  }).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
+}
+
+function placeHeatColor(heat: number) {
+  const clamped = Math.max(0, Math.min(1, heat));
+  const hue = Math.round(178 - clamped * 154);
+  const saturation = Math.round(58 + clamped * 18);
+  const lightness = Math.round(48 + clamped * 4);
+  return `hsl(${hue} ${saturation}% ${lightness}%)`;
+}
+
+function buildPosterMarkerContent(group: PlaceGroup) {
+  const markerContent = document.createElement("button");
+  markerContent.type = "button";
+  markerContent.className = "amap-poster-marker";
+  markerContent.dataset.placeKey = group.key;
+  markerContent.dataset.count = String(group.count);
+  markerContent.style.setProperty("--heat", String(group.heat));
+  markerContent.style.setProperty("--heat-color", placeHeatColor(group.heat));
+  markerContent.setAttribute("aria-label", `${group.label} · ${group.count} 场`);
+  markerContent.title = `${group.label} · ${group.count} 场`;
+
+  const stack = document.createElement("span");
+  stack.className = "amap-poster-stack";
+  group.records.slice(0, 3).forEach((record, index) => {
+    const frame = document.createElement("span");
+    frame.className = "amap-poster-layer";
+    frame.style.setProperty("--poster-index", String(index));
+    const poster = primaryMedia(record);
+    if (poster?.src) {
+      const image = document.createElement("img");
+      image.src = poster.src;
+      image.alt = "";
+      image.loading = "lazy";
+      image.decoding = "async";
+      image.addEventListener("error", () => {
+        image.remove();
+        frame.classList.add("is-fallback");
+        frame.textContent = record.title.slice(0, 1);
+      }, { once: true });
+      frame.appendChild(image);
+    } else {
+      frame.textContent = record.title.slice(0, 1);
+    }
+    stack.appendChild(frame);
+  });
+  markerContent.appendChild(stack);
+
+  const badge = document.createElement("span");
+  badge.className = "amap-poster-count";
+  badge.textContent = String(group.count);
+  markerContent.appendChild(badge);
+  markerContent.addEventListener("click", (event) => event.stopPropagation());
+  return markerContent;
 }
 
 function VenueView({ records, mapSettings, onOpenMapSettings, onOpen }: { records: EventRecord[]; mapSettings: AppSettings["map"]; onOpenMapSettings: () => void; onOpen: (record: EventRecord) => void }) {
-  const [mode, setMode] = useState<"city" | "venue">("city");
-  const rows = mode === "city"
-    ? topRows(records.map((record) => record.city).filter(Boolean), 30)
-    : topRows(records.map((record) => [record.city, record.venue].filter(Boolean).join(" · ")).filter(Boolean), 30);
-  const max = Math.max(1, ...rows.map(([, count]) => count));
+  const [mode, setMode] = useState<PlaceMode>("city");
+  const [selectedPlaceKey, setSelectedPlaceKey] = useState<string | null>(null);
+  const [hoveredPlaceKey, setHoveredPlaceKey] = useState<string | null>(null);
+  const [focusPlaceKey, setFocusPlaceKey] = useState<string | null>(null);
+  const groups = useMemo(() => buildPlaceGroups(records, mode), [mode, records]);
+
+  useEffect(() => {
+    setSelectedPlaceKey(null);
+    setHoveredPlaceKey(null);
+    setFocusPlaceKey(null);
+  }, [mode]);
 
   let mapPanel: ReactNode;
   if (mapSettings.provider === "amap" && !mapSettings.amapKey.trim()) {
     mapPanel = <div className="venue-map-state" data-map-mode="amap-missing-key"><MapIcon /><strong>配置高德 Key 后显示真实足迹底图</strong><p>你已经选择高德地图，但当前设备没有可用的 Web 端 JS API Key。</p><button type="button" onClick={onOpenMapSettings}>配置高德 Key</button></div>;
   } else if (mapSettings.provider === "amap") {
-    mapPanel = <AmapFootprintMap records={records} rows={rows} mode={mode} mapSettings={mapSettings} onOpen={onOpen} />;
+    mapPanel = <AmapFootprintMap
+      groups={groups}
+      mode={mode}
+      mapSettings={mapSettings}
+      selectedPlaceKey={selectedPlaceKey}
+      hoveredPlaceKey={hoveredPlaceKey}
+      focusPlaceKey={focusPlaceKey}
+      onSelectPlace={setSelectedPlaceKey}
+      onHoverPlace={setHoveredPlaceKey}
+      onOpen={onOpen}
+    />;
   } else if (mapSettings.provider === "baidu") {
     mapPanel = <div className="venue-map-state" data-map-mode="baidu-not-ready"><MapIcon /><strong>百度地图尚未接入当前足迹视图</strong><p>为避免“切换了但底图没变化”的假状态，这里不再回退到其他地图。</p><button type="button" onClick={onOpenMapSettings}>切换地图来源</button></div>;
   } else {
-    mapPanel = <div className="venue-map-art venue-offline-summary" data-map-mode="offline-summary"><div className="venue-map-heading"><span>MEMORY PLACES</span><strong>离线城市摘要</strong><small>无需 API · 只显示已记录城市，不模拟行政边界</small></div><div className="venue-offline-grid">{rows.slice(0, 18).map(([name, count]) => <button key={name} type="button" style={{ "--weight": count / max } as CSSProperties} onClick={() => { const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name); if (record) onOpen(record); }}><b>{name}</b><span>{count} 场</span></button>)}</div><button className="venue-enable-map" type="button" onClick={onOpenMapSettings}>启用高德地图</button></div>;
+    mapPanel = <div className="venue-map-art venue-offline-summary" data-map-mode="offline-summary"><div className="venue-map-heading"><span>MEMORY PLACES</span><strong>离线城市摘要</strong><small>无需 API · 只显示已记录城市，不模拟行政边界</small></div><div className="venue-offline-grid">{groups.slice(0, 18).map((group) => <button key={group.key} type="button" style={{ "--weight": group.heat, "--heat-color": placeHeatColor(group.heat) } as CSSProperties} onClick={() => setSelectedPlaceKey(group.key)}><b>{group.label}</b><span>{group.count} 场</span></button>)}</div><button className="venue-enable-map" type="button" onClick={onOpenMapSettings}>启用高德地图</button></div>;
   }
 
   return (
     <section className="archive-venue-view">
       {mapPanel}
-      <div className="venue-ranking"><header><span>足迹整理</span><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button></div></header>{rows.map(([name, count]) => <p key={name} style={{ "--ratio": `${count / max * 100}%` } as CSSProperties}><span>{name}</span><i /><b>{count}</b></p>)}</div>
+      <div className="venue-ranking">
+        <header><span>足迹整理</span><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button></div></header>
+        <div className="venue-ranking-list">
+          {groups.map((group) => <button
+            key={group.key}
+            type="button"
+            className={`${selectedPlaceKey === group.key ? "is-selected " : ""}${hoveredPlaceKey === group.key ? "is-hovered" : ""}`.trim()}
+            style={{ "--ratio": `${group.heat * 100}%`, "--heat": group.heat, "--heat-color": placeHeatColor(group.heat) } as CSSProperties}
+            onMouseEnter={() => setHoveredPlaceKey(group.key)}
+            onMouseLeave={() => setHoveredPlaceKey(null)}
+            onClick={() => { setSelectedPlaceKey(group.key); setFocusPlaceKey(group.key); }}
+          ><span>{group.label}</span><i /><b>{group.count}</b></button>)}
+        </div>
+        <div className="venue-heat-legend"><span>低频</span><i /><span>高频</span></div>
+      </div>
     </section>
   );
 }
 
-function AmapFootprintMap({ records, rows, mode, mapSettings, onOpen }: { records: EventRecord[]; rows: [string, number][]; mode: "city" | "venue"; mapSettings: AppSettings["map"]; onOpen: (record: EventRecord) => void }) {
+function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hoveredPlaceKey, focusPlaceKey, onSelectPlace, onHoverPlace, onOpen }: {
+  groups: PlaceGroup[];
+  mode: PlaceMode;
+  mapSettings: AppSettings["map"];
+  selectedPlaceKey: string | null;
+  hoveredPlaceKey: string | null;
+  focusPlaceKey: string | null;
+  onSelectPlace: (key: string | null) => void;
+  onHoverPlace: (key: string | null) => void;
+  onOpen: (record: EventRecord) => void;
+}) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const mapRef = useRef<AMapMapInstance | null>(null);
+  const markerElementsRef = useRef(new Map<string, HTMLElement>());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
+  const selectedGroup = groups.find((group) => group.key === selectedPlaceKey) || null;
 
   useEffect(() => {
     let disposed = false;
-    let instance: AMapMapInstance | null = null;
     setStatus("loading");
+    markerElementsRef.current.clear();
     loadAmap({ key: mapSettings.amapKey, securityCode: mapSettings.amapSecurityCode })
       .then((AMap) => {
         if (disposed || !hostRef.current) return;
         const map = new AMap.Map(hostRef.current, { center: [104.2, 35.8], zoom: 4.1, viewMode: "2D", resizeEnable: true });
-        instance = map;
-        const markers = rows.slice(0, 30).flatMap(([name, count]) => {
-          const point = footprintLngLat(name, mode, records);
-          if (!point) return [];
-          const record = records.find((item) => mode === "city" ? item.city === name : [item.city, item.venue].filter(Boolean).join(" · ") === name);
-          const marker = new AMap.Marker({ position: point, title: `${name} · ${count} 场` });
-          if (record) marker.on?.("click", () => onOpen(record));
+        mapRef.current = map;
+        const markers = groups.flatMap((group) => {
+          if (!group.point) return [];
+          const markerContent = buildPosterMarkerContent(group);
+          markerElementsRef.current.set(group.key, markerContent);
+          const marker = new AMap.Marker({ position: group.point, title: `${group.label} · ${group.count} 场`, content: markerContent, anchor: "bottom-center", zIndex: 100 + Math.round(group.heat * 100) });
+          marker.on?.("click", (event) => {
+            const original = (event as { originalEvent?: { stopPropagation?: () => void } } | undefined)?.originalEvent;
+            original?.stopPropagation?.();
+            onSelectPlace(group.key);
+          });
+          marker.on?.("mouseover", () => onHoverPlace(group.key));
+          marker.on?.("mouseout", () => onHoverPlace(null));
           return [marker];
         });
         map.add?.(markers);
-        if (markers.length) map.setFitView?.(markers, false, [70, 70, 70, 70], 11);
+        map.on?.("click", () => onSelectPlace(null));
+        if (markers.length) map.setFitView?.(markers, false, [82, 82, 82, 82], 11);
         hostRef.current.dataset.amapReady = "true";
         setStatus("ready");
       })
       .catch(() => { if (!disposed) setStatus("error"); });
     return () => {
       disposed = true;
-      instance?.destroy();
+      markerElementsRef.current.clear();
+      mapRef.current?.destroy();
+      mapRef.current = null;
     };
-  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, mode, onOpen, records, rows]);
+  }, [groups, mapSettings.amapKey, mapSettings.amapSecurityCode, mode]);
 
-  return <div className="amap-map-shell" data-map-mode="amap"><div className="venue-map-heading"><span>AMAP · MEMORY MAP</span><strong>高德现场足迹</strong><small>{status === "ready" ? "已按档案坐标标出演出地点" : status === "error" ? "地图加载失败，请检查 Key、安全密钥或域名白名单" : "正在载入高德地图…"}</small></div><div ref={hostRef} className="amap-map-host" data-amap-status={status} />{status === "error" ? <button className="venue-enable-map" type="button" onClick={() => window.location.reload()}>重新载入</button> : null}</div>;
+  useEffect(() => {
+    markerElementsRef.current.forEach((element, key) => {
+      element.classList.toggle("is-selected", key === selectedPlaceKey);
+      element.classList.toggle("is-hovered", key === hoveredPlaceKey);
+    });
+  }, [hoveredPlaceKey, selectedPlaceKey]);
+
+  useEffect(() => {
+    if (!focusPlaceKey || !mapRef.current) return;
+    const group = groups.find((item) => item.key === focusPlaceKey);
+    if (group?.point) mapRef.current.setZoomAndCenter?.(6.8, group.point, false, 420);
+  }, [focusPlaceKey, groups]);
+
+  return <div className="amap-map-shell" data-map-mode="amap">
+    <div className="venue-map-heading"><span>AMAP · MEMORY MAP</span><strong>{mode === "city" ? "城市海报足迹" : "场馆海报足迹"}</strong><small>{status === "ready" ? "点击海报堆选择地点，再点具体海报打开详情" : status === "error" ? "地图加载失败，请检查 Key、安全密钥或域名白名单" : "正在载入高德地图…"}</small></div>
+    <div ref={hostRef} className="amap-map-host" data-amap-status={status} />
+    <div className="map-heat-legend"><span>低频</span><i /><span>高频</span></div>
+    {selectedGroup && <div className="venue-place-picker" data-place-key={selectedGroup.key}>
+      <header><div><span>{mode === "city" ? "城市" : "场馆"}</span><strong>{selectedGroup.label}</strong><small>{selectedGroup.count} 场 · 选择海报打开详情</small></div><button type="button" aria-label="关闭地点演出选择" onClick={() => onSelectPlace(null)}>×</button></header>
+      <div className={selectedGroup.count === 1 ? "is-single" : "is-multiple"}>
+        {selectedGroup.records.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
+          <span><RecordMedia media={primaryMedia(record)} alt={record.title} fallback={record.title.slice(0, 1)} /></span>
+          <section><strong>{record.title}</strong><small>{record.date} · {record.venue || record.city}</small></section>
+        </button>)}
+      </div>
+    </div>}
+    {status === "error" ? <button className="venue-enable-map" type="button" onClick={() => window.location.reload()}>重新载入</button> : null}
+  </div>;
 }
 
 
