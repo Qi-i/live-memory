@@ -937,9 +937,6 @@ async function syncAccountTextBackup(settings: AppSettings, localRecords: EventR
   // Account backup is secondary storage. Compare actual content/timestamps and do not
   // reuse the personal-cloud syncedAt marker, otherwise one backend can suppress the other.
   for (const [id, local] of localById) {
-    if (settings.supabase.syncMedia && local.mediaTombstones?.length) {
-      await applyMediaTombstones(client, settings, ownerKey, local, bucket);
-    }
     const cloud = cloudById.get(id);
     if (!cloud) {
       toPush.push(local);
@@ -1049,6 +1046,9 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
   // both receive storagePath values in the same transaction cycle.
   if (toPush.length) {
     for (const record of toPush) {
+      if (settings.supabase.syncMedia && record.mediaTombstones?.length) {
+        await applyMediaTombstones(client, settings, ownerKey, record, bucket);
+      }
       let media = record.media;
       if (settings.supabase.syncMedia && !record.deletedAt) {
         media = await Promise.all(record.media.map(
