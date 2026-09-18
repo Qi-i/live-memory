@@ -24,12 +24,21 @@ import {
   type ReactNode,
 } from "react";
 import { BrandLockup } from "./brand";
-import type { EventCategory, EventRecord } from "./domain";
+import type { EventCategory, EventRecord, MapConfig } from "./domain";
 import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
+import { loadAmap, type AMapLngLatLike, type AMapNamespace } from "./amap";
 import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
-export type ShareFormat = "adaptive-landscape" | "adaptive-portrait" | "landscape" | "portrait" | "square" | "long";
+export type ShareFormat =
+  | "adaptive-landscape"
+  | "adaptive-portrait"
+  | "landscape-4-3"
+  | "landscape-16-9"
+  | "portrait-3-4"
+  | "portrait-9-16"
+  | "square"
+  | "long";
 type ShareLayout = "wall" | "tickets" | "timeline" | "magazine" | "cities";
 type SharePalette = "jade" | "midnight" | "paper" | "sunset" | "graphite" | "mist" | "forest" | "champagne" | "plum" | "silver";
 type ScopeMode = "all" | "range" | "manual";
@@ -38,14 +47,15 @@ type SortMode = "date-desc" | "date-asc";
 
 type Rect = { x: number; y: number; width: number; height: number };
 type PosterSlot = { record: EventRecord; rect: Rect; emphasis?: "hero" | "feature" | "normal" };
-type TimelineBand = { label: string; count: number; rect: Rect; slots: PosterSlot[] };
-type CityBand = { label: string; count: number; rect: Rect; slots: PosterSlot[] };
-type CityNode = { label: string; x: number; y: number; count: number };
+type TimelineBand = { label: string; count: number; rect: Rect; headerHeight: number; slots: PosterSlot[] };
+type CityChip = { label: string; count: number };
+type ShareMapPoint = { position: [number, number]; title: string; date: string };
 
 interface ShareStudioProps {
   records: EventRecord[];
   format: ShareFormat;
   setFormat: (format: ShareFormat) => void;
+  mapSettings: MapConfig;
   onClose: () => void;
 }
 
@@ -78,6 +88,7 @@ interface ExportOptions {
   showBrand: boolean;
   showStats: boolean;
   sortMode: SortMode;
+  mapSnapshot?: HTMLCanvasElement | null;
 }
 
 const categoryOptions: EventCategory[] = ["concert", "festival", "livehouse", "theatre", "other"];
@@ -87,7 +98,7 @@ const layoutOptions: Array<{ value: ShareLayout; label: string; description: str
   { value: "tickets", label: "票根聚合", description: "把海报色彩、日期、场馆与座位整理成磨砂票根", icon: <Ticket /> },
   { value: "timeline", label: "时间长卷", description: "按年份分带，突出观演经历的时间脉络", icon: <Rows3 /> },
   { value: "magazine", label: "编目杂志", description: "主视觉、次重点与密集补位形成清晰层级", icon: <LayoutTemplate /> },
-  { value: "cities", label: "城市路线", description: "用非地图坐标场呈现城市足迹与场次分布", icon: <MapPinned /> },
+  { value: "cities", label: "城市路线", description: "真实高德地图配合密集海报，按现场顺序呈现城市足迹", icon: <MapPinned /> },
 ];
 
 const paletteOptions: Array<{ value: SharePalette; label: string }> = [
@@ -146,19 +157,7 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
   },
 };
 
-const cityCoordinateFallbacks: Record<string, [number, number]> = {
-  北京: [116.4, 39.9], 上海: [121.47, 31.23], 广州: [113.27, 23.13], 深圳: [114.06, 22.54],
-  成都: [104.07, 30.67], 重庆: [106.55, 29.56], 西安: [108.94, 34.34], 武汉: [114.31, 30.59],
-  南京: [118.8, 32.06], 杭州: [120.16, 30.27], 苏州: [120.58, 31.3], 天津: [117.2, 39.12],
-  郑州: [113.63, 34.75], 长沙: [112.94, 28.23], 青岛: [120.38, 36.07], 济南: [117.12, 36.65],
-  昆明: [102.83, 25.04], 厦门: [118.09, 24.48], 福州: [119.3, 26.08], 南昌: [115.86, 28.68],
-  合肥: [117.23, 31.82], 沈阳: [123.43, 41.8], 哈尔滨: [126.64, 45.76], 长春: [125.32, 43.82],
-  乌鲁木齐: [87.62, 43.83], 拉萨: [91.13, 29.65], 兰州: [103.84, 36.06], 西宁: [101.78, 36.62],
-  银川: [106.23, 38.49], 呼和浩特: [111.75, 40.84], 海口: [110.2, 20.04], 三亚: [109.51, 18.25],
-  香港: [114.17, 22.32], 澳门: [113.54, 22.2], 台北: [121.56, 25.04],
-};
-
-export function ShareStudio({ records, format, setFormat, onClose }: ShareStudioProps) {
+export function ShareStudio({ records, format, setFormat, mapSettings, onClose }: ShareStudioProps) {
   const eligibleRecords = useMemo(
     () => records
       .slice()
@@ -327,6 +326,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
     setSaved(false);
     setError("");
     try {
+      const mapSnapshot = layout === "cities" ? captureShareAmapSurface() : null;
       await exportSharePng({
         records: selectedRecords,
         format,
@@ -337,6 +337,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         showBrand,
         showStats,
         sortMode,
+        mapSnapshot,
       });
       setSaved(true);
       window.setTimeout(() => setSaved(false), 2400);
@@ -461,7 +462,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
         <section className="share-control-group">
           <strong>成图比例 <small>智能尺寸会按海报数量自动计算</small></strong>
           <div className="share-format-control">
-            {(["adaptive-landscape", "adaptive-portrait", "landscape", "portrait", "square", "long"] as ShareFormat[]).map((item) => (
+            {(["adaptive-landscape", "adaptive-portrait", "landscape-4-3", "landscape-16-9", "portrait-3-4", "portrait-9-16", "square", "long"] as ShareFormat[]).map((item) => (
               <button className={format === item ? "is-active" : ""} key={item} type="button" onClick={() => setFormat(item)}>
                 {formatLabel(item)}
               </button>
@@ -516,7 +517,7 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
               <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
               {showBrand ? <BrandLockup compact inverse={isDarkPalette(palette)} size={44} /> : null}
             </header>
-            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} />
+            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} />
             <footer>
               {showBrand ? <span className="share-preview-github">GitHub · Qi-i/live-memory</span> : <span />}
               {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
@@ -528,7 +529,19 @@ export function ShareStudio({ records, format, setFormat, onClose }: ShareStudio
   );
 }
 
-function SharePreviewLayout({ records, layout, spec, showDetails }: { records: EventRecord[]; layout: ShareLayout; spec: CanvasSpec; showDetails: boolean }) {
+function SharePreviewLayout({
+  records,
+  layout,
+  spec,
+  showDetails,
+  mapSettings,
+}: {
+  records: EventRecord[];
+  layout: ShareLayout;
+  spec: CanvasSpec;
+  showDetails: boolean;
+  mapSettings: MapConfig;
+}) {
   const area = contentArea(spec);
   if (!records.length) return <div className="share-preview-empty">请选择至少一张海报</div>;
 
@@ -558,30 +571,22 @@ function SharePreviewLayout({ records, layout, spec, showDetails }: { records: E
   if (layout === "cities") {
     const model = buildCityModel(records, area, spec);
     return (
-      <div className="share-layout-canvas" style={rectStyle(area)}>
-        <section className="share-coordinate-field" style={localRectStyle(model.mapRect, area)}>
-          <header><b>全国足迹坐标场</b><span>非地图示意 · 不绘制国界</span></header>
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
-            <polyline points={model.nodes.map((node) => `${node.x},${node.y}`).join(" ")} />
-          </svg>
-          {model.nodes.map((node) => <i key={node.label} style={{ left: `${node.x}%`, top: `${node.y}%` } as CSSProperties}><b>{node.label}</b><small>{node.count}</small></i>)}
-          <footer>经纬度归一化显示，仅用于个人演出足迹排布</footer>
+      <div className="share-layout-canvas share-layout-canvas-cities" style={rectStyle(area)}>
+        <ShareAmapMap records={records} mapSettings={mapSettings} rect={model.mapRect} origin={area} />
+        <section className="share-city-poster-field" style={localRectStyle(model.listRect, area)}>
+          <header className="share-city-summary">
+            <strong>城市现场</strong>
+            <div>{model.chips.map((chip) => <span key={chip.label}><b>{chip.label}</b><small>{chip.count}</small></span>)}</div>
+          </header>
+          <div className="share-city-poster-grid" style={localRectStyle(model.posterRect, model.listRect)}>
+            {model.slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={model.posterRect} showDetails={showDetails} />)}
+          </div>
         </section>
-        <div className="share-city-bands" style={localRectStyle(model.listRect, area)}>
-          {model.bands.map((band) => (
-            <section key={band.label} style={{ height: band.rect.height }}>
-              <header><b>{band.label}</b><span>{band.count} 场</span></header>
-              <div>
-                {band.slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={band.rect} showDetails={showDetails} />)}
-              </div>
-            </section>
-          ))}
-        </div>
       </div>
     );
   }
 
-  const slots = layout === "magazine" ? buildMagazineSlots(records, area, spec) : isAdaptiveFormat(spec.format) ? buildAdaptiveWallSlots(records, area, spec) : buildJustifiedSlots(records, area, spec);
+  const slots = layout === "magazine" ? buildMagazineSlots(records, area, spec) : buildWallFillSlots(records, area, spec);
   return (
     <div className={`share-layout-canvas share-layout-canvas-${layout}`} style={rectStyle(area)}>
       {slots.map((slot) => <PosterFigure key={slot.record.id} slot={slot} origin={area} showDetails={showDetails} />)}
@@ -589,41 +594,39 @@ function SharePreviewLayout({ records, layout, spec, showDetails }: { records: E
   );
 }
 
+
 function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length) return [];
-  const gap = spec.width >= 1500 ? 16 : 12;
-  const landscape = isLandscapeFormat(spec.format);
-  const idealWidth = landscape ? 420 : 350;
-  const maxColumns = landscape ? 4 : 3;
-  const columns = Math.max(1, Math.min(maxColumns, records.length, Math.round((area.width + gap) / (idealWidth + gap))));
-  const rows = Math.ceil(records.length / columns);
-  const width = (area.width - gap * Math.max(0, columns - 1)) / columns;
-  const height = (area.height - gap * Math.max(0, rows - 1)) / Math.max(1, rows);
-  return records.map((record, index) => {
-    const row = Math.floor(index / columns);
-    const rowStart = row * columns;
-    const rowItemCount = Math.min(columns, records.length - rowStart);
-    const rowWidth = rowItemCount * width + gap * Math.max(0, rowItemCount - 1);
-    const rowOffset = Math.max(0, (area.width - rowWidth) / 2);
-    return {
-      record,
-      rect: {
-        x: area.x + rowOffset + (index - rowStart) * (width + gap),
-        y: area.y + row * (height + gap),
-        width,
-        height,
-      },
-    };
-  });
+  const scale = spec.width / 1600;
+  const gap = clamp(14 * scale, 10, 24);
+  const targetAspect = isLandscapeFormat(spec.format) ? 2.08 : 1.82;
+  const rects = buildFilledGridRects(
+    records.length,
+    area,
+    gap,
+    targetAspect,
+    isLandscapeFormat(spec.format) ? 6 : 5,
+    128 * scale,
+  );
+  return records.map((record, index) => ({ record, rect: rects[index] }));
 }
 
 function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
   const media = primaryMedia(slot.record);
   const src = useCachedMediaSrc(media);
+  const posterWidth = Math.min(
+    slot.rect.width * 0.34,
+    Math.max(slot.rect.width * 0.25, slot.rect.height * 0.54),
+  );
   const style = {
     ...localRectStyle(slot.rect, origin),
     "--ticket-a": slot.record.colors[0] || "#172229",
     "--ticket-b": slot.record.colors[1] || "#47645d",
+    "--ticket-poster-width": \`\${Math.max(84, posterWidth)}px\`,
+    "--ticket-pad": \`\${clamp(slot.rect.height * 0.065, 10, 22)}px\`,
+    "--ticket-title-size": \`\${clamp(slot.rect.height * 0.105, 18, 34)}px\`,
+    "--ticket-artist-size": \`\${clamp(slot.rect.height * 0.06, 12, 20)}px\`,
+    "--ticket-meta-size": \`\${clamp(slot.rect.height * 0.052, 11, 18)}px\`,
   } as CSSProperties;
   return (
     <article className="share-ticket-card" style={style}>
@@ -637,7 +640,7 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
         <dl>
           <dt>VENUE</dt><dd>{slot.record.venue || "场馆待补"}</dd>
           <dt>SEAT</dt><dd>{slot.record.seat || "座位待补"}</dd>
-          <dt>PRICE</dt><dd>{slot.record.price ? `¥${slot.record.price}` : slot.record.publicPriceRange || "票价待补"}</dd>
+          <dt>PRICE</dt><dd>{slot.record.price ? \`¥\${slot.record.price}\` : slot.record.publicPriceRange || "票价待补"}</dd>
         </dl>
       </section>
     </article>
@@ -646,7 +649,7 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
 
 function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
   return (
-    <figure className={`share-layout-poster is-${slot.emphasis || "normal"}`} style={localRectStyle(slot.rect, origin)}>
+    <figure className={\`share-layout-poster is-\${slot.emphasis || "normal"}\`} style={localRectStyle(slot.rect, origin)}>
       <SharePoster record={slot.record} />
       {showDetails ? <figcaption><span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span><b>{slot.record.title}</b></figcaption> : null}
     </figure>
@@ -668,7 +671,7 @@ function SharePoster({ record }: { record: EventRecord }) {
 function recordPosterRatio(record: EventRecord) {
   const media = primaryMedia(record);
   if (!media?.width || !media.height) return 0.8;
-  return clamp(media.width / media.height, 0.56, 1.32);
+  return clamp(media.width / media.height, 0.5, 1.55);
 }
 
 function contentArea(spec: CanvasSpec): Rect {
@@ -688,376 +691,458 @@ function localRectStyle(rect: Rect, origin: Rect): CSSProperties {
   return { left: rect.x - origin.x, top: rect.y - origin.y, width: rect.width, height: rect.height };
 }
 
-function buildAdaptiveWallSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
-  if (!records.length) return [];
-  const gap = spec.width >= 1500 ? 14 : 12;
-  const landscape = spec.format === "adaptive-landscape";
-  const chromeHeight = spec.height - area.height;
-  const rowCount = chooseAdaptiveRowCount(records, area.width, gap, landscape, spec.width, chromeHeight);
-  const { groups, heights, totalHeight } = measureAdaptiveRows(records, area.width, gap, rowCount);
-  let y = area.y + Math.max(0, (area.height - totalHeight) / 2);
-  const slots: PosterSlot[] = [];
-
-  groups.forEach(([start, end], rowIndex) => {
-    const height = heights[rowIndex];
-    let x = area.x;
-    for (let index = start; index < end; index += 1) {
-      const isLast = index === end - 1;
-      const width = isLast ? area.x + area.width - x : recordPosterRatio(records[index]) * height;
-      slots.push({ record: records[index], rect: { x, y, width: Math.max(1, width), height } });
-      x += width + gap;
-    }
-    y += height + gap;
-  });
-  return slots;
-}
-
-function measureAdaptiveRows(records: EventRecord[], width: number, gap: number, rowCount: number) {
-  const groups = partitionBalanced(records.length, rowCount);
-  const heights = groups.map(([start, end]) => {
-    const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
-    return (width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
-  });
-  const totalHeight = heights.reduce((sum, value) => sum + value, 0) + gap * Math.max(0, rowCount - 1);
-  return { groups, heights, totalHeight };
-}
-
-function chooseAdaptiveRowCount(
-  records: EventRecord[],
-  width: number,
+function buildFilledGridRects(
+  itemCount: number,
+  area: Rect,
   gap: number,
-  landscape: boolean,
-  canvasWidth: number,
-  chromeHeight: number,
-) {
-  if (!records.length) return 1;
-  const targetAspect = landscape ? 1.55 : 0.72;
-  const maxRows = Math.min(records.length, landscape ? 7 : 11);
-  let bestRows = 1;
+  targetAspect: number,
+  maxColumns: number,
+  minHeight = 0,
+): Rect[] {
+  if (!itemCount) return [];
+  let bestColumns = 1;
   let bestScore = Number.POSITIVE_INFINITY;
-  for (let rows = 1; rows <= maxRows; rows += 1) {
-    const measured = measureAdaptiveRows(records, width, gap, rows);
-    const canvasAspect = canvasWidth / Math.max(1, measured.totalHeight + chromeHeight);
-    const orientationPenalty = landscape
-      ? (canvasAspect < 1.12 ? 4 + (1.12 - canvasAspect) * 4 : 0)
-      : (canvasAspect > 0.92 ? 4 + (canvasAspect - 0.92) * 4 : 0);
-    const occupiedArea = measured.groups.reduce((sum, [start, end], index) => {
-      const ratioSum = records.slice(start, end).reduce((rowSum, record) => rowSum + recordPosterRatio(record), 0);
-      return sum + ratioSum * measured.heights[index] * measured.heights[index];
-    }, 0);
-    const fillRatio = occupiedArea / Math.max(1, width * measured.totalHeight);
-    const averageHeight = measured.heights.reduce((sum, value) => sum + value, 0) / measured.heights.length;
-    const readabilityPenalty = averageHeight < 125 ? (125 - averageHeight) / 125 : 0;
-    const score = Math.abs(Math.log(Math.max(0.01, canvasAspect / targetAspect))) + orientationPenalty + readabilityPenalty * 0.5 + (1 - fillRatio) * 0.08;
+  for (let columns = 1; columns <= Math.min(itemCount, maxColumns); columns += 1) {
+    const rows = Math.ceil(itemCount / columns);
+    const width = (area.width - gap * Math.max(0, columns - 1)) / columns;
+    const height = (area.height - gap * Math.max(0, rows - 1)) / rows;
+    if (width <= 0 || height <= 0) continue;
+    const aspectPenalty = Math.abs(Math.log(Math.max(0.01, width / height / targetAspect)));
+    const emptyPenalty = (rows * columns - itemCount) / Math.max(1, itemCount) * 0.09;
+    const heightPenalty = height < minHeight ? (minHeight - height) / Math.max(1, minHeight) * 1.8 : 0;
+    const score = aspectPenalty + emptyPenalty + heightPenalty;
     if (score < bestScore) {
       bestScore = score;
-      bestRows = rows;
+      bestColumns = columns;
     }
   }
-  return bestRows;
+
+  const rows = Math.ceil(itemCount / bestColumns);
+  const rowHeight = (area.height - gap * Math.max(0, rows - 1)) / rows;
+  const rects: Rect[] = [];
+  for (let row = 0; row < rows; row += 1) {
+    const start = row * bestColumns;
+    const count = Math.min(bestColumns, itemCount - start);
+    const cellWidth = (area.width - gap * Math.max(0, count - 1)) / count;
+    for (let column = 0; column < count; column += 1) {
+      rects.push({
+        x: area.x + column * (cellWidth + gap),
+        y: area.y + row * (rowHeight + gap),
+        width: cellWidth,
+        height: rowHeight,
+      });
+    }
+  }
+  return rects;
 }
 
-function buildJustifiedSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
-  if (!records.length) return [];
-  const gap = spec.width >= 1500 ? 14 : 12;
+function partitionByAspect(records: EventRecord[], rowCount: number): Array<[number, number]> {
+  if (rowCount <= 1) return [[0, records.length]];
   const ratios = records.map(recordPosterRatio);
-  const totalRatio = ratios.reduce((sum, ratio) => sum + ratio, 0);
-  const maxRows = Math.min(records.length, spec.format === "long" ? 12 : 8);
-  let bestScore = Number.NEGATIVE_INFINITY;
-  let best: PosterSlot[] = [];
-
-  for (let rowCount = 1; rowCount <= maxRows; rowCount += 1) {
-    const groups = partitionBalanced(records.length, rowCount);
-    const availableHeight = (area.height - gap * Math.max(0, rowCount - 1)) / rowCount;
-    let height = availableHeight;
-    groups.forEach(([start, end]) => {
-      const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
-      const widthHeight = (area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
-      height = Math.min(height, widthHeight);
-    });
-    if (!Number.isFinite(height) || height < 46) continue;
-
-    const totalHeight = height * rowCount + gap * Math.max(0, rowCount - 1);
-    let y = area.y + Math.max(0, (area.height - totalHeight) / 2);
-    const candidate: PosterSlot[] = [];
-    groups.forEach(([start, end]) => {
-      const rowRatios = ratios.slice(start, end);
-      const rowWidth = rowRatios.reduce((sum, ratio) => sum + ratio * height, 0) + gap * Math.max(0, rowRatios.length - 1);
-      let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
-      for (let index = start; index < end; index += 1) {
-        const width = ratios[index] * height;
-        candidate.push({ record: records[index], rect: { x, y, width, height } });
-        x += width + gap;
-      }
-      y += height + gap;
-    });
-
-    const occupiedArea = totalRatio * height * height;
-    const fill = occupiedArea / Math.max(1, area.width * area.height);
-    const readability = Math.min(1, height / (spec.format === "long" ? 190 : 150));
-    const score = fill * 0.88 + readability * 0.12;
-    if (score > bestScore) {
-      bestScore = score;
-      best = candidate;
-    }
-  }
-  return best;
-}
-
-function partitionBalanced(itemCount: number, rowCount: number): Array<[number, number]> {
-  const base = Math.floor(itemCount / rowCount);
-  const remainder = itemCount % rowCount;
   const groups: Array<[number, number]> = [];
   let start = 0;
   for (let row = 0; row < rowCount; row += 1) {
-    const count = base + (row < remainder ? 1 : 0);
-    groups.push([start, start + count]);
-    start += count;
+    const remainingRows = rowCount - row;
+    const maxEnd = records.length - (remainingRows - 1);
+    if (row === rowCount - 1) {
+      groups.push([start, records.length]);
+      break;
+    }
+    const remainingRatio = ratios.slice(start).reduce((sum, ratio) => sum + ratio, 0);
+    const target = remainingRatio / remainingRows;
+    let end = start + 1;
+    let sum = ratios[start] || 0.8;
+    while (end < maxEnd) {
+      const next = ratios[end];
+      if (Math.abs(sum - target) <= Math.abs(sum + next - target)) break;
+      sum += next;
+      end += 1;
+    }
+    groups.push([start, end]);
+    start = end;
   }
   return groups;
 }
 
-function buildSmallMagazineSlots(records: EventRecord[], area: Rect, gap: number): PosterSlot[] {
-  if (!records.length) return [];
-  if (records.length === 1) return [{ record: records[0], rect: { ...area }, emphasis: "hero" }];
+function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
+  if (!records.length || area.width <= 0 || area.height <= 0) return [];
+  const scale = spec.width / 1600;
+  const gap = clamp(11 * scale, 7, 18);
+  const maxRows = Math.min(records.length, spec.format === "long" ? 14 : isLandscapeFormat(spec.format) ? 9 : 13);
+  let bestRows = 1;
+  let bestGroups: Array<[number, number]> = [[0, records.length]];
+  let bestScore = Number.POSITIVE_INFINITY;
 
-  const heroWidth = area.width * (records.length <= 3 ? 0.48 : 0.38);
-  const heroRect = { x: area.x, y: area.y, width: heroWidth, height: area.height };
-  const rest = records.slice(1);
-  const restArea = {
-    x: area.x + heroWidth + gap,
-    y: area.y,
-    width: area.width - heroWidth - gap,
-    height: area.height,
-  };
-  const rowCount = rest.length <= 2 ? rest.length : 2;
-  const groups = partitionBalanced(rest.length, rowCount);
-  const rowHeight = (restArea.height - gap * Math.max(0, rowCount - 1)) / Math.max(1, rowCount);
-  const slots: PosterSlot[] = [{ record: records[0], rect: heroRect, emphasis: "hero" }];
-
-  groups.forEach(([start, end], rowIndex) => {
-    const count = Math.max(1, end - start);
-    const cellWidth = (restArea.width - gap * Math.max(0, count - 1)) / count;
-    for (let index = start; index < end; index += 1) {
-      const column = index - start;
-      slots.push({
-        record: rest[index],
-        rect: {
-          x: restArea.x + column * (cellWidth + gap),
-          y: restArea.y + rowIndex * (rowHeight + gap),
-          width: cellWidth,
-          height: rowHeight,
-        },
-        emphasis: index < 2 ? "feature" : "normal",
-      });
+  for (let rows = 1; rows <= maxRows; rows += 1) {
+    const rowHeight = (area.height - gap * Math.max(0, rows - 1)) / rows;
+    if (rowHeight <= 38) continue;
+    const groups = partitionByAspect(records, rows);
+    let distortion = 0;
+    let narrowPenalty = 0;
+    let extremePenalty = 0;
+    for (const [start, end] of groups) {
+      const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
+      const availableWidth = area.width - gap * Math.max(0, end - start - 1);
+      const naturalWidth = ratioSum * rowHeight;
+      const rowScale = availableWidth / Math.max(1, naturalWidth);
+      distortion += Math.abs(Math.log(Math.max(0.01, rowScale)));
+      if (rowScale < 0.72 || rowScale > 1.38) extremePenalty += Math.abs(1 - rowScale) * 2.2;
+      const smallest = Math.min(...records.slice(start, end).map((record) => recordPosterRatio(record) * rowHeight * rowScale));
+      if (smallest < 72 * scale) narrowPenalty += (72 * scale - smallest) / Math.max(1, 72 * scale);
     }
+    const score = distortion / groups.length + extremePenalty + narrowPenalty * 0.45;
+    if (score < bestScore) {
+      bestScore = score;
+      bestRows = rows;
+      bestGroups = groups;
+    }
+  }
+
+  const rowHeight = (area.height - gap * Math.max(0, bestRows - 1)) / bestRows;
+  const slots: PosterSlot[] = [];
+  let y = area.y;
+  bestGroups.forEach(([start, end]) => {
+    const availableWidth = area.width - gap * Math.max(0, end - start - 1);
+    const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
+    const rowScale = availableWidth / Math.max(1, ratioSum * rowHeight);
+    let x = area.x;
+    for (let index = start; index < end; index += 1) {
+      const isLast = index === end - 1;
+      const width = isLast
+        ? area.x + area.width - x
+        : recordPosterRatio(records[index]) * rowHeight * rowScale;
+      slots.push({ record: records[index], rect: { x, y, width: Math.max(1, width), height: rowHeight } });
+      x += width + gap;
+    }
+    y += rowHeight + gap;
   });
   return slots;
+}
+
+function magazineArtistKey(record: EventRecord) {
+  return record.artists.map((artist) => artist.trim().toLowerCase()).find(Boolean) || \`__record__\${record.id}\`;
+}
+
+function orderMagazineRecords(records: EventRecord[]) {
+  const latest = records.slice().sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt));
+  const latestByArtist = new Map<string, EventRecord>();
+  for (const record of latest) {
+    const key = magazineArtistKey(record);
+    if (!latestByArtist.has(key)) latestByArtist.set(key, record);
+  }
+  const featured = Array.from(latestByArtist.values());
+  const featuredIds = new Set(featured.map((record) => record.id));
+  return {
+    ordered: [...featured, ...records.filter((record) => !featuredIds.has(record.id))],
+    featuredIds,
+  };
 }
 
 function buildMagazineSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length) return [];
-  const gap = spec.width >= 1500 ? 15 : 12;
-
-  if (records.length <= 6) {
-  return buildSmallMagazineSlots(records, area, gap);
+  const gap = clamp(12 * (spec.width / 1600), 8, 20);
+  const { ordered, featuredIds } = orderMagazineRecords(records);
+  const featuredCount = ordered.filter((record) => featuredIds.has(record.id)).length;
+  const weights = ordered.map((record, index) => {
+    if (!featuredIds.has(record.id)) return 0.72;
+    if (index === 0) return 2.7;
+    if (index < 3) return 2.15;
+    if (index < 6) return 1.75;
+    return 1.38;
+  });
+  const rects = buildWeightedMosaic(weights, area, gap);
+  return ordered.map((record, index) => ({
+    record,
+    rect: rects[index],
+    emphasis: index === 0
+      ? "hero"
+      : index < Math.min(featuredCount, 6)
+        ? "feature"
+        : "normal",
+  }));
 }
 
-  const hero = records[0];
-  const heroRatio = recordPosterRatio(hero);
+function buildWeightedMosaic(weights: number[], area: Rect, gap: number): Rect[] {
+  const output = new Array<Rect>(weights.length);
+  const entries = weights.map((weight, index) => ({ weight: Math.max(0.1, weight), index }));
 
-  if (isLandscapeFormat(spec.format)) {
-    const heroHeight = area.height;
-    const heroWidth = Math.min(area.width * 0.34, heroHeight * heroRatio);
-    const heroRect = {
-      x: area.x,
-      y: area.y + (area.height - heroHeight) / 2,
-      width: heroWidth,
-      height: heroHeight,
-    };
-    const supportingArea = {
-      x: heroRect.x + heroRect.width + gap,
-      y: area.y,
-      width: area.width - heroRect.width - gap,
-      height: area.height,
-    };
-    const supporting = buildAdaptiveMagazineRows(
-      records.slice(1),
-      supportingArea,
-      gap,
-      Math.min(4, Math.max(2, Math.ceil((records.length - 1) / 5))),
-    );
-    return [
-      { record: hero, rect: heroRect, emphasis: "hero" },
-      ...supporting.map((slot, index) => ({ ...slot, emphasis: index < 2 ? "feature" as const : "normal" as const })),
-    ];
-  }
-
-  const topCount = records.length >= 14 ? 6 : records.length >= 10 ? 5 : 4;
-  const topHeightRatio = spec.format === "square" ? 0.62 : records.length >= 14 ? 0.62 : 0.6;
-  const topHeight = area.height * topHeightRatio;
-  const heroHeight = topHeight;
-  const heroWidth = Math.min(area.width * 0.52, heroHeight * heroRatio);
-  const heroRect = {
-    x: area.x,
-    y: area.y + (topHeight - heroHeight) / 2,
-    width: heroWidth,
-    height: heroHeight,
-  };
-  const featureArea = {
-    x: heroRect.x + heroRect.width + gap,
-    y: area.y,
-    width: area.width - heroRect.width - gap,
-    height: topHeight,
-  };
-  const featureRecords = records.slice(1, topCount);
-  const featureSlots = buildAdaptiveMagazineRows(featureRecords, featureArea, gap, Math.min(3, featureRecords.length));
-
-  const bottomY = area.y + topHeight + gap;
-  const bottomArea = {
-    x: area.x,
-    y: bottomY,
-    width: area.width,
-    height: Math.max(0, area.y + area.height - bottomY),
-  };
-  const remainingRecords = records.slice(topCount);
-  const bottomSlots = remainingRecords.length
-    ? buildAdaptiveMagazineRows(
-        remainingRecords,
-        bottomArea,
-        gap,
-        Math.min(4, Math.max(1, Math.ceil(remainingRecords.length / 5))),
-      )
-    : [];
-
-  return [
-    { record: hero, rect: heroRect, emphasis: "hero" },
-    ...featureSlots.map((slot) => ({ ...slot, emphasis: "feature" as const })),
-    ...bottomSlots.map((slot) => ({ ...slot, emphasis: "normal" as const })),
-  ];
-}
-
-function buildAdaptiveMagazineRows(records: EventRecord[], area: Rect, gap: number, maxRows: number): PosterSlot[] {
-  if (!records.length || area.width <= 0 || area.height <= 0) return [];
-  const ratios = records.map(recordPosterRatio);
-  let bestGroups: Array<[number, number]> = [[0, records.length]];
-  let bestScale = 1;
-  let bestScore = Number.NEGATIVE_INFINITY;
-
-  for (let rowCount = 1; rowCount <= Math.min(records.length, Math.max(1, maxRows)); rowCount += 1) {
-    const groups = partitionBalanced(records.length, rowCount);
-    const naturalHeights = groups.map(([start, end]) => {
-      const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
-      return (area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum);
-    });
-    const naturalTotalHeight = naturalHeights.reduce((sum, height) => sum + height, 0) + gap * Math.max(0, rowCount - 1);
-    const scale = Math.min(1, area.height / Math.max(1, naturalTotalHeight));
-    const usedHeight = naturalTotalHeight * scale;
-    const occupiedArea = groups.reduce((sum, [start, end], index) => {
-      const ratioSum = ratios.slice(start, end).reduce((rowSum, ratio) => rowSum + ratio, 0);
-      const height = naturalHeights[index] * scale;
-      return sum + ratioSum * height * height;
-    }, 0);
-    const fill = occupiedArea / Math.max(1, area.width * area.height);
-    const verticalUse = usedHeight / Math.max(1, area.height);
-    const readability = Math.min(1, naturalHeights.reduce((sum, value) => sum + value, 0) * scale / rowCount / 170);
-    const score = fill * 0.4 + verticalUse * 0.25 + scale * 0.3 + readability * 0.05;
-    if (score > bestScore) {
-      bestScore = score;
-      bestGroups = groups;
-      bestScale = scale;
+  function split(items: typeof entries, rect: Rect, depth: number) {
+    if (!items.length) return;
+    if (items.length === 1) {
+      output[items[0].index] = rect;
+      return;
+    }
+    const total = items.reduce((sum, item) => sum + item.weight, 0);
+    let running = 0;
+    let splitAt = 1;
+    let best = Number.POSITIVE_INFINITY;
+    for (let index = 1; index < items.length; index += 1) {
+      running += items[index - 1].weight;
+      const delta = Math.abs(total / 2 - running);
+      if (delta < best) {
+        best = delta;
+        splitAt = index;
+      }
+    }
+    const first = items.slice(0, splitAt);
+    const second = items.slice(splitAt);
+    const firstWeight = first.reduce((sum, item) => sum + item.weight, 0);
+    const horizontal = rect.width >= rect.height * (depth % 2 ? 0.9 : 1.08);
+    if (horizontal) {
+      const usable = Math.max(1, rect.width - gap);
+      const firstWidth = usable * firstWeight / total;
+      split(first, { x: rect.x, y: rect.y, width: firstWidth, height: rect.height }, depth + 1);
+      split(second, { x: rect.x + firstWidth + gap, y: rect.y, width: usable - firstWidth, height: rect.height }, depth + 1);
+    } else {
+      const usable = Math.max(1, rect.height - gap);
+      const firstHeight = usable * firstWeight / total;
+      split(first, { x: rect.x, y: rect.y, width: rect.width, height: firstHeight }, depth + 1);
+      split(second, { x: rect.x, y: rect.y + firstHeight + gap, width: rect.width, height: usable - firstHeight }, depth + 1);
     }
   }
 
-  const scaledGap = gap * bestScale;
-  const rowHeights = bestGroups.map(([start, end]) => {
-    const ratioSum = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio, 0);
-    return ((area.width - gap * Math.max(0, end - start - 1)) / Math.max(0.01, ratioSum)) * bestScale;
-  });
-  const usedHeight = rowHeights.reduce((sum, height) => sum + height, 0) + scaledGap * Math.max(0, bestGroups.length - 1);
-  let y = area.y + Math.max(0, (area.height - usedHeight) / 2);
-  const slots: PosterSlot[] = [];
-
-  bestGroups.forEach(([start, end], rowIndex) => {
-    const height = rowHeights[rowIndex];
-    const rowWidth = ratios.slice(start, end).reduce((sum, ratio) => sum + ratio * height, 0) + scaledGap * Math.max(0, end - start - 1);
-    let x = area.x + Math.max(0, (area.width - rowWidth) / 2);
-    for (let index = start; index < end; index += 1) {
-      const width = ratios[index] * height;
-      slots.push({ record: records[index], rect: { x, y, width, height } });
-      x += width + scaledGap;
-    }
-    y += height + scaledGap;
-  });
-  return slots;
+  split(entries, area, 0);
+  return output;
 }
 
 function buildTimelineBands(records: EventRecord[], area: Rect, spec: CanvasSpec): TimelineBand[] {
   const groups = groupByYear(records);
-  const gap = spec.format === "long" ? 22 : 14;
-  const bandHeight = (area.height - gap * Math.max(0, groups.length - 1)) / Math.max(1, groups.length);
+  if (!groups.length) return [];
+  const scale = spec.width / 1600;
+  const gap = clamp(14 * scale, 9, 22);
+  const rects = buildFilledGridRects(
+    groups.length,
+    area,
+    gap,
+    spec.format === "long" ? 0.86 : isLandscapeFormat(spec.format) ? 2.15 : 1.05,
+    spec.format === "long" ? 1 : isLandscapeFormat(spec.format) ? 3 : 2,
+    240 * scale,
+  );
   return groups.map((group, index) => {
-    const rect = { x: area.x, y: area.y + index * (bandHeight + gap), width: area.width, height: bandHeight };
-    const labelWidth = clamp(area.width * 0.13, 104, 170);
-    const posterArea = { x: rect.x + labelWidth, y: rect.y + 10, width: rect.width - labelWidth - 10, height: rect.height - 20 };
-    const slots = fitSingleBand(group.records, posterArea, spec.width >= 1500 ? 11 : 9);
-    return { label: group.label, count: group.records.length, rect, slots };
-  });
-}
-
-function fitSingleBand(records: EventRecord[], area: Rect, gap: number): PosterSlot[] {
-  if (!records.length) return [];
-  const ratios = records.map(recordPosterRatio);
-  const ratioSum = ratios.reduce((sum, ratio) => sum + ratio, 0);
-  const heightByWidth = (area.width - gap * Math.max(0, records.length - 1)) / Math.max(0.01, ratioSum);
-  const height = Math.min(area.height, heightByWidth);
-  const totalWidth = ratios.reduce((sum, ratio) => sum + ratio * height, 0) + gap * Math.max(0, records.length - 1);
-  let x = area.x + Math.max(0, (area.width - totalWidth) / 2);
-  const y = area.y + (area.height - height) / 2;
-  return records.map((record, index) => {
-    const width = ratios[index] * height;
-    const slot = { record, rect: { x, y, width, height } };
-    x += width + gap;
-    return slot;
+    const rect = rects[index];
+    const inset = clamp(14 * scale, 10, 24);
+    const headerHeight = clamp(rect.height * 0.2, 58 * scale, 110 * scale);
+    const posterArea = {
+      x: rect.x + inset,
+      y: rect.y + headerHeight,
+      width: rect.width - inset * 2,
+      height: Math.max(1, rect.height - headerHeight - inset),
+    };
+    return {
+      label: group.label,
+      count: group.records.length,
+      rect,
+      headerHeight,
+      slots: buildWallFillSlots(group.records, posterArea, spec),
+    };
   });
 }
 
 function buildCityModel(records: EventRecord[], area: Rect, spec: CanvasSpec) {
-  const groups = groupByCity(records);
-  const gap = spec.width >= 1500 ? 20 : 16;
-  const mapWidth = area.width * (spec.width >= 1500 ? 0.42 : 0.4);
+  const scale = spec.width / 1600;
+  const gap = clamp(18 * scale, 12, 28);
+  const mapRatio = isLandscapeFormat(spec.format) ? 0.43 : 0.39;
+  const mapWidth = area.width * mapRatio;
   const mapRect = { x: area.x, y: area.y, width: mapWidth, height: area.height };
-  const listRect = { x: area.x + mapWidth + gap, y: area.y, width: area.width - mapWidth - gap, height: area.height };
-  const bandGap = 10;
-  const bandHeight = (listRect.height - bandGap * Math.max(0, groups.length - 1)) / Math.max(1, groups.length);
-  const bands: CityBand[] = groups.map((group, index) => {
-    const rect = { x: listRect.x, y: listRect.y + index * (bandHeight + bandGap), width: listRect.width, height: bandHeight };
-    const labelWidth = clamp(rect.width * 0.22, 92, 150);
-    const posterArea = { x: rect.x + labelWidth, y: rect.y + 8, width: rect.width - labelWidth - 8, height: rect.height - 16 };
-    return { label: group.label, count: group.records.length, rect, slots: fitSingleBand(group.records, posterArea, 8) };
-  });
-  const nodes = groups.map((group) => {
-    const [lng, lat] = cityCoordinate(group.label, group.records);
-    return {
-      label: group.label,
-      x: clamp((lng - 73) / (135 - 73) * 82 + 9, 7, 93),
-      y: clamp((54 - lat) / (54 - 18) * 72 + 15, 12, 88),
-      count: group.records.length,
-    };
-  });
-  return { mapRect, listRect, bands, nodes };
+  const listRect = {
+    x: area.x + mapWidth + gap,
+    y: area.y,
+    width: area.width - mapWidth - gap,
+    height: area.height,
+  };
+  const chipHeight = clamp(listRect.height * 0.13, 78 * scale, 150 * scale);
+  const posterRect = {
+    x: listRect.x,
+    y: listRect.y + chipHeight,
+    width: listRect.width,
+    height: Math.max(1, listRect.height - chipHeight),
+  };
+  const chips: CityChip[] = groupByCity(records).map((group) => ({ label: group.label, count: group.records.length }));
+  return {
+    mapRect,
+    listRect,
+    posterRect,
+    chips,
+    slots: buildWallFillSlots(records, posterRect, spec),
+  };
 }
 
-function cityCoordinate(label: string, records: EventRecord[]): [number, number] {
-  const points = records.map((record) => record.coordinates).filter(Boolean);
-  if (points.length) {
-    const lng = points.reduce((sum, point) => sum + (point?.lng || 0), 0) / points.length;
-    const lat = points.reduce((sum, point) => sum + (point?.lat || 0), 0) / points.length;
-    return [lng, lat];
+function ShareAmapMap({
+  records,
+  mapSettings,
+  rect,
+  origin,
+}: {
+  records: EventRecord[];
+  mapSettings: MapConfig;
+  rect: Rect;
+  origin: Rect;
+}) {
+  const hostRef = useRef<HTMLDivElement | null>(null);
+  const [state, setState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
+  const [resolvedCount, setResolvedCount] = useState(0);
+
+  useEffect(() => {
+    if (mapSettings.provider !== "amap" || !mapSettings.amapKey.trim()) {
+      setState("idle");
+      setResolvedCount(0);
+      return;
+    }
+    const host = hostRef.current;
+    if (!host) return;
+    let disposed = false;
+    let map: ReturnType<typeof createAmapInstance> | null = null;
+    setState("loading");
+
+    void loadAmap({ key: mapSettings.amapKey, securityCode: mapSettings.amapSecurityCode })
+      .then(async (AMap) => {
+        if (disposed || !hostRef.current) return;
+        map = createAmapInstance(AMap, hostRef.current);
+        const points = await resolveShareMapPoints(AMap, records);
+        if (disposed || !map) return;
+        const markers = points.map((point) => new AMap.Marker({ position: point.position, title: point.title }));
+        if (AMap.Polyline && points.length > 1) {
+          const route = new AMap.Polyline({
+            path: points.slice().sort((a, b) => a.date.localeCompare(b.date)).map((point) => point.position),
+            strokeColor: "#0b8f78",
+            strokeOpacity: 0.78,
+            strokeWeight: 5,
+            lineJoin: "round",
+            lineCap: "round",
+          });
+          map.add?.(route);
+        }
+        if (markers.length) {
+          map.add?.(markers);
+          map.setFitView?.(markers, false, [54, 54, 54, 54], 12);
+        }
+        setResolvedCount(points.length);
+        setState(points.length ? "ready" : "empty");
+      })
+      .catch(() => {
+        if (!disposed) setState("error");
+      });
+
+    return () => {
+      disposed = true;
+      map?.destroy();
+    };
+  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, mapSettings.provider, records]);
+
+  const configured = mapSettings.provider === "amap" && Boolean(mapSettings.amapKey.trim());
+  return (
+    <section className="share-amap-panel" style={localRectStyle(rect, origin)}>
+      <div className="share-amap-map" ref={hostRef} aria-label="高德地图城市足迹" />
+      <header><b>高德城市路线</b><span>{resolvedCount ? \`\${resolvedCount} 个真实地点\` : "AMap · 真实地理坐标"}</span></header>
+      {!configured ? <div className="share-amap-state"><b>需要高德地图</b><span>请先在设置中选择高德并配置 Web 端 JS API Key。</span></div> : null}
+      {configured && state === "loading" ? <div className="share-amap-state"><b>正在解析真实地点…</b><span>优先使用档案坐标，其余场馆由高德地理编码。</span></div> : null}
+      {configured && state === "empty" ? <div className="share-amap-state"><b>暂无可定位地点</b><span>请补充城市、场馆或地址后再生成路线。</span></div> : null}
+      {configured && state === "error" ? <div className="share-amap-state"><b>高德地图加载失败</b><span>请检查 Key、安全密钥与域名白名单。</span></div> : null}
+    </section>
+  );
+}
+
+function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
+  return new AMap.Map(host, {
+    resizeEnable: true,
+    viewMode: "2D",
+    zoom: 4,
+    mapStyle: "amap://styles/whitesmoke",
+  });
+}
+
+async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]): Promise<ShareMapPoint[]> {
+  const unique = new Map<string, EventRecord>();
+  for (const record of records) {
+    const key = record.coordinates
+      ? \`coord:\${record.coordinates.lng.toFixed(5)},\${record.coordinates.lat.toFixed(5)}\`
+      : \`place:\${record.city}|\${record.venue}|\${record.address || ""}\`;
+    if (!unique.has(key)) unique.set(key, record);
   }
-  if (cityCoordinateFallbacks[label]) return cityCoordinateFallbacks[label];
-  const seed = Array.from(label).reduce((sum, char) => sum + char.charCodeAt(0), 0);
-  return [80 + (seed % 4800) / 100, 21 + (seed % 2900) / 100];
+
+  const points: ShareMapPoint[] = [];
+  const unresolved: EventRecord[] = [];
+  for (const record of unique.values()) {
+    const lng = Number(record.coordinates?.lng);
+    const lat = Number(record.coordinates?.lat);
+    if (Number.isFinite(lng) && Number.isFinite(lat)) {
+      points.push({ position: [lng, lat], title: [record.city, record.venue].filter(Boolean).join(" · "), date: record.date });
+    } else {
+      unresolved.push(record);
+    }
+  }
+  if (!unresolved.length) return points;
+
+  if (!AMap.Geocoder && AMap.plugin) {
+    await new Promise<void>((resolve) => AMap.plugin?.("AMap.Geocoder", resolve));
+  }
+  if (!AMap.Geocoder) return points;
+  const geocoder = new AMap.Geocoder();
+
+  for (const record of unresolved.slice(0, 40)) {
+    const query = [record.city, record.address || record.venue].filter(Boolean).join(" ");
+    if (!query.trim()) continue;
+    const position = await geocodeAmapPlace(geocoder, query);
+    if (position) points.push({ position, title: [record.city, record.venue].filter(Boolean).join(" · "), date: record.date });
+  }
+  return points;
+}
+
+function geocodeAmapPlace(
+  geocoder: InstanceType<NonNullable<AMapNamespace["Geocoder"]>>,
+  query: string,
+): Promise<[number, number] | null> {
+  return new Promise((resolve) => {
+    geocoder.getLocation(query, (status, result) => {
+      if (status !== "complete" || result.info !== "OK") {
+        resolve(null);
+        return;
+      }
+      resolve(amapLocationTuple(result.geocodes?.[0]?.location));
+    });
+  });
+}
+
+function amapLocationTuple(location?: AMapLngLatLike | [number, number]): [number, number] | null {
+  if (!location) return null;
+  if (Array.isArray(location)) {
+    const lng = Number(location[0]);
+    const lat = Number(location[1]);
+    return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+  }
+  const lng = Number(typeof location.getLng === "function" ? location.getLng() : location.lng);
+  const lat = Number(typeof location.getLat === "function" ? location.getLat() : location.lat);
+  return Number.isFinite(lng) && Number.isFinite(lat) ? [lng, lat] : null;
+}
+
+function captureShareAmapSurface() {
+  const host = document.querySelector<HTMLElement>(".share-amap-map");
+  if (!host) return null;
+  const hostRect = host.getBoundingClientRect();
+  const layers = Array.from(host.querySelectorAll<HTMLCanvasElement>("canvas")).filter((canvas) => canvas.width > 0 && canvas.height > 0);
+  if (!layers.length || hostRect.width <= 0 || hostRect.height <= 0) return null;
+  const density = Math.min(2, Math.max(1, window.devicePixelRatio || 1));
+  const snapshot = document.createElement("canvas");
+  snapshot.width = Math.max(1, Math.round(hostRect.width * density));
+  snapshot.height = Math.max(1, Math.round(hostRect.height * density));
+  const context = snapshot.getContext("2d");
+  if (!context) return null;
+  try {
+    for (const layer of layers) {
+      const rect = layer.getBoundingClientRect();
+      context.drawImage(
+        layer,
+        (rect.left - hostRect.left) * density,
+        (rect.top - hostRect.top) * density,
+        rect.width * density,
+        rect.height * density,
+      );
+    }
+    context.getImageData(0, 0, 1, 1);
+    return snapshot;
+  } catch {
+    return null;
+  }
 }
 
 function groupByYear(records: EventRecord[]) {
@@ -1087,12 +1172,15 @@ function formatPeriod(records: EventRecord[]) {
   return `${first.slice(0, 4)}—${last.slice(0, 4)}`;
 }
 
+
 function formatLabel(format: ShareFormat) {
   if (format === "adaptive-landscape") return "智能横版";
   if (format === "adaptive-portrait") return "智能竖版";
-  if (format === "portrait") return "竖版 4:5";
+  if (format === "landscape-4-3") return "横版 4:3";
+  if (format === "landscape-16-9") return "横版 16:9";
+  if (format === "portrait-3-4") return "竖版 3:4";
+  if (format === "portrait-9-16") return "竖版 9:16";
   if (format === "square") return "方形 1:1";
-  if (format === "landscape") return "横版 16:9";
   return "手机长图";
 }
 
@@ -1101,69 +1189,86 @@ function isAdaptiveFormat(format: ShareFormat) {
 }
 
 function isLandscapeFormat(format: ShareFormat) {
-  return format === "landscape" || format === "adaptive-landscape";
+  return format === "landscape-4-3" || format === "landscape-16-9" || format === "adaptive-landscape";
 }
 
 function isDarkPalette(palette: SharePalette) {
   return palette === "midnight" || palette === "graphite" || palette === "forest" || palette === "plum";
 }
 
+function contentResolutionScale(count: number, layout: ShareLayout) {
+  const target = layout === "tickets" ? 14 : layout === "timeline" || layout === "cities" ? 18 : layout === "magazine" ? 22 : 26;
+  return clamp(Math.sqrt(Math.max(1, count) / target), 1, 1.5);
+}
+
+function scaledSpec(
+  format: ShareFormat,
+  width: number,
+  height: number,
+  padding: number,
+  headerHeight: number,
+  footerHeight: number,
+  scale: number,
+): CanvasSpec {
+  return {
+    format,
+    width: Math.round(width * scale),
+    height: Math.round(height * scale),
+    padding: Math.round(padding * scale),
+    headerHeight: Math.round(headerHeight * scale),
+    footerHeight: Math.round(footerHeight * scale),
+  };
+}
+
 function getAdaptiveCanvasSpec(format: "adaptive-landscape" | "adaptive-portrait", records: EventRecord[], layout: ShareLayout): CanvasSpec {
   const landscape = format === "adaptive-landscape";
-  const width = landscape ? 1600 : 1200;
-  const padding = landscape ? 48 : 44;
-  const headerHeight = landscape ? 112 : 124;
-  const footerHeight = 54;
-  const chromeHeight = padding * 2 + headerHeight + footerHeight;
-  if (!records.length) return { width, height: landscape ? 900 : 1500, padding, headerHeight, footerHeight, format };
-
-  if (layout === "tickets") {
-    const columns = landscape ? Math.min(4, Math.max(2, Math.ceil(Math.sqrt(records.length * 1.35)))) : Math.min(3, Math.max(1, Math.ceil(Math.sqrt(records.length * 0.72))));
-    const rows = Math.ceil(records.length / columns);
-    const ticketHeight = landscape ? 235 : 270;
-    const contentHeight = Math.max(landscape ? 560 : 940, rows * ticketHeight + Math.max(0, rows - 1) * 14);
-    return { width, height: chromeHeight + contentHeight, padding, headerHeight, footerHeight, format };
-  }
-
-  if (layout === "wall") {
-    const gap = landscape ? 14 : 12;
-    const contentWidth = width - padding * 2;
-    const rows = chooseAdaptiveRowCount(records, contentWidth, gap, landscape, width, chromeHeight);
-    const measured = measureAdaptiveRows(records, contentWidth, gap, rows);
-    const naturalHeight = Math.round(chromeHeight + measured.totalHeight);
-    const minHeight = landscape ? Math.round(width * 0.425) : Math.round(width * 1.12);
-    return { width, height: Math.max(minHeight, naturalHeight), padding, headerHeight, footerHeight, format };
-  }
-
-  const groupCount = layout === "timeline" ? groupByYear(records).length : layout === "cities" ? groupByCity(records).length : 0;
-  const contentHeight = layout === "timeline"
-    ? Math.max(landscape ? 680 : 1080, groupCount * (landscape ? 210 : 275))
-    : layout === "cities"
-      ? Math.max(landscape ? 700 : 1120, groupCount * (landscape ? 185 : 235))
-      : Math.max(landscape ? 700 : 1120, Math.ceil(records.length / (landscape ? 6 : 4)) * (landscape ? 230 : 275));
-  return { width, height: chromeHeight + contentHeight, padding, headerHeight, footerHeight, format };
+  const scale = contentResolutionScale(records.length, layout);
+  const baseHeight = landscape
+    ? layout === "wall" || layout === "magazine" ? 1000 : 1080
+    : layout === "wall" || layout === "magazine" ? 1800 : 1900;
+  return scaledSpec(
+    format,
+    landscape ? 1600 : 1200,
+    baseHeight,
+    landscape ? 48 : 44,
+    landscape ? 118 : 132,
+    58,
+    scale,
+  );
 }
 
 function getCanvasSpec(format: ShareFormat, count: number, layout: ShareLayout, records: EventRecord[]): CanvasSpec {
   if (format === "adaptive-landscape" || format === "adaptive-portrait") return getAdaptiveCanvasSpec(format, records, layout);
-  const width = format === "landscape" ? 1600 : 1200;
-  const padding = format === "landscape" ? 58 : 54;
-  const headerHeight = format === "landscape" ? 132 : 156;
-  const footerHeight = 66;
-  if (format !== "long") {
-    return { width, height: format === "landscape" ? 900 : format === "square" ? 1200 : 1500, padding, headerHeight, footerHeight, format };
-  }
-  const groupCount = layout === "timeline" ? groupByYear(records).length : layout === "cities" ? groupByCity(records).length : 0;
-  const contentHeight = layout === "timeline"
-    ? Math.max(960, groupCount * 300)
-    : layout === "cities"
-      ? Math.max(980, groupCount * 250)
+
+  if (format === "long") {
+    const width = 1200;
+    const padding = 54;
+    const headerHeight = 156;
+    const footerHeight = 68;
+    const groupCount = layout === "timeline" ? groupByYear(records).length : 0;
+    const contentHeight = layout === "timeline"
+      ? Math.max(1500, count * 135 + groupCount * 95)
       : layout === "tickets"
-        ? Math.max(980, Math.ceil(Math.max(1, count) / 3) * 285)
-        : layout === "magazine"
-          ? Math.max(980, Math.ceil(Math.max(1, count) / 4) * 290)
-          : Math.max(980, Math.ceil(Math.max(1, count) / 4) * 265);
-  return { width, height: padding * 2 + headerHeight + footerHeight + contentHeight, padding, headerHeight, footerHeight, format };
+        ? Math.max(1500, Math.ceil(Math.max(1, count) / 3) * 270)
+        : layout === "cities"
+          ? Math.max(1600, Math.ceil(Math.max(1, count) / 4) * 255)
+          : layout === "magazine"
+            ? Math.max(1500, Math.ceil(Math.max(1, count) / 4) * 285)
+            : Math.max(1500, Math.ceil(Math.max(1, count) / 4) * 250);
+    return { width, height: padding * 2 + headerHeight + footerHeight + contentHeight, padding, headerHeight, footerHeight, format };
+  }
+
+  const fixed: Record<Exclude<ShareFormat, "adaptive-landscape" | "adaptive-portrait" | "long">, [number, number]> = {
+    "landscape-4-3": [1600, 1200],
+    "landscape-16-9": [1600, 900],
+    "portrait-3-4": [1200, 1600],
+    "portrait-9-16": [1200, 2133],
+    square: [1200, 1200],
+  };
+  const [baseWidth, baseHeight] = fixed[format];
+  const scale = contentResolutionScale(count, layout);
+  const landscape = isLandscapeFormat(format);
+  return scaledSpec(format, baseWidth, baseHeight, landscape ? 56 : 52, landscape ? 132 : 150, 66, scale);
 }
 
 async function exportSharePng(options: ExportOptions) {
@@ -1185,7 +1290,7 @@ async function exportSharePng(options: ExportOptions) {
   else if (options.layout === "tickets") {
     for (const slot of buildTicketSlots(options.records, area, spec)) await drawTicket(context, slot.record, slot.rect, palette);
   } else {
-    const slots = options.layout === "magazine" ? buildMagazineSlots(options.records, area, spec) : isAdaptiveFormat(spec.format) ? buildAdaptiveWallSlots(options.records, area, spec) : buildJustifiedSlots(options.records, area, spec);
+    const slots = options.layout === "magazine" ? buildMagazineSlots(options.records, area, spec) : buildWallFillSlots(options.records, area, spec);
     for (const slot of slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails, slot.emphasis);
   }
 
@@ -1276,6 +1381,7 @@ async function drawTimelineCanvas(context: CanvasRenderingContext2D, bands: Time
   }
 }
 
+
 async function drawCitiesCanvas(
   context: CanvasRenderingContext2D,
   model: ReturnType<typeof buildCityModel>,
@@ -1284,56 +1390,59 @@ async function drawCitiesCanvas(
 ) {
   const map = model.mapRect;
   roundedPath(context, map.x, map.y, map.width, map.height, 22);
-  context.fillStyle = alphaSurface(palette.surface, 0.72);
-  context.fill();
   context.save();
-  roundedPath(context, map.x, map.y, map.width, map.height, 22);
   context.clip();
-  context.strokeStyle = `${palette.accent}25`;
-  context.lineWidth = 1;
-  for (let index = 1; index < 10; index += 1) {
-    const x = map.x + map.width * index / 10;
-    const y = map.y + map.height * index / 10;
-    context.beginPath(); context.moveTo(x, map.y); context.lineTo(x, map.y + map.height); context.stroke();
-    context.beginPath(); context.moveTo(map.x, y); context.lineTo(map.x + map.width, y); context.stroke();
-  }
-  if (model.nodes.length > 1) {
-    context.strokeStyle = palette.accent;
-    context.lineWidth = 3;
-    context.beginPath();
-    model.nodes.forEach((node, index) => {
-      const x = map.x + map.width * node.x / 100;
-      const y = map.y + map.height * node.y / 100;
-      if (index === 0) context.moveTo(x, y); else context.lineTo(x, y);
-    });
-    context.stroke();
-  }
-  model.nodes.forEach((node) => {
-    const x = map.x + map.width * node.x / 100;
-    const y = map.y + map.height * node.y / 100;
-    context.fillStyle = palette.accentSoft;
-    context.beginPath(); context.arc(x, y, 12, 0, Math.PI * 2); context.fill();
-    context.strokeStyle = palette.accent; context.lineWidth = 3; context.stroke();
-    context.fillStyle = palette.text; context.font = "900 15px system-ui, sans-serif"; context.fillText(node.label, x + 16, y + 5);
-  });
-  context.restore();
-  context.fillStyle = palette.text; context.font = "900 27px system-ui, sans-serif"; context.fillText("全国足迹坐标场", map.x + 24, map.y + 40);
-  context.fillStyle = palette.muted; context.font = "800 13px system-ui, sans-serif"; context.fillText("非地图示意 · 不绘制国界", map.x + 25, map.y + 64);
-  context.font = "750 11px system-ui, sans-serif"; context.fillText("经纬度归一化显示，仅用于个人演出足迹排布", map.x + 24, map.y + map.height - 22);
-
-  for (const band of model.bands) {
-    roundedPath(context, band.rect.x, band.rect.y, band.rect.width, band.rect.height, 16);
-    context.fillStyle = alphaSurface(palette.surface, 0.78);
-    context.fill();
-    context.strokeStyle = palette.border;
-    context.stroke();
+  if (options.mapSnapshot) {
+    context.drawImage(options.mapSnapshot, map.x, map.y, map.width, map.height);
+  } else {
+    context.fillStyle = alphaSurface(palette.surface, 0.9);
+    context.fillRect(map.x, map.y, map.width, map.height);
     context.fillStyle = palette.text;
-    context.font = "900 24px system-ui, sans-serif";
-    context.fillText(band.label, band.rect.x + 18, band.rect.y + 38);
+    context.font = \`900 \${Math.max(24, Math.round(map.width * 0.05))}px system-ui, sans-serif\`;
+    context.fillText("高德地图 · AMap", map.x + 28, map.y + 56);
     context.fillStyle = palette.muted;
-    context.font = "800 12px system-ui, sans-serif";
-    context.fillText(`${band.count} 场`, band.rect.x + 20, band.rect.y + 60);
-    for (const slot of band.slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails);
+    context.font = \`800 \${Math.max(14, Math.round(map.width * 0.025))}px system-ui, sans-serif\`;
+    context.fillText("在线预览使用真实高德底图", map.x + 28, map.y + 88);
+    context.fillText("当前浏览器未提供可安全导出的地图画布", map.x + 28, map.y + 114);
+  }
+  const shade = context.createLinearGradient(map.x, map.y, map.x, map.y + map.height * 0.3);
+  shade.addColorStop(0, "rgba(0,0,0,.46)");
+  shade.addColorStop(1, "rgba(0,0,0,0)");
+  context.fillStyle = shade;
+  context.fillRect(map.x, map.y, map.width, map.height * 0.35);
+  context.fillStyle = "#ffffff";
+  context.font = \`900 \${Math.max(22, Math.round(map.width * 0.045))}px system-ui, sans-serif\`;
+  context.fillText("高德城市路线", map.x + 26, map.y + 42);
+  context.restore();
+  context.strokeStyle = palette.border;
+  context.lineWidth = 2;
+  roundedPath(context, map.x, map.y, map.width, map.height, 22);
+  context.stroke();
+
+  const chipTop = model.listRect.y + 4;
+  const chipBottom = model.posterRect.y - 10;
+  let chipX = model.listRect.x;
+  let chipY = chipTop;
+  const lineHeight = Math.max(32, (chipBottom - chipTop) / 2);
+  context.font = \`850 \${Math.max(13, Math.round(model.listRect.width * 0.018))}px system-ui, sans-serif\`;
+  for (const chip of model.chips) {
+    const label = \`\${chip.label} · \${chip.count}\`;
+    const chipWidth = Math.min(model.listRect.width, context.measureText(label).width + 30);
+    if (chipX + chipWidth > model.listRect.x + model.listRect.width && chipX > model.listRect.x) {
+      chipX = model.listRect.x;
+      chipY += lineHeight;
+    }
+    if (chipY + lineHeight > model.posterRect.y) break;
+    roundedPath(context, chipX, chipY, chipWidth, lineHeight - 6, (lineHeight - 6) / 2);
+    context.fillStyle = alphaSurface(palette.surface, 0.88);
+    context.fill();
+    context.fillStyle = palette.text;
+    context.fillText(label, chipX + 15, chipY + lineHeight * 0.62);
+    chipX += chipWidth + 8;
+  }
+
+  for (const slot of model.slots) {
+    await drawPoster(context, slot.record, slot.rect, palette, options.showDetails, slot.emphasis);
   }
 }
 
