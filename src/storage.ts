@@ -19,7 +19,9 @@ const DB_NAME = "echo-archive-v2";
 const DB_VERSION = 1;
 const RECORD_STORE = "records";
 const SETTINGS_KEY = "echoArchiveSettingsV2";
+const FALLBACK_RECORDS_KEY = "echoArchiveRecordsV2";
 const GUEST_SESSION_KEY = "live-memory-guest-session";
+const UNSCOPED_OWNER_KEY = "live-memory-unscoped-data-owner";
 
 const LEGACY_DB_NAME = "echo-archive-local";
 const LEGACY_STORE = "events";
@@ -27,7 +29,47 @@ const LEGACY_LOCAL_KEY = "echoArchiveEvents";
 const MIGRATION_DONE_KEY = "echoArchiveV2MigrationDone";
 
 let dbPromise: Promise<IDBDatabase> | null = null;
+let dbPromiseName = "";
+let storageScope = "";
+let allowLegacyScopeMigration = false;
 let guestRecords: EventRecord[] = [];
+
+function normalizeStorageScope(value: string) {
+  return value.trim().toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 96);
+}
+
+export function storageScopeKey(base: string, scope = storageScope) {
+  const normalized = normalizeStorageScope(scope);
+  return normalized ? `${base}:${normalized}` : base;
+}
+
+export function currentStorageScope() {
+  return storageScope;
+}
+
+export function legacyUnscopedAccountUsername() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}") as Partial<AppSettings>;
+    return String(raw.account?.username || "").trim().toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+export function setStorageScope(scope: string, allowLegacyMigration = false) {
+  const normalized = normalizeStorageScope(scope);
+  if (storageScope === normalized && allowLegacyScopeMigration === allowLegacyMigration) return;
+  const previousDb = dbPromise;
+  storageScope = normalized;
+  allowLegacyScopeMigration = allowLegacyMigration;
+  dbPromise = null;
+  dbPromiseName = "";
+  void previousDb?.then((db) => db.close()).catch(() => undefined);
+}
+
+export function clearStorageScope() {
+  setStorageScope("", false);
+}
 
 function isGuestSession() {
   return typeof sessionStorage !== "undefined" && sessionStorage.getItem(GUEST_SESSION_KEY) === "1";
@@ -61,9 +103,12 @@ function guestSettings(value: Partial<AppSettings> = {}): AppSettings {
 }
 
 function openDb() {
-  if (!dbPromise) {
+  if (!storageScope) return Promise.reject(new Error("账号本地存储尚未初始化"));
+  const dbName = storageScopeKey(DB_NAME);
+  if (!dbPromise || dbPromiseName !== dbName) {
+    dbPromiseName = dbName;
     dbPromise = new Promise((resolve, reject) => {
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+      const request = indexedDB.open(dbName, DB_VERSION);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolve(request.result);
       request.onupgradeneeded = () => {
@@ -95,19 +140,25 @@ async function objectStore(mode: IDBTransactionMode) {
 
 export async function loadRecordsWithMigration() {
   if (isGuestSession()) return guestRecords.map(normalizeRecord);
+  if (!storageScope) return [];
+
   const current = await listRecords();
   if (current.length > 0) return current;
 
-  const migrated = localStorage.getItem(MIGRATION_DONE_KEY) ? [] : await readLegacyRecords();
-  if (migrated.length) await replaceAllRecords(migrated);
-  localStorage.setItem(MIGRATION_DONE_KEY, "1");
-  return migrated.length ? listRecords() : [];
+  const migrationKey = storageScopeKey(MIGRATION_DONE_KEY);
+  if (!localStorage.getItem(migrationKey)) {
+    const migrated = await migrateUnscopedRecordsForCurrentScope();
+    localStorage.setItem(migrationKey, "1");
+    if (migrated.length) return listRecords();
+  }
+  return [];
 }
 
 export async function listRecords() {
   if (isGuestSession()) {
     return guestRecords.map(normalizeRecord).sort((a, b) => b.date.localeCompare(a.date));
   }
+  if (!storageScope) return [];
   try {
     const store = await objectStore("readonly");
     const rows = await requestToPromise<EventRecord[]>(store.getAll());
@@ -162,10 +213,37 @@ export async function replaceAllRecords(records: EventRecord[]) {
   }
 }
 
+function canMigrateLegacyScope() {
+  if (!storageScope || !allowLegacyScopeMigration) return false;
+  const claimedBy = localStorage.getItem(UNSCOPED_OWNER_KEY);
+  return !claimedBy || claimedBy === storageScope;
+}
+
+function claimLegacyScope() {
+  if (storageScope && !localStorage.getItem(UNSCOPED_OWNER_KEY)) {
+    localStorage.setItem(UNSCOPED_OWNER_KEY, storageScope);
+  }
+}
+
 export function readSettings(): AppSettings {
   if (isGuestSession()) return guestSettings();
+
   try {
-    return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"));
+    if (!storageScope) {
+      return normalizeSettings(JSON.parse(localStorage.getItem(SETTINGS_KEY) || "{}"));
+    }
+
+    const key = storageScopeKey(SETTINGS_KEY);
+    let raw = localStorage.getItem(key);
+    if (!raw && canMigrateLegacyScope()) {
+      const legacyRaw = localStorage.getItem(SETTINGS_KEY);
+      if (legacyRaw) {
+        raw = legacyRaw;
+        localStorage.setItem(key, legacyRaw);
+        claimLegacyScope();
+      }
+    }
+    return normalizeSettings(JSON.parse(raw || "{}"));
   } catch {
     return { ...defaultSettings };
   }
@@ -174,7 +252,9 @@ export function readSettings(): AppSettings {
 export function writeSettings(settings: AppSettings) {
   if (isGuestSession()) return guestSettings(settings);
   const normalized = normalizeSettings(settings);
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify(normalized));
+  if (storageScope) {
+    localStorage.setItem(storageScopeKey(SETTINGS_KEY), JSON.stringify(normalized));
+  }
   return normalized;
 }
 
@@ -191,8 +271,9 @@ export function storageHealth(records: EventRecord[], settings: AppSettings): St
 }
 
 function readFallbackRecords() {
+  if (!storageScope) return [];
   try {
-    const rows = JSON.parse(localStorage.getItem("echoArchiveRecordsV2") || "[]");
+    const rows = JSON.parse(localStorage.getItem(storageScopeKey(FALLBACK_RECORDS_KEY)) || "[]");
     return Array.isArray(rows) ? (rows as EventRecord[]) : [];
   } catch {
     return [];
@@ -200,7 +281,62 @@ function readFallbackRecords() {
 }
 
 function writeFallbackRecords(records: EventRecord[]) {
-  localStorage.setItem("echoArchiveRecordsV2", JSON.stringify(records));
+  if (!storageScope) return;
+  localStorage.setItem(storageScopeKey(FALLBACK_RECORDS_KEY), JSON.stringify(records));
+}
+
+function readUnscopedFallbackRecords() {
+  try {
+    const rows = JSON.parse(localStorage.getItem(FALLBACK_RECORDS_KEY) || "[]");
+    return Array.isArray(rows) ? (rows as EventRecord[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readV2RecordsFromDatabase(name: string): Promise<EventRecord[]> {
+  return new Promise((resolve) => {
+    const request = indexedDB.open(name);
+    request.onerror = () => resolve([]);
+    request.onsuccess = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(RECORD_STORE)) {
+        db.close();
+        resolve([]);
+        return;
+      }
+      const tx = db.transaction(RECORD_STORE, "readonly");
+      const getAll = tx.objectStore(RECORD_STORE).getAll();
+      getAll.onsuccess = () => {
+        const rows = Array.isArray(getAll.result) ? (getAll.result as EventRecord[]) : [];
+        db.close();
+        resolve(rows);
+      };
+      getAll.onerror = () => {
+        db.close();
+        resolve([]);
+      };
+    };
+  });
+}
+
+async function migrateUnscopedRecordsForCurrentScope() {
+  if (!canMigrateLegacyScope()) return [];
+
+  const currentV2 = await readV2RecordsFromDatabase(DB_NAME);
+  const fallbackV2 = currentV2.length ? [] : readUnscopedFallbackRecords();
+  const legacy = currentV2.length || fallbackV2.length ? [] : await readLegacyRecords();
+  const records = currentV2.length
+    ? currentV2.map(normalizeRecord)
+    : fallbackV2.length
+      ? fallbackV2.map(normalizeRecord)
+      : legacy;
+
+  if (records.length) {
+    await replaceAllRecords(records);
+    claimLegacyScope();
+  }
+  return records;
 }
 
 async function readLegacyRecords() {

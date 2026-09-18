@@ -795,6 +795,7 @@
 .media-editor-thumbs-v2 figure { position: relative; flex: 0 0 58px; width: 58px; height: 72px; margin: 0; overflow: hidden; border-radius: 7px; background: #101418; }
 .media-editor-thumbs-v2 figure > img, .media-editor-thumbs-v2 figure > span { width: 100%; height: 100%; object-fit: cover; }
 .media-editor-thumbs-v2 figure > button { position: absolute; top: 3px; right: 3px; display: grid; width: 20px; height: 20px; place-items: center; padding: 0; border: 0; border-radius: 50%; color: #fff; background: rgba(0,0,0,.68); }
+.media-editor-sync-badge-v2 { position: absolute; left: 3px; bottom: 3px; z-index: 1; padding: 2px 5px; border-radius: 999px; color: #fff; background: rgba(0,0,0,.66); font-size: 8px; font-style: normal; font-weight: 900; line-height: 1.2; pointer-events: none; }
 .media-editor-thumbs-v2 figure > button svg { width: 12px; height: 12px; }
 .media-editor-empty-v2 { display: grid; min-height: 72px; flex: 1; place-items: center; align-content: center; gap: 4px; color: var(--experience-muted); font-size: 10px; }
 .media-editor-empty-v2 svg { width: 22px; height: 22px; }

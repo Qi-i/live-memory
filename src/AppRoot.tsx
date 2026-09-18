@@ -236,7 +236,14 @@ export default function AppRoot() {
           onSave={persistRecord}
         />
       )}
-      {editing && <RecordEditor record={editing} onCancel={() => setEditing(null)} onSave={persistRecord} />}
+      {editing && (
+        <RecordEditor
+          record={editing}
+          cloudMediaSyncEnabled={!isGuest && settings.supabase.syncMedia && hasPersonalCloudConnection(settings)}
+          onCancel={() => setEditing(null)}
+          onSave={persistRecord}
+        />
+      )}
       {importOpen && <ImportDrawer onClose={() => setImportOpen(false)} onSave={persistRecord} flash={flash} />}
       {zoomMedia && <ImageZoom media={zoomMedia} onClose={() => setZoomMedia(null)} />}
       {confirmAction && <ConfirmDialog action={confirmAction} onClose={() => setConfirmAction(null)} />}

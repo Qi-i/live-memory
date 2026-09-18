@@ -377,6 +377,39 @@ await archiveView("海报", ".archive-poster-card");
   mobileCards.forEach((card, index) => assertContained(`Mobile banner poster ${index + 1}`, card, mobileBounds, 3));
   await page.screenshot({ path: `${outputDir}/13-banner-mobile.png`, fullPage: true });
 
+  // Mobile editor regression: the native file chooser must be wired directly to
+  // the media input, and a selected image must immediately expose local processing state.
+  await page.locator(".archive-poster-card").first().dispatchEvent("contextmenu", {
+    button: 2,
+    bubbles: true,
+    cancelable: true,
+    clientX: 180,
+    clientY: 420,
+  });
+  await page.locator(".archive-context-menu").waitFor({ state: "visible", timeout: 5000 });
+  await page.locator(".archive-context-menu [role=menuitem]").filter({ hasText: "编辑" }).click();
+  await page.locator(".record-editor-v2").waitFor({ state: "visible", timeout: 5000 });
+  const posterPicker = page.locator('input[data-media-kind="poster"]');
+  await posterPicker.waitFor({ state: "attached", timeout: 5000 });
+  const chooserPromise = page.waitForEvent("filechooser", { timeout: 2000 });
+  await posterPicker.click({ force: true });
+  const chooser = await chooserPromise;
+  await chooser.setFiles([]);
+  await posterPicker.setInputFiles({
+    name: "mobile-picker-test.gif",
+    mimeType: "image/gif",
+    buffer: Buffer.from("R0lGODlhAQABAIAAAAAAAP///ywAAAAAAQABAAACAUwAOw==", "base64"),
+  });
+  await page.waitForFunction(() => Array.from(document.querySelectorAll(".media-editor-card-v2"))
+    .some((card) => card.textContent?.includes("主海报") && card.textContent?.includes("本机已准备")), null, { timeout: 10000 });
+  const mobilePosterEditor = page.locator(".media-editor-card-v2").filter({ hasText: "主海报" }).first();
+  if (await mobilePosterEditor.locator("img").count() < 1 || await mobilePosterEditor.locator(".media-editor-sync-badge-v2").count() < 1) {
+    throw new Error("Mobile media editor did not expose the selected poster preview and sync state");
+  }
+  await page.screenshot({ path: `${outputDir}/13b-editor-mobile-media.png`, fullPage: true });
+  await page.locator('.record-editor-v2 button[aria-label="关闭"]').click();
+  await page.locator(".record-editor-v2").waitFor({ state: "detached", timeout: 5000 });
+
   await archiveView("票夹", ".archive-wallet-card");
   const walletOffsets = await page.locator(".archive-wallet-card").evaluateAll((cards) => cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().top)));
   if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] < 145) throw new Error("Mobile wallet cards overlap vertically");

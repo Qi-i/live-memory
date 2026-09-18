@@ -1,10 +1,32 @@
 import { useEffect, useState } from "react";
 import type { EventRecord, MediaAsset } from "./domain";
 
-const CACHE_NAME = "live-memory-media-v2";
+const CACHE_PREFIX = "live-memory-media-v3";
+const LEGACY_CACHE_NAMES = ["live-memory-media-v2"];
 const objectUrls = new Map<string, string>();
 const pendingSources = new Map<string, Promise<string>>();
 let cleanupRegistered = false;
+let mediaCacheScope = "anonymous";
+
+function currentCacheName() {
+  return `${CACHE_PREFIX}-${hashIdentity(mediaCacheScope || "anonymous")}`;
+}
+
+function resetObjectUrls() {
+  objectUrls.forEach((url) => URL.revokeObjectURL(url));
+  objectUrls.clear();
+  pendingSources.clear();
+}
+
+export function setMediaCacheScope(scope: string) {
+  const next = scope.trim() || "anonymous";
+  if (mediaCacheScope === next) return;
+  resetObjectUrls();
+  mediaCacheScope = next;
+  if (typeof caches !== "undefined") {
+    for (const legacy of LEGACY_CACHE_NAMES) void caches.delete(legacy);
+  }
+}
 
 function isInlineSource(src: string) {
   return src.startsWith("data:") || src.startsWith("blob:");
@@ -36,15 +58,13 @@ function registerCleanup() {
   if (cleanupRegistered || typeof window === "undefined") return;
   cleanupRegistered = true;
   window.addEventListener("pagehide", () => {
-    objectUrls.forEach((url) => URL.revokeObjectURL(url));
-    objectUrls.clear();
-    pendingSources.clear();
+    resetObjectUrls();
   }, { once: true });
 }
 
 async function readCachedSource(identity: string) {
   if (typeof caches === "undefined") return "";
-  const cache = await caches.open(CACHE_NAME);
+  const cache = await caches.open(currentCacheName());
   const response = await cache.match(cacheRequest(identity));
   if (!response) return "";
   const blob = await response.blob();
@@ -68,7 +88,7 @@ async function fetchAndCache(asset: MediaAsset, identity: string) {
   const blob = await response.blob();
   if (!blob.size) throw new Error("Image response was empty");
   if (typeof caches !== "undefined") {
-    const cache = await caches.open(CACHE_NAME);
+    const cache = await caches.open(currentCacheName());
     await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
   }
   const objectUrl = URL.createObjectURL(blob);
@@ -120,20 +140,32 @@ export function useCachedMediaSrc(asset?: MediaAsset) {
   return src;
 }
 
+export function mediaPreloadPlan(limit = 80, constrained?: boolean) {
+  const lowMemory = typeof navigator !== "undefined"
+    && Number((navigator as Navigator & { deviceMemory?: number }).deviceMemory || 8) <= 4;
+  const narrow = typeof window !== "undefined" && window.matchMedia?.("(max-width: 720px)").matches;
+  const isConstrained = constrained ?? Boolean(lowMemory || narrow);
+  return {
+    limit: Math.min(limit, isConstrained ? 16 : limit),
+    workers: isConstrained ? 2 : 4,
+  };
+}
+
 export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
+  const plan = mediaPreloadPlan(limit);
   const unique = new Map<string, MediaAsset>();
   for (const record of records) {
     for (const asset of record.media) {
       const identity = mediaIdentity(asset);
       if (identity && !unique.has(identity)) unique.set(identity, asset);
-      if (unique.size >= limit) break;
+      if (unique.size >= plan.limit) break;
     }
-    if (unique.size >= limit) break;
+    if (unique.size >= plan.limit) break;
   }
 
   const queue = Array.from(unique.values());
   let cursor = 0;
-  const workers = Array.from({ length: Math.min(4, queue.length) }, async () => {
+  const workers = Array.from({ length: Math.min(plan.workers, queue.length) }, async () => {
     while (cursor < queue.length) {
       const asset = queue[cursor];
       cursor += 1;
@@ -158,8 +190,10 @@ export async function loadMediaImage(asset?: MediaAsset) {
 }
 
 export async function clearPersistentMediaCache() {
-  objectUrls.forEach((url) => URL.revokeObjectURL(url));
-  objectUrls.clear();
-  pendingSources.clear();
-  if (typeof caches !== "undefined") await caches.delete(CACHE_NAME);
+  resetObjectUrls();
+  if (typeof caches === "undefined") return;
+  const keys = await caches.keys();
+  await Promise.all(keys
+    .filter((key) => key.startsWith(CACHE_PREFIX) || LEGACY_CACHE_NAMES.includes(key))
+    .map((key) => caches.delete(key)));
 }

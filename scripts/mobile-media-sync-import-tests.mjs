@@ -13,6 +13,7 @@ try {
   const domain = await server.ssrLoadModule("/src/domain.ts");
   const importers = await server.ssrLoadModule("/src/importers.ts");
   const supabase = await server.ssrLoadModule("/src/supabase.ts");
+  const mediaCache = await server.ssrLoadModule("/src/mediaCache.ts");
 
   assert.equal(domain.sourceLabels.piaoxingqiu, "票星球");
   assert.equal(domain.normalizeSource("piaoxingqiu"), "piaoxingqiu");
@@ -95,6 +96,7 @@ try {
   const media = await readFile(new URL("../src/media.ts", import.meta.url), "utf8");
   const appController = await readFile(new URL("../src/appController.ts", import.meta.url), "utf8");
   const settingsPage = await readFile(new URL("../src/settingsPage.tsx", import.meta.url), "utf8");
+  const access = await readFile(new URL("../src/access.tsx", import.meta.url), "utf8");
 
   assert.match(overlays, /media-editor-card-v2/);
   assert.match(overlays, /正在处理/);
@@ -105,8 +107,15 @@ try {
   assert.match(media, /toBlob/);
   assert.match(appController, /autoSyncFingerprint/);
   assert.doesNotMatch(settingsPage, />上传当前档案</);
+  assert.deepEqual(mediaCache.mediaPreloadPlan(80, true), { limit: 16, workers: 2 });
+  assert.deepEqual(mediaCache.mediaPreloadPlan(80, false), { limit: 80, workers: 4 });
+  assert.match(overlays, /data-media-kind=\{kind\}/);
+  assert.match(overlays, /event\.currentTarget\.value = ""/);
+  assert.match(overlays, /本机已准备/);
+  assert.match(overlays, /云端已同步/);
+  assert.match(access, /setMediaCacheScope\(user\.id\)/);
 
-  console.log("Mobile media editor, automatic cloud sync, conflict equality, multi-platform ticket import, and screenshot OCR contracts passed.");
+  console.log("Mobile media editor, constrained preloading, truthful media sync state, automatic cloud sync, conflict equality, multi-platform ticket import, and screenshot OCR contracts passed.");
 } finally {
   await server.close();
 }

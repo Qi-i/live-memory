@@ -6,11 +6,19 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { resolveLoginUsername } from "./accountLogin";
 import { AppSettings, defaultSettings, validatePassword, validateUsername } from "./domain";
-import { readSettings, writeSettings } from "./storage";
+import {
+  clearStorageScope,
+  legacyUnscopedAccountUsername,
+  readSettings,
+  setStorageScope,
+  writeSettings,
+} from "./storage";
+import { clearPersistentMediaCache, setMediaCacheScope } from "./mediaCache";
 import {
   currentUser,
   signInWithGithub,
@@ -60,10 +68,14 @@ function normalizedProviderUsername(value: string) {
   return /^[a-z0-9]{4,32}$/.test(normalized) ? normalized : "";
 }
 
-function settingsForSessionUser(settings: AppSettings, user: AccountUser) {
-  const providerUsername = userText(user, "user_name", "preferred_username", "username")
+function sessionProviderUsername(user: AccountUser) {
+  return userText(user, "username", "preferred_username", "user_name")
     || user.email?.split("@")[0]
     || "";
+}
+
+function settingsForSessionUser(settings: AppSettings, user: AccountUser) {
+  const providerUsername = sessionProviderUsername(user);
   const username = validSavedUsername(settings.account.username)
     || normalizedProviderUsername(providerUsername)
     || "user0000";
@@ -78,21 +90,45 @@ function settingsForSessionUser(settings: AppSettings, user: AccountUser) {
   });
 }
 
-function settingsForCredentials(username: string, nickname?: string) {
-  const settings = readSettings();
-  return writeSettings({
-    ...settings,
+function settingsForCredentials(username: string, nickname?: string): AppSettings {
+  const normalizedUsername = validateUsername(username);
+  return {
+    ...defaultSettings,
     account: {
-      ...settings.account,
-      username: validateUsername(username),
-      nickname: nickname?.trim() || settings.account.nickname || username,
+      ...defaultSettings.account,
+      username: normalizedUsername,
+      nickname: nickname?.trim() || normalizedUsername,
     },
-  });
+  };
+}
+
+function accountMigrationAliases(user: AccountUser) {
+  const candidates = [
+    userText(user, "username"),
+    userText(user, "preferred_username"),
+    userText(user, "user_name"),
+    user.email?.split("@")[0] || "",
+  ];
+  return new Set(candidates.flatMap((candidate) => {
+    const direct = validSavedUsername(candidate);
+    const normalized = normalizedProviderUsername(candidate);
+    return [direct, normalized].filter(Boolean);
+  }));
+}
+
+function activateSessionStorage(user: AccountUser) {
+  const legacyUsername = legacyUnscopedAccountUsername();
+  const aliases = accountMigrationAliases(user);
+  const allowLegacyMigration = !legacyUsername || aliases.has(legacyUsername);
+  setStorageScope(user.id, allowLegacyMigration);
+  setMediaCacheScope(user.id);
+  return settingsForSessionUser(readSettings(), user);
 }
 
 export function AccessGate({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AccessMode>("loading");
   const [user, setUser] = useState<AccountUser | null>(null);
+  const activeUserId = useRef("");
 
   useEffect(() => {
     let active = true;
@@ -101,10 +137,15 @@ export function AccessGate({ children }: { children: ReactNode }) {
       if (!active) return;
       if (sessionUser) {
         sessionStorage.removeItem(GUEST_SESSION_KEY);
-        settingsForSessionUser(readSettings(), sessionUser);
+        activateSessionStorage(sessionUser);
+        activeUserId.current = sessionUser.id;
         setUser(sessionUser);
         setMode("account");
       } else {
+        if (activeUserId.current) void clearPersistentMediaCache();
+        activeUserId.current = "";
+        clearStorageScope();
+        setMediaCacheScope("anonymous");
         setUser(null);
         setMode(sessionStorage.getItem(GUEST_SESSION_KEY) === "1" ? "guest" : "signed-out");
       }
@@ -135,12 +176,15 @@ export function AccessGate({ children }: { children: ReactNode }) {
   }, []);
 
   const enterGuest = () => {
+    clearStorageScope();
+    setMediaCacheScope("guest");
     sessionStorage.setItem(GUEST_SESSION_KEY, "1");
     setUser(null);
     setMode("guest");
   };
 
   const leaveGuest = () => {
+    setMediaCacheScope("anonymous");
     sessionStorage.removeItem(GUEST_SESSION_KEY);
     setUser(null);
     setMode("signed-out");
@@ -148,6 +192,10 @@ export function AccessGate({ children }: { children: ReactNode }) {
 
   const signOutAndReturn = async () => {
     await signOut(readSettings());
+    await clearPersistentMediaCache();
+    activeUserId.current = "";
+    clearStorageScope();
+    setMediaCacheScope("anonymous");
     sessionStorage.removeItem(GUEST_SESSION_KEY);
     setUser(null);
     setMode("signed-out");
@@ -178,7 +226,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
             await signInWithPassword(settings, password);
             const sessionUser = await currentUser(settings);
             if (!sessionUser) throw new Error("登录没有完成，请刷新页面后再试。");
-            settingsForSessionUser(settings, sessionUser);
+            activateSessionStorage(sessionUser);
+            activeUserId.current = sessionUser.id;
             setUser(sessionUser);
             setMode("account");
           }}
@@ -189,7 +238,8 @@ export function AccessGate({ children }: { children: ReactNode }) {
             await signUpOnly(settings, password);
             const sessionUser = await currentUser(settings);
             if (!sessionUser) throw new Error("账号已经创建，但登录没有完成，请刷新后再试。");
-            settingsForSessionUser(settings, sessionUser);
+            activateSessionStorage(sessionUser);
+            activeUserId.current = sessionUser.id;
             setUser(sessionUser);
             setMode("account");
           }}
