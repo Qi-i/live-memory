@@ -127,33 +127,57 @@ export function useAppController() {
     }
 
     Promise.all([loadRecordsWithMigration(), Promise.resolve(readSettings())])
-      .then(async ([loadedRecords, loadedSettings]) => {
-        let nextRecords = loadedRecords;
-        let nextSettings = loadedSettings;
-        if (access.user) {
-          try {
-            const initialSync = await syncAfterLogin({ ...loadedSettings, onboardingComplete: true }, loadedRecords);
-            nextRecords = initialSync.records;
-            nextSettings = writeSettings({ ...initialSync.settings, onboardingComplete: true });
+      .then(([loadedRecords, loadedSettings]) => {
+        if (!active) return;
+
+        // Local-first hydration: IndexedDB and the persistent media cache are the
+        // first paint. Cloud reconciliation must never block already-available posters.
+        const localSettings = access.user
+          ? writeSettings({ ...loadedSettings, onboardingComplete: true })
+          : loadedSettings;
+        recordsRef.current = loadedRecords;
+        setRecordState(loadedRecords);
+        setSettings(localSettings);
+        void preloadRecordMedia(loadedRecords);
+        lastSyncFingerprint.current = "";
+
+        if (!access.user) {
+          initialized.current = true;
+          return;
+        }
+
+        syncOperationInFlight.current = true;
+        setSyncing(true);
+        void syncAfterLogin(localSettings, loadedRecords)
+          .then(async (initialSync) => {
+            if (!active) return;
+            const nextRecords = initialSync.records;
+            const nextSettings = writeSettings({ ...initialSync.settings, onboardingComplete: true });
+            const loadedActiveCount = loadedRecords.filter((record) => !record.deletedAt).length;
+            const nextActiveCount = nextRecords.filter((record) => !record.deletedAt).length;
             setPersonalCloudStatus(initialSync.personalCloudStatus);
             if (initialSync.personalCloudStatus === "reconnect-needed") {
-              setCloudRecoveryNotice("个人云端连接尚未恢复，系统会在当前页面自动重试；文字档案不受影响。");
+              setCloudRecoveryNotice("个人云端连接尚未恢复，已继续使用本机档案与图片缓存；系统会在当前页面自动重试。");
+            } else if (nextActiveCount > loadedActiveCount) {
+              setCloudRecoveryNotice(`已从云端恢复 ${nextActiveCount - loadedActiveCount} 条其他设备记录。`);
             }
             await replaceAllRecords(nextRecords);
-          } catch {
-            nextSettings = writeSettings({ ...loadedSettings, onboardingComplete: true });
-          }
-        }
-        if (!active) return;
-        const loadedActiveCount = loadedRecords.filter((record) => !record.deletedAt).length;
-        const nextActiveCount = nextRecords.filter((record) => !record.deletedAt).length;
-        recordsRef.current = nextRecords;
-        setRecordState(nextRecords);
-        setSettings(nextSettings);
-        if (access.user && nextActiveCount > loadedActiveCount) setCloudRecoveryNotice(`已从云端恢复 ${nextActiveCount - loadedActiveCount} 条其他设备记录，可直接刷新云端图片。`);
-        void preloadRecordMedia(nextRecords);
-        lastSyncFingerprint.current = "";
-        initialized.current = true;
+            if (!active) return;
+            setRecords(nextRecords);
+            setSettings(nextSettings);
+            void preloadRecordMedia(nextRecords);
+          })
+          .catch((error) => {
+            if (!active) return;
+            setCloudRecoveryNotice("云端同步暂未完成，当前继续使用本机档案与已缓存图片。");
+            console.warn("Initial cloud sync deferred", error);
+          })
+          .finally(() => {
+            if (!active) return;
+            syncOperationInFlight.current = false;
+            setSyncing(false);
+            initialized.current = true;
+          });
       })
       .catch((error) => {
         if (!active) return;
