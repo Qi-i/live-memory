@@ -492,6 +492,21 @@
 }
 .share-amap-state b { font-size: clamp(24px, calc(var(--share-canvas-width) * .02), 42px); }
 .share-amap-state span { max-width: 360px; color: var(--share-muted); font-size: clamp(13px, calc(var(--share-canvas-width) * .009), 20px); font-weight: 780; line-height: 1.5; }
+.share-amap-state button {
+  justify-self: center;
+  min-height: 42px;
+  margin-top: 8px;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 999px;
+  color: #10201b;
+  background: var(--share-accent-soft);
+  box-shadow: 0 8px 20px rgba(0,0,0,.12);
+  font: inherit;
+  font-size: clamp(12px, calc(var(--share-canvas-width) * .008), 18px);
+  font-weight: 900;
+  cursor: pointer;
+}
 
 .share-city-poster-field { position: absolute; overflow: hidden; }
 .share-city-summary {
