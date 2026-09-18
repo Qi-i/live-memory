@@ -90,6 +90,12 @@ try {
     }],
   };
   assert.equal(supabase.recordsSemanticallyEqual(localWithUploadedPoster, cloudWithSignedPoster, true), true);
+  const mergedMedia = supabase.mergePersonalCloudMedia(
+    [localWithUploadedPoster],
+    [{ ...cloudWithSignedPoster, updatedAt: "2026-09-16T00:00:00.000Z" }],
+  );
+  assert.match(mergedMedia[0].media[0].src, /^data:image\//, "Cloud reconciliation must preserve a still-usable local poster source on this device");
+  assert.equal(mergedMedia[0].media[0].storagePath, "owner/r1/media-1.jpg");
 
   const overlays = await readFile(new URL("../src/overlays.tsx", import.meta.url), "utf8");
   const overlayCss = await readFile(new URL("../src/overlays.css", import.meta.url), "utf8");
@@ -114,6 +120,7 @@ try {
   assert.match(overlays, /本机已准备/);
   assert.match(overlays, /云端已同步/);
   assert.match(access, /setMediaCacheScope\(user\.id\)/);
+  assert.match(appController, /Local-first hydration/);
 
   console.log("Mobile media editor, constrained preloading, truthful media sync state, automatic cloud sync, conflict equality, multi-platform ticket import, and screenshot OCR contracts passed.");
 } finally {
