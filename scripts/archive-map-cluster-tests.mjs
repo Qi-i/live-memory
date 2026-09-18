@@ -13,6 +13,8 @@ assert.match(archive, /hoveredPlaceKey/, "Map and ranking must share hover state
 assert.match(archive, /venue-place-picker/, "First place click must open a place picker");
 assert.match(archive, /amap-poster-marker/, "AMap markers must render poster-stack content");
 assert.match(archive, /amap-poster-count/, "Poster-stack markers must expose the number of shows at that place");
+assert.match(archive, /image\.loading\s*=\s*"lazy"/, "Poster-stack thumbnails must lazy-load to reduce map startup work");
+assert.match(archive, /addEventListener\("error"[\s\S]*is-fallback/, "Broken marker thumbnails must fall back instead of showing a broken image");
 assert.match(archive, /content:\s*markerContent|content:\s*build/, "AMap marker must use custom HTML content");
 assert.doesNotMatch(archive, /marker\.on\?\("click",\s*\(\)\s*=>\s*onOpen\(record\)\)/, "Map marker click must not directly open record detail");
 assert.match(archive, /onMouseEnter=.*setHoveredPlaceKey|setHoveredPlaceKey\(/, "Ranking hover must update shared map highlight");
@@ -23,5 +25,6 @@ assert.match(css, /\.amap-poster-marker/, "Poster markers require dedicated styl
 assert.match(css, /\.venue-place-picker/, "Place picker requires dedicated styling");
 assert.match(css, /--heat-color/, "Map markers and ranking must share heat-driven color styling");
 assert.match(css, /venue-heat-legend|map-heat-legend/, "Map must explain low-to-high visit heat");
+assert.match(css, /@media \(max-width: 820px\)[\s\S]*\.map-heat-legend\s*\{\s*display:\s*none;/, "Mobile map must keep the heat legend from covering the place picker");
 
 console.log("Archive map cluster contracts passed.");
