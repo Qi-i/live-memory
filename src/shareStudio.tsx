@@ -518,7 +518,7 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
               <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
               {showBrand ? <BrandLockup compact inverse={isDarkPalette(palette)} size={44} /> : null}
             </header>
-            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} />
+            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} onOpenMapSettings={onOpenMapSettings} />
             <footer>
               {showBrand ? <span className="share-preview-github">GitHub · Qi-i/live-memory</span> : <span />}
               {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
@@ -536,12 +536,14 @@ function SharePreviewLayout({
   spec,
   showDetails,
   mapSettings,
+  onOpenMapSettings,
 }: {
   records: EventRecord[];
   layout: ShareLayout;
   spec: CanvasSpec;
   showDetails: boolean;
   mapSettings: MapConfig;
+  onOpenMapSettings: () => void;
 }) {
   const area = contentArea(spec);
   if (!records.length) return <div className="share-preview-empty">请选择至少一张海报</div>;
