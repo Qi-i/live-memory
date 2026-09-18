@@ -6,6 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
 import { resolveLoginUsername } from "./accountLogin";
@@ -127,6 +128,7 @@ function activateSessionStorage(user: AccountUser) {
 export function AccessGate({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AccessMode>("loading");
   const [user, setUser] = useState<AccountUser | null>(null);
+  const activeUserId = useRef("");
 
   useEffect(() => {
     let active = true;
@@ -136,12 +138,14 @@ export function AccessGate({ children }: { children: ReactNode }) {
       if (sessionUser) {
         sessionStorage.removeItem(GUEST_SESSION_KEY);
         activateSessionStorage(sessionUser);
+        activeUserId.current = sessionUser.id;
         setUser(sessionUser);
         setMode("account");
       } else {
+        if (activeUserId.current) void clearPersistentMediaCache();
+        activeUserId.current = "";
         clearStorageScope();
         setMediaCacheScope("anonymous");
-        void clearPersistentMediaCache();
         setUser(null);
         setMode(sessionStorage.getItem(GUEST_SESSION_KEY) === "1" ? "guest" : "signed-out");
       }
@@ -189,6 +193,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
   const signOutAndReturn = async () => {
     await signOut(readSettings());
     await clearPersistentMediaCache();
+    activeUserId.current = "";
     clearStorageScope();
     setMediaCacheScope("anonymous");
     sessionStorage.removeItem(GUEST_SESSION_KEY);
@@ -222,6 +227,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
             const sessionUser = await currentUser(settings);
             if (!sessionUser) throw new Error("登录没有完成，请刷新页面后再试。");
             activateSessionStorage(sessionUser);
+            activeUserId.current = sessionUser.id;
             setUser(sessionUser);
             setMode("account");
           }}
@@ -233,6 +239,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
             const sessionUser = await currentUser(settings);
             if (!sessionUser) throw new Error("账号已经创建，但登录没有完成，请刷新后再试。");
             activateSessionStorage(sessionUser);
+            activeUserId.current = sessionUser.id;
             setUser(sessionUser);
             setMode("account");
           }}
