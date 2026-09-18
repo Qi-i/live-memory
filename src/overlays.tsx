@@ -138,7 +138,17 @@ function MediaSection({ title, items, onZoom }: { title: string; items: MediaAss
 
 type MediaProcessState = "idle" | "processing" | "ready" | "error";
 
-export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord; onCancel: () => void; onSave: (record: EventRecord) => Promise<unknown> }) {
+export function RecordEditor({
+  record,
+  onCancel,
+  onSave,
+  cloudMediaSyncEnabled = false,
+}: {
+  record: EventRecord;
+  onCancel: () => void;
+  onSave: (record: EventRecord) => Promise<unknown>;
+  cloudMediaSyncEnabled?: boolean;
+}) {
   const [draft, setDraft] = useState(() => ({ ...record, status: effectiveStatus(record) }));
   const [saving, setSaving] = useState(false);
   const [mediaStates, setMediaStates] = useState<Partial<Record<MediaKind, MediaProcessState>>>({});
@@ -152,12 +162,12 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
     setRecognitionStatus("");
   }, [record]);
 
-  async function addFiles(kind: MediaKind, files: FileList | null) {
-    if (!files?.length) return;
+  async function addFiles(kind: MediaKind, files: File[]) {
+    if (!files.length) return;
     setMediaStates((current) => ({ ...current, [kind]: "processing" }));
     setMediaErrors((current) => ({ ...current, [kind]: "" }));
     try {
-      const media = await Promise.all(Array.from(files).map((file) => fileToMedia(draft.id, kind, file)));
+      const media = await Promise.all(files.map((file) => fileToMedia(draft.id, kind, file)));
       setDraft((current) => {
         const replacesExisting = kind === "poster" || kind === "ticket" || kind === "seatMap";
         const removed = replacesExisting ? current.media.filter((item) => item.kind === kind) : [];
@@ -277,10 +287,10 @@ export function RecordEditor({ record, onCancel, onSave }: { record: EventRecord
           </EditorField>
 
           <div className="media-upload-grid-v2 is-wide">
-            <MediaEditorCard label="主海报" kind="poster" items={mediaFor("poster")} state={mediaStates.poster} error={mediaErrors.poster} onFiles={addFiles} onRemove={removeMedia} />
-            <MediaEditorCard label="电子票根" kind="ticket" items={mediaFor("ticket")} state={mediaStates.ticket} error={mediaErrors.ticket} onFiles={addFiles} onRemove={removeMedia} />
-            <MediaEditorCard label="座位图" kind="seatMap" items={mediaFor("seatMap")} state={mediaStates.seatMap} error={mediaErrors.seatMap} onFiles={addFiles} onRemove={removeMedia} />
-            <MediaEditorCard label="现场精选" kind="livePhoto" items={mediaFor("livePhoto")} state={mediaStates.livePhoto} error={mediaErrors.livePhoto} multiple onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="主海报" kind="poster" items={mediaFor("poster")} state={mediaStates.poster} error={mediaErrors.poster} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="电子票根" kind="ticket" items={mediaFor("ticket")} state={mediaStates.ticket} error={mediaErrors.ticket} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="座位图" kind="seatMap" items={mediaFor("seatMap")} state={mediaStates.seatMap} error={mediaErrors.seatMap} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
+            <MediaEditorCard label="现场精选" kind="livePhoto" items={mediaFor("livePhoto")} state={mediaStates.livePhoto} error={mediaErrors.livePhoto} cloudMediaSyncEnabled={cloudMediaSyncEnabled} multiple onFiles={addFiles} onRemove={removeMedia} />
           </div>
           <EditorField className="is-wide" label="曲目"><textarea value={draft.setlist.join("\n")} onChange={(event) => setDraft({ ...draft, setlist: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="演出记录"><textarea value={draft.note || ""} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></EditorField>
@@ -321,7 +331,7 @@ function mergeImportDraftIntoRecord(record: EventRecord, imported: ImportDraft):
 }
 
 function MediaEditorCard({
-  label, kind, items, state = "idle", error, multiple, onFiles, onRemove,
+  label, kind, items, state = "idle", error, multiple, cloudMediaSyncEnabled, onFiles, onRemove,
 }: {
   label: string;
   kind: MediaKind;
@@ -329,21 +339,54 @@ function MediaEditorCard({
   state?: MediaProcessState;
   error?: string;
   multiple?: boolean;
-  onFiles: (kind: MediaKind, files: FileList | null) => Promise<void>;
+  cloudMediaSyncEnabled: boolean;
+  onFiles: (kind: MediaKind, files: File[]) => Promise<void>;
   onRemove: (id: string) => void;
 }) {
-  const status = state === "processing" ? "正在处理…" : state === "error" ? "处理失败" : items.length ? `已就绪 · ${items.length} 张` : "尚未添加";
+  const cloudCount = items.filter((item) => Boolean(item.storagePath)).length;
+  const localPending = items.filter((item) => !item.storagePath && item.src.startsWith("data:")).length;
+  const status = state === "processing"
+    ? "本机正在处理…"
+    : state === "error"
+      ? "处理失败"
+      : !items.length
+        ? "尚未添加"
+        : localPending
+          ? cloudMediaSyncEnabled
+            ? `本机已准备 · ${localPending} 张待云端同步`
+            : `本机已准备 · ${items.length} 张`
+          : cloudCount === items.length
+            ? `云端已同步 · ${items.length} 张`
+            : cloudCount
+              ? `云端 ${cloudCount} · 其他 ${items.length - cloudCount}`
+              : `外部图片 · ${items.length} 张`;
+
   return <article className={`media-editor-card-v2 is-${state}`}>
     <header><strong>{label}</strong><span>{status}</span></header>
     <div className="media-editor-thumbs-v2">
       {items.length ? items.slice(0, 3).map((item) => <figure key={item.id}>
         <OverlayMedia media={item} alt={item.title || label} />
+        <i className="media-editor-sync-badge-v2">{item.storagePath ? "云端" : item.src.startsWith("data:") ? cloudMediaSyncEnabled ? "待同步" : "本机" : "外部"}</i>
         <button type="button" aria-label={`移除${label}`} onClick={() => onRemove(item.id)}><X /></button>
       </figure>) : <span className="media-editor-empty-v2"><ImagePlus />暂无{label}</span>}
       {items.length > 3 && <span className="media-editor-more-v2">+{items.length - 3}</span>}
     </div>
     <footer>
-      <label><Upload />{items.length && kind !== "livePhoto" ? "更换" : "选择图片"}<input type="file" accept="image/*" multiple={multiple} onChange={(event) => void onFiles(kind, event.target.files)} /></label>
+      <label>
+        <Upload />{items.length && kind !== "livePhoto" ? "更换" : "选择图片"}
+        <input
+          type="file"
+          accept="image/*"
+          multiple={multiple}
+          aria-label={`${label}选择图片`}
+          data-media-kind={kind}
+          onClick={(event) => { event.currentTarget.value = ""; }}
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files || []);
+            if (files.length) void onFiles(kind, files);
+          }}
+        />
+      </label>
       {error && <small>{error}</small>}
     </footer>
   </article>;
