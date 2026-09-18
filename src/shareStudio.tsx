@@ -56,6 +56,7 @@ interface ShareStudioProps {
   format: ShareFormat;
   setFormat: (format: ShareFormat) => void;
   mapSettings: MapConfig;
+  onOpenMapSettings: () => void;
   onClose: () => void;
 }
 
@@ -157,7 +158,7 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
   },
 };
 
-export function ShareStudio({ records, format, setFormat, mapSettings, onClose }: ShareStudioProps) {
+export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMapSettings, onClose }: ShareStudioProps) {
   const eligibleRecords = useMemo(
     () => records
       .slice()
@@ -572,7 +573,7 @@ function SharePreviewLayout({
     const model = buildCityModel(records, area, spec);
     return (
       <div className="share-layout-canvas share-layout-canvas-cities" style={rectStyle(area)}>
-        <ShareAmapMap records={records} mapSettings={mapSettings} rect={model.mapRect} origin={area} />
+        <ShareAmapMap records={records} mapSettings={mapSettings} rect={model.mapRect} origin={area} onOpenMapSettings={onOpenMapSettings} />
         <section className="share-city-poster-field" style={localRectStyle(model.listRect, area)}>
           <header className="share-city-summary">
             <strong>城市现场</strong>
@@ -599,14 +600,14 @@ function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec):
   if (!records.length) return [];
   const scale = spec.width / 1600;
   const gap = clamp(14 * scale, 10, 24);
-  const targetAspect = isLandscapeFormat(spec.format) ? 2.08 : 1.82;
-  const rects = buildFilledGridRects(
+  const targetAspect = isLandscapeFormat(spec.format) ? 2.05 : 1.72;
+  const rects = buildBalancedRowRects(
     records.length,
     area,
     gap,
     targetAspect,
-    isLandscapeFormat(spec.format) ? 6 : 5,
-    128 * scale,
+    isLandscapeFormat(spec.format) ? 5 : 4,
+    138 * scale,
   );
   return records.map((record, index) => ({ record, rect: rects[index] }));
 }
@@ -689,6 +690,68 @@ function rectStyle(rect: Rect): CSSProperties {
 
 function localRectStyle(rect: Rect, origin: Rect): CSSProperties {
   return { left: rect.x - origin.x, top: rect.y - origin.y, width: rect.width, height: rect.height };
+}
+
+function buildBalancedRowRects(
+  itemCount: number,
+  area: Rect,
+  gap: number,
+  targetAspect: number,
+  maxRows: number,
+  minHeight = 0,
+): Rect[] {
+  if (!itemCount) return [];
+  let bestRows = 1;
+  let bestScore = Number.POSITIVE_INFINITY;
+  for (let rows = 1; rows <= Math.min(itemCount, maxRows); rows += 1) {
+    const rowHeight = (area.height - gap * Math.max(0, rows - 1)) / rows;
+    if (rowHeight <= 0) continue;
+    const groups = partitionBalanced(itemCount, rows);
+    let aspectPenalty = 0;
+    let imbalancePenalty = 0;
+    for (const [start, end] of groups) {
+      const count = Math.max(1, end - start);
+      const cardWidth = (area.width - gap * Math.max(0, count - 1)) / count;
+      aspectPenalty += Math.abs(Math.log(Math.max(0.01, cardWidth / rowHeight / targetAspect)));
+      imbalancePenalty += Math.abs(count - itemCount / rows) * 0.04;
+    }
+    const heightPenalty = rowHeight < minHeight ? (minHeight - rowHeight) / Math.max(1, minHeight) * 1.8 : 0;
+    const score = aspectPenalty / groups.length + imbalancePenalty + heightPenalty;
+    if (score < bestScore) {
+      bestScore = score;
+      bestRows = rows;
+    }
+  }
+
+  const groups = partitionBalanced(itemCount, bestRows);
+  const rowHeight = (area.height - gap * Math.max(0, bestRows - 1)) / bestRows;
+  const rects: Rect[] = [];
+  groups.forEach(([start, end], row) => {
+    const count = Math.max(1, end - start);
+    const cardWidth = (area.width - gap * Math.max(0, count - 1)) / count;
+    for (let column = 0; column < count; column += 1) {
+      rects.push({
+        x: area.x + column * (cardWidth + gap),
+        y: area.y + row * (rowHeight + gap),
+        width: cardWidth,
+        height: rowHeight,
+      });
+    }
+  });
+  return rects;
+}
+
+function partitionBalanced(itemCount: number, groupCount: number): Array<[number, number]> {
+  const base = Math.floor(itemCount / groupCount);
+  const remainder = itemCount % groupCount;
+  const groups: Array<[number, number]> = [];
+  let start = 0;
+  for (let index = 0; index < groupCount; index += 1) {
+    const count = base + (index < remainder ? 1 : 0);
+    groups.push([start, start + count]);
+    start += count;
+  }
+  return groups;
 }
 
 function buildFilledGridRects(
@@ -972,11 +1035,13 @@ function ShareAmapMap({
   mapSettings,
   rect,
   origin,
+  onOpenMapSettings,
 }: {
   records: EventRecord[];
   mapSettings: MapConfig;
   rect: Rect;
   origin: Rect;
+  onOpenMapSettings: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [state, setState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
@@ -1034,7 +1099,7 @@ function ShareAmapMap({
     <section className="share-amap-panel" style={localRectStyle(rect, origin)}>
       <div className="share-amap-map" ref={hostRef} aria-label="高德地图城市足迹" />
       <header><b>高德城市路线</b><span>{resolvedCount ? `${resolvedCount} 个真实地点` : "AMap · 真实地理坐标"}</span></header>
-      {!configured ? <div className="share-amap-state"><b>需要高德地图</b><span>请先在设置中选择高德并配置 Web 端 JS API Key。</span></div> : null}
+      {!configured ? <div className="share-amap-state"><b>需要高德地图</b><span>请先在设置中选择高德并配置 Web 端 JS API Key。</span><button type="button" onClick={onOpenMapSettings}>去配置高德地图</button></div> : null}
       {configured && state === "loading" ? <div className="share-amap-state"><b>正在解析真实地点…</b><span>优先使用档案坐标，其余场馆由高德地理编码。</span></div> : null}
       {configured && state === "empty" ? <div className="share-amap-state"><b>暂无可定位地点</b><span>请补充城市、场馆或地址后再生成路线。</span></div> : null}
       {configured && state === "error" ? <div className="share-amap-state"><b>高德地图加载失败</b><span>请检查 Key、安全密钥与域名白名单。</span></div> : null}
@@ -1331,8 +1396,12 @@ async function drawTicket(
   context.fillStyle = tint;
   context.fillRect(slot.x, slot.y, slot.width, slot.height);
 
-  const posterWidth = Math.min(slot.width * 0.29, slot.height * 0.72);
-  const posterRect = { x: slot.x + 18, y: slot.y + 18, width: posterWidth, height: slot.height - 36 };
+  const inset = clamp(slot.height * 0.065, 12, 24);
+  const posterWidth = Math.min(
+    slot.width * 0.34,
+    Math.max(slot.width * 0.25, slot.height * 0.54),
+  );
+  const posterRect = { x: slot.x + inset, y: slot.y + inset, width: posterWidth, height: slot.height - inset * 2 };
   if (image) drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
   else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
   roundedPath(context, posterRect.x, posterRect.y, posterRect.width, posterRect.height, 10);
@@ -1340,20 +1409,24 @@ async function drawTicket(
   context.lineWidth = 1.5;
   context.stroke();
 
-  const copyX = posterRect.x + posterRect.width + 20;
-  const copyWidth = slot.x + slot.width - copyX - 18;
+  const copyX = posterRect.x + posterRect.width + inset;
+  const copyWidth = slot.x + slot.width - copyX - inset;
   context.fillStyle = "rgba(255,255,255,.86)";
-  roundedPath(context, copyX - 10, slot.y + 18, copyWidth + 10, slot.height - 36, 12);
+  roundedPath(context, copyX - inset * 0.5, slot.y + inset, copyWidth + inset * 0.5, slot.height - inset * 2, 12);
   context.fill();
+  const titleSize = clamp(slot.height * 0.105, 18, 36);
+  const artistSize = clamp(slot.height * 0.06, 12, 21);
+  const metaSize = clamp(slot.height * 0.052, 11, 18);
   context.fillStyle = "#15201f";
-  context.font = `900 ${Math.max(16, slot.height * 0.105)}px system-ui, sans-serif`;
-  context.fillText(trimText(context, record.title, copyWidth - 8), copyX, slot.y + slot.height * 0.34);
+  context.font = `900 ${titleSize}px system-ui, sans-serif`;
+  const titleLines = wrapTextLines(context, record.title, copyWidth - 8, 2);
+  titleLines.forEach((line, index) => context.fillText(line, copyX, slot.y + slot.height * (0.29 + index * 0.115)));
   context.fillStyle = "rgba(21,32,31,.66)";
-  context.font = `800 ${Math.max(10, slot.height * 0.055)}px system-ui, sans-serif`;
-  context.fillText(trimText(context, record.artists.join(" / ") || "艺人待补", copyWidth - 8), copyX, slot.y + slot.height * 0.48);
-  context.font = `750 ${Math.max(9, slot.height * 0.047)}px system-ui, sans-serif`;
-  context.fillText(trimText(context, `${record.date} · ${record.city || "城市待补"} · ${record.venue || "场馆待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.64);
-  context.fillText(trimText(context, `${record.seat || "座位待补"} · ${record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.78);
+  context.font = `800 ${artistSize}px system-ui, sans-serif`;
+  context.fillText(trimText(context, record.artists.join(" / ") || "艺人待补", copyWidth - 8), copyX, slot.y + slot.height * 0.55);
+  context.font = `750 ${metaSize}px system-ui, sans-serif`;
+  context.fillText(trimText(context, `${record.date} · ${record.city || "城市待补"} · ${record.venue || "场馆待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.70);
+  context.fillText(trimText(context, `${record.seat || "座位待补"} · ${record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.84);
   context.restore();
 
   roundedPath(context, slot.x, slot.y, slot.width, slot.height, Math.max(12, slot.height * 0.06));
@@ -1369,14 +1442,16 @@ async function drawTimelineCanvas(context: CanvasRenderingContext2D, bands: Time
     context.fill();
     context.strokeStyle = palette.border;
     context.stroke();
+    const titleSize = clamp(band.headerHeight * 0.42, 28, 58);
+    const metaSize = clamp(titleSize * 0.43, 13, 24);
     context.fillStyle = palette.accent;
-    context.fillRect(band.rect.x + 18, band.rect.y + 18, 5, band.rect.height - 36);
+    context.fillRect(band.rect.x + 18, band.rect.y + 18, 5, Math.max(24, band.headerHeight - 28));
     context.fillStyle = palette.text;
-    context.font = "900 34px system-ui, sans-serif";
-    context.fillText(band.label, band.rect.x + 38, band.rect.y + 54);
+    context.font = `900 ${titleSize}px system-ui, sans-serif`;
+    context.fillText(band.label, band.rect.x + 38, band.rect.y + 18 + titleSize);
     context.fillStyle = palette.muted;
-    context.font = "800 15px system-ui, sans-serif";
-    context.fillText(`${band.count} 场现场`, band.rect.x + 40, band.rect.y + 82);
+    context.font = `800 ${metaSize}px system-ui, sans-serif`;
+    context.fillText(`${band.count} 场现场`, band.rect.x + 42 + context.measureText(band.label).width, band.rect.y + 18 + titleSize);
     for (const slot of band.slots) await drawPoster(context, slot.record, slot.rect, palette, options.showDetails);
   }
 }
@@ -1607,6 +1682,31 @@ function drawBrandLockup(context: CanvasRenderingContext2D, x: number, y: number
 function roundedPath(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {
   context.beginPath();
   context.roundRect(x, y, width, height, radius);
+}
+
+function wrapTextLines(context: CanvasRenderingContext2D, value: string, maxWidth: number, maxLines: number) {
+  const text = value.trim();
+  if (!text) return [""];
+  const lines: string[] = [];
+  let remaining = text;
+  while (remaining && lines.length < maxLines) {
+    if (context.measureText(remaining).width <= maxWidth) {
+      lines.push(remaining);
+      remaining = "";
+      break;
+    }
+    let cut = remaining.length;
+    while (cut > 1 && context.measureText(remaining.slice(0, cut)).width > maxWidth) cut -= 1;
+    if (cut <= 1) {
+      lines.push(trimText(context, remaining, maxWidth));
+      remaining = "";
+      break;
+    }
+    lines.push(remaining.slice(0, cut).trim());
+    remaining = remaining.slice(cut).trim();
+  }
+  if (remaining && lines.length) lines[lines.length - 1] = trimText(context, `${lines[lines.length - 1]}${remaining}`, maxWidth);
+  return lines;
 }
 
 function trimText(context: CanvasRenderingContext2D, value: string, maxWidth: number) {
