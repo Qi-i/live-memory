@@ -14,7 +14,7 @@ export interface AMapMarkerInstance {
 }
 
 export interface AMapMapInstance {
-  add?: (items: AMapMarkerInstance[] | AMapMarkerInstance) => void;
+  add?: (items: unknown[] | unknown) => void;
   setFitView?: (...args: unknown[]) => void;
   setCenter?: (center: [number, number], immediately?: boolean, duration?: number) => void;
   setZoomAndCenter?: (zoom: number, center: [number, number], immediately?: boolean, duration?: number) => void;
@@ -22,9 +22,28 @@ export interface AMapMapInstance {
   destroy: () => void;
 }
 
+export interface AMapLngLatLike {
+  lng?: number;
+  lat?: number;
+  getLng?: () => number;
+  getLat?: () => number;
+}
+
+export interface AMapGeocoderResult {
+  info?: string;
+  geocodes?: Array<{ location?: AMapLngLatLike | [number, number] }>;
+}
+
+export interface AMapGeocoderInstance {
+  getLocation: (keyword: string, callback: (status: string, result: AMapGeocoderResult) => void) => void;
+}
+
 export interface AMapNamespace {
   Map: new (container: HTMLElement | string, options?: Record<string, unknown>) => AMapMapInstance;
   Marker: new (options?: AMapMarkerOptions) => AMapMarkerInstance;
+  Polyline?: new (options?: Record<string, unknown>) => unknown;
+  Geocoder?: new (options?: Record<string, unknown>) => AMapGeocoderInstance;
+  plugin?: (plugins: string | string[], callback: () => void) => void;
 }
 
 declare global {

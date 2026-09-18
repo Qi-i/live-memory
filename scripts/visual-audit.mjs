@@ -260,7 +260,19 @@ await archiveView("海报", ".archive-poster-card");
   await assertFixedPreviewFits("Wall");
   const wall = await assertSharePosters("Wall", ".share-layout-canvas-wall");
   const wallFill = wall.posters.reduce((sum, poster) => sum + poster.width * poster.height, 0) / (wall.canvas.width * wall.canvas.height);
-  if (wallFill < 0.72) throw new Error(`Adaptive wall layout leaves too much empty space: ${wallFill.toFixed(3)}`);
+  if (wallFill < 0.88) throw new Error(`Wall layout leaves too much empty space: ${wallFill.toFixed(3)}`);
+  const wallEnvelope = {
+    left: Math.min(...wall.posters.map((poster) => poster.left)),
+    right: Math.max(...wall.posters.map((poster) => poster.right)),
+    top: Math.min(...wall.posters.map((poster) => poster.top)),
+    bottom: Math.max(...wall.posters.map((poster) => poster.bottom)),
+  };
+  if (Math.abs(wallEnvelope.left - wall.canvas.x) > 3
+    || Math.abs(wallEnvelope.right - (wall.canvas.x + wall.canvas.width)) > 3
+    || Math.abs(wallEnvelope.top - wall.canvas.y) > 3
+    || Math.abs(wallEnvelope.bottom - (wall.canvas.y + wall.canvas.height)) > 3) {
+    throw new Error(`Wall composition does not meet all four content edges: ${JSON.stringify({ wallEnvelope, canvas: wall.canvas })}`);
+  }
   await page.screenshot({ path: `${outputDir}/06-share-wall-fit.png`, fullPage: true });
 
   await layoutButton("票根聚合").click();
@@ -271,8 +283,55 @@ await archiveView("海报", ".archive-poster-card");
     overflow: getComputedStyle(canvas).overflow,
   }));
   if (ticketShareGeometry.cardCount < 3 || ticketShareGeometry.backdropCount !== ticketShareGeometry.cardCount) throw new Error(`Ticket share layout is incomplete: ${JSON.stringify(ticketShareGeometry)}`);
+  const ticketReadability = await page.locator(".share-ticket-card").first().evaluate((card) => {
+    const rect = card.getBoundingClientRect();
+    const poster = card.querySelector(".share-ticket-poster")?.getBoundingClientRect();
+    const title = card.querySelector("h3");
+    const meta = card.querySelector("dl");
+    return {
+      aspect: rect.width / rect.height,
+      titleSize: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
+      metaSize: meta ? parseFloat(getComputedStyle(meta).fontSize) : 0,
+      posterRatio: poster ? poster.height / Math.max(1, poster.width) : 0,
+    };
+  });
+  if (ticketReadability.titleSize < 18 || ticketReadability.metaSize < 11 || ticketReadability.posterRatio < 1.05) {
+    throw new Error(`Ticket share readability regressed: ${JSON.stringify(ticketReadability)}`);
+  }
   await assertFixedPreviewFits("Ticket aggregation");
   await page.screenshot({ path: `${outputDir}/06b-share-ticket-aggregation.png`, fullPage: true });
+
+  for (const label of ["智能竖版", "横版 4:3", "横版 16:9", "竖版 3:4", "竖版 9:16", "方形 1:1"]) {
+    await page.locator(".share-format-control button").filter({ hasText: label }).click();
+    await page.waitForTimeout(80);
+    const ticketGeometry = await page.locator(".share-ticket-card").evaluateAll((cards) => cards.map((card) => {
+      const rect = card.getBoundingClientRect();
+      const posterNode = card.querySelector(".share-ticket-poster");
+      const poster = posterNode?.getBoundingClientRect();
+      const image = posterNode?.querySelector("img");
+      const title = card.querySelector("h3");
+      const meta = card.querySelector("dl");
+      const frameRatio = poster ? poster.width / Math.max(1, poster.height) : 0;
+      const sourceRatio = image instanceof HTMLImageElement && image.naturalWidth && image.naturalHeight
+        ? image.naturalWidth / image.naturalHeight
+        : null;
+      return {
+        width: rect.width,
+        height: rect.height,
+        frameRatio,
+        sourceRatio,
+        ratioError: sourceRatio ? Math.abs(Math.log(Math.max(0.01, frameRatio / sourceRatio))) : 0,
+        titleSize: title ? parseFloat(getComputedStyle(title).fontSize) : 0,
+        metaSize: meta ? parseFloat(getComputedStyle(meta).fontSize) : 0,
+      };
+    }));
+    if (!ticketGeometry.length
+      || ticketGeometry.some((item) => item.ratioError > 0.2 || item.titleSize < 18 || item.metaSize < 11 || item.height < 70)) {
+      throw new Error(`${label} ticket layout became unreadable or distorted: ${JSON.stringify(ticketGeometry)}`);
+    }
+    await assertFixedPreviewFits(`Ticket ${label}`);
+  }
+  await page.locator(".share-format-control button").filter({ hasText: "智能横版" }).click();
   await layoutButton("密集海报墙").click();
 
   await page.locator(".share-format-control button").filter({ hasText: "智能竖版" }).click();
@@ -284,6 +343,36 @@ await archiveView("海报", ".archive-poster-card");
   const landscapeSmart = await page.locator(".share-preview").boundingBox();
   if (!landscapeSmart || landscapeSmart.width <= landscapeSmart.height) throw new Error(`Smart landscape did not produce a landscape canvas: ${JSON.stringify(landscapeSmart)}`);
 
+  const fixedFormats = [
+    ["横版 4:3", 4 / 3],
+    ["横版 16:9", 16 / 9],
+    ["竖版 3:4", 3 / 4],
+    ["竖版 9:16", 9 / 16],
+    ["方形 1:1", 1],
+  ];
+  for (const [label, expectedRatio] of fixedFormats) {
+    await page.locator(".share-format-control button").filter({ hasText: label }).click();
+    await page.waitForTimeout(100);
+    const preview = await page.locator(".share-preview").boundingBox();
+    if (!preview || Math.abs(preview.width / preview.height - expectedRatio) > 0.025) {
+      throw new Error(`${label} ratio is wrong: ${JSON.stringify(preview)}`);
+    }
+    const fixedWall = await assertSharePosters(label, ".share-layout-canvas-wall");
+    const envelope = {
+      left: Math.min(...fixedWall.posters.map((poster) => poster.left)),
+      right: Math.max(...fixedWall.posters.map((poster) => poster.right)),
+      top: Math.min(...fixedWall.posters.map((poster) => poster.top)),
+      bottom: Math.max(...fixedWall.posters.map((poster) => poster.bottom)),
+    };
+    if (Math.abs(envelope.left - fixedWall.canvas.x) > 3
+      || Math.abs(envelope.right - (fixedWall.canvas.x + fixedWall.canvas.width)) > 3
+      || Math.abs(envelope.top - fixedWall.canvas.y) > 3
+      || Math.abs(envelope.bottom - (fixedWall.canvas.y + fixedWall.canvas.height)) > 3) {
+      throw new Error(`${label} wall does not fill all four edges: ${JSON.stringify({ envelope, canvas: fixedWall.canvas })}`);
+    }
+  }
+  await page.locator(".share-format-control button").filter({ hasText: "智能横版" }).click();
+
   const fitText = await page.locator(".share-preview-toolbar strong").textContent();
   await page.getByRole("button", { name: "放大预览", exact: true }).click();
   const zoomText = await page.locator(".share-preview-toolbar strong").textContent();
@@ -293,6 +382,10 @@ await archiveView("海报", ".archive-poster-card");
 
   await layoutButton("时间长卷").click();
   await page.locator(".share-timeline-band").first().waitFor({ state: "visible", timeout: 10000 });
+  const timelineTypography = await page.locator(".share-timeline-band > header b").evaluateAll((labels) => labels.map((label) => parseFloat(getComputedStyle(label).fontSize)));
+  if (!timelineTypography.length || timelineTypography.some((size) => size < 28)) {
+    throw new Error(`Timeline year labels are too small: ${timelineTypography.join(",")}`);
+  }
   await assertFixedPreviewFits("Timeline");
   await assertSharePosters("Timeline", ".share-layout-timeline .share-layout-canvas");
   await page.screenshot({ path: `${outputDir}/07-share-timeline.png`, fullPage: true });
@@ -305,7 +398,9 @@ await archiveView("海报", ".archive-poster-card");
   const median = regularAreas[Math.floor(regularAreas.length / 2)] || 1;
   if (hero.width <= 0 || hero.height <= 0 || median <= 0) throw new Error("Magazine layout did not render valid poster geometry");
   const magazineFill = magazine.posters.reduce((sum, poster) => sum + poster.width * poster.height, 0) / (magazine.canvas.width * magazine.canvas.height);
-  if (magazineFill < 0.48) throw new Error(`Magazine layout leaves too much empty space: ${magazineFill.toFixed(3)}`);
+  if (magazineFill < 0.72) throw new Error(`Magazine layout leaves too much empty space: ${magazineFill.toFixed(3)}`);
+  const magazineFeatureCount = await page.locator(".share-layout-canvas-magazine .share-layout-poster.is-feature").count();
+  if (magazine.posters.length >= 4 && magazineFeatureCount < 2) throw new Error(`Magazine did not create multiple feature posters: ${magazineFeatureCount}`);
   const magazineLeft = Math.min(...magazine.posters.map((poster) => poster.left));
   const magazineRight = Math.max(...magazine.posters.map((poster) => poster.right));
   const magazineTop = Math.min(...magazine.posters.map((poster) => poster.top));
@@ -318,14 +413,17 @@ await archiveView("海报", ".archive-poster-card");
   await page.screenshot({ path: `${outputDir}/08-share-magazine-dense.png`, fullPage: true });
 
   await layoutButton("城市路线").click();
-  await page.locator(".share-coordinate-field").waitFor({ state: "visible", timeout: 10000 });
-  const coordinateCopy = await page.locator(".share-coordinate-field").innerText();
-  if (!coordinateCopy.includes("非地图示意") || !coordinateCopy.includes("不绘制国界")) {
-    throw new Error("City route is missing the required non-map compliance label");
+  await page.locator(".share-amap-panel").waitFor({ state: "visible", timeout: 10000 });
+  if (await page.locator(".share-coordinate-field, .share-city-bands").count()) throw new Error("Legacy fabricated coordinate field is still rendered");
+  const cityPosterCount = await page.locator(".share-city-poster-grid .share-layout-poster").count();
+  if (cityPosterCount < 3) throw new Error(`City route poster field is too sparse: ${cityPosterCount}`);
+  const mapCopy = await page.locator(".share-amap-panel").innerText();
+  if (!mapCopy.includes("高德")) throw new Error(`City route does not identify the AMap surface: ${mapCopy}`);
+  if (mapCopy.includes("需要高德地图") && !mapCopy.includes("去配置高德地图")) {
+    throw new Error("City route missing-key state has no direct configuration action");
   }
-  if (await page.locator(".share-coordinate-field > i").count() < 1) throw new Error("City coordinate field has no city nodes");
   await assertFixedPreviewFits("City route");
-  await page.screenshot({ path: `${outputDir}/09-share-city-coordinate-field.png`, fullPage: true });
+  await page.screenshot({ path: `${outputDir}/09-share-city-amap.png`, fullPage: true });
 
   await page.getByRole("button", { name: "逐场选择", exact: true }).click();
   await page.locator(".share-selection-grid button").first().waitFor({ state: "visible", timeout: 10000 });
@@ -427,7 +525,7 @@ await archiveView("海报", ".archive-poster-card");
   await mobileShareButton.scrollIntoViewIfNeeded();
   await mobileShareButton.click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
-  await page.locator(".share-format-control button").filter({ hasText: "竖版 4:5" }).click();
+  await page.locator(".share-format-control button").filter({ hasText: "竖版 3:4" }).click();
   await page.locator(".share-preview-area.is-fixed").waitFor({ state: "visible", timeout: 10000 });
   await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 15000 });
   await assertFixedPreviewFits("Mobile share wall");

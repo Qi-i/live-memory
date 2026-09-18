@@ -183,6 +183,8 @@ export function ArchivePage({
         records={visibleRecords}
         format={shareFormat}
         setFormat={setShareFormat}
+        mapSettings={settings.map}
+        onOpenMapSettings={onOpenMapSettings}
         onClose={() => setShareMode(false)}
       />
     );
