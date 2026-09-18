@@ -617,16 +617,15 @@ function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec):
 function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
   const media = primaryMedia(slot.record);
   const src = useCachedMediaSrc(media);
-  const posterWidth = Math.min(
-    slot.rect.width * 0.34,
-    Math.max(slot.rect.width * 0.25, slot.rect.height * 0.54),
-  );
+  const ticketPad = clamp(slot.rect.height * 0.065, 10, 22);
+  const posterHeight = Math.max(1, slot.rect.height - ticketPad * 2);
+  const posterWidth = Math.min(slot.rect.width * 0.34, posterHeight * recordPosterRatio(slot.record));
   const style = {
     ...localRectStyle(slot.rect, origin),
     "--ticket-a": slot.record.colors[0] || "#172229",
     "--ticket-b": slot.record.colors[1] || "#47645d",
-    "--ticket-poster-width": `${Math.max(84, posterWidth)}px`,
-    "--ticket-pad": `${clamp(slot.rect.height * 0.065, 10, 22)}px`,
+    "--ticket-poster-width": `${Math.max(64, posterWidth)}px`,
+    "--ticket-pad": `${ticketPad}px`,
     "--ticket-title-size": `${clamp(slot.rect.height * 0.105, 18, 34)}px`,
     "--ticket-artist-size": `${clamp(slot.rect.height * 0.06, 12, 20)}px`,
     "--ticket-meta-size": `${clamp(slot.rect.height * 0.052, 11, 18)}px`,
@@ -1439,11 +1438,9 @@ async function drawTicket(
   context.fillRect(slot.x, slot.y, slot.width, slot.height);
 
   const inset = clamp(slot.height * 0.065, 12, 24);
-  const posterWidth = Math.min(
-    slot.width * 0.34,
-    Math.max(slot.width * 0.25, slot.height * 0.54),
-  );
-  const posterRect = { x: slot.x + inset, y: slot.y + inset, width: posterWidth, height: slot.height - inset * 2 };
+  const posterHeight = Math.max(1, slot.height - inset * 2);
+  const posterWidth = Math.min(slot.width * 0.34, posterHeight * recordPosterRatio(record));
+  const posterRect = { x: slot.x + inset, y: slot.y + inset, width: posterWidth, height: posterHeight };
   if (image) drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
   else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
   roundedPath(context, posterRect.x, posterRect.y, posterRect.width, posterRect.height, 10);
