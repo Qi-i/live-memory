@@ -223,7 +223,7 @@ try {
   assert.doesNotMatch(appController, /document\.addEventListener\("visibilitychange", onVisible\)/);
   assert.match(archive, /resolveMarkerPosterSources/);
   assert.match(archive, /placeGroupMapFingerprint/);
-  assert.match(archive, /resolveMediaSource\(primaryMedia\(record\)\)/);
+  assert.match(archive, /loadMediaImage\(media\)/, "Map marker posters must be decoded through the shared media cache before marker mounting");
   assert.doesNotMatch(archive, /map\.setFitView/);
   assert.match(archive, /resizeEnable:\s*false/);
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
