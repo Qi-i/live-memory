@@ -540,8 +540,11 @@
 .share-preview-empty { position: absolute; inset: var(--share-content-y) 54px 66px; display: grid; place-items: center; color: var(--share-muted); font-size: 24px; font-weight: 900; }
 .share-preview-preparing {
   position: absolute;
-  inset: var(--share-content-y) var(--share-content-x) calc(var(--share-content-height) * -1 + var(--share-canvas-height) - var(--share-content-y));
+  top: var(--share-content-y);
+  left: var(--share-content-x);
   z-index: 8;
+  width: var(--share-content-width);
+  height: var(--share-content-height);
   display: grid;
   place-items: center;
   border: 1px solid color-mix(in srgb, var(--share-text) 10%, transparent);
