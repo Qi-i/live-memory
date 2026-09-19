@@ -38,7 +38,7 @@ assert.match(archive, /provider === "amap"/);
 assert.match(archive, /amap-map-host/);
 assert.match(archive, /resolveMarkerPosterSources/);
 assert.match(archive, /placeGroupMapFingerprint/);
-assert.match(archive, /resolveMediaSource\(primaryMedia\(record\)\)/);
+assert.match(archive, /loadMediaImage\(media\)/, "Map marker posters must be decoded through the shared media cache before marker mounting");
 assert.match(archive, /resizeEnable:\s*false/);
 assert.doesNotMatch(archive, /map\.setFitView/);
 assert.match(archive, /配置高德 Key/);
