@@ -1,6 +1,5 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="980" height="280" viewBox="0 0 980 280" role="img" aria-label="Live Memory">
-  <rect width="980" height="280" rx="34" fill="#F7F7F2"/>
-  <g transform="translate(22 -8) scale(.56)">
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="240" viewBox="0 0 920 240" role="img" aria-label="Live Memory">
+  <g transform="translate(6 -22) scale(.54)">
   <defs>
     <linearGradient id="lm-beam" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0" stop-color="#F7E8C8"/>
@@ -24,6 +23,5 @@
       <path d="M340 405c2-31 13-47 28-47s26 16 28 47Z"/>
     </g>
   </g></g>
-  <text x="320" y="147" fill="#0A4A40" font-size="78" font-weight="760" letter-spacing="-2.2" font-family="Inter, Arial, Helvetica, sans-serif">Live Memory</text>
-  <text x="324" y="188" fill="#73877E" font-size="20" font-weight="700" letter-spacing="5" font-family="Inter, Arial, Helvetica, sans-serif">CONCERT ARCHIVE · 现场记</text>
+  <text x="286" y="140" fill="#0A4A40" font-size="82" font-weight="760" letter-spacing="-2.4" font-family="Inter, Arial, Helvetica, sans-serif">Live Memory</text>
 </svg>

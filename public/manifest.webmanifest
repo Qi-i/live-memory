@@ -1,12 +1,12 @@
 {
-  "name": "现场记 - Live Memory",
-  "short_name": "现场记",
+  "name": "Live Memory · 现场记",
+  "short_name": "Live Memory",
   "description": "保存演出海报、票根、座位图和现场照片的私人记忆档案",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
-  "background_color": "#f7f7ef",
-  "theme_color": "#dfff4f",
+  "background_color": "#f7f7f2",
+  "theme_color": "#0a4a40",
   "icons": [
     {
       "src": "./icon.svg",
