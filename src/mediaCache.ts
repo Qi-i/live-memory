@@ -35,9 +35,19 @@ function isInlineSource(src: string) {
 }
 
 function mediaIdentity(asset: MediaAsset) {
-  if (asset.storagePath) return `storage:${asset.storagePath}:${asset.updatedAt || ""}`;
+  // Storage paths are immutable per media asset in Live Memory. Signed URLs and
+  // sync timestamps can rotate without changing the underlying image, so the
+  // persistent cache key must remain stable across views and cloud refreshes.
+  if (asset.storagePath) return `storage:${asset.storagePath}`;
   if (asset.src && !isInlineSource(asset.src)) return `url:${asset.src}`;
   return "";
+}
+
+export function peekResolvedMediaSource(asset?: MediaAsset) {
+  if (!asset) return "";
+  if (asset.src && isInlineSource(asset.src)) return asset.src;
+  const identity = mediaIdentity(asset);
+  return identity ? objectUrls.get(identity) || "" : "";
 }
 
 function hashIdentity(value: string) {
@@ -145,13 +155,12 @@ export async function resolveMediaSource(asset?: MediaAsset, allowNetwork = true
 }
 
 export function useCachedMediaSrc(asset?: MediaAsset) {
-  const inline = asset?.src && isInlineSource(asset.src) ? asset.src : "";
-  const [src, setSrc] = useState(inline);
+  const [src, setSrc] = useState(() => peekResolvedMediaSource(asset));
 
   useEffect(() => {
     let active = true;
     const resolve = () => {
-      setSrc(asset?.src && isInlineSource(asset.src) ? asset.src : "");
+      setSrc(peekResolvedMediaSource(asset));
       if (!asset) return;
       void resolveMediaSource(asset).then((next) => {
         if (active) setSrc(next);
