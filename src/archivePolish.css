@@ -463,11 +463,22 @@
     right: 12px;
     bottom: 9px;
     left: 91px;
+    grid-column: auto;
+    grid-row: auto;
+    align-self: auto;
     justify-content: flex-start;
     gap: 8px;
+    text-align: left;
   }
-  .archive-page .archive-list-ticket > span { font-size: 11.5px; }
-  .archive-page .archive-list-ticket > small { font-size: 10px; }
+  .archive-page .archive-list-ticket > span {
+    flex: 0 0 auto;
+    font-size: 11.5px;
+  }
+  .archive-page .archive-list-ticket > small {
+    min-width: 64px;
+    flex: 1 1 auto;
+    font-size: 10px;
+  }
 }
 @media (max-width: 420px) {
   .archive-ticket-line {
