@@ -809,9 +809,17 @@ function buildFilledGridRects(
   return rects;
 }
 
+const SHARE_POSTER_MAX_FRAME_ASPECT = 0.86;
+
+function posterLayoutRatio(record: EventRecord) {
+  // Concert posters are overwhelmingly portrait artwork. A share slot wider than
+  // this starts cropping the title/logo area into a horizontal strip.
+  return Math.min(recordPosterRatio(record), SHARE_POSTER_MAX_FRAME_ASPECT);
+}
+
 function partitionByAspect(records: EventRecord[], rowCount: number): Array<[number, number]> {
   if (rowCount <= 1) return [[0, records.length]];
-  const ratios = records.map(recordPosterRatio);
+  const ratios = records.map(posterLayoutRatio);
   const groups: Array<[number, number]> = [];
   let start = 0;
   for (let row = 0; row < rowCount; row += 1) {
@@ -837,6 +845,33 @@ function partitionByAspect(records: EventRecord[], rowCount: number): Array<[num
   return groups;
 }
 
+function fitPosterRowRatios(records: EventRecord[], targetRatioSum: number) {
+  const ratios = records.map(posterLayoutRatio);
+  const baseSum = ratios.reduce((sum, ratio) => sum + ratio, 0);
+  if (!ratios.length || baseSum <= 0) return ratios;
+
+  // Making a frame narrower only increases its portrait character, so shrinking
+  // the row is always safe. Expansion is capped to prevent any poster becoming
+  // a landscape strip.
+  if (targetRatioSum <= baseSum) {
+    const scale = targetRatioSum / baseSum;
+    return ratios.map((ratio) => ratio * scale);
+  }
+
+  let remaining = targetRatioSum - baseSum;
+  for (let pass = 0; pass < 4 && remaining > 0.0001; pass += 1) {
+    const headrooms = ratios.map((ratio) => Math.max(0, SHARE_POSTER_MAX_FRAME_ASPECT - ratio));
+    const totalHeadroom = headrooms.reduce((sum, value) => sum + value, 0);
+    if (totalHeadroom <= 0.0001) break;
+    const distributed = Math.min(remaining, totalHeadroom);
+    ratios.forEach((ratio, index) => {
+      ratios[index] = ratio + distributed * headrooms[index] / totalHeadroom;
+    });
+    remaining -= distributed;
+  }
+  return ratios;
+}
+
 function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length || area.width <= 0 || area.height <= 0) return [];
   const scale = spec.width / 1600;
@@ -850,20 +885,26 @@ function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
     const rowHeight = (area.height - gap * Math.max(0, rows - 1)) / rows;
     if (rowHeight <= 38) continue;
     const groups = partitionByAspect(records, rows);
-    let distortion = 0;
+    let adjustmentPenalty = 0;
     let narrowPenalty = 0;
-    let extremePenalty = 0;
+    let stripPenalty = 0;
     for (const [start, end] of groups) {
-      const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
-      const availableWidth = area.width - gap * Math.max(0, end - start - 1);
-      const naturalWidth = ratioSum * rowHeight;
-      const rowScale = availableWidth / Math.max(1, naturalWidth);
-      distortion += Math.abs(Math.log(Math.max(0.01, rowScale)));
-      if (rowScale < 0.72 || rowScale > 1.38) extremePenalty += Math.abs(1 - rowScale) * 2.2;
-      const smallest = Math.min(...records.slice(start, end).map((record) => recordPosterRatio(record) * rowHeight * rowScale));
+      const rowRecords = records.slice(start, end);
+      const availableWidth = area.width - gap * Math.max(0, rowRecords.length - 1);
+      const targetRatioSum = availableWidth / Math.max(1, rowHeight);
+      const baseSum = rowRecords.reduce((sum, record) => sum + posterLayoutRatio(record), 0);
+      const maxSum = rowRecords.length * SHARE_POSTER_MAX_FRAME_ASPECT;
+      const fitted = fitPosterRowRatios(rowRecords, targetRatioSum);
+      const usedWidth = fitted.reduce((sum, ratio) => sum + ratio * rowHeight, 0);
+      adjustmentPenalty += Math.abs(Math.log(Math.max(0.01, Math.min(targetRatioSum, maxSum) / Math.max(0.01, baseSum))));
+      if (targetRatioSum > maxSum) {
+        stripPenalty += (targetRatioSum - maxSum) / Math.max(0.01, targetRatioSum) * 8;
+      }
+      const smallest = Math.min(...fitted.map((ratio) => ratio * rowHeight));
       if (smallest < 72 * scale) narrowPenalty += (72 * scale - smallest) / Math.max(1, 72 * scale);
+      if (usedWidth > availableWidth + 1) stripPenalty += (usedWidth - availableWidth) / Math.max(1, availableWidth) * 4;
     }
-    const score = distortion / groups.length + extremePenalty + narrowPenalty * 0.45;
+    const score = adjustmentPenalty / groups.length + stripPenalty + narrowPenalty * 0.35;
     if (score < bestScore) {
       bestScore = score;
       bestRows = rows;
@@ -875,18 +916,18 @@ function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
   const slots: PosterSlot[] = [];
   let y = area.y;
   bestGroups.forEach(([start, end]) => {
-    const availableWidth = area.width - gap * Math.max(0, end - start - 1);
-    const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
-    const rowScale = availableWidth / Math.max(1, ratioSum * rowHeight);
-    let x = area.x;
-    for (let index = start; index < end; index += 1) {
-      const isLast = index === end - 1;
-      const width = isLast
-        ? area.x + area.width - x
-        : recordPosterRatio(records[index]) * rowHeight * rowScale;
-      slots.push({ record: records[index], rect: { x, y, width: Math.max(1, width), height: rowHeight } });
+    const rowRecords = records.slice(start, end);
+    const availableWidth = area.width - gap * Math.max(0, rowRecords.length - 1);
+    const targetRatioSum = availableWidth / Math.max(1, rowHeight);
+    const fitted = fitPosterRowRatios(rowRecords, targetRatioSum);
+    const posterWidth = fitted.reduce((sum, ratio) => sum + ratio * rowHeight, 0);
+    const usedWidth = posterWidth + gap * Math.max(0, rowRecords.length - 1);
+    let x = area.x + Math.max(0, (area.width - usedWidth) / 2);
+    rowRecords.forEach((record, index) => {
+      const width = Math.max(1, fitted[index] * rowHeight);
+      slots.push({ record, rect: { x, y, width, height: rowHeight } });
       x += width + gap;
-    }
+    });
     y += rowHeight + gap;
   });
   return slots;
