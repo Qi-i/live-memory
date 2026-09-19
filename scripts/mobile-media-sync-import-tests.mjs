@@ -63,6 +63,22 @@ try {
   assert.equal(supabase.recordsSemanticallyEqual(baseRecord, sameCloud, false), true);
   assert.equal(supabase.recordsSemanticallyEqual(baseRecord, { ...sameCloud, venue: "另一个场馆" }, false), false);
 
+  const metadataOnlyDifference = {
+    ...sameCloud,
+    createdAt: "2026-08-01T00:00:00.000Z",
+    mediaTombstones: [{ id: "old-media", storagePath: "owner/r1/old-media.jpg", deletedAt: "2026-09-15T11:00:00.000Z" }],
+  };
+  assert.equal(
+    supabase.recordsSemanticallyEqual(baseRecord, metadataOnlyDifference, false),
+    true,
+    "Media tombstones and record creation metadata must not create a text sync conflict",
+  );
+  assert.deepEqual(supabase.syncConflictDiffFields(baseRecord, metadataOnlyDifference), []);
+  assert.deepEqual(
+    supabase.syncConflictDiffFields(baseRecord, { ...sameCloud, venue: "另一个场馆", price: 880 }),
+    ["场馆", "票价"],
+  );
+
   const localWithUploadedPoster = {
     ...baseRecord,
     media: [{

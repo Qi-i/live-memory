@@ -4,6 +4,14 @@ import type { AppSettings, EventRecord } from "./domain";
 import type { SyncConflict } from "./supabase";
 import { resolveAllConflicts, resolveSyncConflict } from "./supabase";
 
+function formatConflictTime(value: string) {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const base = date.toLocaleString("zh-CN");
+  const ms = String(date.getMilliseconds()).padStart(3, "0");
+  return date.getMilliseconds() ? `${base}.${ms}` : base;
+}
+
 export function SyncConflictDialog({
   conflicts,
   settings,
@@ -77,9 +85,15 @@ export function SyncConflictDialog({
         <div>
           {remaining.map((conflict) => (
             <article key={`${conflict.source}:${conflict.recordId}`}>
-              <strong>{conflict.title}</strong>
-              <p>本地：{new Date(conflict.localUpdatedAt).toLocaleString("zh-CN")}<br />云端：{new Date(conflict.cloudUpdatedAt).toLocaleString("zh-CN")}</p>
-              <div>
+              <div className="conflict-record-copy-v2">
+                <strong>{conflict.title}</strong>
+                <span>实际差异：{conflict.diffFields.length ? conflict.diffFields.join("、") : "记录内容"}</span>
+                {conflict.localUpdatedAt === conflict.cloudUpdatedAt
+                  ? <small>两个版本时间戳完全一致，无法用时间判断来源；仅在内容确实不同时才需要选择。</small>
+                  : null}
+              </div>
+              <p>本地：{formatConflictTime(conflict.localUpdatedAt)}<br />云端：{formatConflictTime(conflict.cloudUpdatedAt)}</p>
+              <div className="conflict-actions-v2">
                 <button className="button primary" disabled={working} type="button" onClick={() => void resolveOne(conflict, "local")}>保留本地</button>
                 <button className="button ghost" disabled={working} type="button" onClick={() => void resolveOne(conflict, "cloud")}>保留云端</button>
               </div>

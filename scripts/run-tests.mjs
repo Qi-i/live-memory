@@ -143,6 +143,9 @@ try {
   const shareStudio = await readFile(new URL("../src/shareStudio.tsx", import.meta.url), "utf8");
   const shareStudioCss = await readFile(new URL("../src/shareStudio.css", import.meta.url), "utf8");
   const mediaCache = await readFile(new URL("../src/mediaCache.ts", import.meta.url), "utf8");
+  const syncConflictDialog = await readFile(new URL("../src/syncConflictDialog.tsx", import.meta.url), "utf8");
+  const overlaysCss = await readFile(new URL("../src/overlays.css", import.meta.url), "utf8");
+  const supabaseSource = await readFile(new URL("../src/supabase.ts", import.meta.url), "utf8");
   const emailLoginMigration = await readFile(new URL("../supabase/migrations/012_email_login_identifier.sql", import.meta.url), "utf8");
 
   assert.equal(appEntry.trim(), 'export { default } from "./AppRoot";');
@@ -218,6 +221,11 @@ try {
   assert.match(mediaCache, /export async function preloadPrimaryRecordMedia/);
   assert.doesNotMatch(mediaCache, /storage:\$\{asset\.storagePath\}:\$\{asset\.updatedAt/);
   assert.match(appController, /preloadRecordMedia/);
+  assert.match(supabaseSource, /recordsSemanticallyEqual\(local, cloud, false\)[\s\S]*mergeMediaState\(local, cloud\)[\s\S]*continue;/);
+  assert.match(supabaseSource, /diffFields:\s*syncConflictDiffFields\(local, cloud\)/);
+  assert.match(syncConflictDialog, /实际差异：/);
+  assert.match(syncConflictDialog, /时间戳完全一致/);
+  assert.match(overlaysCss, /\.conflict-record-copy-v2/);
   assert.match(appController, /CustomEvent<\{ storagePath\?: string \}>/);
   assert.doesNotMatch(appController, /window\.addEventListener\("focus"/);
   assert.doesNotMatch(appController, /document\.addEventListener\("visibilitychange", onVisible\)/);
