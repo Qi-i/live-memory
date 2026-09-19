@@ -318,19 +318,18 @@ export function useAppController() {
 
     void refresh(false);
     const interval = window.setInterval(() => void refresh(false), MEDIA_REFRESH_INTERVAL);
-    const onVisible = () => { if (document.visibilityState === "visible") void refresh(false); };
     const onOnline = () => void refresh(false);
     const onMediaError = (event: Event) => {
       const storagePath = (event as CustomEvent<{ storagePath?: string }>).detail?.storagePath;
       void refresh(true, storagePath);
     };
-    document.addEventListener("visibilitychange", onVisible);
+    // Returning from a background tab must not rotate media URLs or repaint every
+    // image. Refresh only on the long interval, reconnect, or an actual media error.
     window.addEventListener("online", onOnline);
     window.addEventListener(MEDIA_REFRESH_EVENT, onMediaError);
     return () => {
       cancelled = true;
       window.clearInterval(interval);
-      document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
       window.removeEventListener(MEDIA_REFRESH_EVENT, onMediaError);
     };
@@ -341,17 +340,14 @@ export function useAppController() {
     const check = () => { if (document.visibilityState === "visible") void checkRemoteUpdates(true); };
     const initial = window.setTimeout(check, 1800);
     const interval = window.setInterval(check, REMOTE_CHECK_INTERVAL);
-    const onVisible = () => { if (document.visibilityState === "visible") check(); };
     const onOnline = () => void checkRemoteUpdates(false);
-    window.addEventListener("focus", check);
+    // Focus/visibility changes are not data changes. Do not rebuild archive/map
+    // state merely because the user switched windows or returned to the tab.
     window.addEventListener("online", onOnline);
-    document.addEventListener("visibilitychange", onVisible);
     return () => {
       window.clearTimeout(initial);
       window.clearInterval(interval);
-      window.removeEventListener("focus", check);
       window.removeEventListener("online", onOnline);
-      document.removeEventListener("visibilitychange", onVisible);
     };
   }, [access.user, isGuest, settings.supabase.ownerKey, settings.supabase.url]);
 
