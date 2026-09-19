@@ -424,15 +424,16 @@
 
   /* List becomes a compact information card: date | title | artist | place | ticket. */
   .archive-page .archive-list button {
+    position: relative;
     grid-template-columns: 70px minmax(0, 1fr);
-    grid-template-rows: auto auto auto auto;
+    grid-template-rows: auto auto auto;
     gap: 3px 9px;
-    min-height: 108px;
-    padding: 11px 12px;
+    min-height: 118px;
+    padding: 11px 12px 31px;
   }
   .archive-page .archive-list button > span:first-child {
     grid-column: 1;
-    grid-row: 1 / span 4;
+    grid-row: 1 / span 3;
     align-self: start;
     padding-top: 2px;
     color: #0b8f78;
@@ -458,8 +459,10 @@
     line-height: 1.3;
   }
   .archive-page .archive-list-ticket {
-    grid-column: 2;
-    grid-row: 4;
+    position: absolute;
+    right: 12px;
+    bottom: 9px;
+    left: 91px;
     justify-content: flex-start;
     gap: 8px;
   }
