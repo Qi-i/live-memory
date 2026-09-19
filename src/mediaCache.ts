@@ -5,6 +5,7 @@ const CACHE_PREFIX = "live-memory-media-v3";
 const LEGACY_CACHE_NAMES = ["live-memory-media-v2"];
 const objectUrls = new Map<string, string>();
 const pendingSources = new Map<string, Promise<string>>();
+const decodedImages = new Map<string, Promise<HTMLImageElement | null>>();
 const MEDIA_CACHE_SCOPE_EVENT = "live-memory:media-cache-scope";
 let cleanupRegistered = false;
 let mediaCacheScope = "anonymous";
@@ -17,6 +18,7 @@ function resetObjectUrls() {
   objectUrls.forEach((url) => URL.revokeObjectURL(url));
   objectUrls.clear();
   pendingSources.clear();
+  decodedImages.clear();
 }
 
 export function setMediaCacheScope(scope: string) {
@@ -35,9 +37,19 @@ function isInlineSource(src: string) {
 }
 
 function mediaIdentity(asset: MediaAsset) {
-  if (asset.storagePath) return `storage:${asset.storagePath}:${asset.updatedAt || ""}`;
+  // Storage paths are immutable per media asset in Live Memory. Signed URLs and
+  // sync timestamps can rotate without changing the underlying image, so the
+  // persistent cache key must remain stable across views and cloud refreshes.
+  if (asset.storagePath) return `storage:${asset.storagePath}`;
   if (asset.src && !isInlineSource(asset.src)) return `url:${asset.src}`;
   return "";
+}
+
+export function peekResolvedMediaSource(asset?: MediaAsset) {
+  if (!asset) return "";
+  if (asset.src && isInlineSource(asset.src)) return asset.src;
+  const identity = mediaIdentity(asset);
+  return identity ? objectUrls.get(identity) || "" : "";
 }
 
 function hashIdentity(value: string) {
@@ -145,13 +157,12 @@ export async function resolveMediaSource(asset?: MediaAsset, allowNetwork = true
 }
 
 export function useCachedMediaSrc(asset?: MediaAsset) {
-  const inline = asset?.src && isInlineSource(asset.src) ? asset.src : "";
-  const [src, setSrc] = useState(inline);
+  const [src, setSrc] = useState(() => peekResolvedMediaSource(asset));
 
   useEffect(() => {
     let active = true;
     const resolve = () => {
-      setSrc(asset?.src && isInlineSource(asset.src) ? asset.src : "");
+      setSrc(peekResolvedMediaSource(asset));
       if (!asset) return;
       void resolveMediaSource(asset).then((next) => {
         if (active) setSrc(next);
@@ -180,6 +191,27 @@ export function mediaPreloadPlan(limit = 80, constrained?: boolean) {
   };
 }
 
+export async function preloadPrimaryRecordMedia(records: EventRecord[], workers = 6) {
+  const unique = new Map<string, MediaAsset>();
+  for (const record of records) {
+    const asset = record.media.find((item) => item.kind === "poster") || record.media[0];
+    if (!asset) continue;
+    const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
+    if (!unique.has(identity)) unique.set(identity, asset);
+  }
+
+  const queue = Array.from(unique.values());
+  let cursor = 0;
+  const tasks = Array.from({ length: Math.min(Math.max(1, workers), queue.length) }, async () => {
+    while (cursor < queue.length) {
+      const asset = queue[cursor];
+      cursor += 1;
+      await loadMediaImage(asset).catch(() => null);
+    }
+  });
+  await Promise.all(tasks);
+}
+
 export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
   const plan = mediaPreloadPlan(limit);
   const unique = new Map<string, MediaAsset>();
@@ -206,16 +238,33 @@ export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
 
 export async function loadMediaImage(asset?: MediaAsset) {
   if (!asset) return null;
-  const src = await resolveMediaSource(asset);
-  if (!src) return null;
-  return new Promise<HTMLImageElement | null>((resolve) => {
-    const image = new Image();
-    if (!isInlineSource(src)) image.crossOrigin = "anonymous";
-    image.decoding = "async";
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = src;
-  });
+  const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
+  const existing = decodedImages.get(identity);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const src = await resolveMediaSource(asset);
+    if (!src) return null;
+    return new Promise<HTMLImageElement | null>((resolve) => {
+      const image = new Image();
+      if (!isInlineSource(src)) image.crossOrigin = "anonymous";
+      image.decoding = "async";
+      image.onload = async () => {
+        try {
+          await image.decode?.();
+        } catch {
+          // onload already proves the image is renderable.
+        }
+        resolve(image);
+      };
+      image.onerror = () => resolve(null);
+      image.src = src;
+    });
+  })();
+  decodedImages.set(identity, task);
+  const image = await task;
+  if (!image) decodedImages.delete(identity);
+  return image;
 }
 
 export async function clearPersistentMediaCache() {

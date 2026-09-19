@@ -13,7 +13,9 @@ assert.match(archive, /hoveredPlaceKey/, "Map and ranking must share hover state
 assert.match(archive, /venue-place-picker/, "First place click must open a place picker");
 assert.match(archive, /amap-poster-marker/, "AMap markers must render poster-stack content");
 assert.match(archive, /amap-poster-count/, "Poster-stack markers must expose the number of shows at that place");
-assert.match(archive, /image\.loading\s*=\s*"lazy"/, "Poster-stack thumbnails must lazy-load to reduce map startup work");
+assert.match(archive, /resolveMarkerPosterSources/, "Poster-stack thumbnails must be resolved through the shared media cache before markers mount");
+assert.match(archive, /loadMediaImage\(media\)/, "Map marker posters must be decoded through the shared media cache before marker mounting");
+assert.doesNotMatch(archive, /image\.loading\s*=\s*"lazy"/, "Map markers must not start a second progressive lazy-loading sequence after the archive already loaded posters");
 assert.match(archive, /addEventListener\("error"[\s\S]*is-fallback/, "Broken marker thumbnails must fall back instead of showing a broken image");
 assert.match(archive, /content:\s*markerContent|content:\s*build/, "AMap marker must use custom HTML content");
 assert.doesNotMatch(archive, /marker\.on\?\("click",\s*\(\)\s*=>\s*onOpen\(record\)\)/, "Map marker click must not directly open record detail");

@@ -38,7 +38,7 @@ import type {
   MediaAsset,
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
-import { useCachedMediaSrc } from "./mediaCache";
+import { loadMediaImage, resolveMediaSource, useCachedMediaSrc } from "./mediaCache";
 import { loadAmap, type AMapMapInstance } from "./amap";
 import "./archiveContextMenu.css";
 export type { ShareFormat } from "./shareStudio";
@@ -583,7 +583,33 @@ function placeHeatColor(heat: number) {
   return `hsl(${hue} ${saturation}% ${lightness}%)`;
 }
 
-function buildPosterMarkerContent(group: PlaceGroup) {
+function placeGroupMapFingerprint(groups: PlaceGroup[]) {
+  return groups.map((group) => {
+    const point = group.point ? `${group.point[0].toFixed(5)},${group.point[1].toFixed(5)}` : "none";
+    const posters = group.records.slice(0, 3).map((record) => {
+      const poster = primaryMedia(record);
+      return `${record.id}:${poster?.storagePath || poster?.id || ""}`;
+    }).join(",");
+    return `${group.key}:${group.count}:${point}:${posters}`;
+  }).join("|");
+}
+
+async function resolveMarkerPosterSources(groups: PlaceGroup[]) {
+  const sources = new Map<string, string>();
+  const records = new Map<string, EventRecord>();
+  for (const group of groups) {
+    for (const record of group.records.slice(0, 3)) records.set(record.id, record);
+  }
+  await Promise.all(Array.from(records.values()).map(async (record) => {
+    const media = primaryMedia(record);
+    const image = await loadMediaImage(media).catch(() => null);
+    const source = image?.src || await resolveMediaSource(media).catch(() => "");
+    if (source) sources.set(record.id, source);
+  }));
+  return sources;
+}
+
+function buildPosterMarkerContent(group: PlaceGroup, posterSources: Map<string, string>) {
   const markerContent = document.createElement("button");
   markerContent.type = "button";
   markerContent.className = "amap-poster-marker";
@@ -600,12 +626,11 @@ function buildPosterMarkerContent(group: PlaceGroup) {
     const frame = document.createElement("span");
     frame.className = "amap-poster-layer";
     frame.style.setProperty("--poster-index", String(index));
-    const poster = primaryMedia(record);
-    if (poster?.src) {
+    const source = posterSources.get(record.id) || "";
+    if (source) {
       const image = document.createElement("img");
-      image.src = poster.src;
+      image.src = source;
       image.alt = "";
-      image.loading = "lazy";
       image.decoding = "async";
       image.addEventListener("error", () => {
         image.remove();
@@ -614,6 +639,7 @@ function buildPosterMarkerContent(group: PlaceGroup) {
       }, { once: true });
       frame.appendChild(image);
     } else {
+      frame.classList.add("is-fallback");
       frame.textContent = record.title.slice(0, 1);
     }
     stack.appendChild(frame);
@@ -697,24 +723,45 @@ function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hovered
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<AMapMapInstance | null>(null);
+  const groupsRef = useRef(groups);
+  groupsRef.current = groups;
   const markerElementsRef = useRef(new Map<string, HTMLElement>());
   const [status, setStatus] = useState<"loading" | "ready" | "error">("loading");
   const selectedGroup = groups.find((group) => group.key === selectedPlaceKey) || null;
+  const mapFingerprint = useMemo(() => placeGroupMapFingerprint(groups), [groups]);
 
   useEffect(() => {
     let disposed = false;
     setStatus("loading");
     markerElementsRef.current.clear();
+    const mapGroups = groupsRef.current;
     loadAmap({ key: mapSettings.amapKey, securityCode: mapSettings.amapSecurityCode })
-      .then((AMap) => {
+      .then(async (AMap) => {
         if (disposed || !hostRef.current) return;
-        const map = new AMap.Map(hostRef.current, { center: [104.2, 35.8], zoom: 4.1, viewMode: "2D", resizeEnable: true });
+        const map = new AMap.Map(hostRef.current, {
+          center: [104.2, 35.8],
+          zoom: 4.1,
+          viewMode: "2D",
+          resizeEnable: false,
+        });
         mapRef.current = map;
-        const markers = groups.flatMap((group) => {
+
+        // Marker posters use the exact same media cache as every archive/share view.
+        // Resolve them in parallel before mounting markers, so entering the map does
+        // not trigger a second progressive image download sequence.
+        const posterSources = await resolveMarkerPosterSources(mapGroups);
+        if (disposed || !mapRef.current) return;
+        const markers = mapGroups.flatMap((group) => {
           if (!group.point) return [];
-          const markerContent = buildPosterMarkerContent(group);
+          const markerContent = buildPosterMarkerContent(group, posterSources);
           markerElementsRef.current.set(group.key, markerContent);
-          const marker = new AMap.Marker({ position: group.point, title: `${group.label} · ${group.count} 场`, content: markerContent, anchor: "bottom-center", zIndex: 100 + Math.round(group.heat * 100) });
+          const marker = new AMap.Marker({
+            position: group.point,
+            title: `${group.label} · ${group.count} 场`,
+            content: markerContent,
+            anchor: "bottom-center",
+            zIndex: 100 + Math.round(group.heat * 100),
+          });
           marker.on?.("click", (event) => {
             const original = (event as { originalEvent?: { stopPropagation?: () => void } } | undefined)?.originalEvent;
             original?.stopPropagation?.();
@@ -726,7 +773,6 @@ function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hovered
         });
         map.add?.(markers);
         map.on?.("click", () => onSelectPlace(null));
-        if (markers.length) map.setFitView?.(markers, false, [82, 82, 82, 82], 11);
         hostRef.current.dataset.amapReady = "true";
         setStatus("ready");
       })
@@ -737,7 +783,7 @@ function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hovered
       mapRef.current?.destroy();
       mapRef.current = null;
     };
-  }, [groups, mapSettings.amapKey, mapSettings.amapSecurityCode, mode]);
+  }, [mapFingerprint, mapSettings.amapKey, mapSettings.amapSecurityCode, onHoverPlace, onSelectPlace]);
 
   useEffect(() => {
     markerElementsRef.current.forEach((element, key) => {
@@ -748,12 +794,12 @@ function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hovered
 
   useEffect(() => {
     if (!focusPlaceKey || !mapRef.current) return;
-    const group = groups.find((item) => item.key === focusPlaceKey);
+    const group = groupsRef.current.find((item) => item.key === focusPlaceKey);
     if (group?.point) mapRef.current.setZoomAndCenter?.(6.8, group.point, false, 420);
-  }, [focusPlaceKey, groups]);
+  }, [focusPlaceKey]);
 
   return <div className="amap-map-shell" data-map-mode="amap">
-    <div className="venue-map-heading"><span>AMAP · MEMORY MAP</span><strong>{mode === "city" ? "城市海报足迹" : "场馆海报足迹"}</strong><small>{status === "ready" ? "点击海报堆选择地点，再点具体海报打开详情" : status === "error" ? "地图加载失败，请检查 Key、安全密钥或域名白名单" : "正在载入高德地图…"}</small></div>
+    <div className="venue-map-heading"><span>AMAP · MEMORY MAP</span><strong>{mode === "city" ? "城市海报足迹" : "场馆海报足迹"}</strong><small>{status === "ready" ? "地图保持当前视野；点击地点时才会主动聚焦" : status === "error" ? "地图加载失败，请检查 Key、安全密钥或域名白名单" : "正在载入高德地图…"}</small></div>
     <div ref={hostRef} className="amap-map-host" data-amap-status={status} />
     <div className="map-heat-legend"><span>低频</span><i /><span>高频</span></div>
     {selectedGroup && <div className="venue-place-picker" data-place-key={selectedGroup.key}>
@@ -768,7 +814,6 @@ function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hovered
     {status === "error" ? <button className="venue-enable-map" type="button" onClick={() => window.location.reload()}>重新载入</button> : null}
   </div>;
 }
-
 
 function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   const priced = [...records].sort((a, b) => (b.price || 0) - (a.price || 0));

@@ -27,7 +27,7 @@ import { BrandLockup } from "./brand";
 import type { EventCategory, EventRecord, MapConfig } from "./domain";
 import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
 import { loadAmap, type AMapLngLatLike, type AMapNamespace } from "./amap";
-import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
+import { loadMediaImage, preloadPrimaryRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
 export type ShareFormat =
@@ -287,7 +287,10 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
   useEffect(() => {
     let active = true;
     setPreparing(true);
-    void preloadRecordMedia(selectedRecords).finally(() => {
+    // Share compositions use the primary poster from every selected record. Warm
+    // those exact assets before mounting the dense canvas so the preview appears
+    // as one composition instead of progressively refetching a few late posters.
+    void preloadPrimaryRecordMedia(selectedRecords).finally(() => {
       if (active) setPreparing(false);
     });
     return () => { active = false; };
@@ -518,7 +521,9 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
               <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
               {showBrand ? <BrandLockup compact inverse={isDarkPalette(palette)} size={44} /> : null}
             </header>
-            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} onOpenMapSettings={onOpenMapSettings} />
+            {preparing
+              ? <div className="share-preview-preparing"><span>正在从统一图片缓存准备海报…</span></div>
+              : <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} onOpenMapSettings={onOpenMapSettings} />}
             <footer>
               {showBrand ? <span className="share-preview-github">GitHub · Qi-i/live-memory</span> : <span />}
               {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
@@ -651,15 +656,19 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
 }
 
 function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
+  const preserveFullPoster = slot.rect.width / Math.max(1, slot.rect.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
   return (
-    <figure className={`share-layout-poster is-${slot.emphasis || "normal"}`} style={localRectStyle(slot.rect, origin)}>
-      <SharePoster record={slot.record} />
+    <figure
+      className={`share-layout-poster is-${slot.emphasis || "normal"}${preserveFullPoster ? " is-poster-preserved" : ""}`}
+      style={localRectStyle(slot.rect, origin)}
+    >
+      <SharePoster record={slot.record} preserveFull={preserveFullPoster} />
       {showDetails ? <figcaption><span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span><b>{slot.record.title}</b></figcaption> : null}
     </figure>
   );
 }
 
-function SharePoster({ record }: { record: EventRecord }) {
+function SharePoster({ record, preserveFull = false }: { record: EventRecord; preserveFull?: boolean }) {
   const media = primaryMedia(record);
   const src = useCachedMediaSrc(media);
   const style = {
@@ -667,8 +676,11 @@ function SharePoster({ record }: { record: EventRecord }) {
     "--poster-b": record.colors[1],
     aspectRatio: String(recordPosterRatio(record)),
   } as CSSProperties;
-  if (!src) return <span className="share-poster-frame" style={style}><span className="share-poster-fallback">{record.title.slice(0, 4)}</span></span>;
-  return <span className="share-poster-frame" style={style}><img className="share-poster-foreground" src={src} alt={record.title} decoding="async" /></span>;
+  if (!src) return <span className={`share-poster-frame${preserveFull ? " is-preserved" : ""}`} style={style}><span className="share-poster-fallback">{record.title.slice(0, 4)}</span></span>;
+  return <span className={`share-poster-frame${preserveFull ? " is-preserved" : ""}`} style={style}>
+    {preserveFull ? <img className="share-poster-backdrop" src={src} alt="" aria-hidden="true" decoding="async" /> : null}
+    <img className="share-poster-foreground" src={src} alt={record.title} decoding="async" />
+  </span>;
 }
 
 function recordPosterRatio(record: EventRecord) {
@@ -804,9 +816,17 @@ function buildFilledGridRects(
   return rects;
 }
 
+const SHARE_POSTER_MAX_FRAME_ASPECT = 0.86;
+
+function posterLayoutRatio(record: EventRecord) {
+  // Concert posters are overwhelmingly portrait artwork. A share slot wider than
+  // this starts cropping the title/logo area into a horizontal strip.
+  return Math.min(recordPosterRatio(record), SHARE_POSTER_MAX_FRAME_ASPECT);
+}
+
 function partitionByAspect(records: EventRecord[], rowCount: number): Array<[number, number]> {
   if (rowCount <= 1) return [[0, records.length]];
-  const ratios = records.map(recordPosterRatio);
+  const ratios = records.map(posterLayoutRatio);
   const groups: Array<[number, number]> = [];
   let start = 0;
   for (let row = 0; row < rowCount; row += 1) {
@@ -832,6 +852,33 @@ function partitionByAspect(records: EventRecord[], rowCount: number): Array<[num
   return groups;
 }
 
+function fitPosterRowRatios(records: EventRecord[], targetRatioSum: number) {
+  const ratios = records.map(posterLayoutRatio);
+  const baseSum = ratios.reduce((sum, ratio) => sum + ratio, 0);
+  if (!ratios.length || baseSum <= 0) return ratios;
+
+  // Making a frame narrower only increases its portrait character, so shrinking
+  // the row is always safe. Expansion is capped to prevent any poster becoming
+  // a landscape strip.
+  if (targetRatioSum <= baseSum) {
+    const scale = targetRatioSum / baseSum;
+    return ratios.map((ratio) => ratio * scale);
+  }
+
+  let remaining = targetRatioSum - baseSum;
+  for (let pass = 0; pass < 4 && remaining > 0.0001; pass += 1) {
+    const headrooms = ratios.map((ratio) => Math.max(0, SHARE_POSTER_MAX_FRAME_ASPECT - ratio));
+    const totalHeadroom = headrooms.reduce((sum, value) => sum + value, 0);
+    if (totalHeadroom <= 0.0001) break;
+    const distributed = Math.min(remaining, totalHeadroom);
+    ratios.forEach((ratio, index) => {
+      ratios[index] = ratio + distributed * headrooms[index] / totalHeadroom;
+    });
+    remaining -= distributed;
+  }
+  return ratios;
+}
+
 function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec): PosterSlot[] {
   if (!records.length || area.width <= 0 || area.height <= 0) return [];
   const scale = spec.width / 1600;
@@ -845,20 +892,26 @@ function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
     const rowHeight = (area.height - gap * Math.max(0, rows - 1)) / rows;
     if (rowHeight <= 38) continue;
     const groups = partitionByAspect(records, rows);
-    let distortion = 0;
+    let adjustmentPenalty = 0;
     let narrowPenalty = 0;
-    let extremePenalty = 0;
+    let stripPenalty = 0;
     for (const [start, end] of groups) {
-      const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
-      const availableWidth = area.width - gap * Math.max(0, end - start - 1);
-      const naturalWidth = ratioSum * rowHeight;
-      const rowScale = availableWidth / Math.max(1, naturalWidth);
-      distortion += Math.abs(Math.log(Math.max(0.01, rowScale)));
-      if (rowScale < 0.72 || rowScale > 1.38) extremePenalty += Math.abs(1 - rowScale) * 2.2;
-      const smallest = Math.min(...records.slice(start, end).map((record) => recordPosterRatio(record) * rowHeight * rowScale));
+      const rowRecords = records.slice(start, end);
+      const availableWidth = area.width - gap * Math.max(0, rowRecords.length - 1);
+      const targetRatioSum = availableWidth / Math.max(1, rowHeight);
+      const baseSum = rowRecords.reduce((sum, record) => sum + posterLayoutRatio(record), 0);
+      const maxSum = rowRecords.length * SHARE_POSTER_MAX_FRAME_ASPECT;
+      const fitted = fitPosterRowRatios(rowRecords, targetRatioSum);
+      const usedWidth = fitted.reduce((sum, ratio) => sum + ratio * rowHeight, 0);
+      adjustmentPenalty += Math.abs(Math.log(Math.max(0.01, Math.min(targetRatioSum, maxSum) / Math.max(0.01, baseSum))));
+      if (targetRatioSum > maxSum) {
+        stripPenalty += (targetRatioSum - maxSum) / Math.max(0.01, targetRatioSum) * 8;
+      }
+      const smallest = Math.min(...fitted.map((ratio) => ratio * rowHeight));
       if (smallest < 72 * scale) narrowPenalty += (72 * scale - smallest) / Math.max(1, 72 * scale);
+      if (usedWidth > availableWidth + 1) stripPenalty += (usedWidth - availableWidth) / Math.max(1, availableWidth) * 4;
     }
-    const score = distortion / groups.length + extremePenalty + narrowPenalty * 0.45;
+    const score = adjustmentPenalty / groups.length + stripPenalty + narrowPenalty * 0.35;
     if (score < bestScore) {
       bestScore = score;
       bestRows = rows;
@@ -870,18 +923,18 @@ function buildWallFillSlots(records: EventRecord[], area: Rect, spec: CanvasSpec
   const slots: PosterSlot[] = [];
   let y = area.y;
   bestGroups.forEach(([start, end]) => {
-    const availableWidth = area.width - gap * Math.max(0, end - start - 1);
-    const ratioSum = records.slice(start, end).reduce((sum, record) => sum + recordPosterRatio(record), 0);
-    const rowScale = availableWidth / Math.max(1, ratioSum * rowHeight);
-    let x = area.x;
-    for (let index = start; index < end; index += 1) {
-      const isLast = index === end - 1;
-      const width = isLast
-        ? area.x + area.width - x
-        : recordPosterRatio(records[index]) * rowHeight * rowScale;
-      slots.push({ record: records[index], rect: { x, y, width: Math.max(1, width), height: rowHeight } });
+    const rowRecords = records.slice(start, end);
+    const availableWidth = area.width - gap * Math.max(0, rowRecords.length - 1);
+    const targetRatioSum = availableWidth / Math.max(1, rowHeight);
+    const fitted = fitPosterRowRatios(rowRecords, targetRatioSum);
+    const posterWidth = fitted.reduce((sum, ratio) => sum + ratio * rowHeight, 0);
+    const usedWidth = posterWidth + gap * Math.max(0, rowRecords.length - 1);
+    let x = area.x + Math.max(0, (area.width - usedWidth) / 2);
+    rowRecords.forEach((record, index) => {
+      const width = Math.max(1, fitted[index] * rowHeight);
+      slots.push({ record, rect: { x, y, width, height: rowHeight } });
       x += width + gap;
-    }
+    });
     y += rowHeight + gap;
   });
   return slots;
@@ -1075,6 +1128,21 @@ function buildCityModel(records: EventRecord[], area: Rect, spec: CanvasSpec) {
   };
 }
 
+function shareCityFingerprint(records: EventRecord[]) {
+  const cities = new Map<string, string>();
+  for (const record of records) {
+    const label = record.city.trim();
+    if (!label) continue;
+    const key = label.replace(/市$/u, "").trim().toLowerCase();
+    const current = cities.get(key);
+    if (!current || record.date.localeCompare(current) < 0) cities.set(key, record.date);
+  }
+  return Array.from(cities.entries())
+    .sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
+    .map(([city, date]) => `${city}:${date}`)
+    .join("|");
+}
+
 function ShareAmapMap({
   records,
   mapSettings,
@@ -1089,8 +1157,12 @@ function ShareAmapMap({
   onOpenMapSettings: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
   const [state, setState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
   const [resolvedCount, setResolvedCount] = useState(0);
+  const cityFingerprint = useMemo(() => shareCityFingerprint(records), [records]);
+  const viewportFingerprint = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
 
   useEffect(() => {
     if (!mapSettings.amapKey.trim()) {
@@ -1108,7 +1180,7 @@ function ShareAmapMap({
       .then(async (AMap) => {
         if (disposed || !hostRef.current) return;
         map = createAmapInstance(AMap, hostRef.current);
-        const points = await resolveShareMapPoints(AMap, records);
+        const points = await resolveShareMapPoints(AMap, recordsRef.current);
         if (disposed || !map) return;
         const markers = points.map((point) => new AMap.Marker({ position: point.position, title: point.title }));
         if (AMap.Polyline && points.length > 1) {
@@ -1134,7 +1206,12 @@ function ShareAmapMap({
       disposed = true;
       map?.destroy();
     };
-  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, records]);
+  }, [
+    cityFingerprint,
+    mapSettings.amapKey,
+    mapSettings.amapSecurityCode,
+    viewportFingerprint,
+  ]);
 
   const configured = Boolean(mapSettings.amapKey.trim());
   return (
@@ -1178,7 +1255,7 @@ function chinaViewportZoom(host: HTMLElement) {
 
 function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
   return new AMap.Map(host, {
-    resizeEnable: true,
+    resizeEnable: false,
     viewMode: "2D",
     center: SHARE_CHINA_MAP_CENTER,
     zoom: chinaViewportZoom(host),
@@ -1193,6 +1270,8 @@ function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
     pitchEnable: false,
   });
 }
+
+const shareCityPositionCache = new Map<string, [number, number]>();
 
 async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]): Promise<ShareMapPoint[]> {
   const cities = new Map<string, { label: string; date: string }>();
@@ -1211,12 +1290,13 @@ async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]
   if (!AMap.Geocoder) return [];
   const geocoder = new AMap.Geocoder({ city: "全国" });
 
-  const points: ShareMapPoint[] = [];
-  for (const city of cities.values()) {
-    const position = await geocodeAmapPlace(geocoder, city.label);
-    if (position) points.push({ position, title: city.label, date: city.date });
-  }
-  return points;
+  const points = await Promise.all(Array.from(cities.entries()).map(async ([key, city]) => {
+    const cached = shareCityPositionCache.get(key);
+    const position = cached || await geocodeAmapPlace(geocoder, city.label);
+    if (position && !cached) shareCityPositionCache.set(key, position);
+    return position ? { position, title: city.label, date: city.date } satisfies ShareMapPoint : null;
+  }));
+  return points.filter((point): point is ShareMapPoint => Boolean(point));
 }
 
 function geocodeAmapPlace(
@@ -1619,8 +1699,20 @@ async function drawPoster(
   context.clip();
 
   const image = await loadMediaImage(primaryMedia(record));
-  if (image) drawCover(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
-  else drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
+  if (image) {
+    const preserveFullPoster = slot.width / Math.max(1, slot.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
+    if (preserveFullPoster) {
+      context.save();
+      context.filter = "blur(18px) saturate(.9)";
+      drawCover(context, image, slot.x - 16, slot.y - 16, slot.width + 32, slot.height + 32, palette.surface);
+      context.restore();
+      context.fillStyle = "rgba(10, 18, 16, .18)";
+      context.fillRect(slot.x, slot.y, slot.width, slot.height);
+      drawContain(context, image, slot.x, slot.y, slot.width, slot.height);
+    } else {
+      drawCover(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
+    }
+  } else drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
   if (showDetails) drawDetails(context, record, slot, palette);
   context.restore();
 
@@ -1708,6 +1800,22 @@ function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function drawContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
+  const inset = Math.max(2, Math.min(width, height) * 0.018);
+  const availableWidth = Math.max(1, width - inset * 2);
+  const availableHeight = Math.max(1, height - inset * 2);
+  const scale = Math.min(availableWidth / image.naturalWidth, availableHeight / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(
+    image,
+    x + (width - drawWidth) / 2,
+    y + (height - drawHeight) / 2,
+    drawWidth,
+    drawHeight,
+  );
 }
 
 function drawFallback(context: CanvasRenderingContext2D, record: EventRecord, x: number, y: number, width: number, height: number) {
