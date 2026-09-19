@@ -10,6 +10,7 @@ const context = await browser.newContext({
   viewport: { width: 1600, height: 1000 },
   deviceScaleFactor: 1,
   acceptDownloads: true,
+  serviceWorkers: "block",
 });
 const page = await context.newPage();
 page.on("console", (message) => {
@@ -121,6 +122,32 @@ try {
   await page.locator(".archive-poster-card").first().waitFor({ state: "visible", timeout: 15000 });
   await page.locator(".archive-highlight-card-1 img").waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(800);
+
+  // A normal refresh must hydrate posters from the persistent media cache instead
+  // of refetching every image. Block demo-media network requests after the first
+  // load so this fails if Cache Storage/session scope restoration regresses.
+  await page.waitForFunction(async () => {
+    if (!("caches" in window)) return false;
+    const names = (await caches.keys()).filter((name) => name.startsWith("live-memory-media-v3"));
+    let entries = 0;
+    for (const name of names) entries += (await (await caches.open(name)).keys()).length;
+    return entries >= 5;
+  }, null, { timeout: 15000 });
+
+  const blockedDemoRequests = [];
+  await page.route("**/demo/**", (route) => {
+    blockedDemoRequests.push(route.request().url());
+    void route.abort("failed");
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.locator(".experience-shell").waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".archive-poster-card img").first().waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".archive-highlight-card-1 img").waitFor({ state: "visible", timeout: 15000 });
+  const reloadFallbacks = await page.locator(".archive-poster-card .record-media-fallback").count();
+  if (blockedDemoRequests.length || reloadFallbacks) {
+    throw new Error(`Persistent media cache did not survive reload: ${JSON.stringify({ blockedDemoRequests, reloadFallbacks })}`);
+  }
+  await page.unroute("**/demo/**");
 
   const bannerTitle = await page.locator(".archive-masthead h2").evaluate((heading) => ({
     rendered: getComputedStyle(heading, "::before").content,
@@ -509,16 +536,64 @@ await archiveView("海报", ".archive-poster-card");
   await page.locator(".record-editor-v2").waitFor({ state: "detached", timeout: 5000 });
 
   await archiveView("票夹", ".archive-wallet-card");
-  const walletOffsets = await page.locator(".archive-wallet-card").evaluateAll((cards) => cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().top)));
-  if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] < 145) throw new Error("Mobile wallet cards overlap vertically");
+  const walletReadability = await page.locator(".archive-wallet-card").first().evaluate((card) => {
+    const facts = card.querySelector(".archive-card-facts");
+    const artist = card.querySelector(".archive-card-artist");
+    const ticketLine = card.querySelector(".archive-ticket-line");
+    const rect = card.getBoundingClientRect();
+    return {
+      height: rect.height,
+      factsVisible: facts ? getComputedStyle(facts).display !== "none" && facts.getBoundingClientRect().height > 20 : false,
+      artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
+      ticketLineWidth: ticketLine?.getBoundingClientRect().width || 0,
+    };
+  });
+  if (walletReadability.height < 170 || !walletReadability.factsVisible || walletReadability.artistSize < 11 || walletReadability.ticketLineWidth < 70) {
+    throw new Error(`Mobile wallet metadata became unreadable: ${JSON.stringify(walletReadability)}`);
+  }
   await page.screenshot({ path: `${outputDir}/14-wallet-mobile.png`, fullPage: true });
 
   await archiveView("票根", ".archive-ticket");
-  const ticketTops = await page.locator(".archive-ticket").evaluateAll((cards) => cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().top)));
-  if (ticketTops.length > 1 && Math.abs(ticketTops[1] - ticketTops[0]) > 3) throw new Error("Mobile ticket view is not a compact multi-column grid");
+  const mobileTicket = await page.locator(".archive-ticket").first().evaluate((card) => {
+    const rect = card.getBoundingClientRect();
+    const grid = card.parentElement?.getBoundingClientRect();
+    const facts = card.querySelector(".archive-card-facts");
+    const ticketLine = card.querySelector(".archive-ticket-line");
+    const artist = card.querySelector(".archive-card-artist");
+    return {
+      widthUse: grid ? rect.width / grid.width : 0,
+      factsVisible: facts ? getComputedStyle(facts).display !== "none" && facts.getBoundingClientRect().height > 24 : false,
+      artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
+      ticketLineWidth: ticketLine?.getBoundingClientRect().width || 0,
+    };
+  });
+  if (mobileTicket.widthUse < 0.92 || !mobileTicket.factsVisible || mobileTicket.artistSize < 11 || mobileTicket.ticketLineWidth < 90) {
+    throw new Error(`Mobile ticket view must stay single-column and readable: ${JSON.stringify(mobileTicket)}`);
+  }
   await page.screenshot({ path: `${outputDir}/15-ticket-mobile.png`, fullPage: true });
 
   await archiveView("列表", ".archive-list button");
+  const mobileList = await page.locator(".archive-list button").first().evaluate((row) => {
+    const artist = row.querySelector(".archive-card-artist");
+    const ticket = row.querySelector(".archive-list-ticket");
+    const seat = ticket?.querySelector("small");
+    const rowRect = row.getBoundingClientRect();
+    const ticketRect = ticket?.getBoundingClientRect();
+    return {
+      height: rowRect.height,
+      artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
+      ticketVisible: Boolean(ticketRect && ticketRect.height > 10),
+      seatVisible: Boolean(seat && seat.getBoundingClientRect().width > 4),
+      ticketContained: Boolean(ticketRect
+        && ticketRect.left >= rowRect.left
+        && ticketRect.right <= rowRect.right + 1
+        && ticketRect.top >= rowRect.top
+        && ticketRect.bottom <= rowRect.bottom + 1),
+    };
+  });
+  if (mobileList.height < 112 || mobileList.artistSize < 11 || !mobileList.ticketVisible || !mobileList.seatVisible || !mobileList.ticketContained) {
+    throw new Error(`Mobile list metadata is incomplete or clipped: ${JSON.stringify(mobileList)}`);
+  }
   await page.screenshot({ path: `${outputDir}/16-list-mobile.png`, fullPage: true });
 
   const mobileShareButton = page.locator(".archive-command-actions button").last();

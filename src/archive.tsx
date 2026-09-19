@@ -390,6 +390,18 @@ function PosterView({ records, density, onOpen, onZoom }: { records: EventRecord
   );
 }
 
+function archiveArtist(record: EventRecord) {
+  return record.artists.join(" / ") || "艺人待补";
+}
+
+function archivePrice(record: EventRecord) {
+  return record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补";
+}
+
+function archiveLocation(record: EventRecord) {
+  return [record.city || "城市待补", record.venue || "场馆待补"].join(" · ");
+}
+
 function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; index: number; onOpen: (record: EventRecord) => void; onZoom: (media: MediaAsset) => void }) {
   const poster = primaryMedia(record);
   return (
@@ -399,13 +411,13 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
         <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 4)} />
       </button>
       <div className="archive-poster-copy">
-        <div><span>{categoryLabels[record.category]}</span><em>{statusLabels[effectiveStatus(record)]}</em></div>
+        <div className="archive-card-kicker"><span>{categoryLabels[record.category]}</span><em>{statusLabels[effectiveStatus(record)]}</em></div>
         <h3>{record.title}</h3>
-        <p>{record.artists.join(" / ") || "艺人待补"}</p>
-        <dl>
+        <p className="archive-card-artist">{archiveArtist(record)}</p>
+        <dl className="archive-card-facts">
           <dt>日期</dt><dd>{formatDateCn(record.date, record.time)}</dd>
-          <dt>场馆</dt><dd>{record.city || "城市待补"} · {record.venue || "场馆待补"}</dd>
-          <dt>票价</dt><dd>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}</dd>
+          <dt>场馆</dt><dd>{archiveLocation(record)}</dd>
+          <dt>票座</dt><dd className="archive-ticket-line"><b>{archivePrice(record)}</b><span>{record.seat || "座位待补"}</span></dd>
         </dl>
       </div>
     </article>
@@ -438,7 +450,8 @@ function ShowcaseView({ records, density, onOpen, onZoom }: { records: EventReco
                 <div>
                   <span>{record.date.slice(0, 4)} · {record.city || categoryLabels[record.category]}</span>
                   <h3>{record.title}</h3>
-                  <p>{record.artists.join(" / ") || record.venue || "演出记录"}</p>
+                  <p className="archive-card-artist">{archiveArtist(record)}</p>
+                  <small>{record.venue || "场馆待补"} · {archivePrice(record)}</small>
                 </div>
               </article>
             );
@@ -460,8 +473,8 @@ function WalletView({ records, onOpen, onEdit, onZoom }: { records: EventRecord[
             <button className="wallet-copy" type="button" onClick={() => onOpen(record)}>
               <span>{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</span>
               <h3>{record.title}</h3>
-              <p>{record.artists.join(" / ") || "艺人待补"}</p>
-              <dl><dt>日期</dt><dd>{formatDateCn(record.date, record.time)}</dd><dt>场馆</dt><dd>{record.city} · {record.venue}</dd><dt>票座</dt><dd>{record.price ? `¥${record.price}` : "票价待补"} · {record.seat || "座位待补"}</dd></dl>
+              <p className="archive-card-artist">{archiveArtist(record)}</p>
+              <dl className="archive-card-facts"><dt>日期</dt><dd>{formatDateCn(record.date, record.time)}</dd><dt>场馆</dt><dd>{archiveLocation(record)}</dd><dt>票座</dt><dd className="archive-ticket-line"><b>{archivePrice(record)}</b><span>{record.seat || "座位待补"}</span></dd></dl>
               <strong>{formatRelativeDay(record.date)}</strong>
             </button>
             <div className="wallet-actions"><button type="button" title="打开" onClick={() => onOpen(record)}><Eye /></button><button type="button" title="编辑" onClick={() => onEdit(record)}><Pencil /></button></div>
@@ -481,7 +494,7 @@ function TicketView({ records, onOpen }: { records: EventRecord[]; onOpen: (reco
           <section>
             <span className="archive-ticket-backdrop" aria-hidden="true"><RecordMedia media={primaryMedia(record)} alt="" fallback="" /></span>
             <span className="archive-ticket-tint" aria-hidden="true" />
-            <div className="archive-ticket-content"><span>{categoryLabels[record.category]}</span><h3>{record.title}</h3><p>{record.artists.join(" / ") || "艺人待补"}</p><dl><dt>DATE</dt><dd>{record.date}</dd><dt>VENUE</dt><dd>{record.city} · {record.venue}</dd><dt>SEAT</dt><dd>{record.seat || "座位待补"}</dd><dt>PRICE</dt><dd>{record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}</dd></dl></div>
+            <div className="archive-ticket-content"><span>{categoryLabels[record.category]}</span><h3>{record.title}</h3><p className="archive-card-artist">{archiveArtist(record)}</p><dl className="archive-card-facts"><dt>DATE</dt><dd>{record.date}</dd><dt>VENUE</dt><dd>{archiveLocation(record)}</dd><dt>TICKET</dt><dd className="archive-ticket-line"><b>{archivePrice(record)}</b><span>{record.seat || "座位待补"}</span></dd></dl></div>
           </section>
         </button>
       ))}
@@ -495,7 +508,11 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
   return (
     <section className="archive-timeline">
       {Object.entries(groups).map(([year, items]) => (
-        <div key={year}><h2>{year}</h2><div>{items.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><time>{record.date.slice(5).replace("-", ".")}</time><span><RecordMedia media={primaryMedia(record)} alt="" fallback="演" /></span><section><em>{categoryLabels[record.category]}</em><h3>{record.title}</h3><p>{record.artists.join(" / ")} · {record.city} · {record.venue}</p></section></button>)}</div></div>
+        <div key={year}><h2>{year}</h2><div>{items.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
+          <time>{record.date.slice(5).replace("-", ".")}</time>
+          <span><RecordMedia media={primaryMedia(record)} alt="" fallback="演" /></span>
+          <section><em>{categoryLabels[record.category]}</em><h3>{record.title}</h3><strong className="archive-card-artist">{archiveArtist(record)}</strong><p>{archiveLocation(record)} · {archivePrice(record)}</p></section>
+        </button>)}</div></div>
       ))}
     </section>
   );
@@ -503,7 +520,14 @@ function TimelineView({ records, onOpen }: { records: EventRecord[]; onOpen: (re
 
 function CalendarView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
   const groups = groupBy(records, (record) => record.date.slice(0, 7));
-  return <section className="archive-calendar">{Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)).map(([month, items]) => <article key={month}><h2>{month.replace("-", " / ")}</h2><div>{items.sort((a, b) => a.date.localeCompare(b.date)).map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><strong>{record.date.slice(8)}</strong><span>{record.title}</span><em>{record.city}</em></button>)}</div></article>)}</section>;
+  return <section className="archive-calendar">{Object.entries(groups).sort(([a], [b]) => b.localeCompare(a)).map(([month, items]) => <article key={month}>
+    <h2>{month.replace("-", " / ")}</h2>
+    <div>{items.sort((a, b) => a.date.localeCompare(b.date)).map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
+      <strong>{record.date.slice(8)}</strong>
+      <span><b>{record.title}</b><small className="archive-card-artist">{archiveArtist(record)}</small></span>
+      <em>{record.city || "城市待补"} · {archivePrice(record)}</em>
+    </button>)}</div>
+  </article>)}</section>;
 }
 
 const cityCoordinateFallbacks: Record<string, [number, number]> = {
@@ -751,7 +775,15 @@ function PriceView({ records, onOpen }: { records: EventRecord[]; onOpen: (recor
   const max = Math.max(1, ...priced.map((record) => record.price || 0));
   const filled = priced.filter((record) => record.price);
   const average = Math.round(filled.reduce((sum, record) => sum + (record.price || 0), 0) / Math.max(1, filled.length));
-  return <section className="archive-price"><div className="price-metrics"><strong>{records.length}<span>记录</span></strong><strong>¥{average}<span>均价</span></strong><strong>¥{filled.reduce((sum, record) => sum + (record.price || 0), 0)}<span>总票价</span></strong></div><div>{priced.map((record, index) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><span>{String(index + 1).padStart(2, "0")}</span><section><h3>{record.title}</h3><p>{record.artists.join(" / ")} · {record.date} · {record.city}</p></section><i style={{ "--ratio": `${Math.max(4, ((record.price || 0) / max) * 100)}%` } as CSSProperties} /><strong>{record.price ? `¥${record.price}` : "待补"}</strong></button>)}</div></section>;
+  return <section className="archive-price">
+    <div className="price-metrics"><strong>{records.length}<span>记录</span></strong><strong>¥{average}<span>均价</span></strong><strong>¥{filled.reduce((sum, record) => sum + (record.price || 0), 0)}<span>总票价</span></strong></div>
+    <div>{priced.map((record, index) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
+      <span>{String(index + 1).padStart(2, "0")}</span>
+      <section><h3>{record.title}</h3><strong className="archive-card-artist">{archiveArtist(record)}</strong><p>{record.date} · {record.city || "城市待补"} · {record.seat || "座位待补"}</p></section>
+      <i style={{ "--ratio": `${Math.max(4, ((record.price || 0) / max) * 100)}%` } as CSSProperties} />
+      <strong>{archivePrice(record)}</strong>
+    </button>)}</div>
+  </section>;
 }
 
 function SummaryView({ records }: { records: EventRecord[] }) {
@@ -764,7 +796,16 @@ function SummaryPanel({ title, rows }: { title: string; rows: [string, number][]
 }
 
 function ListView({ records, onOpen }: { records: EventRecord[]; onOpen: (record: EventRecord) => void }) {
-  return <section className="archive-list"><header><span>日期</span><span>演出</span><span>艺人</span><span>地点</span><span>票价</span></header>{records.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}><span>{record.date}</span><strong>{record.title}</strong><em>{record.artists.join(" / ") || "待补"}</em><span>{record.city} · {record.venue}</span><b>{record.price ? `¥${record.price}` : "待补"}</b></button>)}</section>;
+  return <section className="archive-list">
+    <header><span>日期</span><span>演出</span><span>艺人</span><span>地点</span><span>票座</span></header>
+    {records.map((record) => <button data-archive-record-id={record.id} key={record.id} type="button" onClick={() => onOpen(record)}>
+      <span>{record.date}</span>
+      <strong>{record.title}</strong>
+      <em className="archive-card-artist">{archiveArtist(record)}</em>
+      <span>{archiveLocation(record)}</span>
+      <div className="archive-list-ticket"><span>{archivePrice(record)}</span><small>{record.seat || "座位待补"}</small></div>
+    </button>)}
+  </section>;
 }
 
 function RecordMedia({ media, alt, fallback = "图片待补", onClick }: { media?: MediaAsset; alt?: string; fallback?: string; onClick?: (event: MouseEvent<HTMLImageElement | HTMLSpanElement>) => void }) {

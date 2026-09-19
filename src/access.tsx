@@ -145,9 +145,10 @@ export function AccessGate({ children }: { children: ReactNode }) {
         if (activeUserId.current) void clearPersistentMediaCache();
         activeUserId.current = "";
         clearStorageScope();
-        setMediaCacheScope("anonymous");
+        const guestSession = sessionStorage.getItem(GUEST_SESSION_KEY) === "1";
+        setMediaCacheScope(guestSession ? "guest" : "anonymous");
         setUser(null);
-        setMode(sessionStorage.getItem(GUEST_SESSION_KEY) === "1" ? "guest" : "signed-out");
+        setMode(guestSession ? "guest" : "signed-out");
       }
     };
 

@@ -730,8 +730,12 @@ function signedMediaExpiresAt(url: string) {
   return 0;
 }
 
+function isInlineMediaSource(src: string) {
+  return src.startsWith("data:") || src.startsWith("blob:");
+}
+
 function hasUsableSignedMedia(asset: MediaAsset) {
-  if (!asset.storagePath || !asset.src || asset.src.startsWith("data:") || asset.src.startsWith("blob:")) return false;
+  if (!asset.storagePath || !asset.src || isInlineMediaSource(asset.src)) return false;
   return signedMediaExpiresAt(asset.src) > Date.now() + SIGNED_MEDIA_RENEW_WINDOW_MS;
 }
 
@@ -750,6 +754,7 @@ export async function refreshSignedMediaUrls(
       if (!asset.storagePath) continue;
       if (options.storagePath && asset.storagePath !== options.storagePath) continue;
       const key = signedMediaCacheKey(bucket, asset.storagePath);
+      if (isInlineMediaSource(asset.src)) continue;
       if (!options.force && hasUsableSignedMedia(asset)) {
         signedMediaSessionCache.set(key, { url: asset.src, expiresAt: signedMediaExpiresAt(asset.src) });
         continue;
@@ -806,10 +811,10 @@ export function mergePersonalCloudMedia(baseRecords: EventRecord[], personalReco
 
 export async function restorePersonalCloudMedia(settings: AppSettings, baseRecords: EventRecord[]): Promise<SyncResult> {
   if (!settings.supabase.ownerKey) throw new Error("请先连接个人云端");
-  const personal = await pullRecordsFromPasskeySupabase(settings, []);
+  const personal = await pullRecordsFromPasskeySupabase(settings, [], false);
   const merged = mergePersonalCloudMedia(baseRecords, personal.records);
   const records = settings.supabase.syncMedia
-    ? await refreshSignedMediaUrls(settings, merged, { force: true })
+    ? await refreshSignedMediaUrls(settings, merged)
     : merged;
   const mediaCount = records.reduce((count, record) => count + record.media.filter((asset) => Boolean(asset.storagePath)).length, 0);
   return { records, message: `已恢复个人云端媒体 ${mediaCount} 项` };
@@ -1023,13 +1028,13 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
           source: "personal",
         });
       } else if (!localChanged && cloudChanged) {
-        merged.set(id, normalizeRecord({ ...cloud, syncedAt: nowIso() }));
+        merged.set(id, normalizeRecord({ ...cloud, ...mergeMediaState(local, cloud), syncedAt: nowIso() }));
       } else if (localChanged && !cloudChanged) {
         toPush.push(local);
       }
     } else {
       if (cloud.updatedAt > local.updatedAt) {
-        merged.set(id, normalizeRecord({ ...cloud, syncedAt: nowIso() }));
+        merged.set(id, normalizeRecord({ ...cloud, ...mergeMediaState(local, cloud), syncedAt: nowIso() }));
       } else {
         toPush.push(local);
       }
@@ -1231,7 +1236,11 @@ async function pushRecordsToPasskeySupabase(settings: AppSettings, records: Even
   };
 }
 
-async function pullRecordsFromPasskeySupabase(settings: AppSettings, localRecords: EventRecord[] = []): Promise<SyncResult> {
+async function pullRecordsFromPasskeySupabase(
+  settings: AppSettings,
+  localRecords: EventRecord[] = [],
+  signMedia = true,
+): Promise<SyncResult> {
   const ownerKey = requireOwnerKey(settings);
   const client = makeSupabaseClient(settings);
   const { data, error } = await client
@@ -1248,6 +1257,7 @@ async function pullRecordsFromPasskeySupabase(settings: AppSettings, localRecord
         deletedAt: row.deleted_at ? String(row.deleted_at) : undefined,
       });
       if (!settings.supabase.syncMedia) return withoutLocalMedia(record);
+      if (!signMedia) return record;
       const media = await Promise.all(record.media.map((asset) => signMediaIfNeeded(client, asset, mediaBucket(settings))));
       return normalizeRecord({ ...record, media });
     }),
@@ -1529,6 +1539,14 @@ function cloudRecordPayload(record: EventRecord) {
   });
 }
 
+function preferredMediaSource(primary: MediaAsset, fallback?: MediaAsset) {
+  const primarySrc = primary.src || "";
+  const fallbackSrc = fallback?.src || "";
+  if (isInlineMediaSource(primarySrc)) return primarySrc;
+  if (isInlineMediaSource(fallbackSrc)) return fallbackSrc;
+  return primarySrc || fallbackSrc;
+}
+
 function mergeMediaState(...records: EventRecord[]) {
   const mediaById = new Map<string, MediaAsset>();
   const tombstoneById = new Map<string, NonNullable<EventRecord["mediaTombstones"]>[number]>();
@@ -1536,13 +1554,20 @@ function mergeMediaState(...records: EventRecord[]) {
   for (const record of records) {
     for (const asset of record.media || []) {
       const previous = mediaById.get(asset.id);
-      if (
-        !previous
-        || asset.updatedAt > previous.updatedAt
-        || (asset.updatedAt === previous.updatedAt && Boolean(asset.storagePath) && !previous.storagePath)
-      ) {
+      if (!previous) {
         mediaById.set(asset.id, asset);
+        continue;
       }
+      const assetWins = asset.updatedAt > previous.updatedAt
+        || (asset.updatedAt === previous.updatedAt && Boolean(asset.storagePath) && !previous.storagePath);
+      const preferred = assetWins ? asset : previous;
+      const fallback = assetWins ? previous : asset;
+      mediaById.set(asset.id, {
+        ...fallback,
+        ...preferred,
+        storagePath: preferred.storagePath || fallback.storagePath,
+        src: preferredMediaSource(preferred, fallback),
+      });
     }
     for (const tombstone of record.mediaTombstones || []) {
       const previous = tombstoneById.get(tombstone.id);

@@ -135,6 +135,7 @@ try {
   const archive = await readFile(new URL("../src/archive.tsx", import.meta.url), "utf8");
   const archiveBannerCss = await readFile(new URL("../src/archiveBanner.css", import.meta.url), "utf8");
   const posterFramesCss = await readFile(new URL("../src/posterFrames.css", import.meta.url), "utf8");
+  const archivePolishCss = await readFile(new URL("../src/archivePolish.css", import.meta.url), "utf8");
   const brand = await readFile(new URL("../src/brand.tsx", import.meta.url), "utf8");
   const brandCss = await readFile(new URL("../src/brand.css", import.meta.url), "utf8");
   const experience = await readFile(new URL("../src/experience.tsx", import.meta.url), "utf8");
@@ -156,6 +157,8 @@ try {
   assert.match(emailLoginMigration, /echo_resolve_login_username/);
   assert.match(emailLoginMigration, /recovery_email/);
   assert.match(appController, /guestDemoRecords/);
+  assert.match(appController, /Local-first hydration/);
+  assert.match(appController, /setRecordState\(loadedRecords\)[\s\S]*syncAfterLogin/);
   assert.match(appController, /if \(isGuest\)/);
   assert.match(appController, /isGuest \? nextRecord : await saveRecord/);
   assert.match(archive, /value: "showcase"/);
@@ -166,6 +169,14 @@ try {
   assert.match(archiveBannerCss, /object-fit:\s*contain/);
   assert.match(posterFramesCss, /--poster-frame-ratio:\s*4 \/ 5/);
   assert.match(posterFramesCss, /object-fit:\s*cover/);
+  assert.match(main, /posterFrames\.css[\s\S]*archivePolish\.css[\s\S]*brand\.css/);
+  assert.match(archive, /archive-card-artist/);
+  assert.match(archive, /archive-ticket-line/);
+  assert.match(archive, /archive-list-ticket/);
+  assert.match(archivePolishCss, /\.archive-card-artist/);
+  assert.match(archivePolishCss, /\.archive-ticket-line/);
+  assert.match(archivePolishCss, /\.archive-calendar button/);
+  assert.match(archivePolishCss, /\.archive-timeline section > \.archive-card-artist/);
   assert.match(brand, /BrandLockup/);
   assert.match(brand, /现场记/);
   assert.match(brand, /Live Memory/);
@@ -201,6 +212,8 @@ try {
   assert.match(mediaCache, /caches\.open\(currentCacheName\(\)\)/);
   assert.match(mediaCache, /CACHE_PREFIX = "live-memory-media-v3"/);
   assert.match(mediaCache, /storage:\$\{asset\.storagePath\}/);
+  assert.match(mediaCache, /MEDIA_CACHE_SCOPE_EVENT/);
+  assert.match(mediaCache, /persistInlineSource/);
   assert.match(appController, /preloadRecordMedia/);
   assert.match(appController, /CustomEvent<\{ storagePath\?: string \}>/);
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);

@@ -12,6 +12,7 @@ import "./statsPage.css";
 import "./settingsPage.css";
 import "./overlays.css";
 import "./posterFrames.css";
+import "./archivePolish.css";
 import "./brand.css";
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

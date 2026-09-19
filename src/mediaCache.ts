@@ -5,6 +5,7 @@ const CACHE_PREFIX = "live-memory-media-v3";
 const LEGACY_CACHE_NAMES = ["live-memory-media-v2"];
 const objectUrls = new Map<string, string>();
 const pendingSources = new Map<string, Promise<string>>();
+const MEDIA_CACHE_SCOPE_EVENT = "live-memory:media-cache-scope";
 let cleanupRegistered = false;
 let mediaCacheScope = "anonymous";
 
@@ -26,6 +27,7 @@ export function setMediaCacheScope(scope: string) {
   if (typeof caches !== "undefined") {
     for (const legacy of LEGACY_CACHE_NAMES) void caches.delete(legacy);
   }
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(MEDIA_CACHE_SCOPE_EVENT));
 }
 
 function isInlineSource(src: string) {
@@ -75,6 +77,22 @@ async function readCachedSource(identity: string) {
   return objectUrl;
 }
 
+async function persistInlineSource(asset: MediaAsset, identity: string) {
+  if (!identity || typeof caches === "undefined" || !asset.src || !isInlineSource(asset.src)) return;
+  try {
+    const response = await fetch(asset.src);
+    if (!response.ok) return;
+    const blob = await response.blob();
+    if (!blob.size) return;
+    const cache = await caches.open(currentCacheName());
+    await cache.put(cacheRequest(identity), new Response(blob, {
+      headers: { "content-type": blob.type || asset.mimeType || "application/octet-stream" },
+    }));
+  } catch {
+    // Inline rendering remains available even if persistent cache priming fails.
+  }
+}
+
 async function fetchAndCache(asset: MediaAsset, identity: string) {
   if (!asset.src) return "";
   const response = await fetch(asset.src, {
@@ -99,7 +117,10 @@ async function fetchAndCache(asset: MediaAsset, identity: string) {
 
 export async function resolveMediaSource(asset?: MediaAsset, allowNetwork = true): Promise<string> {
   if (!asset?.src && !asset?.storagePath) return "";
-  if (asset.src && isInlineSource(asset.src)) return asset.src;
+  if (asset.src && isInlineSource(asset.src)) {
+    if (asset.storagePath) void persistInlineSource(asset, mediaIdentity(asset));
+    return asset.src;
+  }
 
   const identity = mediaIdentity(asset);
   if (!identity) return asset.src || "";
@@ -129,12 +150,20 @@ export function useCachedMediaSrc(asset?: MediaAsset) {
 
   useEffect(() => {
     let active = true;
-    setSrc(asset?.src && isInlineSource(asset.src) ? asset.src : "");
-    if (!asset) return () => { active = false; };
-    void resolveMediaSource(asset).then((next) => {
-      if (active) setSrc(next);
-    });
-    return () => { active = false; };
+    const resolve = () => {
+      setSrc(asset?.src && isInlineSource(asset.src) ? asset.src : "");
+      if (!asset) return;
+      void resolveMediaSource(asset).then((next) => {
+        if (active) setSrc(next);
+      });
+    };
+    resolve();
+    const onScopeChanged = () => resolve();
+    window.addEventListener(MEDIA_CACHE_SCOPE_EVENT, onScopeChanged);
+    return () => {
+      active = false;
+      window.removeEventListener(MEDIA_CACHE_SCOPE_EVENT, onScopeChanged);
+    };
   }, [asset?.id, asset?.src, asset?.storagePath, asset?.updatedAt]);
 
   return src;
