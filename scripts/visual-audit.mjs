@@ -415,6 +415,10 @@ await archiveView("海报", ".archive-poster-card");
       throw new Error(`${label} ratio is wrong: ${JSON.stringify(preview)}`);
     }
     const fixedWall = await assertSharePosters(label, ".share-layout-canvas-wall");
+    const wideFixedWallPosters = fixedWall.posters.filter((poster) => poster.width / Math.max(1, poster.height) > 0.87);
+    if (wideFixedWallPosters.length) {
+      throw new Error(`${label} wall produced horizontal poster strips: ${JSON.stringify(wideFixedWallPosters)}`);
+    }
     const envelope = {
       left: Math.min(...fixedWall.posters.map((poster) => poster.left)),
       right: Math.max(...fixedWall.posters.map((poster) => poster.right)),
