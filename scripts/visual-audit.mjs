@@ -10,6 +10,7 @@ const context = await browser.newContext({
   viewport: { width: 1600, height: 1000 },
   deviceScaleFactor: 1,
   acceptDownloads: true,
+  serviceWorkers: "block",
 });
 const page = await context.newPage();
 page.on("console", (message) => {
@@ -121,6 +122,32 @@ try {
   await page.locator(".archive-poster-card").first().waitFor({ state: "visible", timeout: 15000 });
   await page.locator(".archive-highlight-card-1 img").waitFor({ state: "visible", timeout: 15000 });
   await page.waitForTimeout(800);
+
+  // A normal refresh must hydrate posters from the persistent media cache instead
+  // of refetching every image. Block demo-media network requests after the first
+  // load so this fails if Cache Storage/session scope restoration regresses.
+  await page.waitForFunction(async () => {
+    if (!("caches" in window)) return false;
+    const names = (await caches.keys()).filter((name) => name.startsWith("live-memory-media-v3"));
+    let entries = 0;
+    for (const name of names) entries += (await (await caches.open(name)).keys()).length;
+    return entries >= 5;
+  }, null, { timeout: 15000 });
+
+  const blockedDemoRequests = [];
+  await page.route("**/demo/**", (route) => {
+    blockedDemoRequests.push(route.request().url());
+    void route.abort("failed");
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
+  await page.locator(".experience-shell").waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".archive-poster-card img").first().waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".archive-highlight-card-1 img").waitFor({ state: "visible", timeout: 15000 });
+  const reloadFallbacks = await page.locator(".archive-poster-card .record-media-fallback").count();
+  if (blockedDemoRequests.length || reloadFallbacks) {
+    throw new Error(`Persistent media cache did not survive reload: ${JSON.stringify({ blockedDemoRequests, reloadFallbacks })}`);
+  }
+  await page.unroute("**/demo/**");
 
   const bannerTitle = await page.locator(".archive-masthead h2").evaluate((heading) => ({
     rendered: getComputedStyle(heading, "::before").content,
