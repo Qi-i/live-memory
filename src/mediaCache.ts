@@ -189,6 +189,27 @@ export function mediaPreloadPlan(limit = 80, constrained?: boolean) {
   };
 }
 
+export async function preloadPrimaryRecordMedia(records: EventRecord[], workers = 6) {
+  const unique = new Map<string, MediaAsset>();
+  for (const record of records) {
+    const asset = record.media.find((item) => item.kind === "poster") || record.media[0];
+    if (!asset) continue;
+    const identity = mediaIdentity(asset);
+    if (identity && !unique.has(identity)) unique.set(identity, asset);
+  }
+
+  const queue = Array.from(unique.values());
+  let cursor = 0;
+  const tasks = Array.from({ length: Math.min(Math.max(1, workers), queue.length) }, async () => {
+    while (cursor < queue.length) {
+      const asset = queue[cursor];
+      cursor += 1;
+      await resolveMediaSource(asset).catch(() => "");
+    }
+  });
+  await Promise.all(tasks);
+}
+
 export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
   const plan = mediaPreloadPlan(limit);
   const unique = new Map<string, MediaAsset>();
