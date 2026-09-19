@@ -509,16 +509,57 @@ await archiveView("海报", ".archive-poster-card");
   await page.locator(".record-editor-v2").waitFor({ state: "detached", timeout: 5000 });
 
   await archiveView("票夹", ".archive-wallet-card");
-  const walletOffsets = await page.locator(".archive-wallet-card").evaluateAll((cards) => cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().top)));
-  if (walletOffsets.length > 1 && walletOffsets[1] - walletOffsets[0] < 145) throw new Error("Mobile wallet cards overlap vertically");
+  const walletReadability = await page.locator(".archive-wallet-card").first().evaluate((card) => {
+    const facts = card.querySelector(".archive-card-facts");
+    const artist = card.querySelector(".archive-card-artist");
+    const ticketLine = card.querySelector(".archive-ticket-line");
+    const rect = card.getBoundingClientRect();
+    return {
+      height: rect.height,
+      factsVisible: facts ? getComputedStyle(facts).display !== "none" && facts.getBoundingClientRect().height > 20 : false,
+      artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
+      ticketLineWidth: ticketLine?.getBoundingClientRect().width || 0,
+    };
+  });
+  if (walletReadability.height < 170 || !walletReadability.factsVisible || walletReadability.artistSize < 11 || walletReadability.ticketLineWidth < 70) {
+    throw new Error(`Mobile wallet metadata became unreadable: ${JSON.stringify(walletReadability)}`);
+  }
   await page.screenshot({ path: `${outputDir}/14-wallet-mobile.png`, fullPage: true });
 
   await archiveView("票根", ".archive-ticket");
-  const ticketTops = await page.locator(".archive-ticket").evaluateAll((cards) => cards.slice(0, 4).map((card) => Math.round(card.getBoundingClientRect().top)));
-  if (ticketTops.length > 1 && Math.abs(ticketTops[1] - ticketTops[0]) > 3) throw new Error("Mobile ticket view is not a compact multi-column grid");
+  const mobileTicket = await page.locator(".archive-ticket").first().evaluate((card) => {
+    const rect = card.getBoundingClientRect();
+    const grid = card.parentElement?.getBoundingClientRect();
+    const facts = card.querySelector(".archive-card-facts");
+    const ticketLine = card.querySelector(".archive-ticket-line");
+    const artist = card.querySelector(".archive-card-artist");
+    return {
+      widthUse: grid ? rect.width / grid.width : 0,
+      factsVisible: facts ? getComputedStyle(facts).display !== "none" && facts.getBoundingClientRect().height > 24 : false,
+      artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
+      ticketLineWidth: ticketLine?.getBoundingClientRect().width || 0,
+    };
+  });
+  if (mobileTicket.widthUse < 0.92 || !mobileTicket.factsVisible || mobileTicket.artistSize < 11 || mobileTicket.ticketLineWidth < 90) {
+    throw new Error(`Mobile ticket view must stay single-column and readable: ${JSON.stringify(mobileTicket)}`);
+  }
   await page.screenshot({ path: `${outputDir}/15-ticket-mobile.png`, fullPage: true });
 
   await archiveView("列表", ".archive-list button");
+  const mobileList = await page.locator(".archive-list button").first().evaluate((row) => {
+    const artist = row.querySelector(".archive-card-artist");
+    const ticket = row.querySelector(".archive-list-ticket");
+    const seat = ticket?.querySelector("small");
+    return {
+      height: row.getBoundingClientRect().height,
+      artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
+      ticketVisible: ticket ? ticket.getBoundingClientRect().height > 10 : false,
+      seatVisible: seat ? seat.getBoundingClientRect().width > 4 : false,
+    };
+  });
+  if (mobileList.height < 100 || mobileList.artistSize < 11 || !mobileList.ticketVisible || !mobileList.seatVisible) {
+    throw new Error(`Mobile list metadata is incomplete: ${JSON.stringify(mobileList)}`);
+  }
   await page.screenshot({ path: `${outputDir}/16-list-mobile.png`, fullPage: true });
 
   const mobileShareButton = page.locator(".archive-command-actions button").last();
