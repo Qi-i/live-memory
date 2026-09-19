@@ -834,6 +834,7 @@ export interface SyncConflict {
   title: string;
   localUpdatedAt: string;
   cloudUpdatedAt: string;
+  diffFields: string[];
   localRecord: EventRecord;
   cloudRecord: EventRecord;
   source: "account" | "personal";
@@ -896,14 +897,27 @@ export async function autoSyncAll(settings: AppSettings, localRecords: EventReco
 }
 
 function canonicalSyncRecord(record: EventRecord, includeMedia: boolean) {
-  const { syncedAt: _syncedAt, updatedAt: _updatedAt, media, ...rest } = record;
+  const {
+    schemaVersion: _schemaVersion,
+    syncedAt: _syncedAt,
+    updatedAt: _updatedAt,
+    createdAt: _createdAt,
+    media,
+    mediaTombstones,
+    ...rest
+  } = record;
   const normalizedMedia = includeMedia
     ? media.map((asset) => {
       const { updatedAt: _assetUpdatedAt, source: _assetSource, src, ...stable } = asset;
       return { ...stable, src: asset.storagePath ? "" : src };
     }).sort((a, b) => String(a.id).localeCompare(String(b.id)))
     : [];
-  return { ...rest, media: normalizedMedia };
+  const normalizedTombstones = includeMedia
+    ? (mediaTombstones || [])
+      .map((item) => ({ ...item }))
+      .sort((a, b) => String(a.id).localeCompare(String(b.id)))
+    : [];
+  return { ...rest, media: normalizedMedia, mediaTombstones: normalizedTombstones };
 }
 
 function sortForStableJson(value: unknown): unknown {
@@ -917,6 +931,40 @@ function sortForStableJson(value: unknown): unknown {
 export function recordsSemanticallyEqual(local: EventRecord, cloud: EventRecord, includeMedia = true) {
   return JSON.stringify(sortForStableJson(canonicalSyncRecord(local, includeMedia)))
     === JSON.stringify(sortForStableJson(canonicalSyncRecord(cloud, includeMedia)));
+}
+
+const syncConflictFieldLabels: Array<[keyof EventRecord, string]> = [
+  ["title", "标题"],
+  ["category", "类型"],
+  ["status", "观看状态"],
+  ["recordState", "记录状态"],
+  ["date", "日期"],
+  ["time", "时间"],
+  ["city", "城市"],
+  ["venue", "场馆"],
+  ["address", "地址"],
+  ["coordinates", "坐标"],
+  ["artists", "艺人"],
+  ["lineup", "阵容"],
+  ["price", "票价"],
+  ["publicPriceRange", "公开票价"],
+  ["seat", "座位"],
+  ["companions", "同行人"],
+  ["tags", "标签"],
+  ["note", "备注"],
+  ["setlist", "歌单"],
+  ["sourceChannel", "来源"],
+  ["sourceUrl", "来源链接"],
+  ["importConfidence", "导入信息"],
+  ["favorite", "收藏状态"],
+  ["colors", "主题色"],
+  ["deletedAt", "删除状态"],
+];
+
+export function syncConflictDiffFields(local: EventRecord, cloud: EventRecord) {
+  return syncConflictFieldLabels
+    .filter(([key]) => JSON.stringify(sortForStableJson(local[key])) !== JSON.stringify(sortForStableJson(cloud[key])))
+    .map(([, label]) => label);
 }
 
 async function syncAccountTextBackup(settings: AppSettings, localRecords: EventRecord[]): Promise<AutoSyncResult> {
@@ -1009,35 +1057,65 @@ async function syncPersonalSupabase(settings: AppSettings, localRecords: EventRe
       toPush.push(local);
       continue;
     }
-    if (recordsSemanticallyEqual(local, cloud, true)) {
+    const includeMedia = settings.supabase.syncMedia;
+    if (recordsSemanticallyEqual(local, cloud, includeMedia)) {
       merged.set(id, normalizeRecord({ ...local, syncedAt: nowIso() }));
       continue;
     }
+
+    // Media transport details (signed URLs, source labels, upload metadata and
+    // tombstones) are mergeable state, not a reason to ask the user which text
+    // version "won". Only real user-facing record differences may open a dialog.
+    if (recordsSemanticallyEqual(local, cloud, false)) {
+      const latest = cloud.updatedAt > local.updatedAt ? cloud : local;
+      const reconciled = normalizeRecord({
+        ...latest,
+        ...mergeMediaState(local, cloud),
+        syncedAt: nowIso(),
+      });
+      merged.set(id, reconciled);
+      if (includeMedia && !recordsSemanticallyEqual(reconciled, cloud, true)) {
+        toPush.push(reconciled);
+      }
+      continue;
+    }
+
+    const pushConflict = () => conflicts.push({
+      recordId: id,
+      title: local.title,
+      localUpdatedAt: local.updatedAt,
+      cloudUpdatedAt: cloud.updatedAt,
+      diffFields: syncConflictDiffFields(local, cloud),
+      localRecord: local,
+      cloudRecord: cloud,
+      source: "personal",
+    });
+
     const syncedAt = local.syncedAt;
     if (syncedAt) {
       const localChanged = local.updatedAt > syncedAt;
       const cloudChanged = cloud.updatedAt > syncedAt;
       if (localChanged && cloudChanged) {
-        conflicts.push({
-          recordId: id,
-          title: local.title,
-          localUpdatedAt: local.updatedAt,
-          cloudUpdatedAt: cloud.updatedAt,
-          localRecord: local,
-          cloudRecord: cloud,
-          source: "personal",
-        });
+        pushConflict();
       } else if (!localChanged && cloudChanged) {
         merged.set(id, normalizeRecord({ ...cloud, ...mergeMediaState(local, cloud), syncedAt: nowIso() }));
       } else if (localChanged && !cloudChanged) {
         toPush.push(local);
-      }
-    } else {
-      if (cloud.updatedAt > local.updatedAt) {
+      } else if (cloud.updatedAt > local.updatedAt) {
         merged.set(id, normalizeRecord({ ...cloud, ...mergeMediaState(local, cloud), syncedAt: nowIso() }));
-      } else {
+      } else if (local.updatedAt > cloud.updatedAt) {
         toPush.push(local);
+      } else {
+        pushConflict();
       }
+    } else if (cloud.updatedAt > local.updatedAt) {
+      merged.set(id, normalizeRecord({ ...cloud, ...mergeMediaState(local, cloud), syncedAt: nowIso() }));
+    } else if (local.updatedAt > cloud.updatedAt) {
+      toPush.push(local);
+    } else {
+      // Same timestamp but genuinely different user-facing content cannot be
+      // ordered safely; this is the rare case where a choice is actually needed.
+      pushConflict();
     }
   }
 
