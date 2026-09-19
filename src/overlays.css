@@ -678,7 +678,36 @@
   line-height: 1.5;
 }
 
-.conflict-dialog-v2 article > div {
+.conflict-record-copy-v2 {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.conflict-record-copy-v2 > strong {
+  font-size: 14px;
+  line-height: 1.28;
+}
+
+.conflict-record-copy-v2 > span {
+  color: #108879;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.conflict-record-copy-v2 > small {
+  color: var(--experience-muted);
+  font-size: 10px;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.conflict-actions-v2 {
+  display: flex;
+  gap: 5px;
+}
+
+.conflict-dialog-v2 article > div:not(.conflict-record-copy-v2):not(.conflict-actions-v2) {
   display: flex;
   gap: 5px;
 }
