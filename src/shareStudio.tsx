@@ -27,7 +27,7 @@ import { BrandLockup } from "./brand";
 import type { EventCategory, EventRecord, MapConfig } from "./domain";
 import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
 import { loadAmap, type AMapLngLatLike, type AMapNamespace } from "./amap";
-import { loadMediaImage, preloadRecordMedia, useCachedMediaSrc } from "./mediaCache";
+import { loadMediaImage, preloadPrimaryRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 
 export type ShareFormat =
@@ -287,7 +287,10 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
   useEffect(() => {
     let active = true;
     setPreparing(true);
-    void preloadRecordMedia(selectedRecords).finally(() => {
+    // Share compositions use the primary poster from every selected record. Warm
+    // those exact assets before mounting the dense canvas so the preview appears
+    // as one composition instead of progressively refetching a few late posters.
+    void preloadPrimaryRecordMedia(selectedRecords).finally(() => {
       if (active) setPreparing(false);
     });
     return () => { active = false; };
@@ -518,7 +521,9 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
               <div><span>LIVE MEMORY · CONCERT ARCHIVE</span><h1>{headline.trim() || "我的现场档案"}</h1><p>{period} · {selectedRecords.length} 场演出 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</p></div>
               {showBrand ? <BrandLockup compact inverse={isDarkPalette(palette)} size={44} /> : null}
             </header>
-            <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} onOpenMapSettings={onOpenMapSettings} />
+            {preparing
+              ? <div className="share-preview-preparing"><span>正在从统一图片缓存准备海报…</span></div>
+              : <SharePreviewLayout records={selectedRecords} layout={layout} spec={spec} showDetails={showDetails} mapSettings={mapSettings} onOpenMapSettings={onOpenMapSettings} />}
             <footer>
               {showBrand ? <span className="share-preview-github">GitHub · Qi-i/live-memory</span> : <span />}
               {showStats ? <strong>{cities} 城市 · {watched} 已看</strong> : <strong />}
