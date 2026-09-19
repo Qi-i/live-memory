@@ -219,8 +219,11 @@ try {
   assert.doesNotMatch(mediaCache, /storage:\$\{asset\.storagePath\}:\$\{asset\.updatedAt/);
   assert.match(appController, /preloadRecordMedia/);
   assert.match(appController, /CustomEvent<\{ storagePath\?: string \}>/);
-  assert.doesNotMatch(appController, /window\.addEventListener\("focus", check\)/);
+  assert.doesNotMatch(appController, /window\.addEventListener\("focus"/);
   assert.doesNotMatch(appController, /document\.addEventListener\("visibilitychange", onVisible\)/);
+  assert.match(appController, /setInterval\(retryPersonalCloud,\s*60_000\)/);
+  assert.match(mediaCache, /PageTransitionEvent/);
+  assert.match(mediaCache, /persisted\) return/);
   assert.match(archive, /resolveMarkerPosterSources/);
   assert.match(archive, /placeGroupMapFingerprint/);
   assert.match(archive, /loadMediaImage\(media\)/, "Map marker posters must be decoded through the shared media cache before marker mounting");
