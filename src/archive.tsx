@@ -38,6 +38,7 @@ import type {
   MediaAsset,
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
+import { BrandMark } from "./brand";
 import { loadMediaImage, resolveMediaSource, useCachedMediaSrc } from "./mediaCache";
 import { loadAmap, type AMapMapInstance } from "./amap";
 import "./archiveContextMenu.css";
@@ -194,7 +195,7 @@ export function ArchivePage({
     <section className="archive-page">
       <header className="archive-masthead">
         <div className="archive-masthead-copy">
-          <span>LIVE MEMORY · 我的演出档案</span>
+          <div className="archive-brand-kicker"><BrandMark size={28} /><span>LIVE MEMORY · 我的演出档案</span></div>
           <h2>每一场现场，<br />都是独一无二的记忆。</h2>
           <p>把看过的演出、留下的票根和走过的城市，整理成一份会继续生长的个人档案。</p>
           <div className="archive-masthead-actions">
