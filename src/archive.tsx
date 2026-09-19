@@ -803,7 +803,7 @@ function ListView({ records, onOpen }: { records: EventRecord[]; onOpen: (record
       <strong>{record.title}</strong>
       <em className="archive-card-artist">{archiveArtist(record)}</em>
       <span>{archiveLocation(record)}</span>
-      <b className="archive-list-ticket"><span>{archivePrice(record)}</span><small>{record.seat || "座位待补"}</small></b>
+      <div className="archive-list-ticket"><span>{archivePrice(record)}</span><small>{record.seat || "座位待补"}</small></div>
     </button>)}
   </section>;
 }
