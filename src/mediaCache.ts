@@ -5,6 +5,7 @@ const CACHE_PREFIX = "live-memory-media-v3";
 const LEGACY_CACHE_NAMES = ["live-memory-media-v2"];
 const objectUrls = new Map<string, string>();
 const pendingSources = new Map<string, Promise<string>>();
+const decodedImages = new Map<string, Promise<HTMLImageElement | null>>();
 const MEDIA_CACHE_SCOPE_EVENT = "live-memory:media-cache-scope";
 let cleanupRegistered = false;
 let mediaCacheScope = "anonymous";
@@ -17,6 +18,7 @@ function resetObjectUrls() {
   objectUrls.forEach((url) => URL.revokeObjectURL(url));
   objectUrls.clear();
   pendingSources.clear();
+  decodedImages.clear();
 }
 
 export function setMediaCacheScope(scope: string) {
@@ -194,8 +196,8 @@ export async function preloadPrimaryRecordMedia(records: EventRecord[], workers 
   for (const record of records) {
     const asset = record.media.find((item) => item.kind === "poster") || record.media[0];
     if (!asset) continue;
-    const identity = mediaIdentity(asset);
-    if (identity && !unique.has(identity)) unique.set(identity, asset);
+    const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
+    if (!unique.has(identity)) unique.set(identity, asset);
   }
 
   const queue = Array.from(unique.values());
@@ -204,7 +206,7 @@ export async function preloadPrimaryRecordMedia(records: EventRecord[], workers 
     while (cursor < queue.length) {
       const asset = queue[cursor];
       cursor += 1;
-      await resolveMediaSource(asset).catch(() => "");
+      await loadMediaImage(asset).catch(() => null);
     }
   });
   await Promise.all(tasks);
@@ -236,16 +238,33 @@ export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
 
 export async function loadMediaImage(asset?: MediaAsset) {
   if (!asset) return null;
-  const src = await resolveMediaSource(asset);
-  if (!src) return null;
-  return new Promise<HTMLImageElement | null>((resolve) => {
-    const image = new Image();
-    if (!isInlineSource(src)) image.crossOrigin = "anonymous";
-    image.decoding = "async";
-    image.onload = () => resolve(image);
-    image.onerror = () => resolve(null);
-    image.src = src;
-  });
+  const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
+  const existing = decodedImages.get(identity);
+  if (existing) return existing;
+
+  const task = (async () => {
+    const src = await resolveMediaSource(asset);
+    if (!src) return null;
+    return new Promise<HTMLImageElement | null>((resolve) => {
+      const image = new Image();
+      if (!isInlineSource(src)) image.crossOrigin = "anonymous";
+      image.decoding = "async";
+      image.onload = async () => {
+        try {
+          await image.decode?.();
+        } catch {
+          // onload already proves the image is renderable.
+        }
+        resolve(image);
+      };
+      image.onerror = () => resolve(null);
+      image.src = src;
+    });
+  })();
+  decodedImages.set(identity, task);
+  const image = await task;
+  if (!image) decodedImages.delete(identity);
+  return image;
 }
 
 export async function clearPersistentMediaCache() {
