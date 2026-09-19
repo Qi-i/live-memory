@@ -214,10 +214,27 @@ try {
   assert.match(mediaCache, /storage:\$\{asset\.storagePath\}/);
   assert.match(mediaCache, /MEDIA_CACHE_SCOPE_EVENT/);
   assert.match(mediaCache, /persistInlineSource/);
+  assert.match(mediaCache, /peekResolvedMediaSource/);
+  assert.match(mediaCache, /export async function preloadPrimaryRecordMedia/);
+  assert.doesNotMatch(mediaCache, /storage:\$\{asset\.storagePath\}:\$\{asset\.updatedAt/);
   assert.match(appController, /preloadRecordMedia/);
   assert.match(appController, /CustomEvent<\{ storagePath\?: string \}>/);
+  assert.doesNotMatch(appController, /window\.addEventListener\("focus", check\)/);
+  assert.doesNotMatch(appController, /document\.addEventListener\("visibilitychange", onVisible\)/);
+  assert.match(archive, /resolveMarkerPosterSources/);
+  assert.match(archive, /placeGroupMapFingerprint/);
+  assert.match(archive, /resolveMediaSource\(primaryMedia\(record\)\)/);
+  assert.doesNotMatch(archive, /map\.setFitView/);
+  assert.match(archive, /resizeEnable:\s*false/);
   assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
-  assert.match(shareStudio, /正在准备海报/);
+  assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords\)/);
+  assert.match(shareStudio, /SHARE_POSTER_MAX_FRAME_ASPECT\s*=\s*0\.86/);
+  assert.match(shareStudio, /fitPosterRowRatios/);
+  assert.match(shareStudio, /is-poster-preserved/);
+  assert.match(shareStudio, /shareCityPositionCache/);
+  assert.match(shareStudio, /shareCityFingerprint/);
+  assert.match(shareStudioCss, /share-poster-frame\.is-preserved[\s\S]*object-fit:\s*contain/);
+  assert.match(shareStudio, /正在从统一图片缓存准备海报/);
 
   console.log("Core and architecture verification passed: account rules, username-or-email login compatibility, safe URL cleanup, in-memory example mode, modular shell, archive view registry, complete poster frames, fitted preview scaling, category-aware newest-first sharing, four geometry-driven layouts, reusable branding, responsive navigation, cached media, GitHub entry, cloud upload guard, and clear auth errors.");
 } finally {
