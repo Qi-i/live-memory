@@ -38,7 +38,7 @@ import type {
   MediaAsset,
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
-import { resolveMediaSource, useCachedMediaSrc } from "./mediaCache";
+import { loadMediaImage, resolveMediaSource, useCachedMediaSrc } from "./mediaCache";
 import { loadAmap, type AMapMapInstance } from "./amap";
 import "./archiveContextMenu.css";
 export type { ShareFormat } from "./shareStudio";
@@ -601,7 +601,9 @@ async function resolveMarkerPosterSources(groups: PlaceGroup[]) {
     for (const record of group.records.slice(0, 3)) records.set(record.id, record);
   }
   await Promise.all(Array.from(records.values()).map(async (record) => {
-    const source = await resolveMediaSource(primaryMedia(record)).catch(() => "");
+    const media = primaryMedia(record);
+    const image = await loadMediaImage(media).catch(() => null);
+    const source = image?.src || await resolveMediaSource(media).catch(() => "");
     if (source) sources.set(record.id, source);
   }));
   return sources;
