@@ -1128,6 +1128,21 @@ function buildCityModel(records: EventRecord[], area: Rect, spec: CanvasSpec) {
   };
 }
 
+function shareCityFingerprint(records: EventRecord[]) {
+  const cities = new Map<string, string>();
+  for (const record of records) {
+    const label = record.city.trim();
+    if (!label) continue;
+    const key = label.replace(/市$/u, "").trim().toLowerCase();
+    const current = cities.get(key);
+    if (!current || record.date.localeCompare(current) < 0) cities.set(key, record.date);
+  }
+  return Array.from(cities.entries())
+    .sort(([a], [b]) => a.localeCompare(b, "zh-CN"))
+    .map(([city, date]) => `${city}:${date}`)
+    .join("|");
+}
+
 function ShareAmapMap({
   records,
   mapSettings,
@@ -1142,8 +1157,12 @@ function ShareAmapMap({
   onOpenMapSettings: () => void;
 }) {
   const hostRef = useRef<HTMLDivElement | null>(null);
+  const recordsRef = useRef(records);
+  recordsRef.current = records;
   const [state, setState] = useState<"idle" | "loading" | "ready" | "empty" | "error">("idle");
   const [resolvedCount, setResolvedCount] = useState(0);
+  const cityFingerprint = useMemo(() => shareCityFingerprint(records), [records]);
+  const viewportFingerprint = `${Math.round(rect.width)}x${Math.round(rect.height)}`;
 
   useEffect(() => {
     if (!mapSettings.amapKey.trim()) {
@@ -1161,7 +1180,7 @@ function ShareAmapMap({
       .then(async (AMap) => {
         if (disposed || !hostRef.current) return;
         map = createAmapInstance(AMap, hostRef.current);
-        const points = await resolveShareMapPoints(AMap, records);
+        const points = await resolveShareMapPoints(AMap, recordsRef.current);
         if (disposed || !map) return;
         const markers = points.map((point) => new AMap.Marker({ position: point.position, title: point.title }));
         if (AMap.Polyline && points.length > 1) {
@@ -1187,7 +1206,12 @@ function ShareAmapMap({
       disposed = true;
       map?.destroy();
     };
-  }, [mapSettings.amapKey, mapSettings.amapSecurityCode, records]);
+  }, [
+    cityFingerprint,
+    mapSettings.amapKey,
+    mapSettings.amapSecurityCode,
+    viewportFingerprint,
+  ]);
 
   const configured = Boolean(mapSettings.amapKey.trim());
   return (
@@ -1231,7 +1255,7 @@ function chinaViewportZoom(host: HTMLElement) {
 
 function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
   return new AMap.Map(host, {
-    resizeEnable: true,
+    resizeEnable: false,
     viewMode: "2D",
     center: SHARE_CHINA_MAP_CENTER,
     zoom: chinaViewportZoom(host),
@@ -1246,6 +1270,8 @@ function createAmapInstance(AMap: AMapNamespace, host: HTMLElement) {
     pitchEnable: false,
   });
 }
+
+const shareCityPositionCache = new Map<string, [number, number]>();
 
 async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]): Promise<ShareMapPoint[]> {
   const cities = new Map<string, { label: string; date: string }>();
@@ -1264,12 +1290,13 @@ async function resolveShareMapPoints(AMap: AMapNamespace, records: EventRecord[]
   if (!AMap.Geocoder) return [];
   const geocoder = new AMap.Geocoder({ city: "全国" });
 
-  const points: ShareMapPoint[] = [];
-  for (const city of cities.values()) {
-    const position = await geocodeAmapPlace(geocoder, city.label);
-    if (position) points.push({ position, title: city.label, date: city.date });
-  }
-  return points;
+  const points = await Promise.all(Array.from(cities.entries()).map(async ([key, city]) => {
+    const cached = shareCityPositionCache.get(key);
+    const position = cached || await geocodeAmapPlace(geocoder, city.label);
+    if (position && !cached) shareCityPositionCache.set(key, position);
+    return position ? { position, title: city.label, date: city.date } satisfies ShareMapPoint : null;
+  }));
+  return points.filter((point): point is ShareMapPoint => Boolean(point));
 }
 
 function geocodeAmapPlace(
