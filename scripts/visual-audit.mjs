@@ -38,6 +38,7 @@ async function posterGeometry(selector) {
   return page.locator(selector).evaluateAll((figures) => figures.map((figure) => {
     const rect = figure.getBoundingClientRect();
     const image = figure.querySelector("img");
+    const foreground = figure.querySelector(".share-poster-foreground");
     return {
       left: rect.left,
       top: rect.top,
@@ -46,6 +47,8 @@ async function posterGeometry(selector) {
       width: rect.width,
       height: rect.height,
       objectFit: image ? getComputedStyle(image).objectFit : "fallback",
+      foregroundObjectFit: foreground ? getComputedStyle(foreground).objectFit : "fallback",
+      preserved: figure.classList.contains("is-poster-preserved"),
     };
   }));
 }
@@ -56,8 +59,13 @@ async function assertSharePosters(label, canvasSelector) {
   if (!canvas || posters.length < 3) throw new Error(`${label} did not render enough posters`);
   const parent = { left: canvas.x, top: canvas.y, right: canvas.x + canvas.width, bottom: canvas.y + canvas.height };
   posters.forEach((poster, index) => {
-    if (poster.objectFit !== "cover" && poster.objectFit !== "fallback") {
-      throw new Error(`${label} poster ${index + 1} does not fill its frame with object-fit ${poster.objectFit}`);
+    const frameAspect = poster.width / Math.max(1, poster.height);
+    if (frameAspect > 0.87) {
+      if (!poster.preserved || poster.foregroundObjectFit !== "contain") {
+        throw new Error(`${label} poster ${index + 1} became a wide crop without full-poster preservation: ${JSON.stringify(poster)}`);
+      }
+    } else if (!["cover", "fallback"].includes(poster.foregroundObjectFit)) {
+      throw new Error(`${label} poster ${index + 1} has unexpected foreground fit: ${poster.foregroundObjectFit}`);
     }
     assertContained(`${label} poster ${index + 1}`, poster, parent, 2);
   });
@@ -270,8 +278,20 @@ if (offlineMap.width < 500 || offlineMap.height < 300 || offlineMap.itemCount < 
 await page.screenshot({ path: `${outputDir}/05b-offline-city-summary.png`, fullPage: true });
 await archiveView("海报", ".archive-poster-card");
 
+  const shareRefetches = [];
+  await page.route("**/demo/**", (route) => {
+    shareRefetches.push(route.request().url());
+    void route.abort("failed");
+  });
   await page.getByRole("button", { name: "制作分享图", exact: true }).click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
+  await page.locator(".share-preview-preparing").waitFor({ state: "detached", timeout: 30000 }).catch(() => undefined);
+  await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 30000 });
+  if (shareRefetches.length) throw new Error(`Opening Share Studio refetched posters already present in the shared media cache: ${shareRefetches.join(",")}`);
+  if (await page.locator(".share-layout-canvas-wall .share-poster-fallback").count()) {
+    throw new Error("Share Studio mounted the wall before all cached primary posters were ready");
+  }
+  await page.unroute("**/demo/**");
   const activeFormat = await page.locator(".share-format-control button.is-active").innerText();
   if (!activeFormat.includes("智能横版")) throw new Error(`Share studio did not open in smart landscape mode: ${activeFormat}`);
   const activeLimit = await page.locator(".share-count-control button.is-active").innerText();
@@ -286,6 +306,8 @@ await archiveView("海报", ".archive-poster-card");
 
   await assertFixedPreviewFits("Wall");
   const wall = await assertSharePosters("Wall", ".share-layout-canvas-wall");
+  const wideWallPosters = wall.posters.filter((poster) => poster.width / Math.max(1, poster.height) > 0.87);
+  if (wideWallPosters.length) throw new Error(`Wall poster slots became horizontal strips: ${JSON.stringify(wideWallPosters)}`);
   const wallFill = wall.posters.reduce((sum, poster) => sum + poster.width * poster.height, 0) / (wall.canvas.width * wall.canvas.height);
   if (wallFill < 0.88) throw new Error(`Wall layout leaves too much empty space: ${wallFill.toFixed(3)}`);
   const wallEnvelope = {
@@ -414,7 +436,10 @@ await archiveView("海报", ".archive-poster-card");
     throw new Error(`Timeline year labels are too small: ${timelineTypography.join(",")}`);
   }
   await assertFixedPreviewFits("Timeline");
-  await assertSharePosters("Timeline", ".share-layout-timeline .share-layout-canvas");
+  const timelinePosters = await assertSharePosters("Timeline", ".share-layout-timeline .share-layout-canvas");
+  if (timelinePosters.posters.some((poster) => poster.width / Math.max(1, poster.height) > 0.87)) {
+    throw new Error(`Timeline poster slots became horizontal strips: ${JSON.stringify(timelinePosters.posters)}`);
+  }
   await page.screenshot({ path: `${outputDir}/07-share-timeline.png`, fullPage: true });
 
   await layoutButton("编目杂志").click();
@@ -444,6 +469,10 @@ await archiveView("海报", ".archive-poster-card");
   if (await page.locator(".share-coordinate-field, .share-city-bands").count()) throw new Error("Legacy fabricated coordinate field is still rendered");
   const cityPosterCount = await page.locator(".share-city-poster-grid .share-layout-poster").count();
   if (cityPosterCount < 3) throw new Error(`City route poster field is too sparse: ${cityPosterCount}`);
+  const cityPosterGeometry = await posterGeometry(".share-city-poster-grid .share-layout-poster");
+  if (cityPosterGeometry.some((poster) => poster.width / Math.max(1, poster.height) > 0.87)) {
+    throw new Error(`City poster slots became horizontal strips: ${JSON.stringify(cityPosterGeometry)}`);
+  }
   const mapCopy = await page.locator(".share-amap-panel").innerText();
   if (!mapCopy.includes("高德")) throw new Error(`City route does not identify the AMap surface: ${mapCopy}`);
   if (mapCopy.includes("需要高德地图") && !mapCopy.includes("去配置高德地图")) {
