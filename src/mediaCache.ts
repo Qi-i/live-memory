@@ -71,9 +71,12 @@ function cacheRequest(identity: string) {
 function registerCleanup() {
   if (cleanupRegistered || typeof window === "undefined") return;
   cleanupRegistered = true;
-  window.addEventListener("pagehide", () => {
+  window.addEventListener("pagehide", (event) => {
+    // BFCache keeps the document alive. Revoking object URLs here would leave
+    // restored views holding dead poster URLs and force a second decode/load.
+    if ((event as PageTransitionEvent).persisted) return;
     resetObjectUrls();
-  }, { once: true });
+  });
 }
 
 async function readCachedSource(identity: string) {

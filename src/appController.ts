@@ -250,12 +250,15 @@ export function useAppController() {
     if (isGuest || !access.user || settings.storageMode !== "supabase" || !hasSupabaseConfig(settings) || personalCloudStatus === "connected") return;
     const retryPersonalCloud = () => void recoverPersonalCloud(true);
     const initial = window.setTimeout(retryPersonalCloud, 1200);
-    window.addEventListener("focus", retryPersonalCloud);
-    window.addEventListener("online", retryPersonalCloud);
+    const retryInterval = window.setInterval(retryPersonalCloud, 60_000);
+    const onOnline = () => void recoverPersonalCloud(true);
+    // Window focus / foregrounding is not a connectivity signal. Retry on a
+    // bounded timer or when the browser actually comes back online instead.
+    window.addEventListener("online", onOnline);
     return () => {
       window.clearTimeout(initial);
-      window.removeEventListener("focus", retryPersonalCloud);
-      window.removeEventListener("online", retryPersonalCloud);
+      window.clearInterval(retryInterval);
+      window.removeEventListener("online", onOnline);
     };
   }, [access.user, isGuest, personalCloudStatus, settings.storageMode, settings.supabase.anonKey, settings.supabase.url]);
 
