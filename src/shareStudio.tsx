@@ -656,15 +656,19 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
 }
 
 function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
+  const preserveFullPoster = slot.rect.width / Math.max(1, slot.rect.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
   return (
-    <figure className={`share-layout-poster is-${slot.emphasis || "normal"}`} style={localRectStyle(slot.rect, origin)}>
-      <SharePoster record={slot.record} />
+    <figure
+      className={`share-layout-poster is-${slot.emphasis || "normal"}${preserveFullPoster ? " is-poster-preserved" : ""}`}
+      style={localRectStyle(slot.rect, origin)}
+    >
+      <SharePoster record={slot.record} preserveFull={preserveFullPoster} />
       {showDetails ? <figcaption><span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span><b>{slot.record.title}</b></figcaption> : null}
     </figure>
   );
 }
 
-function SharePoster({ record }: { record: EventRecord }) {
+function SharePoster({ record, preserveFull = false }: { record: EventRecord; preserveFull?: boolean }) {
   const media = primaryMedia(record);
   const src = useCachedMediaSrc(media);
   const style = {
@@ -672,8 +676,11 @@ function SharePoster({ record }: { record: EventRecord }) {
     "--poster-b": record.colors[1],
     aspectRatio: String(recordPosterRatio(record)),
   } as CSSProperties;
-  if (!src) return <span className="share-poster-frame" style={style}><span className="share-poster-fallback">{record.title.slice(0, 4)}</span></span>;
-  return <span className="share-poster-frame" style={style}><img className="share-poster-foreground" src={src} alt={record.title} decoding="async" /></span>;
+  if (!src) return <span className={`share-poster-frame${preserveFull ? " is-preserved" : ""}`} style={style}><span className="share-poster-fallback">{record.title.slice(0, 4)}</span></span>;
+  return <span className={`share-poster-frame${preserveFull ? " is-preserved" : ""}`} style={style}>
+    {preserveFull ? <img className="share-poster-backdrop" src={src} alt="" aria-hidden="true" decoding="async" /> : null}
+    <img className="share-poster-foreground" src={src} alt={record.title} decoding="async" />
+  </span>;
 }
 
 function recordPosterRatio(record: EventRecord) {
@@ -1665,8 +1672,20 @@ async function drawPoster(
   context.clip();
 
   const image = await loadMediaImage(primaryMedia(record));
-  if (image) drawCover(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
-  else drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
+  if (image) {
+    const preserveFullPoster = slot.width / Math.max(1, slot.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
+    if (preserveFullPoster) {
+      context.save();
+      context.filter = "blur(18px) saturate(.9)";
+      drawCover(context, image, slot.x - 16, slot.y - 16, slot.width + 32, slot.height + 32, palette.surface);
+      context.restore();
+      context.fillStyle = "rgba(10, 18, 16, .18)";
+      context.fillRect(slot.x, slot.y, slot.width, slot.height);
+      drawContain(context, image, slot.x, slot.y, slot.width, slot.height);
+    } else {
+      drawCover(context, image, slot.x, slot.y, slot.width, slot.height, palette.surface);
+    }
+  } else drawFallback(context, record, slot.x, slot.y, slot.width, slot.height);
   if (showDetails) drawDetails(context, record, slot, palette);
   context.restore();
 
@@ -1754,6 +1773,22 @@ function drawCover(context: CanvasRenderingContext2D, image: HTMLImageElement, x
   const drawWidth = image.naturalWidth * scale;
   const drawHeight = image.naturalHeight * scale;
   context.drawImage(image, x + (width - drawWidth) / 2, y + (height - drawHeight) / 2, drawWidth, drawHeight);
+}
+
+function drawContain(context: CanvasRenderingContext2D, image: HTMLImageElement, x: number, y: number, width: number, height: number) {
+  const inset = Math.max(2, Math.min(width, height) * 0.018);
+  const availableWidth = Math.max(1, width - inset * 2);
+  const availableHeight = Math.max(1, height - inset * 2);
+  const scale = Math.min(availableWidth / image.naturalWidth, availableHeight / image.naturalHeight);
+  const drawWidth = image.naturalWidth * scale;
+  const drawHeight = image.naturalHeight * scale;
+  context.drawImage(
+    image,
+    x + (width - drawWidth) / 2,
+    y + (height - drawHeight) / 2,
+    drawWidth,
+    drawHeight,
+  );
 }
 
 function drawFallback(context: CanvasRenderingContext2D, record: EventRecord, x: number, y: number, width: number, height: number) {
