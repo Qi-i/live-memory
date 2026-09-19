@@ -550,15 +550,22 @@ await archiveView("海报", ".archive-poster-card");
     const artist = row.querySelector(".archive-card-artist");
     const ticket = row.querySelector(".archive-list-ticket");
     const seat = ticket?.querySelector("small");
+    const rowRect = row.getBoundingClientRect();
+    const ticketRect = ticket?.getBoundingClientRect();
     return {
-      height: row.getBoundingClientRect().height,
+      height: rowRect.height,
       artistSize: artist ? parseFloat(getComputedStyle(artist).fontSize) : 0,
-      ticketVisible: ticket ? ticket.getBoundingClientRect().height > 10 : false,
-      seatVisible: seat ? seat.getBoundingClientRect().width > 4 : false,
+      ticketVisible: Boolean(ticketRect && ticketRect.height > 10),
+      seatVisible: Boolean(seat && seat.getBoundingClientRect().width > 4),
+      ticketContained: Boolean(ticketRect
+        && ticketRect.left >= rowRect.left
+        && ticketRect.right <= rowRect.right + 1
+        && ticketRect.top >= rowRect.top
+        && ticketRect.bottom <= rowRect.bottom + 1),
     };
   });
-  if (mobileList.height < 100 || mobileList.artistSize < 11 || !mobileList.ticketVisible || !mobileList.seatVisible) {
-    throw new Error(`Mobile list metadata is incomplete: ${JSON.stringify(mobileList)}`);
+  if (mobileList.height < 112 || mobileList.artistSize < 11 || !mobileList.ticketVisible || !mobileList.seatVisible || !mobileList.ticketContained) {
+    throw new Error(`Mobile list metadata is incomplete or clipped: ${JSON.stringify(mobileList)}`);
   }
   await page.screenshot({ path: `${outputDir}/16-list-mobile.png`, fullPage: true });
 
