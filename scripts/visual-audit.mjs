@@ -291,6 +291,14 @@ await archiveView("海报", ".archive-poster-card");
   if (await page.locator(".share-layout-canvas-wall .share-poster-fallback").count()) {
     throw new Error("Share Studio mounted the wall before all cached primary posters were ready");
   }
+  const firstPaintPosterState = await page.locator(".share-layout-canvas-wall .share-poster-foreground").evaluateAll((images) => images.map((image) => ({
+    complete: image instanceof HTMLImageElement ? image.complete : false,
+    width: image instanceof HTMLImageElement ? image.naturalWidth : 0,
+    height: image instanceof HTMLImageElement ? image.naturalHeight : 0,
+  })));
+  if (!firstPaintPosterState.length || firstPaintPosterState.some((image) => !image.complete || !image.width || !image.height)) {
+    throw new Error(`Share wall mounted before poster decoding completed: ${JSON.stringify(firstPaintPosterState)}`);
+  }
   await page.unroute("**/demo/**");
   const activeFormat = await page.locator(".share-format-control button.is-active").innerText();
   if (!activeFormat.includes("智能横版")) throw new Error(`Share studio did not open in smart landscape mode: ${activeFormat}`);
