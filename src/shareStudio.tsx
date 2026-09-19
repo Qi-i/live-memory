@@ -1740,13 +1740,15 @@ function drawShareFooter(context: CanvasRenderingContext2D, spec: CanvasSpec, op
   const y = spec.height - spec.padding * 0.42;
   if (options.showBrand) {
     const footerMark = Math.max(24, Math.round(spec.width * 0.018));
+    const brandTextX = spec.padding + footerMark + 9;
     drawBrandMark(context, spec.padding, y - footerMark + 5, footerMark);
     context.fillStyle = palette.text;
     context.font = `850 ${Math.max(14, Math.round(spec.width * 0.012))}px system-ui, sans-serif`;
-    context.fillText("Live Memory", spec.padding + footerMark + 9, y);
+    context.fillText("Live Memory", brandTextX, y);
+    const brandTextWidth = context.measureText("Live Memory").width;
     context.fillStyle = palette.muted;
     context.font = `700 ${Math.max(11, Math.round(spec.width * 0.009))}px system-ui, sans-serif`;
-    context.fillText("GitHub · Qi-i/live-memory", spec.padding + footerMark + Math.round(spec.width * 0.09), y);
+    context.fillText("GitHub · Qi-i/live-memory", brandTextX + brandTextWidth + Math.max(18, Math.round(spec.width * 0.018)), y);
   }
   if (options.showStats) {
     const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
