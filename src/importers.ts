@@ -94,8 +94,10 @@ export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
         time: parsed.time || best.time,
         city: parsed.city || best.city,
         venue: parsed.venue || best.venue,
-        posterUrl: parsed.posterUrl || best.posterUrl,
-        seatMapUrl: parsed.seatMapUrl || best.seatMapUrl,
+        // Explicitly verified item media must never be replaced by a heuristic
+        // image selected from the page's promotional content.
+        posterUrl: knownMedia.posterUrl || parsed.posterUrl || best.posterUrl,
+        seatMapUrl: knownMedia.seatMapUrl || parsed.seatMapUrl || best.seatMapUrl,
         sourceUrl: url,
         sourceChannel: "damai",
         importConfidence: Math.max(best.importConfidence, parsed.importConfidence ?? 0),
@@ -342,8 +344,8 @@ function bestMarkdownImage(text: string, seatMap: boolean) {
 function cleanImageUrl(value: string) {
   let url = String(value || "").trim().replace(/\\\//g, "/").replace(/&amp;/g, "&");
   if (url.startsWith("//")) url = `https:${url}`;
-  const nestedHttps = url.lastIndexOf("https://");
-  if (nestedHttps > 8) url = url.slice(nestedHttps);
+  // Alibaba's /bao/uploaded/ image proxy uses a full nested https URL.
+  // Keep the original URL (including its format/quality suffix) verbatim.
   try {
     const parsed = new URL(url);
     return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.toString() : "";

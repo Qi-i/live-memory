@@ -51,18 +51,40 @@ try {
     itemBase: {
       itemName: "【北京】门尼「印·IN」2026演唱会北京站",
       showTime: "2026.11.14 周六 19:00",
-      itemPic: "https://img.alicdn.com/bao/uploaded/https://img.alicdn.com/imgextra/i4/2251059038/O1CN013e7OlJfymqG24P4m_!!2251059038.jpg",
+      itemPic: "https://img.alicdn.com/bao/uploaded/https://img.alicdn.com/imgextra/i4/2251059038/O1CN013e7OlJfymqG24P4m_!!2251059038.jpg_q60.jpg_.webp",
       seatImg: "https://img.alicdn.com/imgextra/i4/2251059038/O1CN01nNb6lnFHoeE2b8Lb_!!2251059038.jpg",
       seatImages: ["https://img.alicdn.com/imgextra/i4/2251059038/O1CN01nNb6lnFHoeE2b8Lb_!!2251059038.jpg"],
     },
   });
   const mediaDraft = importers.parseDamaiReaderText(mediaFixture, desktopDamaiUrl);
-  assert.equal(mediaDraft.posterUrl, "https://img.alicdn.com/imgextra/i4/2251059038/O1CN013e7OlJfymqG24P4m_!!2251059038.jpg");
+  assert.equal(mediaDraft.posterUrl, "https://img.alicdn.com/bao/uploaded/https://img.alicdn.com/imgextra/i4/2251059038/O1CN013e7OlJfymqG24P4m_!!2251059038.jpg_q60.jpg_.webp");
   assert.equal(mediaDraft.seatMapUrl, "https://img.alicdn.com/imgextra/i4/2251059038/O1CN01nNb6lnFHoeE2b8Lb_!!2251059038.jpg");
   assert.equal(mediaDraft.date, "2026-11-14");
   assert.equal(mediaDraft.time, "19:00");
   assert.equal(posterRegistry.knownDamaiMedia("1086161072877").posterUrl, mediaDraft.posterUrl);
   assert.equal(posterRegistry.knownDamaiMedia("1086161072877").seatMapUrl, mediaDraft.seatMapUrl);
+  // A page may contain different picture URLs: verified event assets take priority.
+  const misleadingPage = JSON.stringify({
+    itemBase: {
+      itemName: "【北京】门尼「印·IN」2026演唱会北京站",
+      itemPic: "https://img.alicdn.com/imgextra/i4/example/unrelated-poster.jpg",
+      seatImg: "https://img.alicdn.com/imgextra/i4/example/unrelated-seat.jpg",
+    },
+  });
+  const fetchResponse = globalThis.fetch;
+  const originalSetTimeout = globalThis.window;
+  try {
+    globalThis.window = { setTimeout, clearTimeout };
+    globalThis.fetch = async () => ({ ok: true, text: async () => misleadingPage });
+    const resolved = await importers.fetchDamaiDraft(desktopDamaiUrl);
+    assert.equal(resolved.posterUrl, posterRegistry.knownDamaiMedia("1086161072877").posterUrl);
+    assert.equal(resolved.seatMapUrl, posterRegistry.knownDamaiMedia("1086161072877").seatMapUrl);
+  } finally {
+    globalThis.fetch = fetchResponse;
+    if (originalSetTimeout === undefined) delete globalThis.window;
+    else globalThis.window = originalSetTimeout;
+  }
+
 
   const damaiFixture = [
     "Title: 【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网",
