@@ -1,5 +1,5 @@
 import { EventCategory, EventStatus, ImportDraft, createId, normalizeStatus } from "./domain";
-import { knownDamaiMedia } from "./posterRegistry";
+import { knownDamaiMedia, knownDamaiEventFacts } from "./posterRegistry";
 
 export function getDamaiItemId(url: string) {
   try {
@@ -46,7 +46,25 @@ export async function createDraftsFromText(text: string): Promise<ImportDraft[]>
   for (const url of urls) {
     const platform = detectTicketingPlatform(url);
     if (platform === "damai") {
-      drafts.push(await fetchDamaiDraft(url));
+      const draft = await fetchDamaiDraft(url);
+      // If one link is accompanied by pasted event-page text, do not discard
+      // the date/venue lines just because a URL was present.
+      if (urls.length === 1 && /(?:^|\n)\s*(?:演出时间|时间|演出场馆|场馆)\s*[:：]/m.test(text)) {
+        const pasted = parseDamaiReaderText(text, url);
+        const date = pasted.date || draft.date;
+        drafts.push({
+          ...draft,
+          date,
+          time: pasted.time || draft.time,
+          city: pasted.city || draft.city,
+          venue: pasted.venue || draft.venue,
+          address: pasted.address || draft.address,
+          status: normalizeStatus(undefined, date),
+          importConfidence: Math.max(draft.importConfidence, pasted.importConfidence ?? 0),
+        });
+      } else {
+        drafts.push(draft);
+      }
     } else if (platform) {
       drafts.push(await fetchTicketingDraft(url, platform));
     } else {
@@ -60,14 +78,20 @@ export async function createDraftsFromText(text: string): Promise<ImportDraft[]>
 export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
   const itemId = getDamaiItemId(url);
   const linkTitle = getDamaiLinkTitle(url);
+  const knownFacts = knownDamaiEventFacts(itemId);
   const fallback: ImportDraft = {
     ...basicUrlDraft(url, "damai"),
     title: linkTitle || "大麦项目",
-    // Never turn an unreadable ticketing page into a fake event dated today.
-    date: "",
-    city: inferCity(linkTitle),
+    // Verified facts can remain usable when the ticketing reader is blocked.
+    // Never substitute today's date for a missing show date.
+    date: knownFacts?.date || "",
+    time: knownFacts?.time,
+    city: knownFacts?.city || inferCity(linkTitle),
+    venue: knownFacts?.venue || "",
+    address: knownFacts?.address,
+    status: normalizeStatus(undefined, knownFacts?.date),
     artists: inferArtists(linkTitle),
-    importConfidence: linkTitle ? 0.55 : 0.25,
+    importConfidence: knownFacts ? 0.92 : linkTitle ? 0.55 : 0.25,
   };
   if (!itemId) return fallback;
   const knownMedia = knownDamaiMedia(itemId);
@@ -94,6 +118,8 @@ export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
         time: parsed.time || best.time,
         city: parsed.city || best.city,
         venue: parsed.venue || best.venue,
+        address: parsed.address || best.address,
+        status: normalizeStatus(undefined, parsed.date || best.date),
         // Explicitly verified item media must never be replaced by a heuristic
         // image selected from the page's promotional content.
         posterUrl: knownMedia.posterUrl || parsed.posterUrl || best.posterUrl,
@@ -205,13 +231,13 @@ export function parseDamaiReaderText(text: string, url: string): Partial<ImportD
   const showTime =
     jsonStringForKey(text, "showTime") ||
     /演出时间[:：]\s*([^\n]+)/.exec(text)?.[1] ||
-    /时间[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    /(?:^|\n)\s*时间[:：]\s*([^\n]+)/.exec(text)?.[1] ||
     "";
   const date = normalizeDate(showTime);
   const venue = cleanVenue(
     jsonStringForKey(text, "venueName") ||
     /演出场馆[:：]\s*([^\n]+)/.exec(text)?.[1] ||
-    /场馆[:：]\s*([^\n]+)/.exec(text)?.[1] ||
+    /(?:^|\n)\s*场馆[:：]\s*([^\n]+)/.exec(text)?.[1] ||
     "",
   );
   const city = normalizeCity(
@@ -234,7 +260,7 @@ export function parseDamaiReaderText(text: string, url: string): Partial<ImportD
     category: /音乐节|festival/i.test(title) ? "festival" : "concert",
     status: normalizeStatus(undefined, date),
     date,
-    time: normalizeTime(showTime || text),
+    time: normalizeTime(showTime),
     city,
     venue,
     address: jsonStringForKey(text, "venueAddr") || undefined,
@@ -364,7 +390,8 @@ function isUsablePoster(url: string) {
 
 function cleanVenue(value: string) {
   const text = String(value || "").trim();
-  return (text.includes("|") ? text.split("|").pop() || text : text).trim();
+  const cleaned = text.replace(/<[^>]*>/g, "").trim();
+  return (cleaned.includes("|") ? cleaned.split("|").pop() || cleaned : cleaned).trim();
 }
 
 function normalizeCity(value: string) {
