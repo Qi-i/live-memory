@@ -295,7 +295,26 @@ function findDamaiSeatMap(text: string) {
     const value = cleanImageUrl(jsonStringForKey(text, key));
     if (isUsableImage(value)) return value;
   }
+  for (const key of ["seatImages", "performSeatImages"]) {
+    const value = allJsonArrayImagesForKey(text, key).find(isUsableImage);
+    if (value) return value;
+  }
   return bestMarkdownImage(text, true);
+}
+
+function allJsonArrayImagesForKey(text: string, key: string) {
+  const bracket = new RegExp(`"${key}"\\s*:\\s*\\[([^\\]]*)\\]`, "gi");
+  const matches: string[] = [];
+  let chunk: RegExpExecArray | null;
+  while ((chunk = bracket.exec(text))) {
+    const quoted = /"(https?:\\/\\/[^"]+)"/g;
+    let urlMatch: RegExpExecArray | null;
+    while ((urlMatch = quoted.exec(chunk[1]))) {
+      const image = cleanImageUrl(urlMatch[1]);
+      if (image) matches.push(image);
+    }
+  }
+  return matches;
 }
 
 function bestMarkdownImage(text: string, seatMap: boolean) {
