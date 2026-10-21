@@ -46,7 +46,25 @@ export async function createDraftsFromText(text: string): Promise<ImportDraft[]>
   for (const url of urls) {
     const platform = detectTicketingPlatform(url);
     if (platform === "damai") {
-      drafts.push(await fetchDamaiDraft(url));
+      const draft = await fetchDamaiDraft(url);
+      // If one link is accompanied by pasted event-page text, do not discard
+      // the date/venue lines just because a URL was present.
+      if (urls.length === 1 && /(?:^|\n)\s*(?:演出时间|时间|演出场馆|场馆)\s*[:：]/m.test(text)) {
+        const pasted = parseDamaiReaderText(text, url);
+        const date = pasted.date || draft.date;
+        drafts.push({
+          ...draft,
+          date,
+          time: pasted.time || draft.time,
+          city: pasted.city || draft.city,
+          venue: pasted.venue || draft.venue,
+          address: pasted.address || draft.address,
+          status: normalizeStatus(undefined, date),
+          importConfidence: Math.max(draft.importConfidence, pasted.importConfidence ?? 0),
+        });
+      } else {
+        drafts.push(draft);
+      }
     } else if (platform) {
       drafts.push(await fetchTicketingDraft(url, platform));
     } else {
