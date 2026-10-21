@@ -26,6 +26,28 @@ const DAMAI_SEAT_MAP_FALLBACKS: Record<string, string> = {
   "1064771079264": "https://inews.gtimg.com/om_bt/Oh4MIEz8I0RJLjTyQ8NobPmkL36jp_ZZGjBLyRMdNdhG0AA/641",
 };
 
+// Published show details verified against the public Damai item page.
+// Fallback entries are deliberately sparse; new items should use live page data.
+const DAMAI_VERIFIED_EVENT_FACTS: Record<string, {
+  date: string;
+  time: string;
+  city: string;
+  venue: string;
+  address?: string;
+}> = {
+  "1086161072877": {
+    date: "2026-11-14",
+    time: "19:00",
+    city: "北京",
+    venue: "国家体育馆",
+    address: "北京市朝阳区天辰东路9号",
+  },
+};
+
+export function knownDamaiEventFacts(itemId: string) {
+  return DAMAI_VERIFIED_EVENT_FACTS[itemId] || null;
+}
+
 export function knownDamaiMedia(itemId: string) {
   return {
     posterUrl: normalizeLegacyAssetUrl(DAMAI_POSTER_FALLBACKS[itemId]),
