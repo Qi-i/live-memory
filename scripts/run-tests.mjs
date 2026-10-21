@@ -47,6 +47,23 @@ try {
   assert.equal(desktopFallback.date, "", "An unreadable page must not invent today's show date");
   assert.equal(desktopFallback.importConfidence, 0.55);
 
+  const mediaFixture = JSON.stringify({
+    itemBase: {
+      itemName: "【北京】门尼「印·IN」2026演唱会北京站",
+      showTime: "2026.11.14 周六 19:00",
+      itemPic: "https://img.alicdn.com/bao/uploaded/https://img.alicdn.com/imgextra/i4/2251059038/O1CN013e7OlJfymqG24P4m_!!2251059038.jpg",
+      seatImg: "https://img.alicdn.com/imgextra/i4/2251059038/O1CN01nNb6lnFHoeE2b8Lb_!!2251059038.jpg",
+      seatImages: ["https://img.alicdn.com/imgextra/i4/2251059038/O1CN01nNb6lnFHoeE2b8Lb_!!2251059038.jpg"],
+    },
+  });
+  const mediaDraft = importers.parseDamaiReaderText(mediaFixture, desktopDamaiUrl);
+  assert.equal(mediaDraft.posterUrl, "https://img.alicdn.com/imgextra/i4/2251059038/O1CN013e7OlJfymqG24P4m_!!2251059038.jpg");
+  assert.equal(mediaDraft.seatMapUrl, "https://img.alicdn.com/imgextra/i4/2251059038/O1CN01nNb6lnFHoeE2b8Lb_!!2251059038.jpg");
+  assert.equal(mediaDraft.date, "2026-11-14");
+  assert.equal(mediaDraft.time, "19:00");
+  assert.equal(posterRegistry.knownDamaiMedia("1086161072877").posterUrl, mediaDraft.posterUrl);
+  assert.equal(posterRegistry.knownDamaiMedia("1086161072877").seatMapUrl, mediaDraft.seatMapUrl);
+
   const damaiFixture = [
     "Title: 【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网",
     "![service](https://gw.alicdn.com/imgextra/service-45-45.png)",
