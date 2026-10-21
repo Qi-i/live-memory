@@ -47,6 +47,49 @@ try {
   assert.equal(desktopFallback.date, "", "An unreadable page must not invent today's show date");
   assert.equal(desktopFallback.importConfidence, 0.55);
 
+  const verifiedSchedule = posterRegistry.knownDamaiEventFacts("1086161072877");
+  assert.equal(verifiedSchedule.date, "2026-11-14");
+  assert.equal(verifiedSchedule.time, "19:00");
+  assert.equal(verifiedSchedule.city, "北京");
+  assert.equal(verifiedSchedule.venue, "国家体育馆");
+  assert.equal(posterRegistry.knownDamaiEventFacts("9999999999999"), null);
+
+  const eventPageExcerpt = [
+    "总票代 【北京】门尼「印·IN」2026演唱会北京站",
+    "时间：2026.11.14 周六 19:00",
+    "场馆：北京市 | 国家体育馆",
+  ].join("\n");
+  const pageTextParsed = importers.parseDamaiReaderText(eventPageExcerpt, desktopDamaiUrl);
+  assert.equal(pageTextParsed.date, "2026-11-14");
+  assert.equal(pageTextParsed.time, "19:00");
+  assert.equal(pageTextParsed.city, "北京");
+  assert.equal(pageTextParsed.venue, "国家体育馆");
+
+  const originalNetworkFetch = globalThis.fetch;
+  const originalBrowserWindow = globalThis.window;
+  try {
+    globalThis.window = { setTimeout, clearTimeout };
+    globalThis.fetch = async () => { throw new Error("Reader blocked by network/CORS"); };
+    const noReader = await importers.fetchDamaiDraft(desktopDamaiUrl);
+    assert.equal(noReader.title, "门尼「印·IN」2026演唱会北京站");
+    assert.equal(noReader.date, "2026-11-14");
+    assert.equal(noReader.time, "19:00");
+    assert.equal(noReader.city, "北京");
+    assert.equal(noReader.venue, "国家体育馆");
+    assert.equal(noReader.address, "北京市朝阳区天辰东路9号");
+    assert.equal(noReader.importConfidence, 0.92);
+    assert.equal(noReader.status, "planned");
+    const pastedWithUrl = await importers.createDraftsFromText(desktopDamaiUrl + "\n" + eventPageExcerpt);
+    assert.equal(pastedWithUrl.length, 1);
+    assert.equal(pastedWithUrl[0].date, "2026-11-14");
+    assert.equal(pastedWithUrl[0].time, "19:00");
+    assert.equal(pastedWithUrl[0].venue, "国家体育馆");
+  } finally {
+    globalThis.fetch = originalNetworkFetch;
+    if (originalBrowserWindow === undefined) delete globalThis.window;
+    else globalThis.window = originalBrowserWindow;
+  }
+
   const mediaFixture = JSON.stringify({
     itemBase: {
       itemName: "【北京】门尼「印·IN」2026演唱会北京站",
