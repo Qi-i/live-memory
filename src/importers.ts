@@ -307,7 +307,7 @@ function allJsonArrayImagesForKey(text: string, key: string) {
   const matches: string[] = [];
   let chunk: RegExpExecArray | null;
   while ((chunk = bracket.exec(text))) {
-    const quoted = /"(https?:\\/\\/[^"]+)"/g;
+    const quoted = /"(https?:[^"]+)"/g;
     let urlMatch: RegExpExecArray | null;
     while ((urlMatch = quoted.exec(chunk[1]))) {
       const image = cleanImageUrl(urlMatch[1]);
