@@ -455,7 +455,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
                 {draft.posterUrl ? <img src={draft.posterUrl} alt="" /> : <span><ImagePlus />海报待补</span>}
               </div>
               <div className="import-draft-copy-v2">
-                <span>{categoryLabels[draft.category]} · 置信度 {Math.round(draft.importConfidence * 100)}%{draft.seatMapUrl ? " · 已识别座位图" : ""}</span>
+                <span>{categoryLabels[draft.category]} · 置信度 {Math.round(draft.importConfidence * 100)}%{draft.seatMapUrl ? " · 已识别座位图" : ""}{!draft.date ? " · 日期待核实" : ""}</span>
                 <input className="import-draft-title-v2" value={draft.title} onChange={(event) => updateDraft(draft.id, { title: event.target.value })} aria-label="演出名称" />
                 <p>{draft.city || "城市待补"} · {draft.venue || "场馆待补"}{draft.publicPriceRange ? ` · 公开票价 ${draft.publicPriceRange}` : ""}</p>
                 <div className="import-draft-fields-v2">
@@ -464,7 +464,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
                   <label>本人票价<input type="number" min="0" value={draft.price ?? ""} onChange={(event) => updateDraft(draft.id, { price: event.target.value ? Number(event.target.value) : null })} placeholder="可修改" /></label>
                 </div>
               </div>
-              <button className="button primary" type="button" onClick={() => void onSave(draftToRecord(draft))}>加入档案</button>
+              <button className="button primary" type="button" disabled={!draft.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)} title={!draft.date ? "请先补充真实演出日期" : undefined} onClick={() => void onSave(draftToRecord(draft))}>加入档案</button>
             </article>
           ))}
         </div>
