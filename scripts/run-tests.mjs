@@ -35,6 +35,18 @@ try {
     importers.cleanupDamaiTitle("【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网"),
     "【北京】汪苏泷2026「明日世界」演唱会-北京站",
   );
+  const desktopDamaiUrl = "https://detail.damai.cn/item.htm?spm=a2oeg.search_category.0.0.2d003871Rjl2By&id=1086161072877&clicktitle=%E9%97%A8%E5%B0%BC%E3%80%8C%E5%8D%B0%C2%B7IN%E3%80%8D2026%E6%BC%94%E5%94%B1%E4%BC%9A%E5%8C%97%E4%BA%AC%E7%AB%99";
+  assert.equal(importers.getDamaiItemId(desktopDamaiUrl), "1086161072877");
+  assert.equal(importers.getDamaiItemId("https://detail.damai.cn/item.htm?id=1086161072877&spm=test"), "1086161072877");
+  assert.equal(importers.getDamaiItemId("https://m.damai.cn/shows/item.html?itemId=1086161072877"), "1086161072877");
+  assert.equal(importers.getDamaiLinkTitle(desktopDamaiUrl), "门尼「印·IN」2026演唱会北京站");
+  const desktopFallback = importers.parseDamaiReaderText("Title: 大麦网", desktopDamaiUrl);
+  assert.equal(desktopFallback.title, "门尼「印·IN」2026演唱会北京站");
+  assert.equal(desktopFallback.city, "北京");
+  assert.deepEqual(desktopFallback.artists, ["门尼"]);
+  assert.equal(desktopFallback.date, "", "An unreadable page must not invent today's show date");
+  assert.equal(desktopFallback.importConfidence, 0.55);
+
   const damaiFixture = [
     "Title: 【北京】汪苏泷2026「明日世界」演唱会-北京站【网上订票】- 大麦网",
     "![service](https://gw.alicdn.com/imgextra/service-45-45.png)",

@@ -2,7 +2,12 @@ import { EventCategory, EventStatus, ImportDraft, createId, normalizeStatus } fr
 import { knownDamaiMedia } from "./posterRegistry";
 
 export function getDamaiItemId(url: string) {
-  return /(?:itemId=|item\.html\?id=|item\.htm\?id=)(\d+)/i.exec(url)?.[1] || "";
+  try {
+    const parsed = new URL(url);
+    return parsed.searchParams.get("itemId") || parsed.searchParams.get("id") || "";
+  } catch {
+    return "";
+  }
 }
 
 export function extractUrls(text: string) {
@@ -15,6 +20,15 @@ export function cleanupDamaiTitle(value: string) {
     .replace(/(?:\s*[-—–_|｜]\s*)?大麦网\s*$/i, "")
     .replace(/\s{2,}/g, " ")
     .trim();
+}
+
+export function getDamaiLinkTitle(url: string) {
+  try {
+    const params = new URL(url).searchParams;
+    return cleanupDamaiTitle(params.get("clicktitle") || params.get("title") || "");
+  } catch {
+    return "";
+  }
 }
 
 export type TicketingPlatform = "damai" | "fenwandao" | "piaoxingqiu";
@@ -45,29 +59,53 @@ export async function createDraftsFromText(text: string): Promise<ImportDraft[]>
 
 export async function fetchDamaiDraft(url: string): Promise<ImportDraft> {
   const itemId = getDamaiItemId(url);
-  const fallback = basicUrlDraft(url, "damai");
+  const linkTitle = getDamaiLinkTitle(url);
+  const fallback: ImportDraft = {
+    ...basicUrlDraft(url, "damai"),
+    title: linkTitle || "大麦项目",
+    // Never turn an unreadable ticketing page into a fake event dated today.
+    date: "",
+    city: inferCity(linkTitle),
+    artists: inferArtists(linkTitle),
+    importConfidence: linkTitle ? 0.55 : 0.25,
+  };
   if (!itemId) return fallback;
   const knownMedia = knownDamaiMedia(itemId);
-  try {
-    const response = await fetchWithTimeout(`https://r.jina.ai/http://detail.damai.cn/item.htm?id=${itemId}`, 14000);
-    if (!response.ok) throw new Error(`大麦页面读取失败：${response.status}`);
-    const text = await response.text();
-    const parsed = parseDamaiReaderText(text, url);
-    return {
-      ...fallback,
-      ...parsed,
-      posterUrl: parsed.posterUrl || knownMedia.posterUrl || undefined,
-      seatMapUrl: parsed.seatMapUrl || knownMedia.seatMapUrl || undefined,
-      sourceUrl: url,
-      sourceChannel: "damai",
-    };
-  } catch {
-    return {
-      ...fallback,
-      posterUrl: knownMedia.posterUrl || undefined,
-      seatMapUrl: knownMedia.seatMapUrl || undefined,
-    };
+  let best: ImportDraft = {
+    ...fallback,
+    posterUrl: knownMedia.posterUrl || undefined,
+    seatMapUrl: knownMedia.seatMapUrl || undefined,
+  };
+  // Desktop and mobile pages do not always expose the same project metadata.
+  for (const readerUrl of [
+    `https://r.jina.ai/http://detail.damai.cn/item.htm?id=${itemId}`,
+    `https://r.jina.ai/http://m.damai.cn/shows/item.html?itemId=${itemId}`,
+  ]) {
+    try {
+      const response = await fetchWithTimeout(readerUrl, 10000);
+      if (!response.ok) continue;
+      const parsed = parseDamaiReaderText(await response.text(), url);
+      best = {
+        ...best,
+        ...parsed,
+        id: fallback.id,
+        title: parsed.title && parsed.title !== "大麦项目" ? parsed.title : best.title,
+        date: parsed.date || best.date,
+        time: parsed.time || best.time,
+        city: parsed.city || best.city,
+        venue: parsed.venue || best.venue,
+        posterUrl: parsed.posterUrl || best.posterUrl,
+        seatMapUrl: parsed.seatMapUrl || best.seatMapUrl,
+        sourceUrl: url,
+        sourceChannel: "damai",
+        importConfidence: Math.max(best.importConfidence, parsed.importConfidence ?? 0),
+      };
+      if (best.date && best.venue && best.posterUrl) break;
+    } catch {
+      // Preserve decoded link metadata and any fields from a previous attempt.
+    }
   }
+  return best;
 }
 
 async function fetchTicketingDraft(url: string, platform: Exclude<TicketingPlatform, "damai">): Promise<ImportDraft> {
@@ -161,7 +199,7 @@ export function parseDamaiReaderText(text: string, url: string): Partial<ImportD
     /#\s+(.+)/.exec(text)?.[1]?.trim() ||
     /项目名称[:：]\s*([^\n]+)/.exec(text)?.[1]?.trim() ||
     "";
-  const title = cleanupDamaiTitle(structuredTitle || readerTitle);
+  const title = cleanupDamaiTitle(structuredTitle || getDamaiLinkTitle(url) || readerTitle);
   const showTime =
     jsonStringForKey(text, "showTime") ||
     /演出时间[:：]\s*([^\n]+)/.exec(text)?.[1] ||
@@ -193,7 +231,7 @@ export function parseDamaiReaderText(text: string, url: string): Partial<ImportD
     title: title || "大麦项目",
     category: /音乐节|festival/i.test(title) ? "festival" : "concert",
     status: normalizeStatus(undefined, date),
-    date: date || new Date().toISOString().slice(0, 10),
+    date,
     time: normalizeTime(showTime || text),
     city,
     venue,
@@ -202,7 +240,7 @@ export function parseDamaiReaderText(text: string, url: string): Partial<ImportD
     publicPriceRange: priceLine.slice(0, 120),
     posterUrl: posterUrl || undefined,
     seatMapUrl: seatMapUrl || undefined,
-    importConfidence: structuredFields >= 3 ? 0.96 : structuredFields >= 2 ? 0.9 : title ? 0.78 : 0.42,
+    importConfidence: structuredFields >= 3 ? 0.96 : structuredFields >= 2 ? 0.9 : date || venue ? 0.78 : title && title !== "大麦项目" ? 0.55 : 0.25,
   };
 }
 
