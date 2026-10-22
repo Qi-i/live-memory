@@ -1,6 +1,6 @@
 # Supabase 配置指南
 
-Supabase 在回响册里有两种用途：
+Supabase 在Live Memory（现场记）里有两种用途：
 
 | 角色 | 需要做什么 | 保存什么 |
 | --- | --- | --- |

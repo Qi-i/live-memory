@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./public/brand-lockup.svg" width="560" alt="现场记 Live Memory" />
+  <img src="./public/live-memory-logo.svg" width="560" alt="Live Memory" />
 </p>
 
 <p align="center"><strong>把演出海报、票根、座位图和现场照片，整理成一份会持续生长的个人现场档案。</strong></p>
@@ -37,7 +37,7 @@
 
 购票平台适合完成交易，却不适合长期保存个人观演记忆。现场记把每场演出的海报、票根、座位、城市、同行人和现场照片组织成可检索、可统计、可分享的私人档案。
 
-新 Logo 由两条相互穿行的轨迹构成：既像舞台灯光与声波，也像一次次现场经历最终汇聚成个人记忆。中文名称“现场记”和英文名称“Live Memory”可同时用于应用、导出分享图及项目传播。
+当前 Logo 由三张层叠的记忆卡片构成，最前方以聚光灯和现场人群概括“演出现场”，后方卡片表达持续累积的个人记忆与档案。品牌主名称统一使用 “Live Memory”，中文名称“现场记”作为中文环境中的辅助名称。
 
 ## 核心功能
 
@@ -64,7 +64,7 @@
 - 支持 12、20、30 张或全部海报；
 - 支持竖版 4:5、方形 1:1、横版 16:9 和手机长图；
 - 提供四种真正不同的布局：密集海报墙、时间长卷、编目杂志、城市路线；
-- 导出 PNG 时同步显示现场记 Logo、GitHub 项目地址和可选档案统计。
+- 导出 PNG 时同步显示 Live Memory Logo、GitHub 项目地址和可选档案统计。
 
 ### 账号与存储
 
@@ -178,13 +178,15 @@ src/
   experience.tsx          应用壳层、主题系统和响应式导航
   archive.tsx             档案筛选与多种视图
   shareStudio.tsx         分享筛选、四种布局与 PNG 导出
-  brand.tsx               现场记 Logo 和文字标识
+  brand.tsx               Live Memory Logo 和文字标识
   mediaCache.ts           图片缓存与跨视图复用
   settingsPage.tsx        账号、云端、显示、导入导出和回收站
   statsPage.tsx           个人统计与管理员页面
 public/
-  icon.svg                应用图标
-  brand-lockup.svg        GitHub 与宣传用 Logo 组合
+  icon.svg                PWA / 浏览器应用图标
+  live-memory-mark.svg    透明背景矢量图形标
+  live-memory-logo.svg    标准横向矢量 Logo
+  brand-lockup.svg        README / 宣传兼容组合标
 ```
 
 ## 文档

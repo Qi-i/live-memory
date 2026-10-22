@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { resolveLoginUsername } from "./accountLogin";
+import { BrandMark } from "./brand";
 import { AppSettings, defaultSettings, validatePassword, validateUsername } from "./domain";
 import {
   clearStorageScope,
@@ -314,8 +315,8 @@ function LoginGate({
     <main className="access-shell">
       <section className="access-showcase" aria-label="示例演出记录">
         <header className="access-brand-line">
-          <span className="access-logo">演</span>
-          <div><strong>现场记</strong><small>演出记录 · 票根收藏</small></div>
+          <BrandMark className="access-logo" size={52} />
+          <div><strong>Live Memory</strong><small>现场记 · 演出记录 · 票根收藏</small></div>
         </header>
 
         <div className="access-copy">

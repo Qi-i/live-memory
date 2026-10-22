@@ -17,6 +17,7 @@ import {
   useMemo,
   useState,
 } from "react";
+import { BrandMark } from "./brand";
 
 export type AppRoute = "archive" | "stats" | "settings" | "admin";
 export type AppearanceMode = "system" | "light" | "dark";
@@ -159,10 +160,10 @@ export function ExperienceShell({
     <div className={`experience-shell${shareMode ? " is-share-mode" : ""}`}>
       <aside className={`experience-rail${mobileNavOpen ? " is-open" : ""}`} aria-label="应用导航">
         <button className="experience-brand" type="button" onClick={() => navigate("archive")}>
-          <span className="experience-brand-mark">演</span>
+          <BrandMark className="experience-brand-mark" size={48} />
           <span>
-            <strong>现场记</strong>
-            <small>演出记录</small>
+            <strong>Live Memory</strong>
+            <small>现场记 · 演出档案</small>
           </span>
         </button>
 

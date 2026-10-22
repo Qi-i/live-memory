@@ -497,7 +497,7 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
 
         <section className="share-switches">
           <label><input type="checkbox" checked={showDetails} onChange={(event) => setShowDetails(event.target.checked)} /><span><b>海报信息</b><small>在海报底部叠加日期和标题。</small></span></label>
-          <label><input type="checkbox" checked={showBrand} onChange={(event) => setShowBrand(event.target.checked)} /><span><b>品牌标识</b><small>显示现场记 Logo 与 GitHub 项目。</small></span></label>
+          <label><input type="checkbox" checked={showBrand} onChange={(event) => setShowBrand(event.target.checked)} /><span><b>品牌标识</b><small>显示 Live Memory Logo 与 GitHub 项目。</small></span></label>
           <label><input type="checkbox" checked={showStats} onChange={(event) => setShowStats(event.target.checked)} /><span><b>档案统计</b><small>显示城市数和已看场次。</small></span></label>
         </section>
 
@@ -1739,12 +1739,16 @@ function drawShareHeader(context: CanvasRenderingContext2D, spec: CanvasSpec, op
 function drawShareFooter(context: CanvasRenderingContext2D, spec: CanvasSpec, options: ExportOptions, palette: PaletteDefinition) {
   const y = spec.height - spec.padding * 0.42;
   if (options.showBrand) {
+    const footerMark = Math.max(24, Math.round(spec.width * 0.018));
+    const brandTextX = spec.padding + footerMark + 9;
+    drawBrandMark(context, spec.padding, y - footerMark + 5, footerMark);
     context.fillStyle = palette.text;
     context.font = `850 ${Math.max(14, Math.round(spec.width * 0.012))}px system-ui, sans-serif`;
-    context.fillText("现场记 · Live Memory", spec.padding, y);
+    context.fillText("Live Memory", brandTextX, y);
+    const brandTextWidth = context.measureText("Live Memory").width;
     context.fillStyle = palette.muted;
     context.font = `700 ${Math.max(11, Math.round(spec.width * 0.009))}px system-ui, sans-serif`;
-    context.fillText("GitHub · Qi-i/live-memory", spec.padding + Math.round(spec.width * 0.15), y);
+    context.fillText("GitHub · Qi-i/live-memory", brandTextX + brandTextWidth + Math.max(18, Math.round(spec.width * 0.018)), y);
   }
   if (options.showStats) {
     const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
@@ -1833,35 +1837,92 @@ function drawFallback(context: CanvasRenderingContext2D, record: EventRecord, x:
   context.textBaseline = "alphabetic";
 }
 
+function drawBrandMark(context: CanvasRenderingContext2D, x: number, y: number, size: number) {
+  const scale = size / 512;
+  context.save();
+  context.translate(x, y);
+  context.scale(scale, scale);
+
+  const roundedCard = (rx: number, ry: number, width: number, height: number, radius: number, color: string, angle: number, cx: number, cy: number) => {
+    context.save();
+    context.translate(cx, cy);
+    context.rotate(angle * Math.PI / 180);
+    context.translate(-cx, -cy);
+    context.fillStyle = color;
+    context.beginPath();
+    context.roundRect(rx, ry, width, height, radius);
+    context.fill();
+    context.restore();
+  };
+
+  roundedCard(92, 142, 220, 278, 34, "#0C4A40", -13, 202, 281);
+  roundedCard(128, 112, 218, 294, 34, "#88A296", -5, 237, 259);
+
+  context.save();
+  context.translate(300, 250);
+  context.rotate(9 * Math.PI / 180);
+  context.translate(-300, -250);
+  context.fillStyle = "#0A4A40";
+  context.beginPath();
+  context.roundRect(164, 78, 270, 330, 36);
+  context.fill();
+
+  context.fillStyle = "#F9EACB";
+  context.beginPath();
+  context.arc(314, 118, 19, 0, Math.PI * 2);
+  context.fill();
+
+  const beam = context.createLinearGradient(314, 136, 314, 357);
+  beam.addColorStop(0, "#F7E8C8");
+  beam.addColorStop(1, "#CCD5C7");
+  context.fillStyle = beam;
+  context.beginPath();
+  context.moveTo(314, 136);
+  context.lineTo(190, 357);
+  context.lineTo(392, 357);
+  context.closePath();
+  context.fill();
+
+  context.fillStyle = "#0A4A40";
+  const person = (cx: number, headY: number, headR: number, left: number, right: number, bottom: number) => {
+    context.beginPath();
+    context.arc(cx, headY, headR, 0, Math.PI * 2);
+    context.fill();
+    context.beginPath();
+    context.moveTo(left, bottom);
+    context.bezierCurveTo(left + 2, bottom - 35, cx - 18, headY + headR, cx, headY + headR);
+    context.bezierCurveTo(cx + 18, headY + headR, right - 2, bottom - 35, right, bottom);
+    context.closePath();
+    context.fill();
+  };
+  person(239, 335, 20, 205, 273, 401);
+  person(307, 337, 23, 267, 347, 406);
+  person(368, 346, 18, 340, 396, 405);
+
+  context.save();
+  context.translate(285, 336);
+  context.rotate(-13 * Math.PI / 180);
+  context.fillRect(-8, -37.5, 16, 75);
+  context.restore();
+  context.save();
+  context.translate(335, 335);
+  context.rotate(20 * Math.PI / 180);
+  context.fillRect(-8, -39, 16, 78);
+  context.restore();
+
+  context.restore();
+  context.restore();
+}
+
 function drawBrandLockup(context: CanvasRenderingContext2D, x: number, y: number, palette: PaletteDefinition) {
-  const size = 64;
-  const gradient = context.createLinearGradient(x, y, x + size, y + size);
-  gradient.addColorStop(0, "#65e2ce");
-  gradient.addColorStop(0.5, "#159b88");
-  gradient.addColorStop(1, "#315ed8");
-  context.fillStyle = gradient;
-  context.beginPath();
-  context.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
-  context.fill();
-  context.strokeStyle = "white";
-  context.lineWidth = 5;
-  context.beginPath();
-  context.arc(x + size * 0.46, y + size * 0.47, size * 0.27, Math.PI * 0.92, Math.PI * 1.78);
-  context.stroke();
-  context.strokeStyle = "rgba(255,255,255,.62)";
-  context.beginPath();
-  context.arc(x + size * 0.54, y + size * 0.53, size * 0.27, Math.PI * -0.08, Math.PI * 0.78);
-  context.stroke();
-  context.fillStyle = "#dfff4f";
-  context.beginPath();
-  context.arc(x + size / 2, y + size / 2, 5, 0, Math.PI * 2);
-  context.fill();
+  const size = 66;
+  drawBrandMark(context, x, y, size);
   context.fillStyle = palette.text;
-  context.font = "900 25px serif";
-  context.fillText("现场记", x + size + 14, y + 28);
-  context.fillStyle = palette.accent;
-  context.font = "800 11px system-ui, sans-serif";
-  context.fillText("LIVE MEMORY", x + size + 16, y + 49);
+  context.font = "800 25px system-ui, sans-serif";
+  context.fillText("Live Memory", x + size + 14, y + 30);
+  context.fillStyle = palette.muted;
+  context.font = "800 9px system-ui, sans-serif";
+  context.fillText("现场记 · CONCERT ARCHIVE", x + size + 16, y + 49);
 }
 
 function roundedPath(context: CanvasRenderingContext2D, x: number, y: number, width: number, height: number, radius: number) {

@@ -132,13 +132,11 @@
 }
 
 :root[data-visual-theme="editorial"] .experience-brand-mark {
-  border-radius: 0;
-  color: var(--experience-surface-solid);
-  background: var(--experience-text);
-  box-shadow: none;
+  border-radius: 12px;
+  background: #f7f7f2;
+  box-shadow: inset 0 0 0 1px rgba(10, 74, 64, .1);
 }
 
-:root[data-visual-theme="editorial"] .experience-brand strong,
 :root[data-visual-theme="editorial"] .archive-masthead h2,
 :root[data-visual-theme="editorial"] .statistics-story h2,
 :root[data-visual-theme="editorial"] .admin-console h2,
@@ -159,7 +157,7 @@
 }
 
 :root[data-visual-theme="editorial"] .experience-context > span,
-:root[data-visual-theme="editorial"] .archive-masthead-copy > span,
+:root[data-visual-theme="editorial"] .archive-brand-kicker,
 :root[data-visual-theme="editorial"] .archive-result-strip em {
   color: var(--experience-text);
   font-family: Georgia, serif;
