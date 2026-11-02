@@ -8,7 +8,7 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppSettings } from "./domain";
 import { effectiveStatus } from "./domain";
 import { useAppController } from "./appController";
@@ -90,6 +90,37 @@ export default function AppRoot() {
   useEffect(() => {
     if (route !== "archive" && shareMode) setShareMode(false);
   }, [route, shareMode]);
+
+  // User-initiated cross-app catalog handoff. No passkey, Supabase token,
+  // media, private notes or account details leave Live Memory.
+  const lastQiLedgerExport = useRef("");
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (query.get("qiledger_bridge") !== "1" || !window.opener ||
+        isGuest || !access.user || busy || activeRecords.length === 0) return;
+    const target = query.get("origin") || "";
+    if (target !== "https://qiledger.pages.dev" &&
+        target !== "http://localhost:3000" &&
+        target !== "http://localhost:8080" &&
+        target !== "http://localhost:5000") return;
+    const nonce = query.get("request") || "";
+    if (!/^[A-Za-z0-9_-]{16,100}$/.test(nonce)) return;
+    const eventList = activeRecords
+      .filter((record) => record.category === "concert" && !record.deletedAt)
+      .map((record) => ({
+        id: record.id, title: record.title, date: record.date,
+        city: record.city, venue: record.venue, category: record.category,
+        facePrice: record.price ?? null,
+      }))
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const fingerprint = nonce + ":" + eventList.map((event) => event.id + event.date + event.facePrice).join(",");
+    if (lastQiLedgerExport.current === fingerprint) return;
+    lastQiLedgerExport.current = fingerprint;
+    window.opener.postMessage(JSON.stringify({
+      type: "live-memory:catalog:v1", request: nonce, events: eventList,
+    }), target);
+    window.close();
+  }, [activeRecords, access.user, isGuest, busy]);
 
   const watchedCount = activeRecords.filter((record) => effectiveStatus(record) === "watched").length;
   const cityCount = new Set(activeRecords.map((record) => record.city).filter(Boolean)).size;
