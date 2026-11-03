@@ -6,4 +6,10 @@
 alter table if exists public.echo_page_views enable row level security;
 revoke all on table public.echo_page_views from public, anon, authenticated;
 revoke all on sequence public.echo_page_views_id_seq from public, anon, authenticated;
--- Intentionally no direct SELECT / INSERT / UPDATE / DELETE policy.
+-- Explicitly deny all direct SELECT / INSERT / UPDATE / DELETE operations.
+
+-- Explicit deny-only policy keeps the telemetry table closed even if a
+-- future migration accidentally re-grants base table privileges.
+drop policy if exists echo_page_views_no_direct_access on public.echo_page_views;
+create policy echo_page_views_no_direct_access on public.echo_page_views
+  for all to anon, authenticated using (false) with check (false);
