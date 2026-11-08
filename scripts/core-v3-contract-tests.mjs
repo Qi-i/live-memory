@@ -107,6 +107,9 @@ const storage = {
 const personalKey = await baseline.exports.createBaselineKey("scope-user-A", "personal", "https://provider.example:user-A");
 const accountKey = await baseline.exports.createBaselineKey("scope-user-A", "account", "https://provider.example:user-A");
 assert.notEqual(personalKey, accountKey, "Account text backup and personal cloud must never share a baseline");
+const anotherAccountKey = await baseline.exports.createBaselineKey("scope-user-B", "personal", "https://provider.example:user-A");
+assert.notEqual(personalKey, anotherAccountKey, "Separate account scopes require different opaque baselines");
+assert.doesNotMatch(personalKey, /scope-user-A|provider\.example|https:\/\//, "No account or provider identity may be readable in the metadata key");
 assert.doesNotMatch(personalKey, /provider\.example|https:\/\//, "Cloud endpoint must not appear in baseline keys");
 const revisions = new baseline.exports.RevisionBaselineStore(storage, personalKey);
 assert.equal(revisions.read("concert-1"), undefined);
