@@ -447,7 +447,7 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
       <button className="archive-poster-media" type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); else onOpen(record); }}>
         <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 4)} />
       </button>
-      <div className="archive-poster-copy">
+      <button className="archive-poster-copy" type="button" aria-label={`查看 ${record.title} 的详细档案`} onClick={(event) => { event.stopPropagation(); onOpen(record); }}>
         <div className="archive-card-kicker"><span>{categoryLabels[record.category]}</span><em>{statusLabels[effectiveStatus(record)]}</em></div>
         <h3>{record.title}</h3>
         <p className="archive-card-artist">{archiveArtist(record)}</p>
@@ -456,7 +456,7 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
           <dt>场馆</dt><dd>{archiveLocation(record)}</dd>
           <dt>票座</dt><dd className="archive-ticket-line"><b>{archivePrice(record)}</b><span>{record.seat || "座位待补"}</span></dd>
         </dl>
-      </div>
+      </button>
     </article>
   );
 }
