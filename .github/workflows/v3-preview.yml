@@ -57,6 +57,16 @@ jobs:
           exit 1
       - name: Verify desktop and Android public demo is interactive and isolated
         run: node scripts/v3-preview-public-smoke.mjs
+      - name: Record verified browser audit in preview manifest
+        shell: bash
+        run: |
+          node -e '
+            const fs=require("node:fs");
+            const file="dist/preview-info.json";
+            const info=JSON.parse(fs.readFileSync(file,"utf8"));
+            info.browserVerified=true;
+            fs.writeFileSync(file,JSON.stringify(info)+"\\n");
+          '
       - uses: actions/upload-artifact@v4
         if: always()
         with:
