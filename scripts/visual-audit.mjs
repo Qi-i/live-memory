@@ -545,7 +545,7 @@ await archiveView("海报", ".archive-poster-card");
   await page.screenshot({ path: `${outputDir}/13-banner-mobile.png`, fullPage: true });
 
   // Single-event keepsake: actual Canvas-generated PNG, not an archive screenshot.
-  await page.locator(".archive-poster-card").first().click();
+  await page.locator(".archive-poster-card .archive-poster-copy").first().click();
   await page.locator(".record-detail-v2").waitFor({ state: "visible", timeout: 10000 });
   await page.getByRole("button", { name: "生成单场纪念分享图" }).click();
   await page.locator(".keepsake-preview-image").waitFor({ state: "visible", timeout: 25000 });
