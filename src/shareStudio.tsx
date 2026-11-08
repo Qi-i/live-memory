@@ -272,7 +272,7 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
     return () => observer.disconnect();
   }, [format, layout, recalculateFit, selectedRecords.length]);
 
-  const shareRef = useDialogBehavior({ onClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
+  const shareRef = useDialogBehavior<HTMLElement>({ onClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
 
   useEffect(() => {
     let active = true;
