@@ -74,7 +74,7 @@ export function StatsPage({ records, onShare }: { records: EventRecord[]; onShar
         <Metric value={scopedRecords.length} label="收录记录" hint={periodLabel} />
         <Metric value={watched.length} label="已看" hint="不含取消和退款" accent />
         <Metric value={planned.length} label="待看/想看" hint="不含取消和退款" />
-        <Metric value={\`¥\${formatMoney(totalPrice)}\`} label="已看票价" hint={priced.length ? \`均价 ¥\${formatMoney(averagePrice)}\` : "暂无票价数据"} accent />
+        <Metric value={`¥${formatMoney(totalPrice)}`} label="已看票价" hint={priced.length ? `均价 ¥${formatMoney(averagePrice)}` : "暂无票价数据"} accent />
       </div>
       <div className="statistics-grid">
         <BarPanel title="每月观演" description={selectedYear === "all" ? "最近 12 个自然月 · 按时间排序" : selectedYear + " 年 1—12 月"} rows={monthly} />
