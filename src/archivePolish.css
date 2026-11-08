@@ -488,3 +488,63 @@
     grid-template-columns: 40px minmax(0, 1fr);
   }
 }
+
+
+/* Discovery ergonomics: one-click favorites, informative result state and keyboard access. */
+.archive-page .archive-command-actions button[aria-pressed="true"] {
+  color: #0d554c;
+  border-color: #64ae9c;
+  background: #dff4eb;
+}
+.archive-page .archive-command-actions button[aria-pressed="true"] .is-filled { fill: currentColor; }
+.archive-page .archive-poster-copy {
+  width: 100%;
+  border: 0;
+  color: inherit;
+  text-align: left;
+  background: transparent;
+  font: inherit;
+  cursor: pointer;
+}
+.archive-page .archive-poster-copy:focus-visible {
+  outline: 3px solid var(--experience-accent-2);
+  outline-offset: -1px;
+  border-radius: 8px;
+}
+.archive-active-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 2px 4px;
+  color: var(--experience-muted);
+  font-size: 13px;
+}
+.archive-active-summary strong { color: var(--experience-text); font-variant-numeric: tabular-nums; }
+.archive-active-summary button {
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 7px;
+  color: #0c7c6e;
+  background: transparent;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.archive-active-summary button:hover { background: color-mix(in srgb, var(--experience-accent-2) 13%, transparent); }
+.archive-filter-empty { min-height: 205px; gap: 10px; }
+.archive-filter-empty h2 { font-size: 20px; }
+.archive-filter-empty p { max-width: 450px; font-size: 13px; font-weight: 550; line-height: 1.6; }
+.archive-filter-empty button { margin-top: 6px; font-size: 13px; }
+@media (max-width: 720px) {
+  .archive-page .archive-command {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .archive-page .archive-command-actions button {
+    min-width: 36px;
+    padding: 0 8px;
+  }
+  .archive-page .archive-search { min-width: 0; }
+  .archive-filter-empty { min-height: 160px; padding: 22px 17px; }
+}
