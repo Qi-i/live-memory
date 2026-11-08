@@ -2,6 +2,7 @@ import { useState, type FormEvent } from "react";
 import { useDialogBehavior } from "../useDialogBehavior";
 import { PortraitArtwork } from "./WorkspaceShell";
 import type { DemoShow } from "./demoData";
+import { renderDemoRecap, saveDemoPng } from "./demoShare";
 import "./demoViews.css";
 
 export function DemoArchiveView({ mode, shows, onOpen }: {
@@ -89,15 +90,33 @@ export function DemoDetail({ show, onClose, onEdit }: {
   </div>;
 }
 
-export function DemoInfo({ kind, shows, onClose }: {
-  kind:"import"|"share"; shows:DemoShow[]; onClose:()=>void;
+export function DemoInfo({ kind, shows, onClose, onImportSample }: {
+  kind:"import"|"share"; shows:DemoShow[]; onClose:()=>void; onImportSample?:()=>void;
 }) {
+  const [png,setPng]=useState<string|null>(null);
+  const [busy,setBusy]=useState(false);
+  const [error,setError]=useState("");
+  const generate=async()=>{
+    if(busy)return;
+    setBusy(true);setError("");
+    try { setPng(await renderDemoRecap(shows)); }
+    catch(reason){setError(reason instanceof Error?reason.message:"分享图生成失败");}
+    finally{setBusy(false);}
+  };
   const ref=useDialogBehavior({onClose,focusSelector:'button[aria-label="关闭演示说明"]'});
   return <div ref={ref} className="v3-demo-backdrop" role="presentation" onMouseDown={e=>{if(e.target===e.currentTarget)onClose();}}>
     <section className="v3-demo-modal" role="dialog" aria-modal="true" aria-label={kind==="share"?"分享预览":"导入说明"}>
       <header><div><span>{kind==="share"?"SHARE DESIGN":"SAFE IMPORT"}</span><h2>{kind==="share"?"个人回顾卡构图":"导入尚未接入真实数据"}</h2><p>{kind==="share"?"只使用当前演示的公开记录，不包含个人私密字段。":"为防止将私人记录输入公开预览，演示入口不读取文件。正式版将通过安全数据导入服务提供此功能。"}</p></div><button type="button" aria-label="关闭演示说明" onClick={onClose}>×</button></header>
-      {kind==="share"&&<div className="v3-demo-share"><span>LIVE MEMORY · THE MOMENTS</span><h3>每一场现场，都是一段记忆</h3><strong>{shows.length} <small>场演出</small></strong><div>{shows.slice(0,3).map(show=><figure key={show.id}>{show.src&&<img src={show.src} alt={show.title}/>}</figure>)}</div><small>DESIGN PREVIEW · NO PRIVATE DATA</small></div>}
-      <footer><button type="button" className="v3-demo-primary" onClick={onClose}>返回预览</button></footer>
+      {kind==="share"&&<>
+        <div className="v3-demo-share"><span>LIVE MEMORY · THE MOMENTS</span><h3>每一场现场，都是一段记忆</h3><strong>{shows.length} <small>场演出</small></strong><div>{shows.slice(0,3).map(show=><figure key={show.id}>{show.src&&<img src={show.src} alt={show.title}/>}</figure>)}</div><small>DESIGN PREVIEW · NO PRIVATE DATA</small></div>
+        {png&&<div className="v3-demo-generated-image"><img src={png} alt="4:5演示回顾PNG预览" /><span>1080 × 1350 · PNG</span></div>}
+        {error&&<p role="alert" className="v3-demo-export-error">{error}</p>}
+      </>}
+      <footer>
+        <button type="button" onClick={onClose}>返回预览</button>
+        {kind==="import"&&<button type="button" className="v3-demo-primary" onClick={onImportSample}>导入预置演示记录</button>}
+        {kind==="share"&&<button type="button" className="v3-demo-primary" disabled={busy} onClick={()=>{if(png)saveDemoPng(png);else void generate();}}>{busy?"生成中…":png?"保存 PNG 图片":"生成 4:5 PNG"}</button>}
+      </footer>
     </section>
   </div>;
 }
