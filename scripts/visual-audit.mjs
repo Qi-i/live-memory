@@ -879,6 +879,8 @@ await archiveView("海报", ".archive-poster-card");
         await v3Page.getByRole("button", { name: "模拟冲突" }).click();
         await v3Page.locator(".v3-mobile-status").getByRole("button", { name: "查看同步状态" }).click();
         await v3Page.locator(".v3-mobile-status .v3-status-history").waitFor({ state: "visible" });
+        const attentionText = await v3Page.locator(".v3-mobile-status .v3-status-current").innerText();
+        if (!attentionText.includes("真正的并发修改")) throw new Error("Mobile sync center hid the current conflict");
         const statusBox = await v3Page.locator(".v3-mobile-status .v3-status-history").boundingBox();
         if (!statusBox || statusBox.x < 0 || statusBox.x + statusBox.width > width + 1) {
           throw new Error("V3 mobile status panel exceeds viewport: " + JSON.stringify(statusBox));
