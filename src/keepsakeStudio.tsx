@@ -260,7 +260,7 @@ async function paintEvent(ctx: CanvasRenderingContext2D, record: EventRecord, wi
   const heroY = 154;
   const heroHeight = tall ? 1172 : 690;
   drawFrame(ctx, 76, heroY, width - 152, heroHeight, p);
-  const image = await safeImage(primaryMedia(record, ["poster", "livePhoto", "ticket"]));
+  const image = await safeImage(primaryMedia(record, ["poster", "livePhoto"]));
   if (image) {
     ctx.save();
     ctx.beginPath();
