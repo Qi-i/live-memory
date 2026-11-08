@@ -104,3 +104,29 @@
   .v3-demo-city-bars > div {grid-template-columns:85px minmax(0,1fr) 25px;gap:8px;}
 }
 @media (prefers-reduced-motion:reduce) {.v3-demo-poster-grid .v3-portrait-frame {transition:none;}}
+
+/* A real exported canvas stays portrait and does not expand the modal past its viewport. */
+.v3-demo-generated-image {
+  display: grid;
+  place-items: center;
+  gap: 9px;
+  min-width: 0;
+  max-height: min(70dvh, 750px);
+  overflow: auto;
+  padding: 14px;
+  border: 1px solid #d7deee;
+  border-radius: 17px;
+  background: #edf0fa;
+}
+.v3-demo-generated-image img {
+  display: block;
+  width: min(320px, 100%);
+  height: auto;
+  max-height: 55dvh;
+  object-fit: contain;
+  aspect-ratio: 4/5;
+  border-radius: 12px;
+  box-shadow: 0 12px 30px rgba(33, 49, 92, .19);
+}
+.v3-demo-generated-image span { color: #6a738c; font-size: 12px; }
+.v3-demo-export-error { padding: 9px 13px; border-radius: 11px; color: #9f3c50; background: #fff0f1; font-size: 13px; }
