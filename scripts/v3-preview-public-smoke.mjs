@@ -7,7 +7,7 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 let failures = [];
 try {
-  for (const [width, height] of [[360, 780], [390, 844], [768, 1024], [1024, 820], [1600, 900]]) {
+  for (const [width, height] of [[360, 780], [390, 844], [768, 1024], [1024, 820], [1600, 900], [1669, 925], [1920, 1080]]) {
     const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: "block", acceptDownloads: true });
     const page = await context.newPage();
     const errors = [];
@@ -78,6 +78,15 @@ try {
       throw Error("Toolbar action clipped at " + width);
     if (width >= 1024 && Math.abs(geom.map.height - geom.side.height) > 2)
       throw Error("Map and city listing have different heights at " + width);
+    if (width === 1669) {
+      const gallery = page.locator(".v3-stage-hero-gallery");
+      const initialScroll = await gallery.evaluate(el => el.scrollLeft);
+      await page.getByRole("button", { name: "下一组海报" }).click();
+      await page.waitForFunction(previous => {
+        const element = document.querySelector(".v3-stage-hero-gallery");
+        return !!element && element.scrollLeft > previous + 15;
+      }, initialScroll, { timeout: 3000 });
+    }
     await page.screenshot({ path: out + "/landing-" + width + ".png", fullPage: true });
     await page.getByRole("button", { name: "北京", exact: false }).last().click();
     await page.getByRole("dialog", { name: /北京的演出/ }).waitFor({ state: "visible" });
@@ -209,4 +218,4 @@ try {
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exitCode = 1;
-} else console.log("V3 public preview validated at 360/390/768/1024/1600px, no external requests, map/hero/status interactive.");
+} else console.log("V3 public preview validated at 360/390/768/1024/1600/1669/1920px, no external requests, map/hero/status interactive.");
