@@ -1,6 +1,7 @@
 import type { EventRecord } from "../../domain";
 import { currentStorageScope, normalizeRecord, storageScopeKey } from "../../storage";
-import type { RecordRepository, AppliedRemoteBatch } from "../../core/ports/RecordRepository";
+import { LocalRevisionChanged, type RecordRepository, type AppliedRemoteBatch } from "../../core/ports/RecordRepository";
+import { recordContentEqual } from "../../core/sync/revision";
 import { applyRemoteAgainstLive } from "../../core/sync/applyRemote";
 
 const LEGACY_DB_VERSION = 1;
@@ -46,6 +47,47 @@ export class IndexedDbRecordRepository implements RecordRepository {
       // The transaction has been opened after the scope assertion. Even if
       // navigation changes scopes meanwhile, its store is tied to the old DB.
       tx.objectStore(RECORD_STORE).put(normalizeRecord(record));
+    });
+  }
+
+
+  async saveIfUnchanged(record: EventRecord, expectedSnapshot: EventRecord | null): Promise<void> {
+    if (expectedSnapshot && expectedSnapshot.id !== record.id) {
+      throw new Error("Editor baseline ID does not match the record being saved");
+    }
+    const db = await this.open();
+    this.checkScope();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(RECORD_STORE, "readwrite");
+      const store = tx.objectStore(RECORD_STORE);
+      const currentRequest = store.get(record.id);
+      let preconditionError: Error | null = null;
+      currentRequest.onsuccess = () => {
+        if (currentStorageScope() !== this.scope) {
+          preconditionError = new Error("Account changed before record save committed");
+          tx.abort();
+          return;
+        }
+        const existing = currentRequest.result as EventRecord | undefined;
+        const matches = expectedSnapshot === null
+          ? existing === undefined
+          : Boolean(existing && recordContentEqual(normalizeRecord(existing), expectedSnapshot));
+        if (!matches) {
+          preconditionError = new LocalRevisionChanged(record.id);
+          tx.abort();
+          return;
+        }
+        store.put(normalizeRecord(record));
+      };
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onabort = () => {
+        db.close();
+        reject(preconditionError ?? tx.error ?? new Error("Record save transaction aborted"));
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(preconditionError ?? tx.error ?? new Error("Record save transaction failed"));
+      };
     });
   }
 
