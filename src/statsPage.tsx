@@ -9,6 +9,7 @@ import {
   Pencil,
   RefreshCw,
   Search,
+  Share2,
   ShieldCheck,
   UserRound,
   X,
@@ -27,7 +28,7 @@ import "./refinementV3.css";
 import "./refinementV3Hotfix.css";
 import "./refinementV3Hotfix.css";
 
-export function StatsPage({ records }: { records: EventRecord[] }) {
+export function StatsPage({ records, onShare }: { records: EventRecord[]; onShare: () => void }) {
   const watched = records.filter((record) => effectiveStatus(record) === "watched");
   const planned = records.filter((record) => effectiveStatus(record) !== "watched");
   const totalPrice = watched.reduce((sum, record) => sum + (record.price || 0), 0);
@@ -40,6 +41,7 @@ export function StatsPage({ records }: { records: EventRecord[] }) {
 
   return (
     <section className="statistics-page">
+      <header className="statistics-share-heading"><div><span>YOUR LIVE STORY</span><h2>我的现场履历</h2><p>数据属于自己，回忆也应该能随时带走。</p></div><button type="button" onClick={onShare}><Share2 />生成回顾分享图</button></header>
       <div className="statistics-metrics">
         <Metric value={records.length} label="总记录" hint={years.length ? `${years[0]}—${years[years.length - 1]}` : "尚无档案"} />
         <Metric value={watched.length} label="已看" hint="完成观演" accent />
@@ -57,7 +59,7 @@ export function StatsPage({ records }: { records: EventRecord[] }) {
       <section className="statistics-story">
         <span>MEMORY PROFILE</span>
         <h2>{profileSentence(records, watched, cities, artists)}</h2>
-        <p>统计页只解释你的档案，不重复档案页的筛选和导航。所有数据均来自当前记录。</p>
+        <p>所有统计来自当前档案。可以生成独立的个人回顾图，不会包含票价、座位等隐私信息。</p>
       </section>
     </section>
   );
