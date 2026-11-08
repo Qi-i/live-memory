@@ -67,7 +67,7 @@ export function KeepsakeStudio({ subject, onClose }: { subject: KeepsakeSubject;
   }, [subject, ratio, theme, showVenue, showBrand, headline]);
 
   const filename = (kind === "record" ? subject.record.date + "-" + subject.record.title : "我的现场履历")
-    .replace(/[\\/:*?"<>|]+/g, "-").slice(0, 65) + "-" + ratio + ".png";
+    .replace(/[^\w\u4e00-\u9fff-]+/g, "-").slice(0, 65) + "-" + ratio + ".png";
 
   function download() {
     if (!imageUrl) return;
@@ -311,7 +311,7 @@ async function paintRecap(ctx: CanvasRenderingContext2D, records: EventRecord[],
     text(ctx, stat.label, x + 26, statsY + 142, 23, p.subtle, 590);
   });
   const collageY = statsY + 230;
-  const collageHeight = tall ? 920 : 535;
+  const collageHeight = tall ? 920 : Math.max(335, Math.min(535, height - collageY - 230));
   const posters = await Promise.all(ordered.filter((record) => primaryMedia(record, ["poster", "livePhoto"])).slice(0, 4)
     .map(async (record) => ({ record, image: await safeImage(primaryMedia(record, ["poster", "livePhoto"])) })));
   const cols = 2, gap = 18, cardWidth = (928 - gap) / cols, cardHeight = (collageHeight - gap) / 2;
