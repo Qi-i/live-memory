@@ -64,8 +64,14 @@ assert.equal(decide(localHash, remoteHash, base).action, "conflict",
 assert.equal(decide(localHash, remoteHash, undefined).action, "unbased-divergence",
   "Legacy records lacking a common baseline require a safe migration, not timestamp guessing");
 assert.equal(decide(localHash, remoteHash, undefined).needsUserReview, true);
-assert.equal(decide(base, undefined, base).action, "push-new");
-assert.equal(decide(undefined, base, base).action, "pull-new");
+assert.equal(decide(base, undefined, base).action, "defer-absence",
+  "A known remote record disappearing needs deletion evidence, not automatic recreation");
+assert.equal(decide(undefined, base, base).action, "defer-absence",
+  "A known local record disappearing must not be resurrected on next sync");
+assert.equal(decide(base, undefined, undefined).action, "push-new",
+  "A genuinely new local record should still be uploaded");
+assert.equal(decide(undefined, base, undefined).action, "pull-new",
+  "A genuinely new remote record should still be downloaded");
 
 assert.equal(policy.exports.presentSyncActivity({ type: "connected" }).surface, "silent");
 assert.equal(policy.exports.presentSyncActivity({ type: "transferred", direction: "pull", changedRecords: 0 }).surface, "silent");
