@@ -28,8 +28,11 @@ export function editorSignature(record: EventRecord): string {
 export function validateEditorRecord(record: EventRecord): string | null {
   if (!record.title.trim()) return "请填写演出名称";
   if (!/^\d{4}-\d{2}-\d{2}$/.test(record.date)) return "请选择有效的演出日期";
-  const time = Date.parse(record.date + "T00:00:00");
-  if (!Number.isFinite(time)) return "演出日期无效";
+  const [year, month, day] = record.date.split("-").map(Number);
+  const date = new Date(Date.UTC(year, month - 1, day));
+  if (date.getUTCFullYear() !== year || date.getUTCMonth() + 1 !== month || date.getUTCDate() !== day) {
+    return "演出日期无效";
+  }
   if (record.price != null && (!Number.isFinite(record.price) || record.price < 0)) return "票价不能为负数或无效数字";
   return null;
 }
