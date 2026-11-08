@@ -23,6 +23,10 @@ export const demoShows: DemoShow[] = [
     venue: "郑州奥林匹克中心", date: "2024-08-18", status: "已看", src: asset("wang-sulong.jpg") },
   { id: "demo-zhao", title: "赵雷 · 没有信号", artist: "赵雷", city: "西安",
     venue: "西安奥体中心", date: "2024-03-10", status: "已看", src: asset("zhao-lei.png") },
+  { id: "demo-beijing", title: "北京现场 · 纪念音乐会", artist: "演示艺人", city: "北京",
+    venue: "北京演出场馆（演示）", date: "2025-11-01", status: "已看" },
+  { id: "demo-urumqi", title: "乌鲁木齐 · 城市音乐节", artist: "演示乐队", city: "乌鲁木齐",
+    venue: "乌鲁木齐音乐广场（演示）", date: "2026-09-12", status: "待看" },
 ];
 
 export const demoPosters = demoShows.map(({ id, title, city, src }) => ({ id, title, city, src }));
