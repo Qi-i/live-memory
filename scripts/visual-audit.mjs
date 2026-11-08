@@ -158,11 +158,12 @@ try {
   await page.unroute("**/demo/**");
 
   const bannerTitle = await page.locator(".archive-masthead h2").evaluate((heading) => ({
-    rendered: getComputedStyle(heading, "::before").content,
-    originalFontSize: getComputedStyle(heading).fontSize,
+    text: heading.textContent?.trim(),
+    fontSize: parseFloat(getComputedStyle(heading).fontSize),
+    pseudoContent: getComputedStyle(heading, "::before").content,
   }));
-  if (!bannerTitle.rendered.includes("把现场，留在时间里") || bannerTitle.originalFontSize !== "0px") {
-    throw new Error(`Premium banner title was not applied: ${JSON.stringify(bannerTitle)}`);
+  if (bannerTitle.text !== "把现场，留在时间里" || bannerTitle.fontSize < 24 || bannerTitle.pseudoContent !== "none") {
+    throw new Error(`Semantic banner title is not readable: ${JSON.stringify(bannerTitle)}`);
   }
 
   const masthead = await page.locator(".archive-masthead").boundingBox();
