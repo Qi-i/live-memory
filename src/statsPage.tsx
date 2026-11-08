@@ -109,10 +109,11 @@ function Metric({ value, label, hint, accent }: { value: string | number; label:
 
 function BarPanel({ title, description, rows }: { title: string; description: string; rows: [string, number][] }) {
   const max = Math.max(1, ...rows.map(([, count]) => count));
+  const hasData = rows.some(([, count]) => count > 0);
   return (
     <article className="statistics-panel">
       <header><span>{description}</span><h2>{title}</h2></header>
-      <div>{rows.length ? rows.map(([label, count]) => <p key={label}><span>{label}</span><i><b style={{ width: `${count / max * 100}%` }} /></i><strong>{count}</strong></p>) : <em className="statistics-empty">暂无可统计数据</em>}</div>
+      <div>{hasData ? rows.map(([label, count]) => <p key={label}><span>{label}</span><i><b style={{ width: `${count / max * 100}%` }} /></i><strong>{count}</strong></p>) : <em className="statistics-empty">暂无可统计数据</em>}</div>
     </article>
   );
 }
