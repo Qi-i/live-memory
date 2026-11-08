@@ -48,7 +48,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Start local standalone preview
         run: |
-          npm run preview -- --host 127.0.0.1 --port 4175 > /tmp/v3-preview.log 2>&1 &
+          VITE_V3_STANDALONE=1 npm run preview -- --host 127.0.0.1 --port 4175 > /tmp/v3-preview.log 2>&1 &
           for attempt in {1..30}; do
             if curl -fsS http://127.0.0.1:4175/live-memory/v3-preview/ >/dev/null; then exit 0; fi
             sleep 1
