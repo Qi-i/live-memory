@@ -71,6 +71,10 @@
 .v3-status-chevron { font-size:17px; font-weight:600; }
 .v3-status-history { display:grid; gap:8px; max-height:210px; padding:0 10px 12px; overflow:auto; }
 .v3-status-history h3 { margin:0; font-size:12px; }
+.v3-status-current { display:grid; gap:4px; padding:9px 10px; border:1px solid var(--v3-border); border-radius:10px; background:rgba(239,244,250,.9); }
+.v3-status-current strong { color:var(--v3-muted); font-size:10px; }
+.v3-status-current span { font-size:12px; font-weight:730; line-height:1.45; }
+.v3-status-current.is-attention { border-color:#e5b8a5; color:#98492e; background:#fff1e9; }
 .v3-status-history p { margin:0; font-size:11px; color:var(--v3-muted); }
 .v3-status-history ol { display:grid; gap:8px; padding:0; margin:0; list-style:none; }
 .v3-status-history li { display:grid; gap:2px; font-size:11px; line-height:1.4; }
