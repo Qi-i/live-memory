@@ -1,5 +1,5 @@
 import type { EventRecord } from "../../domain";
-import type { CloudRecordAdapter, CloudRecordEnvelope } from "../ports/CloudRecordAdapter";
+import { RemoteRevisionChanged, type CloudRecordAdapter, type CloudRecordEnvelope } from "../ports/CloudRecordAdapter";
 import type { RecordRepository } from "../ports/RecordRepository";
 import type { RevisionBaselineStore, RevisionEntry } from "../sync/baselines";
 import { recordRevision, recordContentEqual } from "../sync/revision";
@@ -19,13 +19,6 @@ export interface SyncRunResult {
   deferredIds: string[];
   reviews: SyncReviewItem[];
   activity: SyncActivity;
-}
-
-export class RemoteRevisionChanged extends Error {
-  constructor(message = "Remote record revision changed during the upload") {
-    super(message);
-    this.name = "RemoteRevisionChanged";
-  }
 }
 
 /**
