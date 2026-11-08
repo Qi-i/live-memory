@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="430" height="860" viewBox="0 0 430 860" role="img" aria-labelledby="title desc">
-  <title id="title">回响册移动端演示</title>
+  <title id="title">Live Memory 移动端演示</title>
   <desc id="desc">使用三条虚构演出记录展示移动端海报档案</desc>
   <defs>
     <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M24 0H0V24" fill="none" stroke="#dcded7"/></pattern>
@@ -10,9 +10,20 @@
   <rect x="14" y="14" width="402" height="94" rx="8" fill="#fffef9" stroke="#d8dad5"/>
   <rect x="28" y="27" width="48" height="48" rx="8" fill="#dfff4f"/>
   <rect x="28" y="51" width="48" height="24" fill="#65dfcf"/>
-  <text x="52" y="59" text-anchor="middle" font-family="Arial, sans-serif" font-size="28" font-weight="900">演</text>
-  <text x="88" y="49" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="21" font-weight="900">回响册</text>
-  <text x="88" y="69" font-family="Arial, sans-serif" font-size="11" font-weight="700" fill="#687077">Live memory</text>
+  <g transform="translate(18 20) scale(.085)">
+    <rect x="92" y="142" width="220" height="278" rx="34" fill="#0C4A40" transform="rotate(-13 202 281)"/>
+    <rect x="128" y="112" width="218" height="294" rx="34" fill="#88A296" transform="rotate(-5 237 259)"/>
+    <g transform="rotate(9 300 250)">
+      <rect x="164" y="78" width="270" height="330" rx="36" fill="#0A4A40"/>
+      <circle cx="314" cy="118" r="19" fill="#F9EACB"/>
+      <path d="M314 136 190 357 392 357Z" fill="#DDE0D2"/>
+      <circle cx="239" cy="335" r="20" fill="#0A4A40"/>
+      <circle cx="307" cy="337" r="23" fill="#0A4A40"/>
+      <circle cx="368" cy="346" r="18" fill="#0A4A40"/>
+    </g>
+  </g>
+  <text x="82" y="49" font-family="Arial, sans-serif" font-size="19" font-weight="900" fill="#0A4A40">Live Memory</text>
+  <text x="82" y="68" font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="9" font-weight="700" fill="#73877E">现场记 · CONCERT ARCHIVE</text>
   <g font-family="Arial, 'Microsoft YaHei', sans-serif" font-size="12" font-weight="800">
     <rect x="28" y="79" width="76" height="22" rx="5" fill="#dfff4f"/><text x="66" y="95" text-anchor="middle">档案</text>
     <text x="146" y="95" text-anchor="middle" fill="#687077">统计</text><text x="226" y="95" text-anchor="middle" fill="#687077">备份</text><text x="306" y="95" text-anchor="middle" fill="#687077">设置</text>

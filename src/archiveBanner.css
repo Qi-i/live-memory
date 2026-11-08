@@ -1,3 +1,27 @@
+
+.archive-brand-kicker {
+  position: relative;
+  z-index: 1;
+  display: inline-flex;
+  width: max-content;
+  align-items: center;
+  gap: 8px;
+  color: #0a8271;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: .17em;
+}
+
+.archive-brand-kicker .brand-mark {
+  width: 28px;
+  height: 28px;
+  filter: drop-shadow(0 5px 9px rgba(10, 74, 64, .12));
+}
+
+.archive-brand-kicker > span {
+  white-space: nowrap;
+}
+
 .archive-page .archive-masthead {
   grid-template-columns: minmax(410px, .96fr) minmax(520px, 1.04fr);
   min-height: 430px;
@@ -55,6 +79,7 @@
     0 0 0 48px color-mix(in srgb, var(--experience-accent) 4%, transparent);
 }
 
+/* Legacy plain kicker retained only for backward-compatible snapshots. */
 .archive-page .archive-masthead-copy > span {
   position: relative;
   width: max-content;
@@ -64,7 +89,7 @@
   letter-spacing: .17em;
 }
 
-.archive-page .archive-masthead-copy > span::before {
+ .archive-page .archive-masthead-copy > span::before {
   content: "";
   position: absolute;
   top: 50%;
