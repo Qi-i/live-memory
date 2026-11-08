@@ -1,4 +1,4 @@
-const CACHE_NAME = "live-memory-v5";
+const CACHE_NAME = "live-memory-v6";
 const APP_CACHE_PREFIX = "live-memory-v";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./live-memory-mark.svg", "./live-memory-logo.svg"];
 
