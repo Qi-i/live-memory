@@ -162,11 +162,15 @@ export function RecordEditor({
   const [mediaErrors, setMediaErrors] = useState<Partial<Record<MediaKind, string>>>({});
   const [recognizing, setRecognizing] = useState(false);
   const [recognitionStatus, setRecognitionStatus] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [discardOpen, setDiscardOpen] = useState(false);
   useEffect(() => {
     setDraft({ ...record, status: effectiveStatus(record) });
     setMediaStates({});
     setMediaErrors({});
     setRecognitionStatus("");
+    setSaveError("");
+    setDiscardOpen(false);
   }, [record]);
 
   async function addFiles(kind: MediaKind, files: File[]) {
@@ -255,9 +259,14 @@ export function RecordEditor({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (Object.values(mediaStates).some((state) => state === "processing")) return;
+    const validationError = validateEditorRecord(draft);
+    if (validationError) { setSaveError(validationError); return; }
     setSaving(true);
+    setSaveError("");
     try {
       await onSave({ ...draft, lineup: draft.artists.map((name) => ({ name, role: "artist" })), updatedAt: nowIso() });
+    } catch (reason) {
+      setSaveError(reason instanceof Error ? reason.message : "保存失败，请检查本地存储或同步状态");
     } finally {
       setSaving(false);
     }
@@ -265,12 +274,28 @@ export function RecordEditor({
 
   const mediaFor = (kind: MediaKind) => draft.media.filter((item) => item.kind === kind);
   const mediaBusy = Object.values(mediaStates).some((state) => state === "processing");
+  const isDirty = editorSignature(draft) !== editorSignature({ ...record, status: effectiveStatus(record) });
+  const requestClose = () => {
+    if (saving || mediaBusy || recognizing) return;
+    if (isDirty) setDiscardOpen(true);
+    else onCancel();
+  };
+  const editorRef = useDialogBehavior({ onClose: requestClose, allowEscape: !saving && !mediaBusy && !recognizing, focusSelector: 'input[required]' });
+  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <div className="overlay-backdrop editor-backdrop-v2">
-      <form className="record-editor-v2" onSubmit={submit}>
-        <header className="editor-header-v2"><div><span>RECORD EDITOR</span><h2>{record.title ? "编辑演出" : "新增演出"}</h2></div><button type="button" aria-label="关闭" onClick={onCancel}><X /></button></header>
+    <>
+    <div ref={editorRef} className="overlay-backdrop editor-backdrop-v2">
+      <form className="record-editor-v2" role="dialog" aria-label={record.title ? "编辑演出" : "新增演出"} aria-modal="true" onSubmit={submit}>
+        <header className="editor-header-v2"><div><span>LIVE MEMORY / RECORD STUDIO</span><h2>{record.title ? "编辑演出档案" : "记录一场新现场"}</h2><small>{isDirty ? "● 修改尚未保存" : "所有内容保存在你的私人档案中"}</small></div><button type="button" aria-label="关闭" onClick={requestClose}><X /></button></header>
+        <nav className="editor-chapters-v3" aria-label="编辑表单分区">
+          <button type="button" onClick={() => jumpTo("editor-about")}>01 <span>演出信息</span></button>
+          <button type="button" onClick={() => jumpTo("editor-ticket")}>02 <span>票务与同行</span></button>
+          <button type="button" onClick={() => jumpTo("editor-media")}>03 <span>影像档案</span></button>
+          <button type="button" onClick={() => jumpTo("editor-memory")}>04 <span>现场回忆</span></button>
+        </nav>
         <div className="editor-grid-v2">
+          <EditorSection id="editor-about" number="01" title="演出信息" description="先记录这场演出的基本信息；后续都可以修改。">
           <EditorField className="is-wide" label="演出名称"><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="艺人 / 阵容"><input value={draft.artists.join(" / ")} onChange={(event) => setDraft({ ...draft, artists: splitTextList(event.target.value) })} placeholder="多个用 / 或 、 分隔" /></EditorField>
           <EditorField label="类型"><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as EventCategory })}>{Object.entries(categoryLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></EditorField>
@@ -279,11 +304,12 @@ export function RecordEditor({
           <EditorField label="时间"><input type="time" value={draft.time || ""} onChange={(event) => setDraft({ ...draft, time: event.target.value })} /></EditorField>
           <EditorField label="城市"><input value={draft.city} onChange={(event) => setDraft({ ...draft, city: event.target.value })} /></EditorField>
           <EditorField label="场馆"><input value={draft.venue} onChange={(event) => setDraft({ ...draft, venue: event.target.value })} /></EditorField>
+          </EditorSection>
+          <EditorSection id="editor-ticket" number="02" title="票务与同行" description="票价、座位与同行人仅存在于你的私人档案，分享图默认隐藏。">
           <EditorField label="票价"><input type="number" value={draft.price ?? ""} onChange={(event) => setDraft({ ...draft, price: event.target.value ? Number(event.target.value) : null })} /></EditorField>
           <EditorField label="公开票价"><input value={draft.publicPriceRange || ""} onChange={(event) => setDraft({ ...draft, publicPriceRange: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="座位"><input value={draft.seat || ""} onChange={(event) => setDraft({ ...draft, seat: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="同行人"><input value={draft.companions.join(" / ")} onChange={(event) => setDraft({ ...draft, companions: splitTextList(event.target.value) })} /></EditorField>
-          <EditorField className="is-wide" label="标签"><input value={draft.tags.join(" / ")} onChange={(event) => setDraft({ ...draft, tags: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="票务链接 / 来源">
             <div className="editor-source-import-v2">
               <input value={draft.sourceUrl || ""} onChange={(event) => setDraft({ ...draft, sourceUrl: event.target.value })} placeholder="粘贴大麦、纷玩岛或票星球演出链接" />
@@ -293,19 +319,31 @@ export function RecordEditor({
             {recognitionStatus && <small className="editor-recognition-status-v2">{recognitionStatus}</small>}
           </EditorField>
 
+          </EditorSection>
+          <EditorSection id="editor-media" number="03" title="影像档案" description="上传海报、票根、座位图与现场照片；支持本地保存。">
           <div className="media-upload-grid-v2 is-wide">
             <MediaEditorCard label="主海报" kind="poster" items={mediaFor("poster")} state={mediaStates.poster} error={mediaErrors.poster} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
             <MediaEditorCard label="电子票根" kind="ticket" items={mediaFor("ticket")} state={mediaStates.ticket} error={mediaErrors.ticket} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
             <MediaEditorCard label="座位图" kind="seatMap" items={mediaFor("seatMap")} state={mediaStates.seatMap} error={mediaErrors.seatMap} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
             <MediaEditorCard label="现场精选" kind="livePhoto" items={mediaFor("livePhoto")} state={mediaStates.livePhoto} error={mediaErrors.livePhoto} cloudMediaSyncEnabled={cloudMediaSyncEnabled} multiple onFiles={addFiles} onRemove={removeMedia} />
           </div>
+          </EditorSection>
+          <EditorSection id="editor-memory" number="04" title="现场回忆" description="标签、曲目和感受属于你，日后回顾更容易找到。">
+          <EditorField className="is-wide" label="标签"><input value={draft.tags.join(" / ")} onChange={(event) => setDraft({ ...draft, tags: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="曲目"><textarea value={draft.setlist.join("\n")} onChange={(event) => setDraft({ ...draft, setlist: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="演出记录"><textarea value={draft.note || ""} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></EditorField>
+          </EditorSection>
         </div>
-        <footer className="editor-footer-v2"><button className="button ghost" type="button" onClick={onCancel}>取消</button><button className="button primary" disabled={saving || mediaBusy || recognizing} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}{mediaBusy ? "图片正在处理" : "保存记录"}</button></footer>
+        <footer className="editor-footer-v2">{saveError && <span className="editor-save-error-v3" role="alert">{saveError}</span>}<button className="button ghost" type="button" onClick={requestClose}>取消</button><button className="button primary" disabled={saving || mediaBusy || recognizing} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}{mediaBusy ? "图片正在处理" : "保存记录"}</button></footer>
       </form>
     </div>
+    {discardOpen && <ConfirmDialog action={{ title: "放弃这次编辑？", message: "尚未保存的文字和图片修改会丢失；已经保存在档案中的内容不受影响。", confirmLabel: "放弃修改", danger: true, onConfirm: async () => { setDiscardOpen(false); onCancel(); } }} onClose={() => setDiscardOpen(false)} />}
+    </>
   );
+}
+
+function EditorSection({ id, number, title, description, children }: { id: string; number: string; title: string; description: string; children: ReactNode }) {
+  return <section id={id} className="editor-section-v3"><header><span>{number} / SECTION</span><h3>{title}</h3><p>{description}</p></header><div className="editor-section-fields-v3">{children}</div></section>;
 }
 
 function EditorField({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) { return <label className={`editor-field-v2 ${className}`}><span>{label}</span>{children}</label>; }
