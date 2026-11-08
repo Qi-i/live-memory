@@ -57,6 +57,9 @@ const allowed = [
   "src/ui/system/V3Preview.tsx",
   "src/ui/system/WorkspaceShell.tsx",
   "src/ui/system/demoData.ts",
+  "src/ui/system/DemoFeatures.tsx",
+  "src/ui/system/demoShare.ts",
+  "src/ui/useDialogBehavior.ts",
   "src/core/sync/policy.ts",
 ].map((file) => resolve(project, file));
 for (const file of allowed) {
