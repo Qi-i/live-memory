@@ -130,7 +130,7 @@ export function V3Preview() {
 
   return (
     <WorkspaceShell
-      material={material}
+      appearance={material}
       demoStatus
       brand={<><span className="v3-preview-brand">◈</span> Live Memory <small>V3 · 独立演示</small></>}
       navigation={navigation.map((item) =>
