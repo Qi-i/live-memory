@@ -11,6 +11,8 @@ export interface SyncReviewItem {
   action: Extract<RecordSyncAction, "conflict" | "unbased-divergence">;
   local: EventRecord;
   remote: EventRecord;
+  /** Opaque server CAS revision observed during conflict detection. */
+  remoteServerRevision: string;
 }
 
 export interface SyncRunResult {
@@ -83,7 +85,10 @@ export async function synchronizeRecords(
         break;
       case "conflict":
       case "unbased-divergence":
-        if (onDevice && inCloud) reviews.push({ recordId: id, action: decision.action, local: onDevice, remote: inCloud });
+        if (onDevice && inCloud && envelope) reviews.push({
+          recordId: id, action: decision.action, local: onDevice,
+          remote: inCloud, remoteServerRevision: envelope.serverRevision,
+        });
         break;
     }
   }
