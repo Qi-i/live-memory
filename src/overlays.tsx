@@ -7,6 +7,7 @@ import {
   ImagePlus,
   Loader2,
   Pencil,
+  Share2,
   Sparkles,
   Trash2,
   Upload,
@@ -72,6 +73,7 @@ export function DetailDrawer({
   onClose,
   onEdit,
   onDelete,
+  onShare,
   onZoom,
   onSave,
 }: {
@@ -79,6 +81,7 @@ export function DetailDrawer({
   onClose: () => void;
   onEdit: () => void;
   onDelete: () => void;
+  onShare: () => void;
   onZoom: (media: MediaAsset) => void;
   onSave: (record: EventRecord) => Promise<unknown>;
 }) {
@@ -93,6 +96,7 @@ export function DetailDrawer({
           <button type="button" aria-label="关闭" onClick={onClose}><X /></button>
           <div>
             <button type="button" title={record.favorite ? "取消收藏" : "收藏"} onClick={() => void onSave({ ...record, favorite: !record.favorite })}><Heart className={record.favorite ? "is-filled" : ""} /></button>
+            <button type="button" title="生成单场纪念分享图" aria-label="生成单场纪念分享图" onClick={onShare}><Share2 /></button>
             <button type="button" title="编辑" onClick={onEdit}><Pencil /></button>
             <button className="is-danger" type="button" title="删除" onClick={onDelete}><Trash2 /></button>
           </div>

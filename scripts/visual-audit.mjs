@@ -544,6 +544,40 @@ await archiveView("海报", ".archive-poster-card");
   mobileCards.forEach((card, index) => assertContained(`Mobile banner poster ${index + 1}`, card, mobileBounds, 3));
   await page.screenshot({ path: `${outputDir}/13-banner-mobile.png`, fullPage: true });
 
+  // Single-event keepsake: actual Canvas-generated PNG, not an archive screenshot.
+  await page.locator(".archive-poster-card .archive-poster-copy").first().click();
+  await page.locator(".record-detail-v2").waitFor({ state: "visible", timeout: 10000 });
+  await page.getByRole("button", { name: "生成单场纪念分享图" }).click();
+  await page.locator(".keepsake-preview-image").waitFor({ state: "visible", timeout: 25000 });
+  const eventCardDimensions = await page.locator(".keepsake-preview-image").evaluate((img) => ({
+    width: img.naturalWidth, height: img.naturalHeight,
+  }));
+  if (eventCardDimensions.width !== 1080 || eventCardDimensions.height !== 1350) {
+    throw new Error("Single-event card must render native 4:5 PNG: " + JSON.stringify(eventCardDimensions));
+  }
+  await page.screenshot({ path: outputDir + "/13c-keepsake-concert-feed-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: /手机长图 9:16/ }).click();
+  await page.waitForFunction(() => {
+    const image = document.querySelector(".keepsake-preview-image");
+    return image?.naturalWidth === 1080 && image?.naturalHeight === 1920;
+  }, null, { timeout: 25000 });
+  const [keepsakeDownload] = await Promise.all([
+    page.waitForEvent("download", { timeout: 30000 }),
+    page.getByRole("button", { name: "下载 PNG" }).click(),
+  ]);
+  await keepsakeDownload.saveAs(outputDir + "/13d-keepsake-concert-story.png");
+  await page.getByRole("button", { name: "关闭分享编辑器" }).click();
+  await page.locator(".overlay-header-v2 > button").first().click();
+
+  // The statistics screen also has a dedicated shareable canvas.
+  await page.locator(".experience-mobile-nav button").filter({ hasText: "统计" }).click();
+  await page.getByRole("button", { name: "生成回顾分享图" }).click();
+  await page.locator(".keepsake-preview-image").waitFor({ state: "visible", timeout: 25000 });
+  await page.screenshot({ path: outputDir + "/13e-keepsake-recap-mobile.png", fullPage: true });
+  await page.getByRole("button", { name: "关闭分享编辑器" }).click();
+  await page.locator(".experience-mobile-nav button").filter({ hasText: "档案" }).click();
+  await page.locator(".archive-poster-card").first().waitFor({ state: "visible", timeout: 10000 });
+
   // Mobile editor regression: the native file chooser must be wired directly to
   // the media input, and a selected image must immediately expose local processing state.
   await page.locator(".archive-poster-card").first().dispatchEvent("contextmenu", {
