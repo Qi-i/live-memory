@@ -52,6 +52,7 @@ export class IndexedDbRecordRepository implements RecordRepository {
   async applyRemoteIfUnchanged(
     requestSnapshot: EventRecord[],
     remoteResult: EventRecord[],
+    options: { includeMedia?: boolean } = {},
   ): Promise<AppliedRemoteBatch> {
     const db = await this.open();
     this.checkScope();
@@ -69,7 +70,7 @@ export class IndexedDbRecordRepository implements RecordRepository {
           return;
         }
         const rows = (req.result as EventRecord[]).map(normalizeRecord);
-        const result = applyRemoteAgainstLive(requestSnapshot, remoteResult, rows);
+        const result = applyRemoteAgainstLive(requestSnapshot, remoteResult, rows, options);
         const accepted = new Set(result.acceptedIds);
         const existing = new Map(rows.map((record) => [record.id, record]));
         for (const candidate of result.records) {
