@@ -22,5 +22,6 @@ export interface RecordRepository {
   applyRemoteIfUnchanged(
     requestSnapshot: EventRecord[],
     remoteResult: EventRecord[],
+    options?: { includeMedia?: boolean },
   ): Promise<AppliedRemoteBatch>;
 }
