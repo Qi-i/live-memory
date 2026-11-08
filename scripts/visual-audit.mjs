@@ -708,6 +708,52 @@ await archiveView("海报", ".archive-poster-card");
   const deviceFlag = await localPage.evaluate(() => localStorage.getItem("live-memory-device-only-v1"));
   if (deviceFlag !== "1") throw new Error("Standalone local archive did not preserve its persistent mode flag");
   await localPage.screenshot({ path: outputDir + "/18-device-local-reopened-mobile.png", fullPage: true });
+
+  // Importing backup data should preview without changing IndexedDB, then
+  // add new IDs while preserving existing records with matching IDs.
+  const savedId = await localPage.locator(".archive-poster-card").first().getAttribute("data-archive-record-id");
+  if (!savedId) throw new Error("Local regression record is missing its stable ID");
+  await localPage.locator(".experience-mobile-nav button").filter({ hasText: "设置" }).click();
+  const backupFile = {
+    name: "audit-backup.json",
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ app: "live-memory", version: 3, records: [
+      { id: savedId, title: "不得覆盖原档案", date: "2026-11-08", category: "concert", media: [] },
+      { id: "audit-import-20261108", title: "导入的新演出", date: "2026-10-01", category: "concert", tags: ["值得回顾"], media: [] },
+    ] })),
+  };
+  await localPage.locator(".data-action-grid-v2 input[type=file]").setInputFiles(backupFile);
+  await localPage.getByRole("region", { name: "JSON 备份导入预览" }).waitFor({ state: "visible", timeout: 10000 });
+  const previewCounts = await localPage.locator(".backup-import-counts strong").allTextContents();
+  if (previewCounts.join(",") !== "1,1,1") throw new Error("Incorrect import preview counts: " + previewCounts.join(","));
+  await localPage.screenshot({ path: outputDir + "/19-safe-import-preview-mobile.png", fullPage: true });
+  await localPage.getByRole("button", { name: "确认新增 1 条" }).click();
+  await localPage.getByRole("region", { name: "JSON 备份导入预览" }).waitFor({ state: "detached", timeout: 10000 });
+  await localPage.reload({ waitUntil: "domcontentloaded" });
+  await localPage.locator(".experience-mobile-nav button").filter({ hasText: "档案" }).click();
+  await localPage.locator(".archive-poster-card").filter({ hasText: "本机存储回归测试现场" }).waitFor({ state: "visible", timeout: 15000 });
+  await localPage.locator(".archive-poster-card").filter({ hasText: "导入的新演出" }).waitFor({ state: "visible", timeout: 15000 });
+  if (await localPage.locator(".archive-poster-card").filter({ hasText: "不得覆盖原档案" }).count()) {
+    throw new Error("Import silently overwrote an existing local record");
+  }
+
+  // Favorites and tags must filter the actual archive, and the empty state
+  // must have a visible single-click recovery action.
+  await localPage.getByRole("button", { name: "仅显示收藏演出" }).click();
+  await localPage.locator(".archive-filter-empty").waitFor({ state: "visible", timeout: 10000 });
+  await localPage.getByRole("button", { name: "清空所有筛选条件" }).click();
+  await localPage.locator(".archive-command-actions button").filter({ hasText: "筛选" }).click();
+  await localPage.locator(".archive-filter-row").filter({ hasText: "标签" }).locator("button").filter({ hasText: "值得回顾" }).click();
+  const tagCards = await localPage.locator(".archive-poster-card").count();
+  if (tagCards !== 1) throw new Error("Tag filtering did not narrow the archive: " + tagCards);
+  await localPage.locator(".archive-search input").fill("definitely-not-a-real-concert");
+  await localPage.locator(".archive-filter-empty").waitFor({ state: "visible", timeout: 10000 });
+  await localPage.screenshot({ path: outputDir + "/20-archive-search-empty-mobile.png", fullPage: true });
+  await localPage.getByRole("button", { name: "清空所有筛选条件" }).click();
+  if (await localPage.locator(".archive-poster-card").count() !== 2) {
+    throw new Error("Clearing filters did not restore all saved and imported records");
+  }
+
   await localContext.close();
 } finally {
   await browser.close();

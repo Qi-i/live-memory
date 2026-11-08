@@ -6,6 +6,7 @@ import {
   CircleDollarSign,
   Eye,
   Filter,
+  Heart,
   ImagePlus,
   List,
   Map as MapIcon,
@@ -129,12 +130,32 @@ export function ArchivePage({
   const [filters, setFilters] = useState<Filters>(emptyFilters);
   const [sort, setSort] = useState<"smart" | "date-desc" | "date-asc" | "price-desc" | "updated-desc">("smart");
   const [expanded, setExpanded] = useState(false);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [contextMenu, setContextMenu] = useState<{ record: EventRecord; x: number; y: number } | null>(null);
   const preferredPosterColumns = Math.min(8, Math.max(5, settings.posterColumns || 5));
   const [density, setDensity] = useState(preferredPosterColumns);
   const facets = useMemo(() => buildFacets(records), [records]);
-  const visibleRecords = useMemo(() => sortRecords(filterRecords(records, filters), sort), [filters, records, sort]);
-  const activeFilterCount = filters.categories.length + filters.statuses.length + filters.years.length + filters.cities.length + filters.artists.length + filters.tags.length;
+  const visibleRecords = useMemo(() => sortRecords(filterRecords(records, filters).filter((record) => !favoritesOnly || record.favorite), sort), [favoritesOnly, filters, records, sort]);
+  const activeFilterCount = filters.categories.length + filters.statuses.length + filters.years.length + filters.cities.length + filters.artists.length + filters.tags.length + Number(favoritesOnly);
+  const hasActiveCriteria = activeFilterCount > 0 || Boolean(filters.query.trim());
+  const resetFilters = () => { setFilters({ ...emptyFilters }); setFavoritesOnly(false); };
+
+  useEffect(() => {
+    if (shareMode) return;
+    const focusSearch = (event: KeyboardEvent) => {
+      if (event.defaultPrevented || event.altKey || event.shiftKey) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("input, textarea, select, [contenteditable='true'], [role='dialog'], .record-editor-v2")) return;
+      if (document.querySelector(".record-detail-v2, .record-editor-v2, .image-zoom-v2, .keepsake-dialog")) return;
+      if (event.key === "/" || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k")) {
+        event.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener("keydown", focusSearch);
+    return () => window.removeEventListener("keydown", focusSearch);
+  }, [shareMode]);
 
   useEffect(() => {
     const open = (event: globalThis.MouseEvent) => {
@@ -211,6 +232,8 @@ export function ArchivePage({
         <label className="archive-search">
           <Search />
           <input
+            ref={searchInputRef}
+            aria-label="搜索演出档案"
             value={filters.query}
             onChange={(event) => setFilters((current) => ({ ...current, query: event.target.value }))}
             placeholder="搜索艺人、城市、场馆、标题或标签"
@@ -228,6 +251,10 @@ export function ArchivePage({
         </div>
 
         <div className="archive-command-actions">
+          <button className={favoritesOnly ? "is-active" : ""} type="button" title="仅显示收藏演出" aria-label="仅显示收藏演出" aria-pressed={favoritesOnly} onClick={() => setFavoritesOnly((value) => !value)}>
+            <Heart className={favoritesOnly ? "is-filled" : ""} />
+            <span>收藏</span>
+          </button>
           <button className={expanded ? "is-active" : ""} type="button" onClick={() => setExpanded((value) => !value)}>
             <Filter />
             <span>{activeFilterCount ? `筛选 ${activeFilterCount}` : "筛选"}</span>
@@ -246,6 +273,7 @@ export function ArchivePage({
           <StringFilterChips label="年份" values={filters.years} options={facets.years} onChange={(years) => setFilters((current) => ({ ...current, years }))} />
           <StringFilterChips label="城市" values={filters.cities} options={facets.cities} onChange={(cities) => setFilters((current) => ({ ...current, cities }))} />
           <StringFilterChips label="艺人" values={filters.artists} options={facets.artists} onChange={(artists) => setFilters((current) => ({ ...current, artists }))} />
+          <StringFilterChips label="标签" values={filters.tags} options={facets.tags} onChange={(tags) => setFilters((current) => ({ ...current, tags }))} />
           <div className="archive-filter-footer">
             <label>排序
               <select value={sort} onChange={(event) => setSort(event.target.value as typeof sort)}>
@@ -263,13 +291,26 @@ export function ArchivePage({
                 </select>
               </label>
             )}
-            <button type="button" onClick={() => setFilters((current) => ({ ...emptyFilters, query: current.query }))}>清空条件</button>
+            <button type="button" onClick={resetFilters}>清空全部条件</button>
           </div>
         </section>
       )}
 
 
-      <ArchiveRenderer
+      {hasActiveCriteria && visibleRecords.length > 0 && (
+        <div className="archive-active-summary" role="status" aria-live="polite">
+          <span>找到 <strong>{visibleRecords.length}</strong> / {records.length} 场演出</span>
+          <button type="button" onClick={resetFilters}>清空筛选</button>
+        </div>
+      )}
+      {!visibleRecords.length ? (
+        <section className="archive-empty archive-filter-empty" role="status">
+          <Ticket />
+          <h2>{records.length ? "没有符合条件的演出" : "还没有演出档案"}</h2>
+          <p>{records.length ? "试试取消收藏筛选、换一个标签，或者清空搜索内容。" : "点击页面顶部的“新增”按钮，开始记录第一场现场。"}</p>
+          {hasActiveCriteria && <button type="button" className="button primary" onClick={resetFilters}>清空所有筛选条件</button>}
+        </section>
+      ) : <ArchiveRenderer
         records={visibleRecords}
         layout={layout}
         density={density}
@@ -278,7 +319,7 @@ export function ArchivePage({
         onOpen={onOpen}
         onEdit={onEdit}
         onZoom={onZoom}
-      />
+      />}
       {contextMenu && (
         <div
           className="archive-context-menu"
@@ -407,7 +448,7 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
       <button className="archive-poster-media" type="button" onClick={(event) => { event.stopPropagation(); if (poster) onZoom(poster); else onOpen(record); }}>
         <RecordMedia media={poster} alt={record.title} fallback={record.title.slice(0, 4)} />
       </button>
-      <div className="archive-poster-copy">
+      <button className="archive-poster-copy" type="button" aria-label={`查看 ${record.title} 的详细档案`} onClick={(event) => { event.stopPropagation(); onOpen(record); }}>
         <div className="archive-card-kicker"><span>{categoryLabels[record.category]}</span><em>{statusLabels[effectiveStatus(record)]}</em></div>
         <h3>{record.title}</h3>
         <p className="archive-card-artist">{archiveArtist(record)}</p>
@@ -416,7 +457,7 @@ function PosterCard({ record, index, onOpen, onZoom }: { record: EventRecord; in
           <dt>场馆</dt><dd>{archiveLocation(record)}</dd>
           <dt>票座</dt><dd className="archive-ticket-line"><b>{archivePrice(record)}</b><span>{record.seat || "座位待补"}</span></dd>
         </dl>
-      </div>
+      </button>
     </article>
   );
 }
@@ -913,6 +954,7 @@ function buildFacets(records: EventRecord[]) {
     years: unique(records.map((record) => record.date.slice(0, 4))).sort((a, b) => b.localeCompare(a)),
     cities: unique(records.map((record) => record.city).filter(Boolean)),
     artists: unique(records.flatMap((record) => record.artists)).slice(0, 30),
+    tags: unique(records.flatMap((record) => record.tags)).sort((a, b) => a.localeCompare(b, "zh-CN")),
   };
 }
 
