@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { createServer } from "vite";
+import { runInNewContext } from "node:vm";
 
 const text = async (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [appRoot, archive, banner, controller, mediaCache, shell, css] = await Promise.all([
@@ -18,6 +19,26 @@ assert.match(shell, /aria-expanded=\{mobileNavOpen\}/);
 assert.match(shell, /experience-nav-scrim/);
 assert.match(css, /\.experience-nav-scrim/);
 assert.match(mediaCache, /mediaCacheEpoch/, "Account-scoped caches must fence stale work");
+
+const sw = await text("public/sw.js");
+assert.match(sw, /event\.waitUntil\(refresh\)/, "Background revalidation must finish writing to cache");
+const callbacks = new Map();
+const deletedCaches = [];
+runInNewContext(sw, {
+  self: {
+    addEventListener: (name, callback) => callbacks.set(name, callback),
+    skipWaiting: () => undefined,
+    clients: { claim: async () => undefined },
+  },
+  caches: {
+    keys: async () => ["live-memory-v4", "live-memory-v5", "live-memory-media-v3-private", "other-app-cache"],
+    delete: async (key) => { deletedCaches.push(key); return true; },
+  },
+});
+let activation;
+callbacks.get("activate")({ waitUntil: (promise) => { activation = promise; } });
+await activation;
+assert.deepEqual(deletedCaches, ["live-memory-v4"], "Service worker upgrades must preserve per-account poster caches and unrelated caches");
 
 const server = await createServer({
   appType: "custom",
