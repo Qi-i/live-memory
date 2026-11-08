@@ -5,7 +5,7 @@ on:
     branches:
       - refactor/core-v3-architecture-20261108
   pull_request:
-    branches: [main]
+    branches: [main, refactor/core-v3-architecture-20261108]
     paths:
       - "tests/db/**"
       - "src/core/**"
