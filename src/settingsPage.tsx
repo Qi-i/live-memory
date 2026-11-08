@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   Trash2,
   Upload,
+  X,
 } from "lucide-react";
 import { useEffect, useState } from "react";
 import type { AppSettings, ArchiveView, EventRecord } from "./domain";
