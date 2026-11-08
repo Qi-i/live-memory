@@ -320,6 +320,7 @@ export function useAppController() {
   useEffect(() => {
     if (isGuest || !access.user || !hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia || !cloudMediaPaths) return;
     let cancelled = false;
+    const mediaScope = currentStorageScope();
 
     async function refresh(force = false, storagePath?: string) {
       if (mediaRefreshInFlight.current) return;
@@ -329,17 +330,17 @@ export function useAppController() {
       const before = mediaFingerprint(snapshot);
       try {
         const next = await refreshSignedMediaUrls(settings, snapshot, { force, storagePath });
+        if (cancelled || currentStorageScope() !== mediaScope) return;
         void preloadRecordMedia(next);
-        if (cancelled) return;
         lastMediaRefreshAt.current = Date.now();
         if (mediaFingerprint(next) !== before) {
           await replaceAllRecords(next);
-          if (!cancelled) setRecords(next);
+          if (!cancelled && currentStorageScope() === mediaScope) setRecords(next);
         }
       } catch (error) {
-        if (force && !cancelled) flash(friendlySupabaseErrorMessage(error, "云端图片刷新失败"));
+        if (force && !cancelled && currentStorageScope() === mediaScope) flash(friendlySupabaseErrorMessage(error, "云端图片刷新失败"));
       } finally {
-        mediaRefreshInFlight.current = false;
+        if (currentStorageScope() === mediaScope) mediaRefreshInFlight.current = false;
       }
     }
 
@@ -390,13 +391,16 @@ export function useAppController() {
     if (syncOperationInFlight.current) return false;
     syncOperationInFlight.current = true;
     setSyncing(true);
+    const syncScope = currentStorageScope();
     const before = recordFingerprint(recordsRef.current);
     try {
       const result = await autoSyncAll(settings, recordsRef.current);
+      if (currentStorageScope() !== syncScope) return false;
       setSyncConflicts(result.conflicts);
       const changed = recordFingerprint(result.records) !== before || mediaFingerprint(result.records) !== mediaFingerprint(recordsRef.current);
       if (changed) {
         await replaceAllRecords(result.records);
+        if (currentStorageScope() !== syncScope) return false;
         setRecords(result.records);
         void preloadRecordMedia(result.records);
       }
@@ -406,11 +410,13 @@ export function useAppController() {
       if (!silent) flash(changed ? `${label}：已合并其他设备更新` : `${label}：当前已是最新`);
       return changed;
     } catch (error) {
-      if (!silent) flash(friendlySupabaseErrorMessage(error, `${label}失败`));
+      if (!silent && currentStorageScope() === syncScope) flash(friendlySupabaseErrorMessage(error, `${label}失败`));
       return false;
     } finally {
-      syncOperationInFlight.current = false;
-      setSyncing(false);
+      if (currentStorageScope() === syncScope) {
+        syncOperationInFlight.current = false;
+        setSyncing(false);
+      }
     }
   }
 
@@ -431,23 +437,26 @@ export function useAppController() {
     if (!hasPersonalCloudConnection(settings) || !settings.supabase.syncMedia) { flash("当前未开启个人云端图片同步"); return false; }
     if (mediaRefreshInFlight.current) return false;
     mediaRefreshInFlight.current = true;
+    const refreshScope = currentStorageScope();
     const snapshot = recordsRef.current;
     const before = mediaFingerprint(snapshot);
     try {
       const next = await refreshSignedMediaUrls(settings, snapshot, { force: true });
+      if (currentStorageScope() !== refreshScope) return false;
       void preloadRecordMedia(next);
       lastMediaRefreshAt.current = Date.now();
       if (mediaFingerprint(next) !== before) {
         await replaceAllRecords(next);
+        if (currentStorageScope() !== refreshScope) return false;
         setRecords(next);
       }
       flash("云端图片链接已刷新");
       return true;
     } catch (error) {
-      flash(friendlySupabaseErrorMessage(error, "云端图片刷新失败"));
+      if (currentStorageScope() === refreshScope) flash(friendlySupabaseErrorMessage(error, "云端图片刷新失败"));
       return false;
     } finally {
-      mediaRefreshInFlight.current = false;
+      if (currentStorageScope() === refreshScope) mediaRefreshInFlight.current = false;
     }
   }
 
