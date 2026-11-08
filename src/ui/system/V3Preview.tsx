@@ -55,7 +55,7 @@ export function V3Preview() {
         <button key={item} type="button" aria-current={item === "档案" ? "page" : undefined}>{item}</button>)}
       toolbar={
         <div className="v3-preview-topbar">
-          <div><span>ARCHIVE / V3</span><strong>演出档案 · 新工作区原型</strong></div>
+          <div><span>ARCHIVE / V3 · PUBLIC DEMO</span><strong>演出档案 · 新工作区预览</strong><small className="v3-preview-disclosure">仅使用演示记录 · 不读取账号或个人云数据</small></div>
           <div className="v3-preview-topbar-stats"><b>35 <small>记录</small></b><b>33 <small>已看</small></b><b>10 <small>城市</small></b></div>
           <button type="button" onClick={() => setActivity({ type: "transferred", direction: "pull", changedRecords: 2 })}>模拟云端更新</button>
           <button type="button" onClick={() => setActivity({ type: "conflict", count: 1 })}>模拟冲突</button>
@@ -68,7 +68,7 @@ export function V3Preview() {
       <StageHero
         eyebrow="LIVE MEMORY · EXPERIENCE LIBRARY"
         title="把现场，留在时间里"
-        description="海报与回忆拥有自己的空间，而不是被塞成一条狭窄横幅。"
+        description="独立演示：可浏览竖版海报、地图与状态中心；本页不会读取或保存你的真实档案。"
         posters={filteredPosters}
       />
       <ActionToolbar
