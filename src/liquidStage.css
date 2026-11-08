@@ -188,7 +188,7 @@
 }
 :root[data-visual-theme="aurora"] .archive-poster-card:hover,
 :root[data-visual-theme="aurora"] .archive-wallet-card:hover {
-  transform: translateY(-4px);
+  transform: translateY(-2px);
   box-shadow: 0 26px 55px rgba(64,74,137,.21), inset 0 1px rgba(255,255,255,.8);
 }
 :root[data-visual-theme="aurora"] .archive-poster-media {
