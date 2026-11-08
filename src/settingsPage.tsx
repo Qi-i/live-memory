@@ -30,6 +30,7 @@ import {
   updateAccountPassword,
 } from "./supabase";
 import { ThemeSettingsPanel, projectUrl } from "./experience";
+import { SectionHeading } from "./ui/PagePrimitives";
 import { withoutLocalMedia } from "./syncModel";
 
 interface SettingsPageProps {
@@ -281,7 +282,7 @@ export function GuestSettingsPage({ onLogin }: { onLogin: () => void }) {
 }
 
 function ModuleHeader({ eyebrow, title, description }: { eyebrow: string; title: string; description: string }) {
-  return <header className="settings-module-header-v2"><div><span>{eyebrow}</span><h2>{title}</h2></div><p>{description}</p></header>;
+  return <SectionHeading className="settings-module-header-v2" eyebrow={eyebrow} title={title} description={description} />;
 }
 
 function Info({ label, value }: { label: string; value: string }) { return <p className="settings-info-v2"><span>{label}</span><strong>{value}</strong></p>; }

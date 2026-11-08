@@ -17,6 +17,7 @@ import {
 import { useEffect, useMemo, useState } from "react";
 import type { AppSettings, EventRecord } from "./domain";
 import { categoryLabels, effectiveStatus } from "./domain";
+import { SectionHeading } from "./ui/PagePrimitives";
 import {
   fetchAdminUsers,
   resetAdminUserPassword,
@@ -112,7 +113,7 @@ function BarPanel({ title, description, rows }: { title: string; description: st
   const hasData = rows.some(([, count]) => count > 0);
   return (
     <article className="statistics-panel">
-      <header><span>{description}</span><h2>{title}</h2></header>
+      <SectionHeading variant="stacked" eyebrow={description} title={title} />
       <div>{hasData ? rows.map(([label, count]) => <p key={label}><span>{label}</span><i><b style={{ width: `${count / max * 100}%` }} /></i><strong>{count}</strong></p>) : <em className="statistics-empty">暂无可统计数据</em>}</div>
     </article>
   );

@@ -40,6 +40,8 @@ import { recognizeTicketScreenshot } from "./ocr";
 import type { SyncConflict } from "./supabase";
 import { resolveAllConflicts, resolveSyncConflict } from "./supabase";
 import type { AppSettings } from "./domain";
+import { useDialogBehavior } from "./ui/useDialogBehavior";
+import { editorSignature, validateEditorRecord } from "./ui/editorModel";
 
 function mediaTombstonesAfterRemoval(
   existing: EventRecord["mediaTombstones"],
@@ -85,12 +87,13 @@ export function DetailDrawer({
   onZoom: (media: MediaAsset) => void;
   onSave: (record: EventRecord) => Promise<unknown>;
 }) {
+  const modalRef = useDialogBehavior({ onClose, focusSelector: 'button[aria-label="关闭"]' });
   const poster = primaryMedia(record);
   const tickets = mediaByKind(record, "ticket");
   const seatMaps = mediaByKind(record, "seatMap");
   const photos = mediaByKind(record, "livePhoto");
   return (
-    <div className="overlay-backdrop" role="presentation" onClick={onClose}>
+    <div ref={modalRef} className="overlay-backdrop" role="presentation" onClick={onClose}>
       <aside className="record-detail-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="overlay-header-v2">
           <button type="button" aria-label="关闭" onClick={onClose}><X /></button>
@@ -159,11 +162,15 @@ export function RecordEditor({
   const [mediaErrors, setMediaErrors] = useState<Partial<Record<MediaKind, string>>>({});
   const [recognizing, setRecognizing] = useState(false);
   const [recognitionStatus, setRecognitionStatus] = useState("");
+  const [saveError, setSaveError] = useState("");
+  const [discardOpen, setDiscardOpen] = useState(false);
   useEffect(() => {
     setDraft({ ...record, status: effectiveStatus(record) });
     setMediaStates({});
     setMediaErrors({});
     setRecognitionStatus("");
+    setSaveError("");
+    setDiscardOpen(false);
   }, [record]);
 
   async function addFiles(kind: MediaKind, files: File[]) {
@@ -252,9 +259,14 @@ export function RecordEditor({
   async function submit(event: FormEvent) {
     event.preventDefault();
     if (Object.values(mediaStates).some((state) => state === "processing")) return;
+    const validationError = validateEditorRecord(draft);
+    if (validationError) { setSaveError(validationError); return; }
     setSaving(true);
+    setSaveError("");
     try {
       await onSave({ ...draft, lineup: draft.artists.map((name) => ({ name, role: "artist" })), updatedAt: nowIso() });
+    } catch (reason) {
+      setSaveError(reason instanceof Error ? reason.message : "保存失败，请检查本地存储或同步状态");
     } finally {
       setSaving(false);
     }
@@ -262,12 +274,28 @@ export function RecordEditor({
 
   const mediaFor = (kind: MediaKind) => draft.media.filter((item) => item.kind === kind);
   const mediaBusy = Object.values(mediaStates).some((state) => state === "processing");
+  const isDirty = editorSignature(draft) !== editorSignature({ ...record, status: effectiveStatus(record) });
+  const requestClose = () => {
+    if (saving || mediaBusy || recognizing) return;
+    if (isDirty) setDiscardOpen(true);
+    else onCancel();
+  };
+  const editorRef = useDialogBehavior({ onClose: requestClose, allowEscape: !saving && !mediaBusy && !recognizing, focusSelector: 'input[required]' });
+  const jumpTo = (id: string) => document.getElementById(id)?.scrollIntoView({ behavior: "smooth", block: "start" });
 
   return (
-    <div className="overlay-backdrop editor-backdrop-v2">
-      <form className="record-editor-v2" onSubmit={submit}>
-        <header className="editor-header-v2"><div><span>RECORD EDITOR</span><h2>{record.title ? "编辑演出" : "新增演出"}</h2></div><button type="button" aria-label="关闭" onClick={onCancel}><X /></button></header>
+    <>
+    <div ref={editorRef} className="overlay-backdrop editor-backdrop-v2">
+      <form className="record-editor-v2" role="dialog" aria-label={record.title ? "编辑演出" : "新增演出"} aria-modal="true" onSubmit={submit}>
+        <header className="editor-header-v2"><div><span>LIVE MEMORY / RECORD STUDIO</span><h2>{record.title ? "编辑演出档案" : "记录一场新现场"}</h2><small>{isDirty ? "● 修改尚未保存" : "所有内容保存在你的私人档案中"}</small></div><button type="button" aria-label="关闭" onClick={requestClose}><X /></button></header>
+        <nav className="editor-chapters-v3" aria-label="编辑表单分区">
+          <button type="button" onClick={() => jumpTo("editor-about")}>01 <span>演出信息</span></button>
+          <button type="button" onClick={() => jumpTo("editor-ticket")}>02 <span>票务与同行</span></button>
+          <button type="button" onClick={() => jumpTo("editor-media")}>03 <span>影像档案</span></button>
+          <button type="button" onClick={() => jumpTo("editor-memory")}>04 <span>现场回忆</span></button>
+        </nav>
         <div className="editor-grid-v2">
+          <EditorSection id="editor-about" number="01" title="演出信息" description="先记录这场演出的基本信息；后续都可以修改。">
           <EditorField className="is-wide" label="演出名称"><input required value={draft.title} onChange={(event) => setDraft({ ...draft, title: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="艺人 / 阵容"><input value={draft.artists.join(" / ")} onChange={(event) => setDraft({ ...draft, artists: splitTextList(event.target.value) })} placeholder="多个用 / 或 、 分隔" /></EditorField>
           <EditorField label="类型"><select value={draft.category} onChange={(event) => setDraft({ ...draft, category: event.target.value as EventCategory })}>{Object.entries(categoryLabels).map(([key, label]) => <option key={key} value={key}>{label}</option>)}</select></EditorField>
@@ -276,12 +304,13 @@ export function RecordEditor({
           <EditorField label="时间"><input type="time" value={draft.time || ""} onChange={(event) => setDraft({ ...draft, time: event.target.value })} /></EditorField>
           <EditorField label="城市"><input value={draft.city} onChange={(event) => setDraft({ ...draft, city: event.target.value })} /></EditorField>
           <EditorField label="场馆"><input value={draft.venue} onChange={(event) => setDraft({ ...draft, venue: event.target.value })} /></EditorField>
+          </EditorSection>
+          <EditorSection id="editor-ticket" number="02" title="票务与同行" description="票价、座位与同行人仅存在于你的私人档案，分享图默认隐藏。">
           <EditorField label="票价"><input type="number" value={draft.price ?? ""} onChange={(event) => setDraft({ ...draft, price: event.target.value ? Number(event.target.value) : null })} /></EditorField>
           <EditorField label="公开票价"><input value={draft.publicPriceRange || ""} onChange={(event) => setDraft({ ...draft, publicPriceRange: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="座位"><input value={draft.seat || ""} onChange={(event) => setDraft({ ...draft, seat: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="同行人"><input value={draft.companions.join(" / ")} onChange={(event) => setDraft({ ...draft, companions: splitTextList(event.target.value) })} /></EditorField>
-          <EditorField className="is-wide" label="标签"><input value={draft.tags.join(" / ")} onChange={(event) => setDraft({ ...draft, tags: splitTextList(event.target.value) })} /></EditorField>
-          <EditorField className="is-wide" label="票务链接 / 来源">
+          <EditorField className="is-wide" label="票务链接 / 来源" asGroup>
             <div className="editor-source-import-v2">
               <input value={draft.sourceUrl || ""} onChange={(event) => setDraft({ ...draft, sourceUrl: event.target.value })} placeholder="粘贴大麦、纷玩岛或票星球演出链接" />
               <button className="button ghost" type="button" disabled={recognizing || !draft.sourceUrl?.trim()} onClick={() => void recognizeSourceLink()}>{recognizing ? <Loader2 className="spin" /> : <Sparkles />}识别链接</button>
@@ -290,22 +319,37 @@ export function RecordEditor({
             {recognitionStatus && <small className="editor-recognition-status-v2">{recognitionStatus}</small>}
           </EditorField>
 
+          </EditorSection>
+          <EditorSection id="editor-media" number="03" title="影像档案" description="上传海报、票根、座位图与现场照片；支持本地保存。">
           <div className="media-upload-grid-v2 is-wide">
             <MediaEditorCard label="主海报" kind="poster" items={mediaFor("poster")} state={mediaStates.poster} error={mediaErrors.poster} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
             <MediaEditorCard label="电子票根" kind="ticket" items={mediaFor("ticket")} state={mediaStates.ticket} error={mediaErrors.ticket} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
             <MediaEditorCard label="座位图" kind="seatMap" items={mediaFor("seatMap")} state={mediaStates.seatMap} error={mediaErrors.seatMap} cloudMediaSyncEnabled={cloudMediaSyncEnabled} onFiles={addFiles} onRemove={removeMedia} />
             <MediaEditorCard label="现场精选" kind="livePhoto" items={mediaFor("livePhoto")} state={mediaStates.livePhoto} error={mediaErrors.livePhoto} cloudMediaSyncEnabled={cloudMediaSyncEnabled} multiple onFiles={addFiles} onRemove={removeMedia} />
           </div>
+          </EditorSection>
+          <EditorSection id="editor-memory" number="04" title="现场回忆" description="标签、曲目和感受属于你，日后回顾更容易找到。">
+          <EditorField className="is-wide" label="标签"><input value={draft.tags.join(" / ")} onChange={(event) => setDraft({ ...draft, tags: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="曲目"><textarea value={draft.setlist.join("\n")} onChange={(event) => setDraft({ ...draft, setlist: splitTextList(event.target.value) })} /></EditorField>
           <EditorField className="is-wide" label="演出记录"><textarea value={draft.note || ""} onChange={(event) => setDraft({ ...draft, note: event.target.value })} /></EditorField>
+          </EditorSection>
         </div>
-        <footer className="editor-footer-v2"><button className="button ghost" type="button" onClick={onCancel}>取消</button><button className="button primary" disabled={saving || mediaBusy || recognizing} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}{mediaBusy ? "图片正在处理" : "保存记录"}</button></footer>
+        <footer className="editor-footer-v2">{saveError && <span className="editor-save-error-v3" role="alert">{saveError}</span>}<button className="button ghost" type="button" onClick={requestClose}>取消</button><button className="button primary" disabled={saving || mediaBusy || recognizing} type="submit">{saving ? <Loader2 className="spin" /> : <Check />}{mediaBusy ? "图片正在处理" : "保存记录"}</button></footer>
       </form>
     </div>
+    {discardOpen && <ConfirmDialog action={{ title: "放弃这次编辑？", message: "尚未保存的文字和图片修改会丢失；已经保存在档案中的内容不受影响。", confirmLabel: "放弃修改", danger: true, onConfirm: async () => { setDiscardOpen(false); onCancel(); } }} onClose={() => setDiscardOpen(false)} />}
+    </>
   );
 }
 
-function EditorField({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) { return <label className={`editor-field-v2 ${className}`}><span>{label}</span>{children}</label>; }
+function EditorSection({ id, number, title, description, children }: { id: string; number: string; title: string; description: string; children: ReactNode }) {
+  return <section id={id} className="editor-section-v3"><header><span>{number} / SECTION</span><h3>{title}</h3><p>{description}</p></header><div className="editor-section-fields-v3">{children}</div></section>;
+}
+
+function EditorField({ label, className = "", children, asGroup = false }: { label: string; className?: string; children: ReactNode; asGroup?: boolean }) {
+  if (asGroup) return <div className={`editor-field-v2 ${className}`} role="group" aria-label={label}><span>{label}</span>{children}</div>;
+  return <label className={`editor-field-v2 ${className}`}><span>{label}</span>{children}</label>;
+}
 
 function mergeImportDraftIntoRecord(record: EventRecord, imported: ImportDraft): EventRecord {
   const reliable = imported.importConfidence >= 0.4;
@@ -401,36 +445,54 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState("");
+  const [importError, setImportError] = useState("");
+  const requestClose = () => { if (!loading) onClose(); };
+  const importRef = useDialogBehavior({ onClose: requestClose, allowEscape: !loading, focusSelector: '.editor-header-v2 button' });
 
   function updateDraft(id: string, patch: Partial<ImportDraft>) {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
   }
 
   async function parse() {
+    if (loading) return;
     setLoading(true);
+    setImportError("");
     try {
       const next = await createDraftsFromText(text);
       setDrafts(next);
       flash(`生成 ${next.length} 条草稿`);
+    } catch (reason) {
+      setImportError(reason instanceof Error ? reason.message : "无法识别该演出信息");
     } finally {
       setLoading(false);
     }
   }
 
   async function importImages(files: FileList | null) {
-    if (!files?.length) return;
-    for (const file of Array.from(files)) {
-      const record = blankImportedRecord(file.name.replace(/\.[^.]+$/, ""));
-      record.media = [await fileToMedia(record.id, "poster", file)];
-      await onSave(record);
+    if (!files?.length || loading) return;
+    setLoading(true);
+    setImportError("");
+    let imported = 0;
+    try {
+      for (const file of Array.from(files)) {
+        const record = blankImportedRecord(file.name.replace(/\.[^.]+$/, ""));
+        record.media = [await fileToMedia(record.id, "poster", file)];
+        await onSave(record);
+        imported += 1;
+      }
+      flash(`已导入 ${imported} 张海报档案`);
+    } catch (reason) {
+      setImportError(`已保存 ${imported} 张；后续处理失败：${reason instanceof Error ? reason.message : "未知错误"}`);
+    } finally {
+      setLoading(false);
     }
-    flash(`已导入 ${files.length} 张图片草稿`);
   }
 
 
   async function importScreenshots(files: FileList | null) {
-    if (!files?.length) return;
+    if (!files?.length || loading) return;
     setLoading(true);
+    setImportError("");
     setOcrProgress("正在准备截图识别…");
     try {
       const nextDrafts: ImportDraft[] = [];
@@ -440,18 +502,36 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
       }
       setDrafts(nextDrafts);
       flash(`已从 ${files.length} 张截图识别 ${nextDrafts.length} 条草稿`);
+    } catch (reason) {
+      setImportError(reason instanceof Error ? reason.message : "截图识别失败");
     } finally {
       setLoading(false);
       setOcrProgress("");
     }
   }
 
+  async function saveDraft(draft: ImportDraft) {
+    if (loading) return;
+    setLoading(true);
+    setImportError("");
+    try {
+      await onSave(draftToRecord(draft));
+      setDrafts((current) => current.filter((item) => item.id !== draft.id));
+      flash("已加入档案：" + draft.title);
+    } catch (reason) {
+      setImportError(reason instanceof Error ? reason.message : "保存失败，请检查本机空间或连接状态");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div className="overlay-backdrop" onClick={onClose}>
+    <div ref={importRef} className="overlay-backdrop" onClick={loading ? undefined : requestClose}>
       <aside className="import-drawer-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2></div><button type="button" onClick={onClose}><X /></button></header>
+        <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2><small>链接与截图先核对草稿；海报导入会直接保存至档案。</small></div><button type="button" aria-label="关闭批量导入" disabled={loading} onClick={requestClose}><X /></button></header>
         <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦、纷玩岛、票星球演出链接，或票务页文字。也可直接使用下方截图识别。" />
         <div className="import-actions-v2"><button className="button primary" disabled={loading || !text.trim()} type="button" onClick={() => void parse()}>{loading ? <Loader2 className="spin" /> : <Sparkles />}识别链接/文字</button><label className="button ghost"><ImagePlus />截图识别<input type="file" accept="image/*" multiple onChange={(event) => void importScreenshots(event.target.files)} /></label><label className="button ghost"><Upload />海报导入<input type="file" accept="image/*" multiple onChange={(event) => void importImages(event.target.files)} /></label>{ocrProgress && <span className="import-ocr-progress-v2">{ocrProgress}</span>}</div>
+        {importError && <p className="import-error-v3" role="alert">{importError}</p>}
         <div className="import-drafts-v2">
           {drafts.map((draft) => (
             <article key={draft.id}>
@@ -468,7 +548,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
                   <label>本人票价<input type="number" min="0" value={draft.price ?? ""} onChange={(event) => updateDraft(draft.id, { price: event.target.value ? Number(event.target.value) : null })} placeholder="可修改" /></label>
                 </div>
               </div>
-              <button className="button primary" type="button" disabled={!draft.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)} title={!draft.date ? "请先补充真实演出日期" : undefined} onClick={() => void onSave(draftToRecord(draft))}>加入档案</button>
+              <button className="button primary" type="button" disabled={loading || !draft.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)} title={!draft.date ? "请先补充真实演出日期" : undefined} onClick={() => void saveDraft(draft)}>{loading ? "处理中…" : "加入档案"}</button>
             </article>
           ))}
         </div>
@@ -478,22 +558,26 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
 }
 
 export function ImageZoom({ media, onClose }: { media: MediaAsset; onClose: () => void }) {
-  return <div className="image-zoom-v2" onClick={onClose}><button type="button" aria-label="关闭" onClick={onClose}><X /></button><img src={media.src} alt={media.title || ""} onClick={(event) => event.stopPropagation()} /><div><a className="button primary" href={media.src} download={media.title || "live-memory-image"}><Download />下载</a><button className="button ghost" type="button" onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(media.src); }}><Copy />复制地址</button></div></div>;
+  const zoomRef = useDialogBehavior({ onClose, focusSelector: 'button[aria-label="关闭"]' });
+  return <div ref={zoomRef} className="image-zoom-v2" role="dialog" aria-label="放大查看图片" aria-modal="true" onClick={onClose}><button type="button" aria-label="关闭" onClick={onClose}><X /></button><img src={media.src} alt={media.title || ""} onClick={(event) => event.stopPropagation()} /><div><a className="button primary" href={media.src} download={media.title || "live-memory-image"}><Download />下载</a><button className="button ghost" type="button" onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(media.src); }}><Copy />复制地址</button></div></div>;
 }
 
 export function ConfirmDialog({ action, onClose }: { action: ConfirmAction; onClose: () => void }) {
   const [working, setWorking] = useState(false);
-  async function confirm() { setWorking(true); try { await action.onConfirm(); onClose(); } finally { setWorking(false); } }
-  return <div className="dialog-backdrop-v2" onClick={onClose}><section className="confirm-dialog-v2" role="alertdialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><span><Trash2 /></span><h2>{action.title}</h2><p>{action.message}</p><div><button className="button ghost" type="button" disabled={working} onClick={onClose}>取消</button><button className={`button ${action.danger ? "danger" : "primary"}`} type="button" disabled={working} onClick={() => void confirm()}>{working ? <Loader2 className="spin" /> : <Trash2 />}{action.confirmLabel}</button></div></section></div>;
+  const [error, setError] = useState("");
+  const confirmRef = useDialogBehavior({ onClose, allowEscape: !working });
+  async function confirm() { setWorking(true); setError(""); try { await action.onConfirm(); onClose(); } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败，请稍后重试"); } finally { setWorking(false); } }
+  return <div ref={confirmRef} className="dialog-backdrop-v2" onClick={working ? undefined : onClose}><section className="confirm-dialog-v2" role="alertdialog" aria-modal="true" aria-label={action.title} onClick={(event) => event.stopPropagation()}><span><Trash2 /></span><h2>{action.title}</h2><p>{action.message}</p>{error && <p className="dialog-error-v3" role="alert">{error}</p>}<div><button className="button ghost" type="button" disabled={working} onClick={onClose}>取消</button><button className={`button ${action.danger ? "danger" : "primary"}`} type="button" disabled={working} onClick={() => void confirm()}>{working ? <Loader2 className="spin" /> : <Trash2 />}{action.confirmLabel}</button></div></section></div>;
 }
 
 export function SyncConflictDialog({ conflicts, settings, onResolve, onDismiss }: { conflicts: SyncConflict[]; settings: AppSettings; onResolve: (resolved: EventRecord[]) => Promise<void>; onDismiss: () => void }) {
   const [working, setWorking] = useState(false);
   const [remaining, setRemaining] = useState(conflicts);
+  const conflictRef = useDialogBehavior({ onClose: onDismiss, allowEscape: !working });
   useEffect(() => setRemaining(conflicts), [conflicts]);
   async function resolveOne(conflict: SyncConflict, choice: "local" | "cloud") { setWorking(true); try { const resolved = await resolveSyncConflict(settings, conflict, choice); const next = remaining.filter((item) => item.recordId !== conflict.recordId); setRemaining(next); if (!next.length) await onResolve([resolved]); } finally { setWorking(false); } }
   async function resolveAll(choice: "local" | "cloud") { setWorking(true); try { const resolved = await resolveAllConflicts(settings, remaining, choice); setRemaining([]); await onResolve(resolved); } finally { setWorking(false); } }
-  return <div className="dialog-backdrop-v2" onClick={onDismiss}><section className="conflict-dialog-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><header><span>SYNC CONFLICT</span><h2>{remaining.length} 条记录同时被修改</h2><p>选择本地或云端版本，不再静默覆盖。</p></header>{remaining.length > 1 && <div className="conflict-bulk-v2"><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("local")}>全部保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("cloud")}>全部保留云端</button></div>}<div>{remaining.map((conflict) => <article key={conflict.recordId}><strong>{conflict.title}</strong><p>本地：{new Date(conflict.localUpdatedAt).toLocaleString("zh-CN")}<br />云端：{new Date(conflict.cloudUpdatedAt).toLocaleString("zh-CN")}</p><div><button className="button primary" disabled={working} type="button" onClick={() => void resolveOne(conflict, "local")}>保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveOne(conflict, "cloud")}>保留云端</button></div></article>)}</div><footer><button className="button ghost" type="button" disabled={working} onClick={onDismiss}>稍后处理</button></footer></section></div>;
+  return <div ref={conflictRef} className="dialog-backdrop-v2" onClick={working ? undefined : onDismiss}><section className="conflict-dialog-v2" role="dialog" aria-modal="true" aria-label="处理云同步冲突" onClick={(event) => event.stopPropagation()}><header><span>SYNC CONFLICT</span><h2>{remaining.length} 条记录同时被修改</h2><p>选择本地或云端版本，不再静默覆盖。</p></header>{remaining.length > 1 && <div className="conflict-bulk-v2"><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("local")}>全部保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("cloud")}>全部保留云端</button></div>}<div>{remaining.map((conflict) => <article key={conflict.recordId}><strong>{conflict.title}</strong><p>本地：{new Date(conflict.localUpdatedAt).toLocaleString("zh-CN")}<br />云端：{new Date(conflict.cloudUpdatedAt).toLocaleString("zh-CN")}</p><div><button className="button primary" disabled={working} type="button" onClick={() => void resolveOne(conflict, "local")}>保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveOne(conflict, "cloud")}>保留云端</button></div></article>)}</div><footer><button className="button ghost" type="button" disabled={working} onClick={onDismiss}>稍后处理</button></footer></section></div>;
 }
 
 function OverlayMedia({ media, alt, fallback = "图片待补" }: { media?: MediaAsset; alt?: string; fallback?: ReactNode }) {

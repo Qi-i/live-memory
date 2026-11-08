@@ -40,6 +40,7 @@ import type {
 } from "./domain";
 import { ShareStudio, type ShareFormat } from "./shareStudio";
 import { BrandMark } from "./brand";
+import { EmptyState } from "./ui/PagePrimitives";
 import { loadMediaImage, resolveMediaSource, useCachedMediaSrc } from "./mediaCache";
 import { loadAmap, type AMapMapInstance } from "./amap";
 import "./archiveContextMenu.css";
@@ -912,7 +913,7 @@ function RecordMedia({ media, alt, fallback = "图片待补", onClick }: { media
 }
 
 function ArchiveEmpty() {
-  return <section className="archive-empty"><Ticket /><h2>没有找到符合条件的演出</h2><p>换一个筛选条件，或者新增一条演出记录。</p></section>;
+  return <EmptyState className="archive-empty" icon={<Ticket />} title="没有找到符合条件的演出" description="换一个筛选条件，或者新增一条演出记录。" />;
 }
 
 function FilterChips<T extends string>({ label, values, options, labels, onChange }: { label: string; values: T[]; options: T[]; labels: Record<T, string>; onChange: (values: T[]) => void }) {

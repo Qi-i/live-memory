@@ -4,6 +4,7 @@ import type { EventRecord, MediaAsset } from "./domain";
 import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
 import { loadMediaImage } from "./mediaCache";
 import "./keepsakeStudio.css";
+import { useDialogBehavior } from "./ui/useDialogBehavior";
 
 export type KeepsakeSubject =
   | { kind: "record"; record: EventRecord }
@@ -36,11 +37,7 @@ export function KeepsakeStudio({ subject, onClose }: { subject: KeepsakeSubject;
   const [busy, setBusy] = useState(true);
   const [error, setError] = useState("");
   const kind = subject.kind;
-  useEffect(() => {
-    const onKeyDown = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  const keepsakeRef = useDialogBehavior({ onClose, focusSelector: 'button[aria-label="关闭分享编辑器"]' });
 
   useEffect(() => {
     let cancelled = false;
@@ -95,7 +92,7 @@ export function KeepsakeStudio({ subject, onClose }: { subject: KeepsakeSubject;
   }
 
   return (
-    <div className="keepsake-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <div ref={keepsakeRef} className="keepsake-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="keepsake-dialog" role="dialog" aria-modal="true" aria-label={kind === "record" ? "单场演出纪念卡" : "个人观演回顾卡"}>
         <div className="keepsake-editor">
           <header className="keepsake-heading">
