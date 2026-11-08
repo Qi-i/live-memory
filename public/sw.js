@@ -23,6 +23,11 @@ self.addEventListener("fetch", (event) => {
   const url = new URL(request.url);
   const sameOrigin = url.origin === self.location.origin;
 
+  // The independent V3 demo is not an offline production app. Never let the
+  // V2 service worker cache or serve stale prototype HTML and assets.
+  const previewPath = new URL("v3-preview/", self.registration.scope).pathname;
+  if (sameOrigin && url.pathname.startsWith(previewPath)) return;
+
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
     return;
