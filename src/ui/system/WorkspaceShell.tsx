@@ -110,16 +110,18 @@ export function PortraitArtwork({
   alt,
   caption,
   className = "",
+  priority = false,
 }: {
   src?: string;
   alt: string;
   caption?: ReactNode;
   className?: string;
+  priority?: boolean;
 }) {
   return (
     <figure className={"v3-portrait-artwork " + className}>
       <div className="v3-portrait-frame">
-        {src ? <img src={src} alt={alt} loading="lazy" decoding="async" /> : <span aria-hidden="true">LIVE</span>}
+        {src ? <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" /> : <span aria-hidden="true">LIVE</span>}
       </div>
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
@@ -153,8 +155,9 @@ export function StageHero({
         <p>{description}</p>
       </div>
       <div className="v3-stage-hero-gallery" aria-label="演出海报画廊">
-        {posters.map((poster) => (
+        {posters.map((poster, index) => (
           <PortraitArtwork
+            priority={index < 3}
             key={poster.id}
             src={poster.src}
             alt={poster.title + "海报"}
