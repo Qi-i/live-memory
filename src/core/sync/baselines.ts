@@ -29,11 +29,11 @@ export async function createBaselineKey(
   if (!accountScope.trim() || !providerIdentity.trim()) {
     throw new Error("A known account and cloud identity are required for sync baselines");
   }
-  const input = new TextEncoder().encode(provider + ":" + providerIdentity);
+  const input = new TextEncoder().encode(JSON.stringify({ accountScope, provider, providerIdentity }));
   const digest = await crypto.subtle.digest("SHA-256", input);
   const suffix = Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
   // No credentials or cloud URL are included in the readable localStorage key.
-  return "live-memory:sync-base:v3:" + encodeURIComponent(accountScope) + ":" + suffix;
+  return "live-memory:sync-base:v3:" + suffix;
 }
 
 export class RevisionBaselineStore {
