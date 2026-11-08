@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
+import { useId, useState } from "react";
 import type { SyncActivity, SyncPresentation } from "../../core/sync/policy";
 import { presentSyncActivity } from "../../core/sync/policy";
 import "./workspace.css";
@@ -22,6 +22,7 @@ export function StatusCenter({
   history?: StatusHistoryItem[];
 }) {
   const [expanded, setExpanded] = useState(false);
+  const historyId = useId();
   const presentation: SyncPresentation = presentSyncActivity(current);
   const alert = presentation.surface === "attention";
   return (
@@ -29,8 +30,9 @@ export function StatusCenter({
       <button
         type="button"
         className="v3-status-trigger"
+        aria-label="查看同步状态"
         aria-expanded={expanded}
-        aria-controls="v3-status-history"
+        aria-controls={historyId}
         onClick={() => setExpanded((value) => !value)}
       >
         <span className="v3-status-indicator" aria-hidden="true" />
@@ -41,7 +43,7 @@ export function StatusCenter({
         <span aria-hidden="true" className="v3-status-chevron">{expanded ? "−" : "+"}</span>
       </button>
       {expanded && (
-        <div id="v3-status-history" className="v3-status-history">
+        <div id={historyId} className="v3-status-history">
           <h3>同步记录</h3>
           {history.length ? (
             <ol>
@@ -98,7 +100,12 @@ export function WorkspaceShell({
         <header className="v3-global-toolbar">{toolbar}</header>
         <main className="v3-workspace-content" id="v3-workspace-content">{children}</main>
       </div>
-      {mobileNavigation && <nav className="v3-mobile-navigation" aria-label="手机主导航">{mobileNavigation}</nav>}
+      {mobileNavigation && (
+        <nav className="v3-mobile-navigation" aria-label="手机主导航">
+          {mobileNavigation}
+          <div className="v3-mobile-status"><StatusCenter current={activity} history={activityHistory} /></div>
+        </nav>
+      )}
       {overlay && <div className="v3-overlay-host">{overlay}</div>}
     </div>
   );
