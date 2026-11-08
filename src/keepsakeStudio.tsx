@@ -312,11 +312,16 @@ async function paintRecap(ctx: CanvasRenderingContext2D, records: EventRecord[],
   });
   const collageY = statsY + 230;
   const collageHeight = tall ? 920 : Math.max(335, Math.min(535, height - collageY - 230));
-  const posters = await Promise.all(ordered.filter((record) => primaryMedia(record, ["poster", "livePhoto"])).slice(0, 4)
+  // Original posters are portrait artwork. Three portrait columns keep each
+  // full poster readable; the taller story format adds a second portrait row.
+  const columns = 3, rows = tall ? 2 : 1, gap = 18;
+  const posterSlots = columns * rows;
+  const posters = await Promise.all(ordered.filter((record) => primaryMedia(record, ["poster", "livePhoto"])).slice(0, posterSlots)
     .map(async (record) => ({ record, image: await safeImage(primaryMedia(record, ["poster", "livePhoto"])) })));
-  const cols = 2, gap = 18, cardWidth = (928 - gap) / cols, cardHeight = (collageHeight - gap) / 2;
-  for (let index = 0; index < 4; index += 1) {
-    const col = index % 2, row = Math.floor(index / 2);
+  const cardWidth = (928 - gap * (columns - 1)) / columns;
+  const cardHeight = (collageHeight - gap * (rows - 1)) / rows;
+  for (let index = 0; index < posterSlots; index += 1) {
+    const col = index % columns, row = Math.floor(index / columns);
     const x = 76 + col * (cardWidth + gap), y = collageY + row * (cardHeight + gap);
     drawFrame(ctx, x, y, cardWidth, cardHeight, p);
     const item = posters[index];
