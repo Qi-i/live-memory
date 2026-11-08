@@ -60,7 +60,6 @@ const allowed = [
   "src/ui/useDialogBehavior.ts",
   "src/ui/system/demoData.ts",
   "src/ui/system/DemoViews.tsx",
-  "src/ui/system/DemoFeatures.tsx",
   "src/ui/system/demoShare.ts",
   "src/ui/useDialogBehavior.ts",
   "src/core/sync/policy.ts",
