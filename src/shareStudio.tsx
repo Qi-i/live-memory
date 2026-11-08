@@ -272,7 +272,8 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
     return () => observer.disconnect();
   }, [format, layout, recalculateFit, selectedRecords.length]);
 
-  const shareRef = useDialogBehavior<HTMLElement>({ onClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
+  const requestClose = () => { if (!saving) onClose(); };
+  const shareRef = useDialogBehavior<HTMLElement>({ onClose: requestClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
 
   useEffect(() => {
     let active = true;
@@ -361,12 +362,12 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
 
   return (
     <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}`} onMouseDown={(event) => {
-      if (event.target === event.currentTarget) onClose();
+      if (event.target === event.currentTarget) requestClose();
     }}>
       <aside className="share-studio-panel" aria-label="分享图设置">
         <header className="share-studio-heading">
           <BrandLockup compact size={38} />
-          <button type="button" aria-label="退出分享制作" title="关闭（Esc）" onClick={onClose}><X /></button>
+          <button type="button" aria-label="退出分享制作" title="关闭（Esc）" disabled={saving} onClick={requestClose}><X /></button>
         </header>
 
         <div className="share-intro-copy">
