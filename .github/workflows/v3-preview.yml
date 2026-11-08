@@ -12,7 +12,7 @@ permissions:
 jobs:
   build:
     if: github.ref == 'refs/heads/refactor/core-v3-architecture-20261108'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:
       - uses: actions/checkout@v5
