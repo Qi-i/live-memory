@@ -34,12 +34,12 @@ export function DemoStatistics({ shows, onShare }: { shows: DemoShow[]; onShare?
   const years = [...new Set(shows.map(s => s.date.slice(0,4)))].sort().reverse();
   const selected = year === "全部" ? shows : shows.filter(s => s.date.startsWith(year));
   const counts = new Map<string,number>();
-  for(const show of selected) counts.set(show.city, (counts.get(show.city) || 0) + 1);
+  for(const show of selected.filter(item => item.status === "已看" && item.city)) counts.set(show.city, (counts.get(show.city) || 0) + 1);
   const cities = [...counts.entries()].sort((a,b) => b[1] - a[1]);
-  return <section className="v3-demo-panel"><header><span>MEMORY PROFILE</span><h2>现场履历</h2><p>年份、演出和城市统计均来自当前演示记录。</p></header>
+  return <section className="v3-demo-panel"><header><span>MEMORY PROFILE</span><h2>现场履历</h2><p>按年份汇总演示档案；已到访城市仅统计已看现场。</p></header>
     <div className="v3-demo-years" role="group" aria-label="统计年份">{["全部",...years].map(label => <button type="button" key={label} aria-pressed={label === year} onClick={() => setYear(label)}>{label}</button>)}</div>
     <div className="v3-demo-metrics"><article><strong>{selected.length}</strong><small>收录记录</small></article><article><strong>{selected.filter(s => s.status === "已看").length}</strong><small>已看现场</small></article><article><strong>{cities.length}</strong><small>城市足迹</small></article></div>
-    <div className="v3-demo-city-bars">{cities.map(([city, count]) => <div key={city}><strong>{city}</strong><span><i style={{width:String(Math.round(100 * count / selected.length))+"%"}} /></span><b>{count}</b></div>)}</div>
+    <div className="v3-demo-city-bars">{cities.map(([city, count]) => <div key={city}><strong>{city}</strong><span><i style={{width:String(Math.round(100 * count / Math.max(1,...cities.map(([,n])=>n))))+"%"}} /></span><b>{count}</b></div>)}</div>
     {onShare && <button className="v3-demo-primary" type="button" onClick={onShare}>预览回顾卡</button>}
   </section>;
 }
@@ -47,13 +47,21 @@ export function DemoStatistics({ shows, onShare }: { shows: DemoShow[]; onShare?
 export function DemoEditor({ existing, onClose, onSave }: {
   existing?: DemoShow; onClose: () => void; onSave: (show: DemoShow) => void;
 }) {
-  const ref = useDialogBehavior({ onClose, focusSelector: "input[required]" });
   const [title,setTitle]=useState(existing?.title || "");
   const [artist,setArtist]=useState(existing?.artist || "");
   const [date,setDate]=useState(existing?.date || "2026-11-08");
   const [city,setCity]=useState(existing?.city || "");
   const [venue,setVenue]=useState(existing?.venue || "");
   const [status,setStatus]=useState<DemoShow["status"]>(existing?.status || "待看");
+  const [discardOpen,setDiscardOpen]=useState(false);
+  const dirty=title!==(existing?.title || "") ||
+    artist!==(existing?.artist || "") ||
+    date!==(existing?.date || "2026-11-08") ||
+    city!==(existing?.city || "") ||
+    venue!==(existing?.venue || "") ||
+    status!==(existing?.status || "待看");
+  const requestClose=()=>{ if(dirty)setDiscardOpen(true); else onClose(); };
+  const ref = useDialogBehavior({ onClose:requestClose, focusSelector: "input[required]" });
   const save=(event: FormEvent) => {
     event.preventDefault();
     if (!title.trim() || !city.trim() || !date) return;
@@ -62,9 +70,9 @@ export function DemoEditor({ existing, onClose, onSave }: {
       venue:venue.trim(), status, src:existing?.src });
     onClose();
   };
-  return <div ref={ref} className="v3-demo-backdrop" role="presentation" onMouseDown={e => { if(e.target === e.currentTarget) onClose(); }}>
+  return <div ref={ref} className="v3-demo-backdrop" role="presentation" onMouseDown={e => { if(e.target === e.currentTarget) requestClose(); }}>
     <form className="v3-demo-modal" role="dialog" aria-modal="true" aria-label={existing ? "编辑演示记录" : "新增演示记录"} onSubmit={save}>
-      <header><div><span>RECORD EDITOR · DEMO</span><h2>{existing ? "编辑演出" : "记录一场现场"}</h2><p>仅保存到当前演示页面的内存中，刷新即恢复，不上传个人数据。</p></div><button type="button" aria-label="关闭编辑窗口" onClick={onClose}>×</button></header>
+      <header><div><span>RECORD EDITOR · DEMO</span><h2>{existing ? "编辑演出" : "记录一场现场"}</h2><p>仅保存到当前演示页面的内存中，刷新即恢复，不上传个人数据。</p></div><button type="button" aria-label="关闭编辑窗口" onClick={requestClose}>×</button></header>
       <div className="v3-demo-fields"><label>演出名称<input required value={title} onChange={e=>setTitle(e.target.value)}/></label>
         <label>艺人<input value={artist} onChange={e=>setArtist(e.target.value)}/></label>
         <label>日期<input required type="date" value={date} onChange={e=>setDate(e.target.value)}/></label>
@@ -72,7 +80,11 @@ export function DemoEditor({ existing, onClose, onSave }: {
         <label>场馆<input value={venue} onChange={e=>setVenue(e.target.value)}/></label>
         <label>观演状态<select value={status} onChange={e=>setStatus(e.target.value as DemoShow["status"])}><option>已看</option><option>待看</option></select></label>
       </div>
-      <footer><button type="button" onClick={onClose}>取消</button><button type="submit" className="v3-demo-primary">保存演示记录</button></footer>
+      {discardOpen&&<div className="v3-demo-discard-warning" role="alert"><p>修改尚未保存。确定放弃这次编辑吗？</p>
+        <button type="button" onClick={()=>setDiscardOpen(false)}>继续编辑</button>
+        <button type="button" onClick={onClose}>放弃修改</button>
+      </div>}
+      <footer><button type="button" onClick={requestClose}>取消</button><button type="submit" className="v3-demo-primary">保存演示记录</button></footer>
     </form>
   </div>;
 }
