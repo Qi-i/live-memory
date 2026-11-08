@@ -13,13 +13,25 @@ try {
     const errors = [];
     const unexpectedRequests = [];
     page.on("pageerror", error => errors.push(error.message));
+    page.on("response", response => { if (response.status() >= 400) errors.push(response.status() + " " + response.url()); });
     page.on("request", req => {
       const target = new URL(req.url());
       if (target.origin !== new URL(url).origin) unexpectedRequests.push(target.href);
     });
     const result = await page.goto(url, { waitUntil: "domcontentloaded" });
     if (!result || result.status() !== 200) throw Error("Standalone preview HTTP " + result?.status());
-    await page.locator('[data-ui-system="v3"]').waitFor({ state: "visible", timeout: 15000 });
+    try {
+      await page.locator('[data-ui-system="v3"]').waitFor({ state: "visible", timeout: 10000 });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => ({
+        href: location.href,
+        title: document.title,
+        text: document.body.innerText.slice(0, 850),
+        scripts: [...document.querySelectorAll("script[src]")].map(el => el.src),
+        rootLength: document.querySelector("#root")?.innerHTML.length,
+      }));
+      throw Error("V3 demo root did not render: " + JSON.stringify({ diagnostic, errors, unexpectedRequests }));
+    }
     await page.waitForFunction(() => [...document.querySelectorAll(".v3-stage-hero-gallery img")]
       .slice(0, 2).every(image => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
 
