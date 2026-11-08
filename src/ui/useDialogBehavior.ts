@@ -28,8 +28,8 @@ export interface DialogBehaviorOptions {
   focusSelector?: string;
 }
 
-export function useDialogBehavior({ onClose, allowEscape = true, focusSelector }: DialogBehaviorOptions) {
-  const rootRef = useRef<HTMLDivElement>(null);
+export function useDialogBehavior<T extends HTMLElement = HTMLDivElement>({ onClose, allowEscape = true, focusSelector }: DialogBehaviorOptions) {
+  const rootRef = useRef<T>(null);
   const callback = useRef(onClose);
   const escEnabled = useRef(allowEscape);
   callback.current = onClose;
