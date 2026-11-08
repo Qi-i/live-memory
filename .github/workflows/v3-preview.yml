@@ -42,6 +42,28 @@ jobs:
           printf '{"sha":"%s","type":"demo-only","source":"refactor/core-v3-architecture-20261108"}\n' "$GITHUB_SHA" > dist/preview-info.json
           test -d dist/assets
           test -f dist/demo/zhou-shen.webp
+      - name: Install browser for public preview verification
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start local standalone preview
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4175 > /tmp/v3-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4175/live-memory/v3-preview/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/v3-preview.log
+          exit 1
+      - name: Verify desktop and Android public demo is interactive and isolated
+        run: node scripts/v3-preview-public-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-preview-visual
+          path: visual-artifacts/v3-public
+          if-no-files-found: warn
+          retention-days: 14
       - uses: actions/upload-artifact@v4
         with:
           name: v3-static-preview
