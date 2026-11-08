@@ -44,6 +44,7 @@ try {
       };
       const art = rect(".v3-portrait-frame");
       return {
+        shell: rect(".v3-workspace-shell"), sidebar: rect(".v3-sidebar"),
         art, hero: rect(".v3-stage-hero"), copy: rect(".v3-stage-hero-copy"),
         gallery: rect(".v3-stage-hero-gallery"), map: rect(".v3-map-stage"),
         side: rect(".v3-map-side"), tools: rect(".v3-action-toolbar"),
@@ -52,10 +53,20 @@ try {
           return { left: r.left, right: r.right };
         }),
         bodyWidth: document.documentElement.scrollWidth,
-        viewportWidth: innerWidth,
+        viewportWidth: innerWidth, viewportHeight: innerHeight,
+        bodyHeight: document.documentElement.scrollHeight,
         artFit: getComputedStyle(document.querySelector(".v3-portrait-frame img")).objectFit,
       };
     });
+    if (geom.shell.top < -1 || geom.shell.bottom > height + 1 || geom.shell.left < -1 || geom.shell.right > width + 1) {
+      throw Error("Root workspace escapes viewport at " + width + ": " + JSON.stringify(geom.shell));
+    }
+    if (geom.bodyHeight > height + 2) throw Error("The browser document scrolls outside its app shell at " + width);
+    if (width > 800 && geom.sidebar.bottom > height + 1) throw Error("Sidebar account area is clipped below the viewport");
+    const initialMetrics = await page.locator(".v3-preview-topbar-stats b").allInnerTexts();
+    if (!initialMetrics[0]?.trim().startsWith("7") || !initialMetrics[1]?.trim().startsWith("6") || !initialMetrics[2]?.trim().startsWith("5")) {
+      throw Error("Header stats are inconsistent with demo fixtures: " + JSON.stringify(initialMetrics));
+    }
     const aspect = geom.art.width / geom.art.height;
     if (aspect < 0.59 || aspect > 0.75 || geom.art.height < 150 || geom.artFit !== "contain")
       throw Error("Poster crushed or cropped: " + JSON.stringify({ width, art: geom.art, aspect, fit: geom.artFit }));
@@ -94,6 +105,40 @@ try {
     }
     const after = await page.locator(".v3-stage-hero").evaluate(el => el.getBoundingClientRect().top);
     if (Math.abs(after - before) > 1) throw Error("Status notification shifts content by " + (after - before));
+    // A view selection must change the actual workspace, not only the pressed style.
+    await page.getByRole("button", { name: "海报", exact: true }).click();
+    const initialCards = await page.locator(".v3-demo-poster-grid > button").count();
+    if (initialCards !== 7) throw Error("Poster wall not driven by the shared 7-record fixture: " + initialCards);
+    await page.getByRole("button", { name: "新增记录", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "新增演示记录" });
+    await editor.waitFor({ state: "visible" });
+    await editor.getByLabel("演出名称").fill("UI 回归验证演出");
+    await editor.getByLabel("城市").fill("杭州");
+    await editor.getByRole("button", { name: "保存演示记录" }).click();
+    await editor.waitFor({ state: "detached" });
+    const afterAdd = (await page.locator(".v3-preview-topbar-stats b").first().innerText()).trim();
+    if (!afterAdd.startsWith("8")) throw Error("Saving a demo record did not update the shared statistics: " + afterAdd);
+
+    await page.getByRole("button", { name: "列表", exact: true }).click();
+    await page.getByRole("cell", { name: "UI 回归验证演出" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "统计", exact: true }).click();
+    await page.getByRole("heading", { name: "现场履历" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.getByRole("button", { name: /Editorial/ }).click();
+    const material = await page.locator(".v3-workspace-shell").getAttribute("data-v3-surface");
+    if (material !== "editorial") throw Error("Theme setting did not reach the shared shell: " + material);
+    await page.getByRole("button", { name: "档案", exact: true }).click();
+    await page.getByRole("button", { name: "海报", exact: true }).click();
+    await page.locator(".v3-demo-poster-grid > button").first().click();
+    const detail = page.getByRole("dialog", { name: /详情/ });
+    await detail.waitFor({ state: "visible" });
+    await detail.getByRole("button", { name: "编辑演示记录" }).click();
+    const editExisting = page.getByRole("dialog", { name: "编辑演示记录" });
+    await editExisting.getByLabel("演出名称").fill("已编辑的临时演出");
+    await editExisting.getByRole("button", { name: "保存演示记录" }).click();
+    await editExisting.waitFor({ state: "detached" });
+    await page.getByRole("button", { name: "列表", exact: true }).click();
+    await page.getByRole("cell", { name: "已编辑的临时演出" }).waitFor({ state: "visible" });
     if (errors.length) throw Error("Browser errors: " + errors.join(" | "));
     if (unexpectedRequests.length) throw Error("Standalone preview contacted an external service: " + unexpectedRequests.join(" | "));
     await context.close();
