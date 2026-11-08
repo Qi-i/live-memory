@@ -17,15 +17,27 @@ import "./brand.css";
 import "./liquidStage.css";
 import "./ui/editorWorkflow.css";
 
-ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
-  <React.StrictMode>
-    <ExperienceThemeProvider>
-      <AccessGate>
-        <App />
-      </AccessGate>
-    </ExperienceThemeProvider>
-  </React.StrictMode>,
-);
+const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
+const v3Preview = import.meta.env.VITE_V3_PREVIEW === "1"
+  && new URLSearchParams(window.location.search).has("v3-preview");
+
+if (v3Preview) {
+  // Independent design laboratory; intentionally never touches user login,
+  // IndexedDB, cloud sync or the production application state.
+  void import("./ui/system/V3Preview").then(({ V3Preview }) => {
+    root.render(<React.StrictMode><V3Preview /></React.StrictMode>);
+  });
+} else {
+  root.render(
+    <React.StrictMode>
+      <ExperienceThemeProvider>
+        <AccessGate>
+          <App />
+        </AccessGate>
+      </ExperienceThemeProvider>
+    </React.StrictMode>,
+  );
+}
 
 if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
