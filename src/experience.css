@@ -787,3 +787,30 @@ body {
     background: white;
   }
 }
+
+
+/* Lightweight route placeholders, used only while an on-demand panel is parsed. */
+.experience-route-loading,
+.experience-dialog-loading,
+.share-studio-loading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  color: var(--experience-muted);
+  font-size: 13px;
+  font-weight: 760;
+}
+.experience-route-loading { min-height: 230px; }
+.experience-dialog-loading,
+.share-studio-loading {
+  position: fixed;
+  inset: 0;
+  z-index: 1100;
+  background: color-mix(in srgb, var(--experience-surface-solid) 94%, #0a1a24);
+}
+.share-studio-loading { z-index: 180; }
+.experience-route-loading svg,
+.experience-dialog-loading svg,
+.share-studio-loading svg { width: 29px; height: 29px; }
