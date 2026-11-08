@@ -9,6 +9,7 @@ import {
   Heart,
   ImagePlus,
   List,
+  Loader2,
   Map as MapIcon,
   Pencil,
   Search,
@@ -24,6 +25,8 @@ import {
   MouseEvent,
   ReactNode,
   SetStateAction,
+  Suspense,
+  lazy,
   useEffect,
   useMemo,
   useRef,
@@ -38,7 +41,7 @@ import type {
   Filters,
   MediaAsset,
 } from "./domain";
-import { ShareStudio, type ShareFormat } from "./shareStudio";
+import type { ShareFormat } from "./shareStudio";
 import { BrandMark } from "./brand";
 import { loadMediaImage, resolveMediaSource, useCachedMediaSrc } from "./mediaCache";
 import { loadAmap, type AMapMapInstance } from "./amap";
@@ -53,6 +56,8 @@ import {
   primaryMedia,
   statusLabels,
 } from "./domain";
+
+const ShareStudio = lazy(async () => ({ default: (await import("./shareStudio")).ShareStudio }));
 
 export type ArchiveLayout = ArchiveView | "showcase";
 
@@ -201,6 +206,7 @@ export function ArchivePage({
 
   if (shareMode) {
     return (
+      <Suspense fallback={<div className="share-studio-loading" role="status"><Loader2 className="spin" /><span>正在打开分享工作室…</span></div>}>
       <ShareStudio
         records={visibleRecords}
         format={shareFormat}
@@ -209,6 +215,7 @@ export function ArchivePage({
         onOpenMapSettings={onOpenMapSettings}
         onClose={() => setShareMode(false)}
       />
+      </Suspense>
     );
   }
 
