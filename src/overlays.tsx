@@ -40,6 +40,8 @@ import { recognizeTicketScreenshot } from "./ocr";
 import type { SyncConflict } from "./supabase";
 import { resolveAllConflicts, resolveSyncConflict } from "./supabase";
 import type { AppSettings } from "./domain";
+import { useDialogBehavior } from "./ui/useDialogBehavior";
+import { editorSignature, validateEditorRecord } from "./ui/editorModel";
 
 function mediaTombstonesAfterRemoval(
   existing: EventRecord["mediaTombstones"],
@@ -85,12 +87,13 @@ export function DetailDrawer({
   onZoom: (media: MediaAsset) => void;
   onSave: (record: EventRecord) => Promise<unknown>;
 }) {
+  const modalRef = useDialogBehavior({ onClose, focusSelector: 'button[aria-label="关闭"]' });
   const poster = primaryMedia(record);
   const tickets = mediaByKind(record, "ticket");
   const seatMaps = mediaByKind(record, "seatMap");
   const photos = mediaByKind(record, "livePhoto");
   return (
-    <div className="overlay-backdrop" role="presentation" onClick={onClose}>
+    <div ref={modalRef} className="overlay-backdrop" role="presentation" onClick={onClose}>
       <aside className="record-detail-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="overlay-header-v2">
           <button type="button" aria-label="关闭" onClick={onClose}><X /></button>
@@ -401,6 +404,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState("");
+  const importRef = useDialogBehavior({ onClose, allowEscape: !loading, focusSelector: '.editor-header-v2 button' });
 
   function updateDraft(id: string, patch: Partial<ImportDraft>) {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
@@ -447,7 +451,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
   }
 
   return (
-    <div className="overlay-backdrop" onClick={onClose}>
+    <div ref={importRef} className="overlay-backdrop" onClick={onClose}>
       <aside className="import-drawer-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
         <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2></div><button type="button" onClick={onClose}><X /></button></header>
         <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦、纷玩岛、票星球演出链接，或票务页文字。也可直接使用下方截图识别。" />
@@ -478,22 +482,26 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
 }
 
 export function ImageZoom({ media, onClose }: { media: MediaAsset; onClose: () => void }) {
-  return <div className="image-zoom-v2" onClick={onClose}><button type="button" aria-label="关闭" onClick={onClose}><X /></button><img src={media.src} alt={media.title || ""} onClick={(event) => event.stopPropagation()} /><div><a className="button primary" href={media.src} download={media.title || "live-memory-image"}><Download />下载</a><button className="button ghost" type="button" onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(media.src); }}><Copy />复制地址</button></div></div>;
+  const zoomRef = useDialogBehavior({ onClose, focusSelector: 'button[aria-label="关闭"]' });
+  return <div ref={zoomRef} className="image-zoom-v2" role="dialog" aria-label="放大查看图片" aria-modal="true" onClick={onClose}><button type="button" aria-label="关闭" onClick={onClose}><X /></button><img src={media.src} alt={media.title || ""} onClick={(event) => event.stopPropagation()} /><div><a className="button primary" href={media.src} download={media.title || "live-memory-image"}><Download />下载</a><button className="button ghost" type="button" onClick={(event) => { event.stopPropagation(); void navigator.clipboard?.writeText(media.src); }}><Copy />复制地址</button></div></div>;
 }
 
 export function ConfirmDialog({ action, onClose }: { action: ConfirmAction; onClose: () => void }) {
   const [working, setWorking] = useState(false);
-  async function confirm() { setWorking(true); try { await action.onConfirm(); onClose(); } finally { setWorking(false); } }
-  return <div className="dialog-backdrop-v2" onClick={onClose}><section className="confirm-dialog-v2" role="alertdialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><span><Trash2 /></span><h2>{action.title}</h2><p>{action.message}</p><div><button className="button ghost" type="button" disabled={working} onClick={onClose}>取消</button><button className={`button ${action.danger ? "danger" : "primary"}`} type="button" disabled={working} onClick={() => void confirm()}>{working ? <Loader2 className="spin" /> : <Trash2 />}{action.confirmLabel}</button></div></section></div>;
+  const [error, setError] = useState("");
+  const confirmRef = useDialogBehavior({ onClose, allowEscape: !working });
+  async function confirm() { setWorking(true); setError(""); try { await action.onConfirm(); onClose(); } catch (reason) { setError(reason instanceof Error ? reason.message : "操作失败，请稍后重试"); } finally { setWorking(false); } }
+  return <div ref={confirmRef} className="dialog-backdrop-v2" onClick={working ? undefined : onClose}><section className="confirm-dialog-v2" role="alertdialog" aria-modal="true" aria-label={action.title} onClick={(event) => event.stopPropagation()}><span><Trash2 /></span><h2>{action.title}</h2><p>{action.message}</p>{error && <p className="dialog-error-v3" role="alert">{error}</p>}<div><button className="button ghost" type="button" disabled={working} onClick={onClose}>取消</button><button className={`button ${action.danger ? "danger" : "primary"}`} type="button" disabled={working} onClick={() => void confirm()}>{working ? <Loader2 className="spin" /> : <Trash2 />}{action.confirmLabel}</button></div></section></div>;
 }
 
 export function SyncConflictDialog({ conflicts, settings, onResolve, onDismiss }: { conflicts: SyncConflict[]; settings: AppSettings; onResolve: (resolved: EventRecord[]) => Promise<void>; onDismiss: () => void }) {
   const [working, setWorking] = useState(false);
   const [remaining, setRemaining] = useState(conflicts);
+  const conflictRef = useDialogBehavior({ onClose: onDismiss, allowEscape: !working });
   useEffect(() => setRemaining(conflicts), [conflicts]);
   async function resolveOne(conflict: SyncConflict, choice: "local" | "cloud") { setWorking(true); try { const resolved = await resolveSyncConflict(settings, conflict, choice); const next = remaining.filter((item) => item.recordId !== conflict.recordId); setRemaining(next); if (!next.length) await onResolve([resolved]); } finally { setWorking(false); } }
   async function resolveAll(choice: "local" | "cloud") { setWorking(true); try { const resolved = await resolveAllConflicts(settings, remaining, choice); setRemaining([]); await onResolve(resolved); } finally { setWorking(false); } }
-  return <div className="dialog-backdrop-v2" onClick={onDismiss}><section className="conflict-dialog-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}><header><span>SYNC CONFLICT</span><h2>{remaining.length} 条记录同时被修改</h2><p>选择本地或云端版本，不再静默覆盖。</p></header>{remaining.length > 1 && <div className="conflict-bulk-v2"><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("local")}>全部保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("cloud")}>全部保留云端</button></div>}<div>{remaining.map((conflict) => <article key={conflict.recordId}><strong>{conflict.title}</strong><p>本地：{new Date(conflict.localUpdatedAt).toLocaleString("zh-CN")}<br />云端：{new Date(conflict.cloudUpdatedAt).toLocaleString("zh-CN")}</p><div><button className="button primary" disabled={working} type="button" onClick={() => void resolveOne(conflict, "local")}>保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveOne(conflict, "cloud")}>保留云端</button></div></article>)}</div><footer><button className="button ghost" type="button" disabled={working} onClick={onDismiss}>稍后处理</button></footer></section></div>;
+  return <div ref={conflictRef} className="dialog-backdrop-v2" onClick={working ? undefined : onDismiss}><section className="conflict-dialog-v2" role="dialog" aria-modal="true" aria-label="处理云同步冲突" onClick={(event) => event.stopPropagation()}><header><span>SYNC CONFLICT</span><h2>{remaining.length} 条记录同时被修改</h2><p>选择本地或云端版本，不再静默覆盖。</p></header>{remaining.length > 1 && <div className="conflict-bulk-v2"><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("local")}>全部保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveAll("cloud")}>全部保留云端</button></div>}<div>{remaining.map((conflict) => <article key={conflict.recordId}><strong>{conflict.title}</strong><p>本地：{new Date(conflict.localUpdatedAt).toLocaleString("zh-CN")}<br />云端：{new Date(conflict.cloudUpdatedAt).toLocaleString("zh-CN")}</p><div><button className="button primary" disabled={working} type="button" onClick={() => void resolveOne(conflict, "local")}>保留本地</button><button className="button ghost" disabled={working} type="button" onClick={() => void resolveOne(conflict, "cloud")}>保留云端</button></div></article>)}</div><footer><button className="button ghost" type="button" disabled={working} onClick={onDismiss}>稍后处理</button></footer></section></div>;
 }
 
 function OverlayMedia({ media, alt, fallback = "图片待补" }: { media?: MediaAsset; alt?: string; fallback?: ReactNode }) {
