@@ -807,7 +807,7 @@ await archiveView("海报", ".archive-poster-card");
   if (process.env.V3_PREVIEW_AUDIT === "1") {
     // A separate architecture preview, with no login or personal data access.
     // The V3 layout is tested by measured geometry, not CSS string matches.
-    for (const [width, height] of [[1600, 1000], [1024, 820], [390, 844]]) {
+    for (const [width, height] of [[1920, 1080], [1600, 1000], [1024, 820], [768, 1024], [390, 844], [360, 780]]) {
       const v3Context = await browser.newContext({
         viewport: { width, height }, serviceWorkers: "block",
       });
@@ -905,7 +905,7 @@ await archiveView("海报", ".archive-poster-card");
       await v3Page.locator(".v3-map-detail-layer").waitFor({ state: "detached" });
       await v3Context.close();
     }
-    console.log("V3 geometry audit passed: 1600/1024/390 viewports, portrait originals, map alignment, status non-reflow and accessible city panels.");
+    console.log("V3 geometry audit passed: 1920/1600/1024/768/390/360 viewports, portrait originals, map alignment, status non-reflow and accessible city panels.");
   }
 } finally {
   await browser.close();
