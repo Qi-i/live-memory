@@ -86,6 +86,18 @@ export function V3Preview() {
     ].slice(0, 8));
   };
   const reset = () => { setShows(demoShows.map((show) => ({ ...show }))); setSearch(""); setSelectedCity(null); };
+  const importSample = () => {
+    setShows(current => current.some(show => show.id === "demo-imported")
+      ? current : [{
+        id:"demo-imported", title:"夜色音乐会 · 导入演示", artist:"演示乐队",
+        city:"北京", venue:"城市音乐厅（演示）", date:"2026-08-16", status:"已看",
+      }, ...current]);
+    setSearch("");
+    setSelectedCity(null);
+    setMode("海报");
+    setPage("档案");
+    setDialog(null);
+  };
   const renderMap = () => (
     <MapSplitPane
       map={<PreviewMap cities={cityRows} selectedCity={selectedCity} onCity={setSelectedCity} />}
@@ -162,7 +174,7 @@ export function V3Preview() {
                 onClose={() => setDialog(null)}
                 onEdit={() => setDialog({ type: "editor", showId: selectedShow.id })} />
             : dialog.type === "import" || dialog.type === "share"
-              ? <DemoInfo kind={dialog.type} shows={visibleShows} onClose={() => setDialog(null)} />
+              ? <DemoInfo kind={dialog.type} shows={visibleShows} onClose={() => setDialog(null)} onImportSample={importSample} />
               : null
       )}
     >
