@@ -86,6 +86,7 @@
 .v3-workspace-content > .v3-action-toolbar,
 .v3-workspace-content > .v3-map-split { flex-shrink:0; }
 .v3-mobile-navigation { display:none; }
+.v3-mobile-status { display:none; }
 .v3-overlay-host { position:fixed; inset:0; z-index:100; pointer-events:none; }
 .v3-overlay-host > * { pointer-events:auto; }
 .v3-stage-hero {
@@ -143,6 +144,19 @@
   .v3-global-toolbar { min-height:61px; padding:10px 15px; }
   .v3-mobile-navigation { display:flex; position:fixed; left:10px; right:10px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:15; justify-content:space-around; padding:7px; border:1px solid rgba(255,255,255,.89); border-radius:20px; background:rgba(251,253,255,.87); backdrop-filter:blur(22px); box-shadow:0 12px 35px rgba(40,48,91,.2); }
   .v3-mobile-navigation button { text-align:center; font-size:12px; min-height:44px; }
+  .v3-mobile-status { display:block; position:relative; flex:0 0 44px; align-self:center; }
+  .v3-mobile-status .v3-status-center { border-radius:13px; overflow:visible; background:rgba(255,255,255,.8); }
+  .v3-mobile-status .v3-status-trigger { display:grid; place-items:center; width:44px; height:44px; padding:0; border-radius:13px; }
+  .v3-mobile-status .v3-status-indicator { width:11px; height:11px; }
+  .v3-mobile-status .v3-status-copy,
+  .v3-mobile-status .v3-status-chevron { display:none; }
+  .v3-mobile-status .v3-status-history {
+    position:absolute; right:0; bottom:calc(100% + 10px);
+    z-index:17; width:min(310px,calc(100vw - 24px)); max-height:min(310px,50dvh);
+    padding:14px; border:1px solid rgba(255,255,255,.88); border-radius:18px;
+    background:rgba(251,253,255,.98); box-shadow:0 15px 44px rgba(49,60,112,.24);
+  }
+  .v3-mobile-status .v3-status-history h3 { font-size:14px; }
   .v3-stage-hero { grid-template-columns:1fr; gap:9px; padding:18px 15px; min-height:0; }
   .v3-stage-hero-copy { padding:2px; gap:9px; }
   .v3-stage-hero-copy h1 { font-size:clamp(28px,6vw,38px); }
