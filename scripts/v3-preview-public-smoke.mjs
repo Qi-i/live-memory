@@ -157,6 +157,11 @@ try {
       const editor = page.getByRole("dialog", { name: "新增演示记录" });
       await editor.waitFor({ state: "visible" });
       await editor.getByLabel("演出名称").fill("独立预览的新现场");
+      await editor.getByRole("button", { name: "关闭编辑窗口" }).click();
+      await editor.getByText("修改尚未保存", { exact: false }).waitFor({ state: "visible" });
+      await editor.getByRole("button", { name: "继续编辑" }).click();
+      const preservedDraft = await editor.getByLabel("演出名称").inputValue();
+      if (preservedDraft !== "独立预览的新现场") throw Error("Cancelling unsaved-change warning lost the draft");
       await editor.getByLabel("城市").fill("北京");
       await editor.getByLabel("艺人").fill("演示艺人");
       await editor.getByRole("button", { name: "保存演示记录" }).click();
