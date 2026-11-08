@@ -143,6 +143,7 @@ try {
     // One complete task flow verifies the public preview is operable, not just
     // a screenshot. No personal account, database, or remote endpoint is used.
     if (width === 390) {
+      const countBefore = Number.parseInt(await page.locator(".v3-preview-topbar-stats b").first().innerText(), 10);
       await page.getByRole("button", { name: "新增记录", exact: true }).click();
       const editor = page.getByRole("dialog", { name: "新增演示记录" });
       await editor.waitFor({ state: "visible" });
@@ -151,7 +152,10 @@ try {
       await editor.getByLabel("艺人").fill("演示艺人");
       await editor.getByRole("button", { name: "保存演示记录" }).click();
       await editor.waitFor({ state: "detached" });
-      await page.locator(".v3-preview-topbar-stats").getByText("8").waitFor({ state: "visible" });
+      await page.waitForFunction(expected => {
+        const text = document.querySelector(".v3-preview-topbar-stats b")?.textContent || "";
+        return Number.parseInt(text, 10) === expected;
+      }, countBefore + 1, { timeout: 10000 });
       await page.getByRole("button", { name: "海报", exact: true }).click();
       const addedPoster = page.locator(".v3-demo-poster-grid button").filter({ hasText: "独立预览的新现场" });
       await addedPoster.waitFor({ state: "visible" });
