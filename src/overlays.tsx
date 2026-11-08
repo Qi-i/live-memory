@@ -445,37 +445,54 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
   const [drafts, setDrafts] = useState<ImportDraft[]>([]);
   const [loading, setLoading] = useState(false);
   const [ocrProgress, setOcrProgress] = useState("");
-  const importRef = useDialogBehavior({ onClose, allowEscape: !loading, focusSelector: '.editor-header-v2 button' });
+  const [importError, setImportError] = useState("");
+  const requestClose = () => { if (!loading) onClose(); };
+  const importRef = useDialogBehavior({ onClose: requestClose, allowEscape: !loading, focusSelector: '.editor-header-v2 button' });
 
   function updateDraft(id: string, patch: Partial<ImportDraft>) {
     setDrafts((current) => current.map((draft) => draft.id === id ? { ...draft, ...patch } : draft));
   }
 
   async function parse() {
+    if (loading) return;
     setLoading(true);
+    setImportError("");
     try {
       const next = await createDraftsFromText(text);
       setDrafts(next);
       flash(`生成 ${next.length} 条草稿`);
+    } catch (reason) {
+      setImportError(reason instanceof Error ? reason.message : "无法识别该演出信息");
     } finally {
       setLoading(false);
     }
   }
 
   async function importImages(files: FileList | null) {
-    if (!files?.length) return;
-    for (const file of Array.from(files)) {
-      const record = blankImportedRecord(file.name.replace(/\.[^.]+$/, ""));
-      record.media = [await fileToMedia(record.id, "poster", file)];
-      await onSave(record);
+    if (!files?.length || loading) return;
+    setLoading(true);
+    setImportError("");
+    let imported = 0;
+    try {
+      for (const file of Array.from(files)) {
+        const record = blankImportedRecord(file.name.replace(/\.[^.]+$/, ""));
+        record.media = [await fileToMedia(record.id, "poster", file)];
+        await onSave(record);
+        imported += 1;
+      }
+      flash(`已导入 ${imported} 张海报档案`);
+    } catch (reason) {
+      setImportError(`已保存 ${imported} 张；后续处理失败：${reason instanceof Error ? reason.message : "未知错误"}`);
+    } finally {
+      setLoading(false);
     }
-    flash(`已导入 ${files.length} 张图片草稿`);
   }
 
 
   async function importScreenshots(files: FileList | null) {
-    if (!files?.length) return;
+    if (!files?.length || loading) return;
     setLoading(true);
+    setImportError("");
     setOcrProgress("正在准备截图识别…");
     try {
       const nextDrafts: ImportDraft[] = [];
@@ -485,18 +502,36 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
       }
       setDrafts(nextDrafts);
       flash(`已从 ${files.length} 张截图识别 ${nextDrafts.length} 条草稿`);
+    } catch (reason) {
+      setImportError(reason instanceof Error ? reason.message : "截图识别失败");
     } finally {
       setLoading(false);
       setOcrProgress("");
     }
   }
 
+  async function saveDraft(draft: ImportDraft) {
+    if (loading) return;
+    setLoading(true);
+    setImportError("");
+    try {
+      await onSave(draftToRecord(draft));
+      setDrafts((current) => current.filter((item) => item.id !== draft.id));
+      flash("已加入档案：" + draft.title);
+    } catch (reason) {
+      setImportError(reason instanceof Error ? reason.message : "保存失败，请检查本机空间或连接状态");
+    } finally {
+      setLoading(false);
+    }
+  }
+
   return (
-    <div ref={importRef} className="overlay-backdrop" onClick={onClose}>
+    <div ref={importRef} className="overlay-backdrop" onClick={loading ? undefined : requestClose}>
       <aside className="import-drawer-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2></div><button type="button" onClick={onClose}><X /></button></header>
+        <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2><small>先识别并核对草稿，再逐条加入私人档案。</small></div><button type="button" aria-label="关闭批量导入" disabled={loading} onClick={requestClose}><X /></button></header>
         <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦、纷玩岛、票星球演出链接，或票务页文字。也可直接使用下方截图识别。" />
         <div className="import-actions-v2"><button className="button primary" disabled={loading || !text.trim()} type="button" onClick={() => void parse()}>{loading ? <Loader2 className="spin" /> : <Sparkles />}识别链接/文字</button><label className="button ghost"><ImagePlus />截图识别<input type="file" accept="image/*" multiple onChange={(event) => void importScreenshots(event.target.files)} /></label><label className="button ghost"><Upload />海报导入<input type="file" accept="image/*" multiple onChange={(event) => void importImages(event.target.files)} /></label>{ocrProgress && <span className="import-ocr-progress-v2">{ocrProgress}</span>}</div>
+        {importError && <p className="import-error-v3" role="alert">{importError}</p>}
         <div className="import-drafts-v2">
           {drafts.map((draft) => (
             <article key={draft.id}>
@@ -513,7 +548,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
                   <label>本人票价<input type="number" min="0" value={draft.price ?? ""} onChange={(event) => updateDraft(draft.id, { price: event.target.value ? Number(event.target.value) : null })} placeholder="可修改" /></label>
                 </div>
               </div>
-              <button className="button primary" type="button" disabled={!draft.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)} title={!draft.date ? "请先补充真实演出日期" : undefined} onClick={() => void onSave(draftToRecord(draft))}>加入档案</button>
+              <button className="button primary" type="button" disabled={loading || !draft.title.trim() || !/^\d{4}-\d{2}-\d{2}$/.test(draft.date)} title={!draft.date ? "请先补充真实演出日期" : undefined} onClick={() => void saveDraft(draft)}>{loading ? "处理中…" : "加入档案"}</button>
             </article>
           ))}
         </div>
