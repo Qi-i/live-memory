@@ -15,7 +15,8 @@ import { useEffect, useState } from "react";
 import type { AppSettings, ArchiveView, EventRecord } from "./domain";
 import { viewLabels } from "./domain";
 import { fileToAvatar, downloadBlob, nowIso } from "./media";
-import { normalizeRecord, replaceAllRecords } from "./storage";
+import { currentStorageScope, listRecords, replaceAllRecords } from "./storage";
+import { mergeBackupAdditions, parseBackupImport, type BackupImportPlan } from "./backupImport";
 import {
   friendlySupabaseErrorMessage,
   getLinkedProviders,
@@ -67,6 +68,7 @@ export function SettingsPage({
 }: SettingsPageProps) {
   const [draft, setDraft] = useState(settings);
   const [password, setPassword] = useState("");
+  const [importPreview, setImportPreview] = useState<BackupImportPlan | null>(null);
   const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
   useEffect(() => setDraft(settings), [settings]);
   useEffect(() => {
@@ -122,15 +124,33 @@ export function SettingsPage({
     flash("云端图片链接已刷新");
   }
 
-  async function importBackup(file?: File) {
+  async function inspectBackup(file?: File) {
     if (!file) return;
-    const parsed = JSON.parse(await file.text()) as { records?: unknown[] } | unknown[];
-    const rows = Array.isArray(parsed) ? parsed : parsed.records;
-    if (!Array.isArray(rows)) throw new Error("备份文件格式不正确");
-    const next = rows.map((row) => normalizeRecord(row as EventRecord));
-    await replaceAllRecords(next);
-    setRecords(next);
-    flash(`已导入 ${next.length} 条记录`);
+    setImportPreview(null);
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(await file.text());
+    } catch {
+      throw new Error("JSON 文件无法解析，当前档案没有改动");
+    }
+    const plan = parseBackupImport(parsed, records, file.name);
+    setImportPreview(plan);
+  }
+
+  async function confirmImport() {
+    if (!importPreview || busy) return;
+    const scope = currentStorageScope();
+    await run(async () => {
+      const current = await listRecords();
+      if (currentStorageScope() !== scope) throw new Error("账号已经切换，请重新选择备份文件");
+      const merged = mergeBackupAdditions(current, importPreview);
+      const added = merged.length - current.length;
+      if (added) await replaceAllRecords(merged);
+      if (currentStorageScope() !== scope) throw new Error("账号已经切换，已停止应用导入结果");
+      if (added) setRecords(merged);
+      setImportPreview(null);
+      flash(added ? `已新增 ${added} 条档案，原有 ${current.length} 条全部保留` : "没有新增记录；所有已有档案均已保留");
+    });
   }
 
   return (
@@ -191,8 +211,23 @@ export function SettingsPage({
               <button type="button" onClick={() => exportJson(records)}><Download /><span><strong>完整 JSON</strong><small>包含当前图片数据</small></span></button>
               <button type="button" onClick={() => exportText(records)}><Download /><span><strong>文字备份</strong><small>不包含本地图片</small></span></button>
               <button type="button" onClick={() => exportCsv(records)}><Download /><span><strong>CSV 表格</strong><small>便于统计和整理</small></span></button>
-              <label><Upload /><span><strong>导入 JSON</strong><small>恢复或迁移档案</small></span><input type="file" accept="application/json" onChange={(event) => void run(() => importBackup(event.target.files?.[0]))} /></label>
+              <label><Upload /><span><strong>安全导入 JSON</strong><small>先预览，仅合并新记录</small></span><input type="file" accept=".json,application/json" disabled={busy} onChange={(event) => { const file = event.target.files?.[0]; event.target.value = ""; void run(() => inspectBackup(file)); }} /></label>
             </div>
+            {importPreview && (
+              <section className="backup-import-preview" role="region" aria-label="JSON 备份导入预览">
+                <div className="backup-import-preview-head">
+                  <div><span>IMPORT PREVIEW · 只合并，不覆盖</span><h3>确认导入内容</h3><p title={importPreview.filename}>{importPreview.filename}</p></div>
+                  <button type="button" aria-label="取消导入" onClick={() => setImportPreview(null)}><X /></button>
+                </div>
+                <div className="backup-import-counts">
+                  <div><strong>{importPreview.additions.length}</strong><span>待新增</span></div>
+                  <div><strong>{importPreview.duplicateCount}</strong><span>已有 ID，跳过</span></div>
+                  <div><strong>{importPreview.existingCount}</strong><span>当前档案，保留</span></div>
+                </div>
+                <p className="backup-import-explain">导入只添加尚不存在的记录；同 ID 的现有记录、照片、编辑内容和回收站均不会被覆盖或删除。{importPreview.deletedCount ? `备份中另有 ${importPreview.deletedCount} 条已删除记录，将保留其回收站状态。` : ""}使用云端同步的账号，新增记录后可能自动同步到已连接的个人云端。</p>
+                <div className="backup-import-actions"><button type="button" className="button ghost" onClick={() => setImportPreview(null)}>取消</button><button type="button" className="button primary" disabled={!importPreview.additions.length || busy} onClick={() => void confirmImport()}><Check />{importPreview.additions.length ? `确认新增 ${importPreview.additions.length} 条` : "没有可新增的档案"}</button></div>
+              </section>
+            )}
             <div className="recycle-v2">
               <header><strong>回收站</strong><span>{trashRecords.length} 条</span></header>
               {trashRecords.length ? trashRecords.map((record) => <article key={record.id}><div><strong>{record.title}</strong><span>{record.date} · {record.artists.join(" / ") || "艺人待补"}</span></div><div><button type="button" onClick={() => void onRestore(record)}><RefreshCw />恢复</button><button className="is-danger" type="button" onClick={() => void onPermanentDelete(record)}><Trash2 />永久删除</button></div></article>) : <p>回收站为空。</p>}
