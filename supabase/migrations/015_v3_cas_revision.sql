@@ -70,7 +70,7 @@ begin
   if p_expected_revision is null then
     insert into public.echo_text_backups as record (user_id, id, payload, updated_at, deleted_at)
     values (v_user, p_id, p_payload, v_updated, v_deleted)
-    on conflict (user_id, id) do nothing
+    on conflict on constraint echo_text_backups_pkey do nothing
     returning record.id, record.payload, record.v3_revision
       into id, payload, v3_revision;
   else
@@ -124,7 +124,7 @@ begin
   if p_expected_revision is null then
     insert into public.echo_passkey_records as record (owner_key, id, payload, updated_at, deleted_at)
     values (v_owner, p_id, p_payload, v_updated, v_deleted)
-    on conflict (owner_key, id) do nothing
+    on conflict on constraint echo_passkey_records_pkey do nothing
     returning record.id, record.payload, record.v3_revision
       into id, payload, v3_revision;
   else
