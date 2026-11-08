@@ -9,15 +9,14 @@ import {
   Plus,
   RefreshCw,
 } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
 import type { AppSettings } from "./domain";
 import { effectiveStatus } from "./domain";
 import { useAppController } from "./appController";
 import { ArchivePage } from "./archive";
 import type { ArchiveLayout, ShareFormat } from "./archive";
 import { ExperienceShell } from "./experience";
-import { AdminPage, StatsPage } from "./statsPage";
-import { GuestSettingsPage, SettingsPage } from "./settingsPage";
+
 import {
   ConfirmDialog,
   DetailDrawer,
@@ -31,7 +30,13 @@ import { blankRecord } from "./seeds";
 import { duplicateRecordForNextShow } from "./recordActions";
 import { hasPersonalCloudConnection, isAdmin } from "./supabase";
 import { replaceAllRecords } from "./storage";
-import { KeepsakeStudio, type KeepsakeSubject } from "./keepsakeStudio";
+import type { KeepsakeSubject } from "./keepsakeStudio";
+
+const StatsPage = lazy(async () => ({ default: (await import("./statsPage")).StatsPage }));
+const AdminPage = lazy(async () => ({ default: (await import("./statsPage")).AdminPage }));
+const SettingsPage = lazy(async () => ({ default: (await import("./settingsPage")).SettingsPage }));
+const GuestSettingsPage = lazy(async () => ({ default: (await import("./settingsPage")).GuestSettingsPage }));
+const KeepsakeStudio = lazy(async () => ({ default: (await import("./keepsakeStudio")).KeepsakeStudio }));
 
 export default function AppRoot() {
   const controller = useAppController();
@@ -232,6 +237,7 @@ export default function AppRoot() {
           onOpenMapSettings={() => setRoute("settings")}
         />
       )}
+      <Suspense fallback={<div className="experience-route-loading" role="status"><Loader2 className="spin" /><span>正在打开页面…</span></div>}>
       {route === "stats" && <StatsPage records={activeRecords} onShare={(selectedRecords) => setKeepsakeSubject({ kind: "recap", records: selectedRecords })} />}
       {route === "settings" && isGuest && <GuestSettingsPage onLogin={access.leaveGuest} />}
       {route === "settings" && !isGuest && (
@@ -259,6 +265,7 @@ export default function AppRoot() {
         />
       )}
       {route === "admin" && !isGuest && Boolean(access.user) && isAdmin(settings) && <AdminPage settings={settings} />}
+      </Suspense>
 
       {selected && (
         <DetailDrawer
@@ -287,7 +294,7 @@ export default function AppRoot() {
       )}
       {importOpen && <ImportDrawer onClose={() => setImportOpen(false)} onSave={persistRecord} flash={flash} />}
       {zoomMedia && <ImageZoom media={zoomMedia} onClose={() => setZoomMedia(null)} />}
-      {keepsakeSubject && <KeepsakeStudio subject={keepsakeSubject} onClose={() => setKeepsakeSubject(null)} />}
+      {keepsakeSubject && <Suspense fallback={<div className="experience-dialog-loading" role="status"><Loader2 className="spin" /><span>正在准备纪念卡…</span></div>}><KeepsakeStudio subject={keepsakeSubject} onClose={() => setKeepsakeSubject(null)} /></Suspense>}
       {confirmAction && <ConfirmDialog action={confirmAction} onClose={() => setConfirmAction(null)} />}
       {syncConflicts.length > 0 && (
         <SyncConflictDialog
