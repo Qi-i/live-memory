@@ -3,6 +3,7 @@ import type { AppSettings, EventRecord, MediaAsset } from "./domain";
 import { defaultSettings } from "./domain";
 import { nowIso } from "./media";
 import {
+  currentStorageScope,
   deleteRecord,
   loadRecordsWithMigration,
   readSettings,
@@ -112,7 +113,16 @@ export function useAppController() {
 
   useEffect(() => {
     let active = true;
+    const sessionScope = currentStorageScope();
     initialized.current = false;
+    // Invalidate requests from the previous account before new hydration.
+    syncOperationInFlight.current = false;
+    mediaRefreshInFlight.current = false;
+    personalCloudRecoveryInFlight.current = false;
+    lastMediaRefreshAt.current = 0;
+    lastRemoteCheckAt.current = 0;
+    lastSyncFingerprint.current = "";
+    setSyncing(false);
 
     if (isGuest) {
       const demoRecords = guestDemoRecords();
@@ -128,7 +138,7 @@ export function useAppController() {
 
     Promise.all([loadRecordsWithMigration(), Promise.resolve(readSettings())])
       .then(([loadedRecords, loadedSettings]) => {
-        if (!active) return;
+        if (!active || currentStorageScope() !== sessionScope) return;
 
         // Local-first hydration: IndexedDB and the persistent media cache are the
         // first paint. Cloud reconciliation must never block already-available posters.
@@ -150,7 +160,7 @@ export function useAppController() {
         setSyncing(true);
         void syncAfterLogin(localSettings, loadedRecords)
           .then(async (initialSync) => {
-            if (!active) return;
+            if (!active || currentStorageScope() !== sessionScope) return;
             const nextRecords = initialSync.records;
             const nextSettings = writeSettings({ ...initialSync.settings, onboardingComplete: true });
             const loadedActiveCount = loadedRecords.filter((record) => !record.deletedAt).length;
@@ -162,25 +172,25 @@ export function useAppController() {
               setCloudRecoveryNotice(`已从云端恢复 ${nextActiveCount - loadedActiveCount} 条其他设备记录。`);
             }
             await replaceAllRecords(nextRecords);
-            if (!active) return;
+            if (!active || currentStorageScope() !== sessionScope) return;
             setRecords(nextRecords);
             setSettings(nextSettings);
             void preloadRecordMedia(nextRecords);
           })
           .catch((error) => {
-            if (!active) return;
+            if (!active || currentStorageScope() !== sessionScope) return;
             setCloudRecoveryNotice("云端同步暂未完成，当前继续使用本机档案与已缓存图片。");
             console.warn("Initial cloud sync deferred", error);
           })
           .finally(() => {
-            if (!active) return;
+            if (!active || currentStorageScope() !== sessionScope) return;
             syncOperationInFlight.current = false;
             setSyncing(false);
             initialized.current = true;
           });
       })
       .catch((error) => {
-        if (!active) return;
+        if (!active || currentStorageScope() !== sessionScope) return;
         setToast(friendlySupabaseErrorMessage(error, "本机记录加载失败"));
         initialized.current = true;
       });
