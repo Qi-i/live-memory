@@ -179,7 +179,11 @@
 @media (max-width: 560px) {
   .statistics-metrics { gap: 7px; }
   .statistics-metrics > article { min-height: 105px; padding: 12px; }
-  .statistics-panel { min-height: 280px; padding: 13px; }
+  .statistics-panel { min-height: 0; padding: 14px; }
+  .statistics-panel h2 { margin-bottom: 12px; font-size: 21px; }
+  .statistics-panel p { min-height: 36px; }
+  .statistics-empty { min-height: 80px; }
+  .statistics-story h2 { font-size: clamp(24px, 6.8vw, 30px); line-height: 1.15; overflow-wrap: anywhere; }
   .statistics-panel p { grid-template-columns: 78px minmax(0, 1fr) 24px; }
   .statistics-story { min-height: 190px; padding: 20px; }
   .statistics-story h2 { font-size: 32px; }
