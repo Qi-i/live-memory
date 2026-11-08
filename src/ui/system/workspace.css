@@ -81,6 +81,10 @@
   gap:13px; padding:12px 22px; border-radius:23px;
 }
 .v3-workspace-content { display:flex; flex-direction:column; gap:var(--v3-gap); min-width:0; min-height:0; overflow:auto; overscroll-behavior:contain; padding:1px 1px 18px; }
+/* One content scrollbar owns overflow. Neither map nor hero is squeezed to fit the viewport. */
+.v3-workspace-content > .v3-stage-hero,
+.v3-workspace-content > .v3-action-toolbar,
+.v3-workspace-content > .v3-map-split { flex-shrink:0; }
 .v3-mobile-navigation { display:none; }
 .v3-overlay-host { position:fixed; inset:0; z-index:100; pointer-events:none; }
 .v3-overlay-host > * { pointer-events:auto; }
