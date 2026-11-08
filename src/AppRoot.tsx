@@ -232,7 +232,7 @@ export default function AppRoot() {
           onOpenMapSettings={() => setRoute("settings")}
         />
       )}
-      {route === "stats" && <StatsPage records={activeRecords} onShare={() => setKeepsakeSubject({ kind: "recap", records: activeRecords })} />}
+      {route === "stats" && <StatsPage records={activeRecords} onShare={(selectedRecords) => setKeepsakeSubject({ kind: "recap", records: selectedRecords })} />}
       {route === "settings" && isGuest && <GuestSettingsPage onLogin={access.leaveGuest} />}
       {route === "settings" && !isGuest && (
         <SettingsPage
