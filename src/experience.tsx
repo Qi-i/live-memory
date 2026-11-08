@@ -151,6 +151,15 @@ export function ExperienceShell({
   const meta = routeMetadata(route);
   const routes = (["archive", "stats", "settings", ...(adminVisible ? ["admin"] : [])] as AppRoute[]);
 
+  useEffect(() => {
+    if (!mobileNavOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setMobileNavOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileNavOpen]);
+
   function navigate(next: AppRoute) {
     onRouteChange(next);
     setMobileNavOpen(false);
@@ -204,9 +213,11 @@ export function ExperienceShell({
         </button>
       </aside>
 
+      {mobileNavOpen && <button className="experience-nav-scrim" type="button" aria-label="关闭导航" onClick={() => setMobileNavOpen(false)} />}
+
       <section className="experience-workspace">
         <header className="experience-topbar">
-          <button className="experience-mobile-menu" type="button" aria-label={mobileNavOpen ? "关闭导航" : "打开导航"} onClick={() => setMobileNavOpen((value) => !value)}>
+          <button className="experience-mobile-menu" type="button" aria-expanded={mobileNavOpen} aria-label={mobileNavOpen ? "关闭导航" : "打开导航"} onClick={() => setMobileNavOpen((value) => !value)}>
             {mobileNavOpen ? <X /> : <Menu />}
           </button>
           <div className="experience-context">
