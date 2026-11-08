@@ -71,9 +71,23 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     if (expected !== null && (!/^[1-9]\d*$/.test(expected) || !Number.isSafeInteger(Number(expected)))) {
       throw new Error("Invalid server revision, refusing cloud overwrite");
     }
-    const payload: EventRecord = this.includeMedia ? record : {
-      ...record, media: [], mediaTombstones: undefined,
-    };
+    // The CAS RPC only commits JSON metadata. Image bytes must first be
+    // uploaded by the media pipeline, not smuggled into public JSON rows.
+    if (this.includeMedia && record.media.some((asset) =>
+      !asset.storagePath && /^(?:data:|blob:)/i.test(asset.src)
+    )) {
+      throw new Error("V3_MEDIA_UPLOAD_REQUIRED: Upload local images before committing the record");
+    }
+    const payload: EventRecord = this.includeMedia
+      ? {
+        ...record,
+        media: record.media.map((asset) => asset.storagePath
+          ? { ...asset, src: "" }
+          : asset),
+      }
+      : {
+        ...record, media: [], mediaTombstones: undefined,
+      };
     const fn = this.provider === "personal" ? "live_memory_v3_cas_personal" : "live_memory_v3_cas_account";
     const args = { p_id: record.id, p_payload: payload, p_expected_revision: expected === null ? null : Number(expected) };
     const { data, error } = await this.client.rpc(fn, args);
