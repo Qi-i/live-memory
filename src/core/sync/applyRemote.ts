@@ -28,7 +28,9 @@ export function applyRemoteAgainstLive(
   requestSnapshot: EventRecord[],
   remoteResult: EventRecord[],
   liveRecords: EventRecord[],
+  options: { includeMedia?: boolean } = {},
 ): RemoteApplication {
+  const includeMedia = options.includeMedia !== false;
   const before = mapById(requestSnapshot);
   const live = mapById(liveRecords);
   const acceptedIds: string[] = [];
@@ -51,27 +53,28 @@ export function applyRemoteAgainstLive(
     }
 
     const localChangedDuringRequest = baseline
-      ? !recordContentEqual(current, baseline)
-      : !recordContentEqual(current, remote);
-    const responseDifferentFromRequest = baseline
-      ? !recordContentEqual(remote, baseline)
-      : false;
+      ? !recordContentEqual(current, baseline, includeMedia)
+      : !recordContentEqual(current, remote, includeMedia);
 
     if (!baseline && localChangedDuringRequest) {
       deferredIds.push(remote.id);
       continue;
     }
     if (localChangedDuringRequest) {
-      // Both sides changed: do not choose a winner behind the user's back.
-      // If only the device changed, preserve its newer content and retry sync.
-      if (responseDifferentFromRequest) deferredIds.push(remote.id);
-      else deferredIds.push(remote.id);
+      // A newer local edit is never overwritten by a prior network snapshot.
+      deferredIds.push(remote.id);
       continue;
     }
 
     // This record did not change on device while the request was pending.
     // It is safe to accept even metadata-only acknowledgements (syncedAt).
-    live.set(remote.id, remote);
+    live.set(remote.id, includeMedia
+      ? remote
+      : {
+        ...remote,
+        media: current.media,
+        mediaTombstones: current.mediaTombstones,
+      });
     acceptedIds.push(remote.id);
   }
 
