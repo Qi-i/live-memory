@@ -20,7 +20,7 @@ assert.match(card, /drawContainedImage/, "Do not flatten vertical posters into h
 assert.doesNotMatch(card, /record\.seat|record\.price|record\.note|record\.companions/);
 assert.match(card, /隐私保护/);
 assert.match(card, /kind === "record"/);
-assert.match(card, /kind === "recap"/);
+assert.match(card, /kind: "recap"; records: EventRecord\[\]/);
 assert.match(detail, /生成单场纪念分享图/);
 assert.match(stats, /生成回顾分享图/);
 assert.match(app, /<KeepsakeStudio subject=\{keepsakeSubject\}/);
