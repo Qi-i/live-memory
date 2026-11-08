@@ -284,7 +284,7 @@ await archiveView("海报", ".archive-poster-card");
     shareRefetches.push(route.request().url());
     void route.abort("failed");
   });
-  await page.getByRole("button", { name: "制作分享图", exact: true }).click();
+  await page.getByRole("button", { name: "生成分享图", exact: true }).click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
   await page.locator(".share-preview-preparing").waitFor({ state: "detached", timeout: 30000 }).catch(() => undefined);
   await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 30000 });
