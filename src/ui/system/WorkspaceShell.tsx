@@ -45,6 +45,9 @@ export function StatusCenter({
       {expanded && (
         <div id={historyId} className="v3-status-history">
           <h3>同步记录</h3>
+          <div className={"v3-status-current" + (alert ? " is-attention" : "")} role={alert ? "alert" : "status"}>
+            <strong>当前状态</strong><span>{presentation.label}</span>
+          </div>
           {history.length ? (
             <ol>
               {history.slice(0, 8).map((entry) => {
