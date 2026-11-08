@@ -260,7 +260,7 @@ export function ThemeSettingsPanel() {
       <header>
         <span>外观</span>
         <h2>页面风格</h2>
-        <p>选择明暗模式和页面风格，手机端与分享图会自动适配。</p>
+        <p>统一切换整个工作区的材质、色彩和控件风格。分享 PNG 使用独立成图主题，不随网页主题改变。</p>
       </header>
       <div className="theme-setting-group">
         <strong>明暗模式</strong>
@@ -277,11 +277,11 @@ export function ThemeSettingsPanel() {
         <div className="theme-choice-grid">
           <button className={visualTheme === "aurora" ? "is-active" : ""} type="button" onClick={() => setVisualTheme("aurora")}>
             <i className="theme-preview theme-preview-aurora" />
-            <span><b>清透玻璃</b><small>柔和渐变、圆角玻璃与轻盈留白</small></span>
+            <span><b>Liquid Stage · 液态舞台</b><small>渐变光场、液态玻璃、悬浮层次与演出海报</small></span>
           </button>
           <button className={visualTheme === "editorial" ? "is-active" : ""} type="button" onClick={() => setVisualTheme("editorial")}>
             <i className="theme-preview theme-preview-editorial" />
-            <span><b>纸质画册</b><small>纸张底色、硬边框与杂志式排版</small></span>
+            <span><b>Editorial · 纸质画册</b><small>保留无透明效果的经典杂志阅读主题</small></span>
           </button>
         </div>
       </div>
