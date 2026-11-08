@@ -107,3 +107,25 @@
 @media (prefers-reduced-motion: reduce) {
   .keepsake-backdrop, .keepsake-dialog { scroll-behavior: auto; }
 }
+
+/* A compact editorial entry point on the statistics page, separate from the exported artwork. */
+.statistics-share-heading {
+  display: flex; align-items: center; justify-content: space-between; gap: 18px;
+  padding: 20px 24px; margin-bottom: 18px;
+  border: 1px solid rgba(21, 92, 87, .15); border-radius: 19px;
+  background: linear-gradient(115deg, rgba(219, 241, 234, .95), rgba(245, 249, 247, .82));
+}
+.statistics-share-heading div { min-width: 0; display: grid; gap: 5px; }
+.statistics-share-heading span { color: #087f70; font-size: 11px; font-weight: 850; letter-spacing: .16em; }
+.statistics-share-heading h2 { margin: 0; font-size: 23px; line-height: 1.25; color: #173c3a; }
+.statistics-share-heading p { margin: 0; font-size: 13px; color: #5b7473; }
+.statistics-share-heading button {
+  display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 9px;
+  min-height: 43px; padding: 10px 17px; border: none; border-radius: 11px;
+  color: white; background: #0d7f71; cursor: pointer; font-size: 13px; font-weight: 760;
+}
+.statistics-share-heading button svg { width: 17px; height: 17px; }
+@media (max-width: 600px) {
+  .statistics-share-heading { align-items: stretch; flex-direction: column; padding: 16px 17px; gap: 12px; }
+  .statistics-share-heading button { align-self: stretch; }
+}
