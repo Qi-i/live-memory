@@ -543,6 +543,14 @@ await archiveView("海报", ".archive-poster-card");
   const mobileBounds = { left: mobileMasthead.x, top: mobileMasthead.y, right: mobileMasthead.x + mobileMasthead.width, bottom: mobileMasthead.y + mobileMasthead.height };
   mobileCards.forEach((card, index) => assertContained(`Mobile banner poster ${index + 1}`, card, mobileBounds, 3));
   await page.screenshot({ path: `${outputDir}/13-banner-mobile.png`, fullPage: true });
+  const liquidMaterial = await page.locator(".experience-topbar").evaluate((element) => {
+    const style = getComputedStyle(element);
+    return { filter: style.backdropFilter || style.webkitBackdropFilter, radius: style.borderRadius };
+  });
+  if (!liquidMaterial.filter || liquidMaterial.filter === "none") {
+    throw new Error("Liquid Stage topbar should use functional translucent material: " + JSON.stringify(liquidMaterial));
+  }
+
 
   // Single-event keepsake: actual Canvas-generated PNG, not an archive screenshot.
   await page.locator(".archive-poster-card .archive-poster-copy").first().click();
@@ -615,8 +623,19 @@ await archiveView("海报", ".archive-poster-card");
   if (await mobilePosterEditor.locator("img").count() < 1 || await mobilePosterEditor.locator(".media-editor-sync-badge-v2").count() < 1) {
     throw new Error("Mobile media editor did not expose the selected poster preview and sync state");
   }
+  const editorSections = await page.locator(".editor-section-v3").count();
+  if (editorSections !== 4) throw new Error("Record editor must expose four clear workflow sections: " + editorSections);
+  const editorLayout = await page.locator(".record-editor-v2").evaluate((node) => {
+    const rect = node.getBoundingClientRect();
+    return { x: rect.left, right: rect.right, viewport: innerWidth };
+  });
+  if (editorLayout.x < -1 || editorLayout.right > editorLayout.viewport + 1) {
+    throw new Error("Editor overflows the mobile viewport: " + JSON.stringify(editorLayout));
+  }
   await page.screenshot({ path: `${outputDir}/13b-editor-mobile-media.png`, fullPage: true });
   await page.locator('.record-editor-v2 button[aria-label="关闭"]').click();
+  await page.getByRole("alertdialog", { name: "放弃这次编辑？" }).waitFor({ state: "visible", timeout: 5000 });
+  await page.getByRole("button", { name: "放弃修改" }).click();
   await page.locator(".record-editor-v2").waitFor({ state: "detached", timeout: 5000 });
 
   await archiveView("票夹", ".archive-wallet-card");
