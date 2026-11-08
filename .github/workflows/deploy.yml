@@ -77,6 +77,18 @@ jobs:
           fi
           test -f "$RUNNER_TEMP/v3-preview/index.html"
           test -f "$RUNNER_TEMP/v3-preview/preview-info.json"
+          if ! node -e '
+            const fs=require("fs");
+            const info=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if (info.browserVerified !== true || info.type !== "demo-only") process.exit(1);
+          ' "$RUNNER_TEMP/v3-preview/preview-info.json"; then
+            if [ "$EVENT_TYPE" = "workflow_run" ]; then
+              echo "V3 artifact is missing required browser and isolation verification" >&2
+              exit 1
+            fi
+            echo "No browser-verified V3 artifact yet; publish V2 unchanged."
+            exit 0
+          fi
           if [ "$EVENT_TYPE" = "workflow_run" ]; then
             node -e '
               const fs=require("fs");
