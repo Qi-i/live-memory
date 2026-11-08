@@ -101,7 +101,7 @@ const storage = {
 const personalKey = await baseline.exports.createBaselineKey("scope-user-A", "personal", "https://provider.example:user-A");
 const accountKey = await baseline.exports.createBaselineKey("scope-user-A", "account", "https://provider.example:user-A");
 assert.notEqual(personalKey, accountKey, "Account text backup and personal cloud must never share a baseline");
-assert.doesNotMatch(personalKey, /provider\.example|user-A:/);
+assert.doesNotMatch(personalKey, /provider\.example|https:\/\//, "Cloud endpoint must not appear in baseline keys");
 const revisions = new baseline.exports.RevisionBaselineStore(storage, personalKey);
 assert.equal(revisions.read("concert-1"), undefined);
 revisions.acknowledge([{ id: "concert-1", revision: base }]);
