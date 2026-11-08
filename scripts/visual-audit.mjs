@@ -817,6 +817,8 @@ await archiveView("海报", ".archive-poster-card");
       await v3Page.goto(previewUrl.toString(), { waitUntil: "domcontentloaded" });
       await v3Page.locator('[data-ui-system="v3"]').waitFor({ state: "visible", timeout: 15000 });
       await v3Page.locator(".v3-portrait-frame").first().waitFor({ state: "visible", timeout: 10000 });
+      await v3Page.waitForFunction(() => [...document.querySelectorAll(".v3-stage-hero-gallery .v3-portrait-frame img")]
+        .slice(0, 2).every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
       const layout = await v3Page.evaluate(() => {
         const bounds = (selector) => {
           const rect = document.querySelector(selector)?.getBoundingClientRect();
@@ -833,6 +835,8 @@ await archiveView("海报", ".archive-poster-card");
           workspaceScrollWidth: document.querySelector(".v3-workspace-content")?.scrollWidth,
           workspaceWidth: document.querySelector(".v3-workspace-content")?.clientWidth,
           fit: getComputedStyle(document.querySelector(".v3-portrait-frame img")).objectFit,
+          heroCopy: bounds(".v3-stage-hero-copy"),
+          heroGallery: bounds(".v3-stage-hero-gallery"),
           actionBounds: [...document.querySelectorAll(".v3-action-toolbar button")].map((el) => {
             const rect = el.getBoundingClientRect();
             return { x: rect.x, right: rect.right };
@@ -851,6 +855,12 @@ await archiveView("海报", ".archive-poster-card");
       }
       if (width > 800 && Math.abs(layout.map.height - layout.side.height) > 2) {
         throw new Error("V3 map and ranking panel heights diverged: " + JSON.stringify(layout));
+      }
+      if (width <= 800 && layout.heroGallery.y < layout.heroCopy.bottom - 2) {
+        throw new Error("V3 mobile banner layers overlap: " + JSON.stringify(layout));
+      }
+      if (width <= 800 && layout.heroGallery.bottom > layout.hero.bottom + 3) {
+        throw new Error("V3 portrait strip escapes its hero layout: " + JSON.stringify(layout));
       }
       if (width === 1600 && layout.hero.height < 320) {
         throw new Error("V3 banner too flat for portrait artwork: " + JSON.stringify(layout));
