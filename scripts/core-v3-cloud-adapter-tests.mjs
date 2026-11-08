@@ -20,9 +20,16 @@ class FakeRpc {
   calls=[];
   from(table) {
     this.calls.push(["select",table]);
-    return {select:async columns=>{
+    return {select:columns=>{
       assert.equal(columns,"id,payload,v3_revision");
-      return {data:[...this.rows.values()],error:null};
+      return {order:(key,options)=>{
+        assert.equal(key,"id");
+        assert.equal(options.ascending,true);
+        return {range:async (start,end)=>{
+          const sorted=[...this.rows.values()].sort((a,b)=>a.id.localeCompare(b.id));
+          return {data:sorted.slice(start,end+1),error:null};
+        }};
+      }};
     }};
   }
   async rpc(name,args) {
@@ -44,13 +51,20 @@ const record={
 const client=new FakeRpc();
 const personal=new adapter.SupabaseV3RecordAdapter(client,"personal","owner-test","account-test");
 assert.equal(personal.includeMedia,true);
-const first=await personal.compareAndSwap(record,null);
+await assert.rejects(personal.compareAndSwap(record,null), /V3_MEDIA_UPLOAD_REQUIRED/,
+  "Local ticket bytes must never be committed as record JSON before media upload");
+const uploadedRecord = { ...record, media: [{
+  ...record.media[0], storagePath:"test/record-one/ticket.png",
+  src:"https://storage.example/signed-private?token=SECRET"
+}] };
+const first=await personal.compareAndSwap(uploadedRecord,null);
 assert.equal(first.serverRevision,"1");
 assert.equal(first.record.media.length,1);
-const next=await personal.compareAndSwap({...record,title:"已修改"},first.serverRevision);
+assert.equal(first.record.media[0].src,"", "Rotating private signed URLs must not be sent to cloud JSON");
+const next=await personal.compareAndSwap({...uploadedRecord,title:"已修改"},first.serverRevision);
 assert.equal(next.serverRevision,"2");
 assert.equal(next.record.title,"已修改");
-await assert.rejects(personal.compareAndSwap({...record,title:"旧窗口误覆盖"},"1"),
+await assert.rejects(personal.compareAndSwap({...uploadedRecord,title:"旧窗口误覆盖"},"1"),
   e=>e instanceof ports.RemoteRevisionChanged,
   "Server CAS must refuse old-tab edits instead of silently overwriting");
 assert.equal((await personal.list())[0].record.title,"已修改");
@@ -64,6 +78,18 @@ assert.equal(accountClient.calls.at(-1)[1],"live_memory_v3_cas_account");
 assert.equal(account.includeMedia,false);
 assert.equal((await account.list()).length,1);
 
+// The adapter must fetch every page; a provider limit cannot erase archives.
+const many=new FakeRpc();
+for(let index=0; index<1007; index++){
+  const id="bulk-"+String(index).padStart(4,"0");
+  many.rows.set(id,{id,payload:{...record,id,media:[]},v3_revision:1});
+}
+const all=await new adapter.SupabaseV3RecordAdapter(
+  many,"account","auth-user","account-test",
+).list();
+assert.equal(all.length,1007,"Every record across 3 server pages must be returned");
+assert.equal(new Set(all.map(row=>row.record.id)).size,1007);
+
 const missingRevision=new FakeRpc();
 missingRevision.rows.set(record.id,{id:record.id,payload:record});
 await assert.rejects(new adapter.SupabaseV3RecordAdapter(
@@ -71,4 +97,4 @@ await assert.rejects(new adapter.SupabaseV3RecordAdapter(
 ).list(),/version/i,"Old schema cannot be silently treated as CAS-capable");
 assert.doesNotMatch(adapterCode, /\.upsert\(|\.delete\(/,
   "V3 cloud adapter cannot fall back to an unconditional public write");
-console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, media privacy, schema fail-close, provider separation.");
+console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, local-byte guard, signed-URL stripping, account privacy, schema fail-close.");

@@ -2,7 +2,7 @@ name: Validate pull request
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, refactor/core-v3-architecture-20261108]
   push:
     branches: [refactor/experience-system-v3]
 
@@ -48,7 +48,7 @@ jobs:
         env:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
-          VITE_V3_PREVIEW: ${{ github.head_ref == 'refactor/core-v3-architecture-20261108' && '1' || '0' }}
+          VITE_V3_PREVIEW: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
       - name: Start preview
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/live-memory-preview.log 2>&1 &
@@ -61,7 +61,7 @@ jobs:
       - name: Capture responsive visual audit
         run: node scripts/visual-audit.mjs
         env:
-          V3_PREVIEW_AUDIT: ${{ github.head_ref == 'refactor/core-v3-architecture-20261108' && '1' || '0' }}
+          V3_PREVIEW_AUDIT: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
