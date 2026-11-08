@@ -222,3 +222,15 @@
   .editor-footer-v2 .button.primary { min-width: 135px; }
   .editor-footer-v2 .button { font-size: 13px; }
 }
+
+.import-error-v3 {
+  margin: 10px 16px 0;
+  padding: 12px 14px;
+  border: 1px solid rgba(191, 67, 104, .32);
+  border-radius: 11px;
+  color: #a43857;
+  background: rgba(201, 73, 105, .09);
+  font-size: 13px;
+  font-weight: 710;
+  line-height: 1.6;
+}
