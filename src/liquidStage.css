@@ -418,3 +418,36 @@ button, a, input, textarea, select { touch-action: manipulation; }
   :root[data-visual-theme="aurora"] .archive-poster-card,
   :root[data-visual-theme="aurora"] .experience-nav button { transition: none; }
 }
+
+/* Dense galleries avoid a separate GPU backdrop layer for every poster.
+ * Optical glass remains on navigation, large panels and sheets. */
+:root[data-visual-theme="aurora"] .archive-poster-card,
+:root[data-visual-theme="aurora"] .archive-wallet-card,
+:root[data-visual-theme="aurora"] .archive-ticket,
+:root[data-visual-theme="aurora"] .archive-calendar > article,
+:root[data-visual-theme="aurora"] .archive-list button {
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  background:
+    linear-gradient(155deg, var(--liquid-highlight), transparent 50%),
+    var(--liquid-glass-strong);
+}
+@media (prefers-reduced-transparency: reduce) {
+  :root[data-visual-theme="aurora"] .experience-rail,
+  :root[data-visual-theme="aurora"] .experience-topbar,
+  :root[data-visual-theme="aurora"] .archive-command,
+  :root[data-visual-theme="aurora"] .statistics-panel,
+  :root[data-visual-theme="aurora"] .settings-module {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background-color: var(--experience-surface-solid);
+  }
+}
+@media (forced-colors: active) {
+  :root[data-visual-theme="aurora"] .experience-rail,
+  :root[data-visual-theme="aurora"] .experience-topbar,
+  :root[data-visual-theme="aurora"] .archive-command,
+  :root[data-visual-theme="aurora"] .record-editor-v2 {
+    border: 1px solid CanvasText;
+  }
+}
