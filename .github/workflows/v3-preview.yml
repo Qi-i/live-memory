@@ -1,0 +1,50 @@
+name: Build V3 standalone preview
+
+on:
+  push:
+    branches:
+      - refactor/core-v3-architecture-20261108
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    if: github.ref == 'refs/heads/refactor/core-v3-architecture-20261108'
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify standalone preview cannot import account or private data
+        run: node scripts/v3-preview-isolation-tests.mjs
+      - name: Verify application type safety
+        run: npm run typecheck
+      - name: Build demo-only V3 UI
+        run: npm run build
+        env:
+          VITE_V3_STANDALONE: "1"
+          VITE_V3_PREVIEW: "0"
+      - name: Package isolated preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f dist/v3-preview.html
+          test ! -f dist/index.html
+          mv dist/v3-preview.html dist/index.html
+          printf '{"sha":"%s","type":"demo-only","source":"refactor/core-v3-architecture-20261108"}\n' "$GITHUB_SHA" > dist/preview-info.json
+          test -d dist/assets
+          test -f dist/demo/zhou-shen.webp
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3-static-preview
+          path: dist
+          if-no-files-found: error
+          retention-days: 14
