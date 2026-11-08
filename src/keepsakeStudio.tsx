@@ -291,8 +291,8 @@ async function paintEvent(ctx: CanvasRenderingContext2D, record: EventRecord, wi
 async function paintRecap(ctx: CanvasRenderingContext2D, records: EventRecord[], width: number, height: number, p: ThemeColors, options: DrawOptions) {
   const tall = height > 1500;
   const ordered = [...records].filter((record) => !record.deletedAt).sort((a, b) => b.date.localeCompare(a.date));
-  const watched = ordered.filter((record) => effectiveStatus(record) === "watched");
-  const cities = [...new Set(ordered.map((record) => record.city).filter(Boolean))];
+  const watched = ordered.filter((record) => effectiveStatus(record) === "watched" && record.recordState !== "cancelled" && record.recordState !== "refunded");
+  const cities = [...new Set(watched.map((record) => record.city).filter(Boolean))];
   const years = ordered.map((record) => record.date.slice(0, 4)).filter((value) => /^\d{4}$/.test(value)).sort();
   const period = years.length ? (years[0] === years[years.length - 1] ? years[0] : years[0] + " — " + years[years.length - 1]) : "MY LIVE HISTORY";
   text(ctx, "MY LIVE MEMORY", 76, 100, 25, p.highlight, 850);
