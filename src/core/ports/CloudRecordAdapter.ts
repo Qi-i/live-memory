@@ -24,3 +24,11 @@ export interface CloudRecordAdapter {
    */
   compareAndSwap(record: EventRecord, expected: string | null): Promise<CloudRecordEnvelope>;
 }
+
+/** Returned only for a rejected optimistic concurrency precondition. */
+export class RemoteRevisionChanged extends Error {
+  constructor(message = "Remote record revision changed during the upload") {
+    super(message);
+    this.name = "RemoteRevisionChanged";
+  }
+}
