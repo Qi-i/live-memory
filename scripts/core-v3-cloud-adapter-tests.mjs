@@ -44,13 +44,20 @@ const record={
 const client=new FakeRpc();
 const personal=new adapter.SupabaseV3RecordAdapter(client,"personal","owner-test","account-test");
 assert.equal(personal.includeMedia,true);
-const first=await personal.compareAndSwap(record,null);
+await assert.rejects(personal.compareAndSwap(record,null), /V3_MEDIA_UPLOAD_REQUIRED/,
+  "Local ticket bytes must never be committed as record JSON before media upload");
+const uploadedRecord = { ...record, media: [{
+  ...record.media[0], storagePath:"test/record-one/ticket.png",
+  src:"https://storage.example/signed-private?token=SECRET"
+}] };
+const first=await personal.compareAndSwap(uploadedRecord,null);
 assert.equal(first.serverRevision,"1");
 assert.equal(first.record.media.length,1);
-const next=await personal.compareAndSwap({...record,title:"已修改"},first.serverRevision);
+assert.equal(first.record.media[0].src,"", "Rotating private signed URLs must not be sent to cloud JSON");
+const next=await personal.compareAndSwap({...uploadedRecord,title:"已修改"},first.serverRevision);
 assert.equal(next.serverRevision,"2");
 assert.equal(next.record.title,"已修改");
-await assert.rejects(personal.compareAndSwap({...record,title:"旧窗口误覆盖"},"1"),
+await assert.rejects(personal.compareAndSwap({...uploadedRecord,title:"旧窗口误覆盖"},"1"),
   e=>e instanceof ports.RemoteRevisionChanged,
   "Server CAS must refuse old-tab edits instead of silently overwriting");
 assert.equal((await personal.list())[0].record.title,"已修改");
@@ -71,4 +78,4 @@ await assert.rejects(new adapter.SupabaseV3RecordAdapter(
 ).list(),/version/i,"Old schema cannot be silently treated as CAS-capable");
 assert.doesNotMatch(adapterCode, /\.upsert\(|\.delete\(/,
   "V3 cloud adapter cannot fall back to an unconditional public write");
-console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, media privacy, schema fail-close, provider separation.");
+console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, local-byte guard, signed-URL stripping, account privacy, schema fail-close.");
