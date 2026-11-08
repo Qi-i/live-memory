@@ -528,7 +528,7 @@ export function ImportDrawer({ onClose, onSave, flash }: { onClose: () => void; 
   return (
     <div ref={importRef} className="overlay-backdrop" onClick={loading ? undefined : requestClose}>
       <aside className="import-drawer-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
-        <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2><small>先识别并核对草稿，再逐条加入私人档案。</small></div><button type="button" aria-label="关闭批量导入" disabled={loading} onClick={requestClose}><X /></button></header>
+        <header className="editor-header-v2"><div><span>BATCH IMPORT</span><h2>批量添加</h2><small>链接与截图先核对草稿；海报导入会直接保存至档案。</small></div><button type="button" aria-label="关闭批量导入" disabled={loading} onClick={requestClose}><X /></button></header>
         <textarea value={text} onChange={(event) => setText(event.target.value)} placeholder="粘贴大麦、纷玩岛、票星球演出链接，或票务页文字。也可直接使用下方截图识别。" />
         <div className="import-actions-v2"><button className="button primary" disabled={loading || !text.trim()} type="button" onClick={() => void parse()}>{loading ? <Loader2 className="spin" /> : <Sparkles />}识别链接/文字</button><label className="button ghost"><ImagePlus />截图识别<input type="file" accept="image/*" multiple onChange={(event) => void importScreenshots(event.target.files)} /></label><label className="button ghost"><Upload />海报导入<input type="file" accept="image/*" multiple onChange={(event) => void importImages(event.target.files)} /></label>{ocrProgress && <span className="import-ocr-progress-v2">{ocrProgress}</span>}</div>
         {importError && <p className="import-error-v3" role="alert">{importError}</p>}
