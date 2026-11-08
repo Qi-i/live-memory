@@ -4,7 +4,7 @@ import {
   type StagePoster, type StatusHistoryItem,
 } from "./WorkspaceShell";
 import type { SyncActivity } from "../../core/sync/policy";
-import { seedRecords } from "../../seeds";
+import { demoPosters } from "./demoData";
 import "./preview.css";
 
 const cityCounts = [
@@ -17,15 +17,7 @@ const history: StatusHistoryItem[] = [
   { id: "b", time: "上一次同步", activity: { type: "transferred", direction: "push", changedRecords: 2 } },
 ];
 
-const posters: StagePoster[] = seedRecords
-  .filter((record) => record.media.some((asset) => asset.kind === "poster"))
-  .slice(0, 8)
-  .map((record) => ({
-    id: record.id,
-    title: record.title,
-    city: record.city,
-    src: record.media.find((asset) => asset.kind === "poster")?.src,
-  }));
+const posters: StagePoster[] = demoPosters;
 
 const navigation = ["档案", "统计", "地图", "设置", "管理"];
 const modes = ["海报", "时间线", "城市/场馆", "汇总", "列表"];
