@@ -703,6 +703,8 @@ await archiveView("海报", ".archive-poster-card");
   await localPage.locator(".overlay-header-v2 > button").first().click();
   await localPage.reload({ waitUntil: "domcontentloaded" });
   await localPage.locator(".archive-poster-card").filter({ hasText: "本机存储回归测试现场" }).waitFor({ state: "visible", timeout: 15000 });
+  const emptyHeroHeight = await localPage.locator(".archive-highlight-empty").evaluate((element) => element.getBoundingClientRect().height);
+  if (emptyHeroHeight > 135) throw new Error("No-poster local archive still wastes space on a giant placeholder: " + emptyHeroHeight);
   const deviceFlag = await localPage.evaluate(() => localStorage.getItem("live-memory-device-only-v1"));
   if (deviceFlag !== "1") throw new Error("Standalone local archive did not preserve its persistent mode flag");
   await localPage.screenshot({ path: outputDir + "/18-device-local-reopened-mobile.png", fullPage: true });

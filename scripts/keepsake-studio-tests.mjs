@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 const card = await readFile(new URL("../src/keepsakeStudio.tsx", import.meta.url), "utf8");
 const cardCss = await readFile(new URL("../src/keepsakeStudio.css", import.meta.url), "utf8");
 const app = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
+const statsCss = await readFile(new URL("../src/statsPage.css", import.meta.url), "utf8");
 const detail = await readFile(new URL("../src/overlays.tsx", import.meta.url), "utf8");
 const stats = await readFile(new URL("../src/statsPage.tsx", import.meta.url), "utf8");
 
@@ -17,6 +18,9 @@ assert.match(card, /URL\.revokeObjectURL/);
 assert.match(card, /if \(cancelled\) return/, "Do not apply stale account preview after unmount");
 assert.match(card, /safeImage\(primaryMedia\(record, \["poster"/);
 assert.match(card, /drawContainedImage/, "Do not flatten vertical posters into horizontal strips");
+assert.match(card, /const columns = 3, rows = tall \? 2 : 1/, "Portrait posters should never be collapsed into wide recap strips");
+assert.match(card, /const cardWidth = \(928 - gap \* \(columns - 1\)\) \/ columns/);
+assert.match(statsCss, /\.statistics-panel \{ min-height: 0; padding: 14px; \}/, "Mobile stats cards should size to their content");
 assert.doesNotMatch(card, /record\.seat|record\.price|record\.note|record\.companions/);
 assert.match(card, /隐私保护/);
 assert.match(card, /kind === "record"/);
