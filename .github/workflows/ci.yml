@@ -48,6 +48,7 @@ jobs:
         env:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_V3_PREVIEW: ${{ github.head_ref == 'refactor/core-v3-architecture-20261108' && '1' || '0' }}
       - name: Start preview
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/live-memory-preview.log 2>&1 &
@@ -59,6 +60,8 @@ jobs:
           exit 1
       - name: Capture responsive visual audit
         run: node scripts/visual-audit.mjs
+        env:
+          V3_PREVIEW_AUDIT: ${{ github.head_ref == 'refactor/core-v3-architecture-20261108' && '1' || '0' }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
