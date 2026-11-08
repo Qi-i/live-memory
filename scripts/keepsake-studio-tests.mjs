@@ -1,0 +1,30 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const card = await readFile(new URL("../src/keepsakeStudio.tsx", import.meta.url), "utf8");
+const cardCss = await readFile(new URL("../src/keepsakeStudio.css", import.meta.url), "utf8");
+const app = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
+const detail = await readFile(new URL("../src/overlays.tsx", import.meta.url), "utf8");
+const stats = await readFile(new URL("../src/statsPage.tsx", import.meta.url), "utf8");
+
+assert.match(card, /1080/);
+assert.match(card, /1920\s*:\s*1350/);
+assert.match(card, /canvas\.toBlob/);
+assert.match(card, /loadMediaImage\(media\)/, "Use existing account-aware media cache before export");
+assert.match(card, /navigator\.share/);
+assert.match(card, /new File\(\[imageBlob\]/);
+assert.match(card, /URL\.revokeObjectURL/);
+assert.match(card, /if \(cancelled\) return/, "Do not apply stale account preview after unmount");
+assert.match(card, /safeImage\(primaryMedia\(record, \["poster"/);
+assert.match(card, /drawContainedImage/, "Do not flatten vertical posters into horizontal strips");
+assert.doesNotMatch(card, /record\.seat|record\.price|record\.note|record\.companions/);
+assert.match(card, /隐私保护/);
+assert.match(card, /kind === "record"/);
+assert.match(card, /kind === "recap"/);
+assert.match(detail, /生成单场纪念分享图/);
+assert.match(stats, /生成回顾分享图/);
+assert.match(app, /<KeepsakeStudio subject=\{keepsakeSubject\}/);
+assert.match(app, /setKeepsakeSubject\(null\).*access\.user\?\.id, isGuest/s);
+assert.match(cardCss, /max-width:\s*760px/);
+assert.match(cardCss, /max-height:\s*49dvh/);
+console.log("Private keepsake studio contracts passed: two 1080px exports, privacy by default, cached posters, mobile layout, share and account isolation.");
