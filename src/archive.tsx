@@ -142,6 +142,7 @@ export function ArchivePage({
   const resetFilters = () => { setFilters({ ...emptyFilters }); setFavoritesOnly(false); };
 
   useEffect(() => {
+    if (shareMode) return;
     const focusSearch = (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.altKey || event.shiftKey) return;
       const target = event.target instanceof Element ? event.target : null;
@@ -154,7 +155,7 @@ export function ArchivePage({
     };
     window.addEventListener("keydown", focusSearch);
     return () => window.removeEventListener("keydown", focusSearch);
-  }, []);
+  }, [shareMode]);
 
   useEffect(() => {
     const open = (event: globalThis.MouseEvent) => {
