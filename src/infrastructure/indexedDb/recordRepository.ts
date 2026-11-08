@@ -25,11 +25,13 @@ export class IndexedDbRecordRepository implements RecordRepository {
     return new Promise((resolve, reject) => {
       const tx = db.transaction(RECORD_STORE, "readonly");
       const req = tx.objectStore(RECORD_STORE).getAll();
-      req.onsuccess = () => resolve(
-        (req.result as EventRecord[]).map(normalizeRecord).sort((a, b) => b.date.localeCompare(a.date)),
-      );
-      req.onerror = () => reject(req.error ?? new Error("Unable to load scoped records"));
-      tx.onabort = () => reject(tx.error ?? new Error("Record read aborted"));
+      let value: EventRecord[] = [];
+      req.onsuccess = () => {
+        value = (req.result as EventRecord[]).map(normalizeRecord).sort((a, b) => b.date.localeCompare(a.date));
+      };
+      tx.oncomplete = () => { db.close(); resolve(value); };
+      tx.onabort = () => { db.close(); reject(tx.error ?? new Error("Record read aborted")); };
+      tx.onerror = () => { db.close(); reject(tx.error ?? new Error("Record read failed")); };
     });
   }
 
@@ -38,9 +40,9 @@ export class IndexedDbRecordRepository implements RecordRepository {
     this.checkScope();
     return new Promise((resolve, reject) => {
       const tx = db.transaction(RECORD_STORE, "readwrite");
-      tx.oncomplete = () => resolve();
-      tx.onabort = () => reject(tx.error ?? new Error("Record write aborted"));
-      tx.onerror = () => reject(tx.error ?? new Error("Record write failed"));
+      tx.oncomplete = () => { db.close(); resolve(); };
+      tx.onabort = () => { db.close(); reject(tx.error ?? new Error("Record write aborted")); };
+      tx.onerror = () => { db.close(); reject(tx.error ?? new Error("Record write failed")); };
       // The transaction has been opened after the scope assertion. Even if
       // navigation changes scopes meanwhile, its store is tied to the old DB.
       tx.objectStore(RECORD_STORE).put(normalizeRecord(record));
@@ -80,15 +82,15 @@ export class IndexedDbRecordRepository implements RecordRepository {
       };
 
       tx.oncomplete = () => {
+        db.close();
         if (!planned) {
           reject(new Error("Remote batch finished without a validated write plan"));
           return;
         }
         resolve(planned);
       };
-      req.onerror = () => reject(req.error ?? new Error("Unable to read current record revisions"));
-      tx.onabort = () => reject(tx.error ?? new Error("Remote batch transaction aborted"));
-      tx.onerror = () => reject(tx.error ?? new Error("Remote batch transaction failed"));
+      tx.onabort = () => { db.close(); reject(tx.error ?? new Error("Remote batch transaction aborted")); };
+      tx.onerror = () => { db.close(); reject(tx.error ?? new Error("Remote batch transaction failed")); };
     });
   }
 
