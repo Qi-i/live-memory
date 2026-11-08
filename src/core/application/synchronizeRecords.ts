@@ -107,7 +107,7 @@ export async function synchronizeRecords(
     uploadedIds.push(candidate.record.id);
     // The server may have normalized media references. Apply its response only
     // if there has been no new local edit in the meantime.
-    const confirmed = await local.applyRemoteIfUnchanged(snapshot, [acknowledged.record]);
+    const confirmed = await local.applyRemoteIfUnchanged(snapshot, [acknowledged.record], { includeMedia: cloud.includeMedia });
     if (confirmed.deferredIds.length) confirmed.deferredIds.forEach((id) => deferred.add(id));
     toAcknowledge.push({
       id: candidate.record.id,
@@ -116,7 +116,7 @@ export async function synchronizeRecords(
   }
 
   if (downloadCandidates.length) {
-    const accepted = await local.applyRemoteIfUnchanged(snapshot, downloadCandidates);
+    const accepted = await local.applyRemoteIfUnchanged(snapshot, downloadCandidates, { includeMedia: cloud.includeMedia });
     downloadedIds.push(...accepted.acceptedIds);
     accepted.deferredIds.forEach((id) => deferred.add(id));
     for (const acceptedId of accepted.acceptedIds) {
