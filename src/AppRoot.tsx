@@ -196,6 +196,7 @@ export default function AppRoot() {
       )}
       {route === "archive" && (
         <ArchivePage
+          key={access.user?.id || (isGuest ? "guest" : "local")}
           records={activeRecords}
           settings={settings}
           layout={layout}
