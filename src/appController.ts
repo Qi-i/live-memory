@@ -221,6 +221,7 @@ export function useAppController() {
     if (hasPersonalCloudConnection(settings) && personalCloudStatus === "connected") return true;
     if (personalCloudRecoveryInFlight.current) return false;
     personalCloudRecoveryInFlight.current = true;
+    const recoveryScope = currentStorageScope();
     setPersonalCloudStatus("reconnect-needed");
     const delays = [0, 650, 1800];
     let lastError: unknown = null;
@@ -229,12 +230,15 @@ export function useAppController() {
         if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
         try {
           const connected = await signInStorageWithAccount(settings);
+          if (currentStorageScope() !== recoveryScope) return false;
           const connectedSettings = writeSettings(connected.settings);
           let nextRecords = recordsRef.current;
           if (connectedSettings.supabase.syncMedia) {
             const restored = await restorePersonalCloudMedia(connectedSettings, nextRecords);
+            if (currentStorageScope() !== recoveryScope) return false;
             nextRecords = restored.records;
             await replaceAllRecords(nextRecords);
+            if (currentStorageScope() !== recoveryScope) return false;
             setRecords(nextRecords);
             void preloadRecordMedia(nextRecords);
             lastMediaRefreshAt.current = Date.now();
@@ -248,11 +252,12 @@ export function useAppController() {
           lastError = error;
         }
       }
+      if (currentStorageScope() !== recoveryScope) return false;
       setPersonalCloudStatus("reconnect-needed");
       if (!silent && lastError) flash(friendlySupabaseErrorMessage(lastError, "个人云端恢复失败"));
       return false;
     } finally {
-      personalCloudRecoveryInFlight.current = false;
+      if (currentStorageScope() === recoveryScope) personalCloudRecoveryInFlight.current = false;
     }
   }
 
@@ -277,16 +282,20 @@ export function useAppController() {
     if (!hasAccountCloudConfig(settings) && !hasPersonalCloudConnection(settings)) return;
     const fingerprint = autoSyncFingerprint(records, settings);
     if (lastSyncFingerprint.current === fingerprint) return;
+    const syncScope = currentStorageScope();
     const timer = window.setTimeout(() => {
+      if (currentStorageScope() !== syncScope) return;
       lastSyncFingerprint.current = fingerprint;
       syncOperationInFlight.current = true;
       setSyncing(true);
       autoSyncAll(settings, recordsRef.current)
         .then(async (result) => {
+          if (currentStorageScope() !== syncScope) return;
           setSyncConflicts(result.conflicts);
           const nextFingerprint = autoSyncFingerprint(result.records, settings);
           if (nextFingerprint !== fingerprint) {
             await replaceAllRecords(result.records);
+            if (currentStorageScope() !== syncScope) return;
             setRecords(result.records);
           }
           lastSyncFingerprint.current = nextFingerprint;
@@ -295,10 +304,15 @@ export function useAppController() {
           if (result.message) flash(result.message);
         })
         .catch((error) => {
+          if (currentStorageScope() !== syncScope) return;
           lastSyncFingerprint.current = "";
           flash(friendlySupabaseErrorMessage(error, "云同步暂时不可用"));
         })
-        .finally(() => { syncOperationInFlight.current = false; setSyncing(false); });
+        .finally(() => {
+          if (currentStorageScope() !== syncScope) return;
+          syncOperationInFlight.current = false;
+          setSyncing(false);
+        });
     }, 900);
     return () => window.clearTimeout(timer);
   }, [access.user, editing, isGuest, records, settings, syncing]);
