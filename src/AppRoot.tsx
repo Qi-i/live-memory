@@ -125,7 +125,6 @@ export default function AppRoot() {
   const watchedCount = activeRecords.filter((record) => effectiveStatus(record) === "watched").length;
   const cityCount = new Set(activeRecords.map((record) => record.city).filter(Boolean)).size;
   const yearCount = new Set(activeRecords.map((record) => record.date.slice(0, 4))).size;
-  const archiveMediaKey = useMemo(() => activeRecords.flatMap((record) => record.media.map((asset) => `${asset.id}:${asset.src}`)).join("|"), [activeRecords]);
   const metrics = useMemo(() => {
     if (route === "archive") return [
       { value: activeRecords.length, label: "记录" },
@@ -197,7 +196,6 @@ export default function AppRoot() {
       )}
       {route === "archive" && (
         <ArchivePage
-          key={archiveMediaKey}
           records={activeRecords}
           settings={settings}
           layout={layout}
