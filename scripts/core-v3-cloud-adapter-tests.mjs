@@ -20,9 +20,16 @@ class FakeRpc {
   calls=[];
   from(table) {
     this.calls.push(["select",table]);
-    return {select:async columns=>{
+    return {select:columns=>{
       assert.equal(columns,"id,payload,v3_revision");
-      return {data:[...this.rows.values()],error:null};
+      return {order:(key,options)=>{
+        assert.equal(key,"id");
+        assert.equal(options.ascending,true);
+        return {range:async (start,end)=>{
+          const sorted=[...this.rows.values()].sort((a,b)=>a.id.localeCompare(b.id));
+          return {data:sorted.slice(start,end+1),error:null};
+        }};
+      }};
     }};
   }
   async rpc(name,args) {
@@ -70,6 +77,18 @@ assert.deepEqual(backup.record.media,[],"Text cloud must strip private ticket da
 assert.equal(accountClient.calls.at(-1)[1],"live_memory_v3_cas_account");
 assert.equal(account.includeMedia,false);
 assert.equal((await account.list()).length,1);
+
+// The adapter must fetch every page; a provider limit cannot erase archives.
+const many=new FakeRpc();
+for(let index=0; index<1007; index++){
+  const id="bulk-"+String(index).padStart(4,"0");
+  many.rows.set(id,{id,payload:{...record,id,media:[]},v3_revision:1});
+}
+const all=await new adapter.SupabaseV3RecordAdapter(
+  many,"account","auth-user","account-test",
+).list();
+assert.equal(all.length,1007,"Every record across 3 server pages must be returned");
+assert.equal(new Set(all.map(row=>row.record.id)).size,1007);
 
 const missingRevision=new FakeRpc();
 missingRevision.rows.set(record.id,{id:record.id,payload:record});
