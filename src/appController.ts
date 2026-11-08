@@ -94,6 +94,7 @@ export function useAppController() {
   const [busy, setBusy] = useState(false);
   const [toast, setToast] = useState("");
   const initialized = useRef(false);
+  const activeControllerScope = useRef<string | null>(null);
   const lastSyncFingerprint = useRef("");
   const toastTimer = useRef<number | null>(null);
   const recordsRef = useRef<EventRecord[]>([]);
@@ -115,6 +116,19 @@ export function useAppController() {
     let active = true;
     const sessionScope = currentStorageScope();
     initialized.current = false;
+    if (activeControllerScope.current !== sessionScope) {
+      activeControllerScope.current = sessionScope;
+      // Never retain another account's record details, draft or visible results.
+      recordsRef.current = [];
+      setRecordState([]);
+      setSettings(defaultSettings);
+      setSelected(null);
+      setEditing(null);
+      setImportOpen(false);
+      setZoomMedia(null);
+      setSyncConflicts([]);
+      setCloudRecoveryNotice("");
+    }
     // Invalidate requests from the previous account before new hydration.
     syncOperationInFlight.current = false;
     mediaRefreshInFlight.current = false;
