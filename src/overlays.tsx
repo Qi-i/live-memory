@@ -310,7 +310,7 @@ export function RecordEditor({
           <EditorField label="公开票价"><input value={draft.publicPriceRange || ""} onChange={(event) => setDraft({ ...draft, publicPriceRange: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="座位"><input value={draft.seat || ""} onChange={(event) => setDraft({ ...draft, seat: event.target.value })} /></EditorField>
           <EditorField className="is-wide" label="同行人"><input value={draft.companions.join(" / ")} onChange={(event) => setDraft({ ...draft, companions: splitTextList(event.target.value) })} /></EditorField>
-          <EditorField className="is-wide" label="票务链接 / 来源">
+          <EditorField className="is-wide" label="票务链接 / 来源" asGroup>
             <div className="editor-source-import-v2">
               <input value={draft.sourceUrl || ""} onChange={(event) => setDraft({ ...draft, sourceUrl: event.target.value })} placeholder="粘贴大麦、纷玩岛或票星球演出链接" />
               <button className="button ghost" type="button" disabled={recognizing || !draft.sourceUrl?.trim()} onClick={() => void recognizeSourceLink()}>{recognizing ? <Loader2 className="spin" /> : <Sparkles />}识别链接</button>
@@ -346,7 +346,10 @@ function EditorSection({ id, number, title, description, children }: { id: strin
   return <section id={id} className="editor-section-v3"><header><span>{number} / SECTION</span><h3>{title}</h3><p>{description}</p></header><div className="editor-section-fields-v3">{children}</div></section>;
 }
 
-function EditorField({ label, className = "", children }: { label: string; className?: string; children: ReactNode }) { return <label className={`editor-field-v2 ${className}`}><span>{label}</span>{children}</label>; }
+function EditorField({ label, className = "", children, asGroup = false }: { label: string; className?: string; children: ReactNode; asGroup?: boolean }) {
+  if (asGroup) return <div className={`editor-field-v2 ${className}`} role="group" aria-label={label}><span>{label}</span>{children}</div>;
+  return <label className={`editor-field-v2 ${className}`}><span>{label}</span>{children}</label>;
+}
 
 function mergeImportDraftIntoRecord(record: EventRecord, imported: ImportDraft): EventRecord {
   const reliable = imported.importConfidence >= 0.4;
