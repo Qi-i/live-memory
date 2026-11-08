@@ -8,7 +8,7 @@ const browser = await chromium.launch({ headless: true });
 let failures = [];
 try {
   for (const [width, height] of [[360, 780], [390, 844], [768, 1024], [1024, 820], [1600, 900]]) {
-    const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: "block" });
+    const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: "block", acceptDownloads: true });
     const page = await context.newPage();
     const errors = [];
     const unexpectedRequests = [];
@@ -139,6 +139,60 @@ try {
     await editExisting.waitFor({ state: "detached" });
     await page.getByRole("button", { name: "列表", exact: true }).click();
     await page.getByRole("cell", { name: "已编辑的临时演出" }).waitFor({ state: "visible" });
+
+    // One complete task flow verifies the public preview is operable, not just
+    // a screenshot. No personal account, database, or remote endpoint is used.
+    if (width === 390) {
+      await page.getByRole("button", { name: "新增记录", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "新增演示记录" });
+      await editor.waitFor({ state: "visible" });
+      await editor.getByLabel("演出名称").fill("独立预览的新现场");
+      await editor.getByLabel("城市").fill("北京");
+      await editor.getByLabel("艺人").fill("演示艺人");
+      await editor.getByRole("button", { name: "保存演示记录" }).click();
+      await editor.waitFor({ state: "detached" });
+      await page.locator(".v3-preview-topbar-stats").getByText("8").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "海报", exact: true }).click();
+      const addedPoster = page.locator(".v3-demo-poster-grid button").filter({ hasText: "独立预览的新现场" });
+      await addedPoster.waitFor({ state: "visible" });
+      await addedPoster.click();
+      const detail = page.getByRole("dialog", { name: /独立预览的新现场详情/ });
+      await detail.waitFor({ state: "visible" });
+      await detail.getByRole("button", { name: "编辑演示记录" }).click();
+      const editing = page.getByRole("dialog", { name: "编辑演示记录" });
+      await editing.getByLabel("演出名称").fill("独立预览的新现场 · 已编辑");
+      await editing.getByRole("button", { name: "保存演示记录" }).click();
+      await page.locator(".v3-demo-poster-grid").getByText("独立预览的新现场 · 已编辑").waitFor({ state: "visible" });
+
+      await page.getByRole("button", { name: "时间线", exact: true }).click();
+      await page.locator(".v3-demo-timeline").getByText("独立预览的新现场 · 已编辑").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "列表", exact: true }).click();
+      await page.locator(".v3-demo-table-scroll").getByText("独立预览的新现场 · 已编辑").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "统计", exact: true }).click();
+      await page.getByRole("group", { name: "统计年份" }).waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "档案", exact: true }).click();
+      await page.getByRole("button", { name: "更多操作" }).click();
+      await page.getByRole("button", { name: "分享预览" }).click();
+      await page.getByRole("dialog", { name: "分享预览" }).getByRole("button", { name: "生成 4:5 PNG" }).click();
+      const png = page.getByRole("img", { name: "4:5演示回顾PNG预览" });
+      await png.waitFor({ state: "visible", timeout: 15000 });
+      const dims = await png.evaluate(image => ({ width: image.naturalWidth, height: image.naturalHeight }));
+      if (dims.width !== 1080 || dims.height !== 1350) throw Error("Share PNG has wrong dimensions: " + JSON.stringify(dims));
+      const downloaded = page.waitForEvent("download", { timeout: 10000 });
+      await page.getByRole("button", { name: "保存 PNG 图片" }).click();
+      const download = await downloaded;
+      if (!download.suggestedFilename().endsWith(".png")) throw Error("Share export did not download PNG");
+      await page.getByRole("button", { name: "返回预览" }).click();
+      await page.getByRole("button", { name: "导入", exact: true }).click();
+      await page.getByRole("dialog", { name: "导入说明" }).getByRole("button", { name: "导入预置演示记录" }).click();
+      await page.getByRole("button", { name: "海报", exact: true }).click();
+      await page.locator(".v3-demo-poster-grid").getByText("夜色音乐会 · 导入演示").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "设置", exact: true }).click();
+      await page.getByRole("button", { name: /Editorial/ }).click();
+      const style = await page.locator('[data-ui-system="v3"]').getAttribute("data-v3-surface");
+      if (style !== "editorial") throw Error("Theme selector did not actually change the shell");
+      await page.screenshot({ path: out + "/interactive-390.png", fullPage: true });
+    }
     if (errors.length) throw Error("Browser errors: " + errors.join(" | "));
     if (unexpectedRequests.length) throw Error("Standalone preview contacted an external service: " + unexpectedRequests.join(" | "));
     await context.close();
