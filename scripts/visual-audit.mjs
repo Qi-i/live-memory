@@ -874,6 +874,18 @@ await archiveView("海报", ".archive-poster-card");
         if (Math.abs(afterY - beforeY) > 1) {
           throw new Error("V3 sync event moved the content region by " + (afterY - beforeY) + "px");
         }
+      } else {
+        const beforeY = await v3Page.locator(".v3-stage-hero").evaluate((el) => el.getBoundingClientRect().top);
+        await v3Page.getByRole("button", { name: "模拟冲突" }).click();
+        await v3Page.locator(".v3-mobile-status").getByRole("button", { name: "查看同步状态" }).click();
+        await v3Page.locator(".v3-mobile-status .v3-status-history").waitFor({ state: "visible" });
+        const statusBox = await v3Page.locator(".v3-mobile-status .v3-status-history").boundingBox();
+        if (!statusBox || statusBox.x < 0 || statusBox.x + statusBox.width > width + 1) {
+          throw new Error("V3 mobile status panel exceeds viewport: " + JSON.stringify(statusBox));
+        }
+        const afterY = await v3Page.locator(".v3-stage-hero").evaluate((el) => el.getBoundingClientRect().top);
+        if (Math.abs(afterY - beforeY) > 1) throw new Error("V3 mobile sync panel shifted main content");
+        await v3Page.locator(".v3-mobile-status").getByRole("button", { name: "查看同步状态" }).click();
       }
 
       await v3Page.screenshot({ path: outputDir + "/23-v3-shell-" + width + ".png", fullPage: true });
