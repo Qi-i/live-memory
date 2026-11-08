@@ -781,6 +781,27 @@ await archiveView("海报", ".archive-poster-card");
     throw new Error("Clearing filters did not restore all saved and imported records");
   }
 
+  // Theme switching must work on the same device without changing archive data.
+  await localPage.locator(".experience-mobile-nav button").filter({ hasText: "设置" }).click();
+  await localPage.getByRole("button", { name: "深色", exact: true }).click();
+  await localPage.getByRole("button", { name: /Liquid Stage · 液态舞台/ }).click();
+  const darkTheme = await localPage.evaluate(() => ({
+    appearance: document.documentElement.dataset.appearance,
+    theme: document.documentElement.dataset.visualTheme,
+  }));
+  if (darkTheme.appearance !== "dark" || darkTheme.theme !== "aurora") {
+    throw new Error("Dark Liquid Stage theme did not activate: " + JSON.stringify(darkTheme));
+  }
+  await localPage.screenshot({ path: outputDir + "/21-liquid-stage-dark-mobile.png", fullPage: true });
+  await localPage.getByRole("button", { name: /Editorial · 纸质画册/ }).click();
+  const editorial = await localPage.locator(".experience-topbar").evaluate((element) => ({
+    theme: document.documentElement.dataset.visualTheme,
+    filter: getComputedStyle(element).backdropFilter,
+  }));
+  if (editorial.theme !== "editorial" || editorial.filter !== "none") {
+    throw new Error("Editorial did not remove glass effect: " + JSON.stringify(editorial));
+  }
+  await localPage.screenshot({ path: outputDir + "/22-editorial-dark-mobile.png", fullPage: true });
   await localContext.close();
 } finally {
   await browser.close();
