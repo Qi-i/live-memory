@@ -78,6 +78,9 @@ export async function synchronizeRecords(
       case "push":
         if (onDevice) toUpload.push({ record: onDevice, expected: envelope?.serverRevision ?? null });
         break;
+      case "defer-absence":
+        deferred.add(id);
+        break;
       case "conflict":
       case "unbased-divergence":
         if (onDevice && inCloud) reviews.push({ recordId: id, action: decision.action, local: onDevice, remote: inCloud });
