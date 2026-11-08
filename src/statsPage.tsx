@@ -26,43 +26,81 @@ import {
 } from "./adminApi";
 import "./refinementV3.css";
 import "./refinementV3Hotfix.css";
-import "./refinementV3Hotfix.css";
 
-export function StatsPage({ records, onShare }: { records: EventRecord[]; onShare: () => void }) {
-  const watched = records.filter((record) => effectiveStatus(record) === "watched");
-  const planned = records.filter((record) => effectiveStatus(record) !== "watched");
-  const totalPrice = watched.reduce((sum, record) => sum + (record.price || 0), 0);
-  const averagePrice = Math.round(totalPrice / Math.max(1, watched.filter((record) => record.price).length));
-  const years = unique(records.map((record) => record.date.slice(0, 4))).sort();
-  const monthly = useMemo(() => countRows(watched.map((record) => record.date.slice(0, 7)), 12), [watched]);
-  const artists = useMemo(() => countRows(records.flatMap((record) => record.artists), 10), [records]);
-  const cities = useMemo(() => countRows(records.map((record) => record.city).filter(Boolean), 10), [records]);
-  const categories = useMemo(() => countRows(records.map((record) => categoryLabels[record.category]), 10), [records]);
+export function StatsPage({ records, onShare }: { records: EventRecord[]; onShare: (records: EventRecord[]) => void }) {
+  const [selectedYear, setSelectedYear] = useState("all");
+  const years = useMemo(() => unique(records.map((record) => record.date.slice(0, 4)).filter((year) => /^\d{4}$/.test(year))).sort((a, b) => b.localeCompare(a)), [records]);
+  useEffect(() => {
+    if (selectedYear !== "all" && !years.includes(selectedYear)) setSelectedYear("all");
+  }, [selectedYear, years]);
+  const scopedRecords = useMemo(() =>
+    selectedYear === "all" ? records : records.filter((record) => record.date.startsWith(selectedYear + "-")),
+  [records, selectedYear]);
+  // A cancelled/refunded ticket does not count as an attended concert, even
+  // if its planned date has passed and effectiveStatus would otherwise be watched.
+  const watched = useMemo(() => scopedRecords.filter((record) =>
+    effectiveStatus(record) === "watched" && record.recordState !== "cancelled" && record.recordState !== "refunded",
+  ), [scopedRecords]);
+  const planned = scopedRecords.filter((record) =>
+    effectiveStatus(record) !== "watched" && record.recordState !== "cancelled" && record.recordState !== "refunded");
+  const priced = watched.filter((record) => record.price != null && Number.isFinite(record.price));
+  const totalPrice = priced.reduce((sum, record) => sum + Number(record.price), 0);
+  const averagePrice = priced.length ? totalPrice / priced.length : 0;
+  const formatMoney = (value: number) => new Intl.NumberFormat("zh-CN", { maximumFractionDigits: 2 }).format(value);
+  const monthly = useMemo(() => monthlyTrend(watched, selectedYear), [watched, selectedYear]);
+  const artists = useMemo(() => countRows(watched.flatMap((record) => record.artists), 10), [watched]);
+  const cities = useMemo(() => countRows(watched.map((record) => record.city).filter(Boolean), 10), [watched]);
+  const categories = useMemo(() => countRows(scopedRecords.map((record) => categoryLabels[record.category]), 10), [scopedRecords]);
+  const periodLabel = selectedYear === "all" ? "全部年份" : selectedYear + " 年";
 
   return (
     <section className="statistics-page">
-      <header className="statistics-share-heading"><div><span>YOUR LIVE STORY</span><h2>我的现场履历</h2><p>数据属于自己，回忆也应该能随时带走。</p></div><button type="button" onClick={onShare}><Share2 />生成回顾分享图</button></header>
-      <div className="statistics-metrics">
-        <Metric value={records.length} label="总记录" hint={years.length ? `${years[0]}—${years[years.length - 1]}` : "尚无档案"} />
-        <Metric value={watched.length} label="已看" hint="完成观演" accent />
-        <Metric value={planned.length} label="待看/想看" hint="未来计划" />
-        <Metric value={`¥${totalPrice}`} label="累计票价" hint={`均价 ¥${averagePrice || 0}`} accent />
+      <header className="statistics-share-heading">
+        <div><span>YOUR LIVE STORY</span><h2>我的现场履历</h2><p>按年份回看演出，生成与当前筛选一致的个人回顾图。</p></div>
+        <button type="button" onClick={() => onShare(scopedRecords)}><Share2 />生成回顾分享图</button>
+      </header>
+      <div className="statistics-period-toolbar">
+        <div><span>TIME FILTER</span><strong>观演年份</strong></div>
+        <div className="statistics-year-options" role="group" aria-label="选择统计年份">
+          <button type="button" aria-pressed={selectedYear === "all"} className={selectedYear === "all" ? "is-active" : ""} onClick={() => setSelectedYear("all")}>全部 <small>{records.length}</small></button>
+          {years.map((year) => (
+            <button type="button" key={year} aria-pressed={selectedYear === year} className={selectedYear === year ? "is-active" : ""} onClick={() => setSelectedYear(year)}>
+              {year} <small>{records.filter((record) => record.date.startsWith(year + "-")).length}</small>
+            </button>
+          ))}
+        </div>
       </div>
-
+      <div className="statistics-metrics" aria-label={periodLabel + "观演概况"}>
+        <Metric value={scopedRecords.length} label="收录记录" hint={periodLabel} />
+        <Metric value={watched.length} label="已看" hint="不含取消和退款" accent />
+        <Metric value={planned.length} label="待看/想看" hint="不含取消和退款" />
+        <Metric value={\`¥\${formatMoney(totalPrice)}\`} label="已看票价" hint={priced.length ? \`均价 ¥\${formatMoney(averagePrice)}\` : "暂无票价数据"} accent />
+      </div>
       <div className="statistics-grid">
-        <BarPanel title="每月观演" description="最近 12 个有记录的月份" rows={monthly} />
-        <BarPanel title="常看艺人" description="按档案出现次数统计" rows={artists} />
-        <BarPanel title="城市足迹" description="现场发生在哪些城市" rows={cities} />
-        <BarPanel title="演出类型" description="档案类型结构" rows={categories} />
+        <BarPanel title="每月观演" description={selectedYear === "all" ? "最近 12 个自然月 · 按时间排序" : selectedYear + " 年 1—12 月"} rows={monthly} />
+        <BarPanel title="常看艺人" description="仅统计实际观演" rows={artists} />
+        <BarPanel title="城市足迹" description="仅统计已到访的现场" rows={cities} />
+        <BarPanel title="演出类型" description="当前年份内全部档案" rows={categories} />
       </div>
-
       <section className="statistics-story">
-        <span>MEMORY PROFILE</span>
-        <h2>{profileSentence(records, watched, cities, artists)}</h2>
-        <p>所有统计来自当前档案。可以生成独立的个人回顾图，不会包含票价、座位等隐私信息。</p>
+        <span>MEMORY PROFILE · {periodLabel}</span>
+        <h2>{profileSentence(scopedRecords, watched, cities, artists)}</h2>
+        <p>统计数据来自当前档案。取消和退款的演出不计入已看记录；分享图默认不包含票价、座位或个人备注。</p>
       </section>
     </section>
   );
+}
+
+function monthlyTrend(records: EventRecord[], year: string): [string, number][] {
+  const now = new Date();
+  const end = year === "all" ? new Date(now.getFullYear(), now.getMonth(), 1) : new Date(Number(year), 11, 1);
+  const counts = new Map<string, number>();
+  for (const record of records) counts.set(record.date.slice(0, 7), (counts.get(record.date.slice(0, 7)) || 0) + 1);
+  return Array.from({ length: 12 }, (_, index) => {
+    const month = new Date(end.getFullYear(), end.getMonth() - 11 + index, 1);
+    const key = month.getFullYear() + "-" + String(month.getMonth() + 1).padStart(2, "0");
+    return [key, counts.get(key) || 0];
+  });
 }
 
 function Metric({ value, label, hint, accent }: { value: string | number; label: string; hint: string; accent?: boolean }) {
@@ -80,7 +118,8 @@ function BarPanel({ title, description, rows }: { title: string; description: st
 }
 
 function profileSentence(records: EventRecord[], watched: EventRecord[], cities: [string, number][], artists: [string, number][]) {
-  if (!records.length) return "你的现场画像会随着档案逐渐形成。";
+  if (!records.length) return "这段时间还没有演出记录。";
+  if (!watched.length) return "这一阶段尚未留下已完成的观演现场。";
   const city = cities[0]?.[0] || "不同城市";
   const artist = artists[0]?.[0] || "不同艺人";
   return `你已经完成 ${watched.length} 次演出记录，最常抵达 ${city}，档案中出现最多的是 ${artist}。`;
