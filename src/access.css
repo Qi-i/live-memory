@@ -163,3 +163,27 @@
   .access-guest { grid-template-columns: 1fr; }
   .access-guest button { justify-content: center; }
 }
+
+
+/* Local-first entry: a durable private archive, distinct from throwaway guest demo. */
+.access-device {
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 12px;
+  align-items: center; margin: 18px 0 10px; padding: 15px;
+  border: 1px solid #9ccec0; border-radius: 15px;
+  background: linear-gradient(120deg, #e8f6f0, #f3faf6);
+}
+.access-device > div { display: grid; grid-template-columns: 27px minmax(0, 1fr); gap: 10px; align-items: start; }
+.access-device > div > svg { width: 22px; height: 22px; margin-top: 3px; color: #147c6d; }
+.access-device span { display: grid; gap: 5px; }
+.access-device strong { color: #125d50; font-size: 13px; line-height: 1.4; }
+.access-device small { color: #51736b; font-size: 12px; line-height: 1.5; }
+.access-device button {
+  display: inline-flex; min-height: 42px; align-items: center; gap: 5px; padding: 0 12px;
+  border: 0; border-radius: 10px; background: #157d6b; color: white;
+  font: inherit; font-weight: 800; font-size: 12px; cursor: pointer;
+}
+.access-device button svg { width: 16px; height: 16px; }
+@media (max-width: 720px) {
+  .access-device { grid-template-columns: 1fr; }
+  .access-device button { justify-content: center; }
+}
