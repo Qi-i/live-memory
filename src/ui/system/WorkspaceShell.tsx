@@ -17,9 +17,11 @@ export interface StatusHistoryItem {
 export function StatusCenter({
   current,
   history = [],
+  demo = false,
 }: {
   current: SyncActivity;
   history?: StatusHistoryItem[];
+  demo?: boolean;
 }) {
   const [expanded, setExpanded] = useState(false);
   const historyId = useId();
@@ -37,8 +39,8 @@ export function StatusCenter({
       >
         <span className="v3-status-indicator" aria-hidden="true" />
         <span className="v3-status-copy">
-          <strong>{alert ? presentation.label : "数据状态中心"}</strong>
-          <small>{alert ? "需要处理" : presentation.surface === "silent" ? "本机档案与云端状态" : presentation.label}</small>
+          <strong>{demo ? "演示状态中心" : alert ? presentation.label : "数据状态中心"}</strong>
+          <small>{demo ? "模拟交互 · 未连接云端" : alert ? "需要处理" : presentation.surface === "silent" ? "本机档案与云端状态" : presentation.label}</small>
         </span>
         <span aria-hidden="true" className="v3-status-chevron">{expanded ? "−" : "+"}</span>
       </button>
@@ -46,7 +48,7 @@ export function StatusCenter({
         <div id={historyId} className="v3-status-history">
           <h3>同步记录</h3>
           <div className={"v3-status-current" + (alert ? " is-attention" : "")} role={alert ? "alert" : "status"}>
-            <strong>当前状态</strong><span>{presentation.label}</span>
+            <strong>{demo ? "当前模拟状态" : "当前状态"}</strong><span>{presentation.label}</span>
           </div>
           {history.length ? (
             <ol>
@@ -79,6 +81,7 @@ export function WorkspaceShell({
   children,
   overlay,
   appearance = "liquid",
+  demoStatus = false,
 }: {
   brand: ReactNode;
   navigation: ReactNode;
@@ -90,6 +93,7 @@ export function WorkspaceShell({
   children: ReactNode;
   overlay?: ReactNode;
   appearance?: "liquid" | "editorial";
+  demoStatus?: boolean;
 }) {
   return (
     <div className="v3-workspace-shell" data-ui-system="v3" data-v3-surface={appearance}>
@@ -97,7 +101,7 @@ export function WorkspaceShell({
         <div className="v3-sidebar-brand">{brand}</div>
         <nav className="v3-sidebar-navigation" aria-label="主导航">{navigation}</nav>
         <div className="v3-sidebar-utility">
-          <StatusCenter current={activity} history={activityHistory} />
+          <StatusCenter current={activity} history={activityHistory} demo={demoStatus} />
           {account && <div className="v3-sidebar-account">{account}</div>}
         </div>
       </aside>
@@ -108,7 +112,7 @@ export function WorkspaceShell({
       {mobileNavigation && (
         <nav className="v3-mobile-navigation" aria-label="手机主导航">
           {mobileNavigation}
-          <div className="v3-mobile-status"><StatusCenter current={activity} history={activityHistory} /></div>
+          <div className="v3-mobile-status"><StatusCenter current={activity} history={activityHistory} demo={demoStatus} /></div>
         </nav>
       )}
       {overlay && <div className="v3-overlay-host">{overlay}</div>}
