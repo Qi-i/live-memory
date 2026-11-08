@@ -803,6 +803,88 @@ await archiveView("海报", ".archive-poster-card");
   }
   await localPage.screenshot({ path: outputDir + "/22-editorial-dark-mobile.png", fullPage: true });
   await localContext.close();
+
+  if (process.env.V3_PREVIEW_AUDIT === "1") {
+    // A separate architecture preview, with no login or personal data access.
+    // The V3 layout is tested by measured geometry, not CSS string matches.
+    for (const [width, height] of [[1600, 1000], [1024, 820], [390, 844]]) {
+      const v3Context = await browser.newContext({
+        viewport: { width, height }, serviceWorkers: "block",
+      });
+      const v3Page = await v3Context.newPage();
+      const previewUrl = new URL(baseUrl);
+      previewUrl.searchParams.set("v3-preview", "1");
+      await v3Page.goto(previewUrl.toString(), { waitUntil: "domcontentloaded" });
+      await v3Page.locator('[data-ui-system="v3"]').waitFor({ state: "visible", timeout: 15000 });
+      await v3Page.locator(".v3-portrait-frame").first().waitFor({ state: "visible", timeout: 10000 });
+      const layout = await v3Page.evaluate(() => {
+        const bounds = (selector) => {
+          const rect = document.querySelector(selector)?.getBoundingClientRect();
+          if (!rect) throw new Error("Missing V3 element " + selector);
+          return { x: rect.x, y: rect.y, width: rect.width, height: rect.height, right: rect.right, bottom: rect.bottom };
+        };
+        return {
+          hero: bounds(".v3-stage-hero"),
+          artwork: bounds(".v3-portrait-frame"),
+          map: bounds(".v3-map-stage"),
+          side: bounds(".v3-map-side"),
+          tools: bounds(".v3-action-toolbar"),
+          viewport: innerWidth,
+          workspaceScrollWidth: document.querySelector(".v3-workspace-content")?.scrollWidth,
+          workspaceWidth: document.querySelector(".v3-workspace-content")?.clientWidth,
+          fit: getComputedStyle(document.querySelector(".v3-portrait-frame img")).objectFit,
+          actionBounds: [...document.querySelectorAll(".v3-action-toolbar button")].map((el) => {
+            const rect = el.getBoundingClientRect();
+            return { x: rect.x, right: rect.right };
+          }),
+        };
+      });
+      const ratio = layout.artwork.width / layout.artwork.height;
+      if (ratio > 0.75 || ratio < 0.59 || layout.artwork.height < 150 || layout.fit !== "contain") {
+        throw new Error("V3 portrait artwork was crushed or cropped at " + width + "px: " + JSON.stringify(layout));
+      }
+      if (layout.workspaceScrollWidth > layout.workspaceWidth + 3) {
+        throw new Error("V3 workspace has horizontal overflow at " + width + "px: " + JSON.stringify(layout));
+      }
+      if (layout.actionBounds.some((rect) => rect.x < layout.tools.x - 2 || rect.right > layout.tools.right + 2)) {
+        throw new Error("V3 action toolbar clipped a button at " + width + "px: " + JSON.stringify(layout));
+      }
+      if (width > 800 && Math.abs(layout.map.height - layout.side.height) > 2) {
+        throw new Error("V3 map and ranking panel heights diverged: " + JSON.stringify(layout));
+      }
+      if (width === 1600 && layout.hero.height < 320) {
+        throw new Error("V3 banner too flat for portrait artwork: " + JSON.stringify(layout));
+      }
+
+      // Status updates live in the sidebar and cannot displace the main hero.
+      if (width > 800) {
+        const beforeY = await v3Page.locator(".v3-stage-hero").evaluate((el) => el.getBoundingClientRect().top);
+        await v3Page.getByRole("button", { name: "模拟云端更新" }).click();
+        const afterY = await v3Page.locator(".v3-stage-hero").evaluate((el) => el.getBoundingClientRect().top);
+        if (Math.abs(afterY - beforeY) > 1) {
+          throw new Error("V3 sync event moved the content region by " + (afterY - beforeY) + "px");
+        }
+      }
+
+      await v3Page.screenshot({ path: outputDir + "/23-v3-shell-" + width + ".png", fullPage: true });
+      await v3Page.locator(".v3-preview-city-list > button").filter({ hasText: "北京" }).click();
+      const panelFit = await v3Page.evaluate(() => {
+        const map = document.querySelector(".v3-map-stage").getBoundingClientRect();
+        const panel = document.querySelector(".v3-map-detail-layer").getBoundingClientRect();
+        return { left: panel.left >= map.left - 1, right: panel.right <= map.right + 1,
+          top: panel.top >= map.top - 1, bottom: panel.bottom <= map.bottom + 1 };
+      });
+      if (Object.values(panelFit).some((v) => !v)) {
+        throw new Error("V3 map city detail exceeds map geometry at " + width + "px: " + JSON.stringify(panelFit));
+      }
+      await v3Page.locator(".v3-map-stage").scrollIntoViewIfNeeded();
+      await v3Page.screenshot({ path: outputDir + "/24-v3-city-details-" + width + ".png", fullPage: true });
+      await v3Page.getByRole("button", { name: "关闭城市详情" }).click();
+      await v3Page.locator(".v3-map-detail-layer").waitFor({ state: "detached" });
+      await v3Context.close();
+    }
+    console.log("V3 geometry audit passed: 1600/1024/390 viewports, portrait originals, map alignment, status non-reflow and accessible city panels.");
+  }
 } finally {
   await browser.close();
 }
