@@ -65,7 +65,7 @@ jobs:
             const file="dist/preview-info.json";
             const info=JSON.parse(fs.readFileSync(file,"utf8"));
             info.browserVerified=true;
-            fs.writeFileSync(file,JSON.stringify(info)+"\\n");
+            fs.writeFileSync(file,JSON.stringify(info));
           '
       - uses: actions/upload-artifact@v4
         if: always()
