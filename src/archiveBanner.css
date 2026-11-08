@@ -395,3 +395,18 @@
   .archive-page .archive-ticket > section { padding: 12px 12px 10px 18px; }
   .archive-page .archive-ticket h3 { font-size: 14px; }
 }
+
+
+/* No poster yet: keep the guidance, not a giant empty hero illustration. */
+.archive-page .archive-highlight-empty {
+  min-height: 145px;
+  padding: 18px 22px;
+  gap: 4px;
+  background: radial-gradient(ellipse at center, color-mix(in srgb, var(--experience-accent) 11%, transparent), transparent 74%);
+}
+.archive-page .archive-highlight-empty span { font-size: 15px; }
+.archive-page .archive-highlight-empty small { font-size: 12px; }
+@media (max-width: 720px) {
+  .archive-page .archive-highlight-empty { min-height: 90px; padding: 15px 14px; }
+  .archive-page .archive-highlight-empty span { font-size: 14px; }
+}
