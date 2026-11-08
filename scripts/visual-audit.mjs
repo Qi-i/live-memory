@@ -683,6 +683,30 @@ await archiveView("海报", ".archive-poster-card");
   await page.screenshot({ path: `${outputDir}/17-share-mobile-fit.png`, fullPage: true });
   await page.keyboard.press("Escape");
   await page.locator(".share-studio-stage").waitFor({ state: "detached", timeout: 10000 });
+
+  // Device-only use must persist data across a reload without a public account.
+  const localContext = await browser.newContext({
+    viewport: { width: 390, height: 844 },
+    acceptDownloads: true,
+    serviceWorkers: "block",
+  });
+  const localPage = await localContext.newPage();
+  await localPage.goto(baseUrl, { waitUntil: "domcontentloaded" });
+  await localPage.getByRole("button", { name: "使用本机档案" }).click();
+  await localPage.locator(".experience-shell").waitFor({ state: "visible", timeout: 12000 });
+  await localPage.getByRole("button", { name: "新增", exact: true }).click();
+  await localPage.locator(".record-editor-v2").waitFor({ state: "visible", timeout: 10000 });
+  await localPage.locator(".editor-field-v2").filter({ hasText: "演出名称" }).locator("input").fill("本机存储回归测试现场");
+  await localPage.locator(".editor-field-v2").filter({ hasText: "日期" }).locator("input").fill("2026-11-08");
+  await localPage.getByRole("button", { name: "保存记录" }).click();
+  await localPage.locator(".record-detail-v2").waitFor({ state: "visible", timeout: 10000 });
+  await localPage.locator(".overlay-header-v2 > button").first().click();
+  await localPage.reload({ waitUntil: "domcontentloaded" });
+  await localPage.locator(".archive-poster-card").filter({ hasText: "本机存储回归测试现场" }).waitFor({ state: "visible", timeout: 15000 });
+  const deviceFlag = await localPage.evaluate(() => localStorage.getItem("live-memory-device-only-v1"));
+  if (deviceFlag !== "1") throw new Error("Standalone local archive did not preserve its persistent mode flag");
+  await localPage.screenshot({ path: outputDir + "/18-device-local-reopened-mobile.png", fullPage: true });
+  await localContext.close();
 } finally {
   await browser.close();
 }
