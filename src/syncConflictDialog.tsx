@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { AppSettings, EventRecord } from "./domain";
 import type { SyncConflict } from "./supabase";
 import { resolveAllConflicts, resolveSyncConflict } from "./supabase";
+import { useDialogBehavior } from "./ui/useDialogBehavior";
 
 function formatConflictTime(value: string) {
   const date = new Date(value);
@@ -27,6 +28,7 @@ export function SyncConflictDialog({
   const [resolved, setResolved] = useState<EventRecord[]>([]);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
+  const conflictRef = useDialogBehavior({ onClose: onDismiss, allowEscape: !working });
 
   useEffect(() => {
     setRemaining(conflicts);
@@ -68,8 +70,8 @@ export function SyncConflictDialog({
   }
 
   return (
-    <div className="dialog-backdrop-v2" onClick={onDismiss}>
-      <section className="conflict-dialog-v2" role="dialog" aria-modal="true" onClick={(event) => event.stopPropagation()}>
+    <div ref={conflictRef} className="dialog-backdrop-v2" onClick={working ? undefined : onDismiss}>
+      <section className="conflict-dialog-v2" role="dialog" aria-modal="true" aria-label="云端同步冲突处理" onClick={(event) => event.stopPropagation()}>
         <header>
           <span>SYNC CONFLICT</span>
           <h2>{remaining.length} 条记录同时被修改</h2>
