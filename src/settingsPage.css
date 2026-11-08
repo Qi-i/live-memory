@@ -562,3 +562,16 @@
 .map-api-help-v2 a { display: inline-flex; align-items: center; gap: 4px; color: var(--experience-text); font-size: 10px; font-weight: 900; text-decoration: none; }
 .map-api-help-v2 a:hover { color: var(--experience-accent-2); text-decoration: underline; }
 .map-api-help-v2 svg { width: 12px; height: 12px; }
+
+
+.device-local-notice {
+  padding: 17px 21px; margin-bottom: 18px;
+  border: 1px solid #9acbb9; border-radius: 15px;
+  background: linear-gradient(110deg, #e8f6ed, #f8faf7);
+  color: #14483f;
+}
+.device-local-notice strong { display: block; font-size: 15px; line-height: 1.4; }
+.device-local-notice p { margin: 7px 0 0; color: #426b64; font-size: 13px; line-height: 1.7; }
+@media (max-width: 600px) {
+  .device-local-notice { padding: 14px 16px; }
+}
