@@ -7,7 +7,7 @@ import { defineConfig } from "vite";
 const standalonePreview = process.env.VITE_V3_STANDALONE === "1";
 
 export default defineConfig({
-  base: standalonePreview ? "/" : "/live-memory/",
+  base: standalonePreview ? "/live-memory/v3-preview/" : "/live-memory/",
   build: {
     sourcemap: false,
     ...(standalonePreview
