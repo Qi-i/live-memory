@@ -1,0 +1,32 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+
+const access = await readFile(new URL("../src/access.tsx", import.meta.url), "utf8");
+const storage = await readFile(new URL("../src/storage.ts", import.meta.url), "utf8");
+const controller = await readFile(new URL("../src/appController.ts", import.meta.url), "utf8");
+const root = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
+const settings = await readFile(new URL("../src/settingsPage.tsx", import.meta.url), "utf8");
+
+assert.match(access, /"device" \| "account"/);
+assert.match(access, /live-memory-device-only-v1/);
+assert.match(access, /localStorage\.setItem\(DEVICE_MODE_KEY, "1"\)/);
+assert.match(access, /setStorageScope\(DEVICE_STORAGE_SCOPE, false\)/);
+assert.match(access, /setMediaCacheScope\(DEVICE_STORAGE_SCOPE\)/);
+assert.match(access, /if \(!authEnabled\)/);
+assert.match(access, /return;\s*}\s*let active = true;/);
+assert.match(access, /enterDevice/);
+assert.match(access, /本机档案/);
+assert.match(access, /if \(mode === "device"\)/);
+assert.match(access, /localStorage\.removeItem\(DEVICE_MODE_KEY\)/);
+assert.match(storage, /storageScopeKey\(DB_NAME\)/);
+assert.match(storage, /if \(!storageScope\) return \[\]/);
+assert.match(controller, /const isGuest = access\.mode === "guest"/);
+assert.match(controller, /if \(!access\.user\) {\s*initialized\.current = true;/);
+assert.match(root, /const isDeviceOnly = access\.mode === "device"/);
+assert.match(root, /本机独立档案/);
+assert.match(root, /deviceOnly=\{isDeviceOnly\}/);
+assert.match(settings, /deviceOnly \? "关闭本机档案（保留记录）"/);
+assert.match(settings, /!\s*deviceOnly && <section className="settings-module cloud-module-v2"/);
+assert.match(settings, /完整 JSON/);
+assert.match(settings, /清理网站数据/);
+console.log("Local-first contracts passed: persistent independent IndexedDB scope, no mandatory account client, guarded settings and explicit export warning.");
