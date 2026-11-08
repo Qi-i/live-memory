@@ -30,6 +30,7 @@ import { blankRecord } from "./seeds";
 import { duplicateRecordForNextShow } from "./recordActions";
 import { hasPersonalCloudConnection, isAdmin } from "./supabase";
 import { replaceAllRecords } from "./storage";
+import { KeepsakeStudio, type KeepsakeSubject } from "./keepsakeStudio";
 
 export default function AppRoot() {
   const controller = useAppController();
@@ -75,6 +76,7 @@ export default function AppRoot() {
   const [shareMode, setShareMode] = useState(false);
   const [shareFormat, setShareFormat] = useState<ShareFormat>("adaptive-landscape");
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
+  const [keepsakeSubject, setKeepsakeSubject] = useState<KeepsakeSubject | null>(null);
   const [syncMenuOpen, setSyncMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -90,6 +92,9 @@ export default function AppRoot() {
   useEffect(() => {
     if (route !== "archive" && shareMode) setShareMode(false);
   }, [route, shareMode]);
+
+  // Sharing previews may contain account-scoped photos. Dismiss on identity changes.
+  useEffect(() => { setKeepsakeSubject(null); }, [access.user?.id, isGuest]);
 
   // User-initiated cross-app catalog handoff. No passkey, Supabase token,
   // media, private notes or account details leave Live Memory.
@@ -223,7 +228,7 @@ export default function AppRoot() {
           onOpenMapSettings={() => setRoute("settings")}
         />
       )}
-      {route === "stats" && <StatsPage records={activeRecords} />}
+      {route === "stats" && <StatsPage records={activeRecords} onShare={() => setKeepsakeSubject({ kind: "recap", records: activeRecords })} />}
       {route === "settings" && isGuest && <GuestSettingsPage onLogin={access.leaveGuest} />}
       {route === "settings" && !isGuest && (
         <SettingsPage
@@ -255,6 +260,7 @@ export default function AppRoot() {
           record={selected}
           onClose={() => setSelected(null)}
           onEdit={() => setEditing(selected)}
+          onShare={() => setKeepsakeSubject({ kind: "record", record: selected })}
           onDelete={() => setConfirmAction({
             title: "移到回收站？",
             message: `“${selected.title}”会保留在回收站，可随时恢复。`,
@@ -276,6 +282,7 @@ export default function AppRoot() {
       )}
       {importOpen && <ImportDrawer onClose={() => setImportOpen(false)} onSave={persistRecord} flash={flash} />}
       {zoomMedia && <ImageZoom media={zoomMedia} onClose={() => setZoomMedia(null)} />}
+      {keepsakeSubject && <KeepsakeStudio subject={keepsakeSubject} onClose={() => setKeepsakeSubject(null)} />}
       {confirmAction && <ConfirmDialog action={confirmAction} onClose={() => setConfirmAction(null)} />}
       {syncConflicts.length > 0 && (
         <SyncConflictDialog
