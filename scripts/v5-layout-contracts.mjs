@@ -12,7 +12,7 @@ const [appRoot, archiveCss, bannerCss, studio, studioCss, main, visualAudit] = a
 ]);
 
 assert.match(appRoot, /useState<ShareFormat>\("adaptive-landscape"\)/, "Share studio should open in smart landscape format");
-assert.match(bannerCss, /content:\s*"把现场，留在时间里"/);
+assert.match((await readFile("src/archive.tsx", "utf8")), /<h2>把现场，留在时间里<\/h2>/, "Archive heading must be visible semantic text");
 assert.match(bannerCss, /white-space:\s*nowrap/);
 assert.match(bannerCss, /archive-highlight-card-4,[\s\S]*display:\s*none/);
 assert.match(studio, /function partitionByAspect/);
