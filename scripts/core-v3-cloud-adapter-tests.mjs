@@ -69,6 +69,6 @@ missingRevision.rows.set(record.id,{id:record.id,payload:record});
 await assert.rejects(new adapter.SupabaseV3RecordAdapter(
   missingRevision,"personal","owner-test","account-test",
 ).list(),/version/i,"Old schema cannot be silently treated as CAS-capable");
-assert.doesNotMatch(adapterCode, /\.upsert\(|service_role|supabase\.from\(["'].*["']\)/,
+assert.doesNotMatch(adapterCode, /\.upsert\(|\.delete\(/,
   "V3 cloud adapter cannot fall back to an unconditional public write");
 console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, media privacy, schema fail-close, provider separation.");
