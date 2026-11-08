@@ -15,7 +15,13 @@ interface RpcResult {
   error: { code?: string; message: string } | null;
 }
 export interface V3RpcClient {
-  from(table: string): { select(columns: string): PromiseLike<RpcResult> };
+  from(table: string): {
+    select(columns: string): {
+      order(column: string, options: { ascending: boolean }): {
+        range(from: number, through: number): PromiseLike<RpcResult>;
+      };
+    };
+  };
   rpc(name: string, args: Record<string, unknown>): PromiseLike<RpcResult>;
 }
 interface V3Row {
@@ -60,10 +66,30 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     const table = this.provider === "personal" ? "echo_passkey_records" : "echo_text_backups";
     // The caller must supply its own configured auth / owner-key client.
     // Existing RLS restricts visible rows. No service_role is used.
-    const { data, error } = await this.client.from(table).select("id,payload,v3_revision");
-    if (error) throw rpcFailure(error.message);
-    if (!Array.isArray(data)) throw new Error("V3 remote list returned an invalid result");
-    return data.map(parseRow);
+    // PostgREST caps unbounded queries (typically 1,000 rows). A truncated
+    // response must never be mistaken for a deleted record. Key-order paging
+    // makes the result deterministic for each request window.
+    const pageSize = 500;
+    const all: CloudRecordEnvelope[] = [];
+    const seenIds = new Set<string>();
+    for (let start = 0; start < 500_000; start += pageSize) {
+      const { data, error } = await this.client.from(table)
+        .select("id,payload,v3_revision")
+        .order("id", { ascending: true })
+        .range(start, start + pageSize - 1);
+      if (error) throw rpcFailure(error.message);
+      if (!Array.isArray(data)) throw new Error("V3 remote list returned an invalid result");
+      for (const item of data) {
+        const row = parseRow(item);
+        if (seenIds.has(row.record.id)) {
+          throw new Error("V3 remote listing changed across pages; retry without changing local data");
+        }
+        seenIds.add(row.record.id);
+        all.push(row);
+      }
+      if (data.length < pageSize) return all;
+    }
+    throw new Error("V3 cloud record count exceeded the safe page cap; no data was modified");
   }
 
   async compareAndSwap(record: EventRecord, expected: string | null): Promise<CloudRecordEnvelope> {
