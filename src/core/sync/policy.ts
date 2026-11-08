@@ -10,7 +10,8 @@ export type RecordSyncAction =
   | "push"
   | "pull"
   | "conflict"
-  | "unbased-divergence";
+  | "unbased-divergence"
+  | "defer-absence";
 
 export interface RecordSyncInput {
   localRevision?: string;
@@ -31,8 +32,14 @@ export function decideRecordSync({
   acknowledgedRevision: base,
 }: RecordSyncInput): RecordSyncDecision {
   if (!local && !remote) return { action: "unchanged", needsUserReview: false, reason: "no-record" };
-  if (local && !remote) return { action: "push-new", needsUserReview: false, reason: "missing-on-remote" };
-  if (!local && remote) return { action: "pull-new", needsUserReview: false, reason: "missing-on-device" };
+  // Known history + a missing side may indicate a local deletion or an
+  // incomplete remote listing. Neither can be safely turned into resurrection.
+  if (local && !remote) return base
+    ? { action: "defer-absence", needsUserReview: false, reason: "remote-absence-requires-tombstone-reconciliation" }
+    : { action: "push-new", needsUserReview: false, reason: "missing-on-remote" };
+  if (!local && remote) return base
+    ? { action: "defer-absence", needsUserReview: false, reason: "local-absence-requires-tombstone-reconciliation" }
+    : { action: "pull-new", needsUserReview: false, reason: "missing-on-device" };
   if (local === remote) return { action: "unchanged", needsUserReview: false, reason: "semantically-identical" };
 
   // An old installation may lack version history. Never label a simple
