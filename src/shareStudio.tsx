@@ -29,6 +29,7 @@ import { categoryLabels, effectiveStatus, primaryMedia } from "./domain";
 import { loadAmap, type AMapLngLatLike, type AMapNamespace } from "./amap";
 import { loadMediaImage, preloadPrimaryRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
+import { useDialogBehavior } from "./ui/useDialogBehavior";
 
 export type ShareFormat =
   | "adaptive-landscape"
@@ -271,18 +272,7 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
     return () => observer.disconnect();
   }, [format, layout, recalculateFit, selectedRecords.length]);
 
-  useEffect(() => {
-    const previousOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.body.style.overflow = previousOverflow;
-      window.removeEventListener("keydown", handleKeyDown);
-    };
-  }, [onClose]);
+  const shareRef = useDialogBehavior({ onClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
 
   useEffect(() => {
     let active = true;
@@ -370,7 +360,7 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
   } as CSSProperties;
 
   return (
-    <section className={`share-studio-stage share-theme-${palette}`} onMouseDown={(event) => {
+    <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) onClose();
     }}>
       <aside className="share-studio-panel" aria-label="分享图设置">
