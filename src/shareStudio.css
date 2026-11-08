@@ -693,3 +693,42 @@
 .share-ticket-card dl { display: grid; grid-template-columns: auto minmax(0,1fr); gap: .25em .65em; margin: 0; font-size: var(--ticket-meta-size, 13px); line-height: 1.18; }
 .share-ticket-card dt { color: rgba(18,32,29,.58); font-weight: 950; }
 .share-ticket-card dd { min-width: 0; margin: 0; overflow: hidden; font-weight: 850; text-overflow: ellipsis; white-space: nowrap; }
+
+
+/* Legibility pass: keep information density by using better grouping, not 8px text. */
+.share-studio-panel { color: #1a2c2a; background: rgba(255, 255, 255, .985); }
+.share-studio-summary small,
+.share-control-group > strong small,
+.share-category-control button i,
+.share-sort-button small,
+.share-range-control label,
+.share-selection-grid button small,
+.share-selection-browser > label input,
+.share-palette-control button,
+.share-switches b,
+.share-preview-toolbar button,
+.share-preview-toolbar strong { font-size: 11px; }
+.share-range-control input, .share-selection-grid button b, .share-sort-button b { font-size: 12px; }
+.share-category-control button, .share-format-control button,
+.share-scope-control button, .share-count-control button { font-size: 12px; min-height: 34px; }
+.share-studio-panel .share-control-group > strong { font-size: 13px; }
+.share-studio-summary span { font-size: 13px; }
+.share-category-control, .share-format-control, .share-scope-control, .share-count-control {
+  background: #f1f6f4;
+}
+.share-palette-control button { min-height: 47px; }
+.share-export-button { font-size: 14px; min-height: 46px; }
+.share-preview-toolbar button { min-height: 34px; }
+@media (min-width: 861px) {
+  .share-studio-stage { grid-template-columns: minmax(380px, 430px) minmax(0, 1fr); }
+  .share-studio-panel { padding: 15px 17px; gap: 10px; }
+  .share-category-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .share-format-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .share-layout-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .share-switches { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .share-studio-panel { padding-inline: 13px; }
+  .share-category-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .share-format-control { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
