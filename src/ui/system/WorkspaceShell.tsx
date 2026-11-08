@@ -78,6 +78,7 @@ export function WorkspaceShell({
   activityHistory,
   children,
   overlay,
+  appearance = "liquid",
 }: {
   brand: ReactNode;
   navigation: ReactNode;
@@ -88,9 +89,10 @@ export function WorkspaceShell({
   activityHistory?: StatusHistoryItem[];
   children: ReactNode;
   overlay?: ReactNode;
+  appearance?: "liquid" | "editorial";
 }) {
   return (
-    <div className="v3-workspace-shell" data-ui-system="v3">
+    <div className="v3-workspace-shell" data-ui-system="v3" data-v3-surface={appearance}>
       <aside className="v3-sidebar" aria-label="应用导航">
         <div className="v3-sidebar-brand">{brand}</div>
         <nav className="v3-sidebar-navigation" aria-label="主导航">{navigation}</nav>
