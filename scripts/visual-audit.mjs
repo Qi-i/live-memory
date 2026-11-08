@@ -158,11 +158,12 @@ try {
   await page.unroute("**/demo/**");
 
   const bannerTitle = await page.locator(".archive-masthead h2").evaluate((heading) => ({
-    rendered: getComputedStyle(heading, "::before").content,
-    originalFontSize: getComputedStyle(heading).fontSize,
+    text: heading.textContent?.trim(),
+    fontSize: parseFloat(getComputedStyle(heading).fontSize),
+    pseudoContent: getComputedStyle(heading, "::before").content,
   }));
-  if (!bannerTitle.rendered.includes("把现场，留在时间里") || bannerTitle.originalFontSize !== "0px") {
-    throw new Error(`Premium banner title was not applied: ${JSON.stringify(bannerTitle)}`);
+  if (bannerTitle.text !== "把现场，留在时间里" || bannerTitle.fontSize < 24 || bannerTitle.pseudoContent !== "none") {
+    throw new Error(`Semantic banner title is not readable: ${JSON.stringify(bannerTitle)}`);
   }
 
   const masthead = await page.locator(".archive-masthead").boundingBox();
@@ -283,7 +284,7 @@ await archiveView("海报", ".archive-poster-card");
     shareRefetches.push(route.request().url());
     void route.abort("failed");
   });
-  await page.getByRole("button", { name: "制作分享图", exact: true }).click();
+  await page.getByRole("button", { name: "生成分享图", exact: true }).click();
   await page.locator(".share-studio-stage").waitFor({ state: "visible", timeout: 15000 });
   await page.locator(".share-preview-preparing").waitFor({ state: "detached", timeout: 30000 }).catch(() => undefined);
   await page.locator(".share-layout-canvas-wall .share-layout-poster").first().waitFor({ state: "visible", timeout: 30000 });

@@ -354,10 +354,11 @@ export function useAppController() {
     };
   }, [access.user, isGuest, settings.supabase.ownerKey, settings.supabase.url]);
 
+  const pageViewEnabled = !isGuest && Boolean(access.user) && hasAccountCloudConfig(settings);
   useEffect(() => {
-    if (isGuest || !access.user || !hasAccountCloudConfig(settings)) return;
+    if (!pageViewEnabled) return;
     recordPageView(route, document.referrer || undefined).catch(() => undefined);
-  }, [access.user, isGuest, route, settings]);
+  }, [access.user?.id, pageViewEnabled, route]);
 
   async function runCloudSync(label: string, silent = false) {
     if (isGuest) { if (!silent) flash("示例模式无需云同步"); return false; }

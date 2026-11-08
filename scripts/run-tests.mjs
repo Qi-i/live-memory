@@ -262,7 +262,8 @@ try {
   assert.match(appController, /if \(isGuest\)/);
   assert.match(appController, /isGuest \? nextRecord : await saveRecord/);
   assert.match(archive, /value: "showcase"/);
-  assert.match(archive, /制作分享图/);
+  assert.match(archive, /生成分享图/);
+  assert.doesNotMatch(archive, /archive-masthead-actions/, "Share action should not be duplicated in the hero");
   assert.match(archive, /archive-highlight-card/);
   assert.doesNotMatch(archive, /Compact archive masthead v2/);
   assert.match(archiveBannerCss, /aspect-ratio:\s*4 \/ 5/);

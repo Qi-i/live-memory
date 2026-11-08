@@ -196,12 +196,8 @@ export function ArchivePage({
       <header className="archive-masthead">
         <div className="archive-masthead-copy">
           <div className="archive-brand-kicker"><BrandMark size={28} /><span>LIVE MEMORY · 我的演出档案</span></div>
-          <h2>每一场现场，<br />都是独一无二的记忆。</h2>
-          <p>把看过的演出、留下的票根和走过的城市，整理成一份会继续生长的个人档案。</p>
-          <div className="archive-masthead-actions">
-            <button type="button" onClick={() => document.querySelector(".archive-command")?.scrollIntoView({ behavior: "smooth", block: "start" })}><Archive />浏览全部档案</button>
-            <button type="button" onClick={() => setShareMode(true)}><Share2 />制作分享图</button>
-          </div>
+          <h2>把现场，留在时间里</h2>
+          <p>海报、票根与到访城市，记录每一场演出。</p>
           <div className="archive-masthead-stats" aria-label="演出记录摘要">
             <strong>{records.length}<span>全部记录</span></strong>
             <strong>{records.filter((record) => effectiveStatus(record) === "watched").length}<span>已经看过</span></strong>

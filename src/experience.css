@@ -75,6 +75,8 @@ body {
   backdrop-filter: blur(20px);
 }
 
+.experience-nav-scrim { display: none; }
+
 .experience-brand,
 .experience-profile,
 .experience-nav button,
@@ -282,7 +284,7 @@ body {
 .experience-metrics span {
   margin-top: 5px;
   color: var(--experience-muted);
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 850;
 }
 
@@ -579,6 +581,18 @@ body {
 }
 
 @media (max-width: 920px) {
+  .experience-nav-scrim {
+    position: fixed;
+    inset: 0;
+    z-index: 75;
+    display: block;
+    width: 100%;
+    padding: 0;
+    border: 0;
+    background: rgba(5, 14, 17, 0.4);
+    cursor: pointer;
+  }
+
   :root {
     --experience-page-gap: 10px;
     --experience-page-pad: 10px;
@@ -708,7 +722,7 @@ body {
     gap: 3px;
     border-radius: 9px;
     color: var(--experience-muted);
-    font-size: 10px;
+    font-size: 12px;
     font-weight: 900;
   }
 

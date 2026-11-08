@@ -9,6 +9,7 @@ const decodedImages = new Map<string, Promise<HTMLImageElement | null>>();
 const MEDIA_CACHE_SCOPE_EVENT = "live-memory:media-cache-scope";
 let cleanupRegistered = false;
 let mediaCacheScope = "anonymous";
+let mediaCacheEpoch = 0;
 
 function currentCacheName() {
   return `${CACHE_PREFIX}-${hashIdentity(mediaCacheScope || "anonymous")}`;
@@ -24,6 +25,7 @@ function resetObjectUrls() {
 export function setMediaCacheScope(scope: string) {
   const next = scope.trim() || "anonymous";
   if (mediaCacheScope === next) return;
+  mediaCacheEpoch += 1;
   resetObjectUrls();
   mediaCacheScope = next;
   if (typeof caches !== "undefined") {
@@ -79,27 +81,28 @@ function registerCleanup() {
   });
 }
 
-async function readCachedSource(identity: string) {
+async function readCachedSource(identity: string, epoch: number) {
   if (typeof caches === "undefined") return "";
   const cache = await caches.open(currentCacheName());
   const response = await cache.match(cacheRequest(identity));
   if (!response) return "";
   const blob = await response.blob();
-  if (!blob.size) return "";
+  if (!blob.size || epoch !== mediaCacheEpoch) return "";
   const objectUrl = URL.createObjectURL(blob);
   objectUrls.set(identity, objectUrl);
   registerCleanup();
   return objectUrl;
 }
 
-async function persistInlineSource(asset: MediaAsset, identity: string) {
+async function persistInlineSource(asset: MediaAsset, identity: string, epoch: number) {
   if (!identity || typeof caches === "undefined" || !asset.src || !isInlineSource(asset.src)) return;
   try {
     const response = await fetch(asset.src);
     if (!response.ok) return;
     const blob = await response.blob();
-    if (!blob.size) return;
+    if (!blob.size || epoch !== mediaCacheEpoch) return;
     const cache = await caches.open(currentCacheName());
+    if (epoch !== mediaCacheEpoch) return;
     await cache.put(cacheRequest(identity), new Response(blob, {
       headers: { "content-type": blob.type || asset.mimeType || "application/octet-stream" },
     }));
@@ -108,7 +111,7 @@ async function persistInlineSource(asset: MediaAsset, identity: string) {
   }
 }
 
-async function fetchAndCache(asset: MediaAsset, identity: string) {
+async function fetchAndCache(asset: MediaAsset, identity: string, epoch: number) {
   if (!asset.src) return "";
   const response = await fetch(asset.src, {
     mode: "cors",
@@ -120,10 +123,13 @@ async function fetchAndCache(asset: MediaAsset, identity: string) {
   const cacheable = response.clone();
   const blob = await response.blob();
   if (!blob.size) throw new Error("Image response was empty");
+  if (epoch !== mediaCacheEpoch) return "";
   if (typeof caches !== "undefined") {
     const cache = await caches.open(currentCacheName());
+    if (epoch !== mediaCacheEpoch) return "";
     await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
   }
+  if (epoch !== mediaCacheEpoch) return "";
   const objectUrl = URL.createObjectURL(blob);
   objectUrls.set(identity, objectUrl);
   registerCleanup();
@@ -132,8 +138,9 @@ async function fetchAndCache(asset: MediaAsset, identity: string) {
 
 export async function resolveMediaSource(asset?: MediaAsset, allowNetwork = true): Promise<string> {
   if (!asset?.src && !asset?.storagePath) return "";
+  const epoch = mediaCacheEpoch;
   if (asset.src && isInlineSource(asset.src)) {
-    if (asset.storagePath) void persistInlineSource(asset, mediaIdentity(asset));
+    if (asset.storagePath) void persistInlineSource(asset, mediaIdentity(asset), epoch);
     return asset.src;
   }
 
@@ -145,17 +152,22 @@ export async function resolveMediaSource(asset?: MediaAsset, allowNetwork = true
   if (existing) return existing;
 
   const task = (async () => {
-    const cached = await readCachedSource(identity).catch(() => "");
+    const cached = await readCachedSource(identity, epoch).catch(() => "");
+    if (epoch !== mediaCacheEpoch) return "";
     if (cached) return cached;
     if (!allowNetwork || !asset.src) return "";
     try {
-      return await fetchAndCache(asset, identity);
+      return await fetchAndCache(asset, identity, epoch);
     } catch {
-      return asset.src || "";
+      return epoch === mediaCacheEpoch ? asset.src || "" : "";
     }
-  })().finally(() => pendingSources.delete(identity));
+  })();
 
   pendingSources.set(identity, task);
+  // An old account's request must never remove a new account's in-flight entry.
+  void task.finally(() => {
+    if (pendingSources.get(identity) === task) pendingSources.delete(identity);
+  });
   return task;
 }
 
@@ -242,6 +254,7 @@ export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
 export async function loadMediaImage(asset?: MediaAsset) {
   if (!asset) return null;
   const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
+  const epoch = mediaCacheEpoch;
   const existing = decodedImages.get(identity);
   if (existing) return existing;
 
@@ -266,8 +279,8 @@ export async function loadMediaImage(asset?: MediaAsset) {
   })();
   decodedImages.set(identity, task);
   const image = await task;
-  if (!image) decodedImages.delete(identity);
-  return image;
+  if (decodedImages.get(identity) === task && (!image || epoch !== mediaCacheEpoch)) decodedImages.delete(identity);
+  return epoch === mediaCacheEpoch ? image : null;
 }
 
 export async function clearPersistentMediaCache() {

@@ -1,4 +1,5 @@
-const CACHE_NAME = "live-memory-v5";
+const CACHE_NAME = "live-memory-v6";
+const APP_CACHE_PREFIX = "live-memory-v";
 const APP_SHELL = ["./", "./index.html", "./manifest.webmanifest", "./icon.svg", "./live-memory-mark.svg", "./live-memory-logo.svg"];
 
 self.addEventListener("install", (event) => {
@@ -10,7 +11,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
       .keys()
-      .then((keys) => Promise.all(keys.filter((key) => key !== CACHE_NAME).map((key) => caches.delete(key))))
+      .then((keys) => Promise.all(keys.filter((key) => key.startsWith(APP_CACHE_PREFIX) && key !== CACHE_NAME).map((key) => caches.delete(key))))
       .then(() => self.clients.claim()),
   );
 });
@@ -28,7 +29,7 @@ self.addEventListener("fetch", (event) => {
   }
 
   if (sameOrigin) {
-    event.respondWith(staleWhileRevalidate(request));
+    event.respondWith(staleWhileRevalidate(request, event));
     return;
   }
 
@@ -48,16 +49,20 @@ async function networkFirst(request) {
   }
 }
 
-async function staleWhileRevalidate(request) {
+async function staleWhileRevalidate(request, event) {
   const cache = await caches.open(CACHE_NAME);
   const cached = await cache.match(request);
   const refresh = fetch(request)
-    .then((response) => {
-      if (response.ok) cache.put(request, response.clone());
+    .then(async (response) => {
+      if (response.ok) await cache.put(request, response.clone()).catch(() => undefined);
       return response;
     })
     .catch(() => undefined);
-  if (cached) return cached;
+  if (cached) {
+    // Keep the worker alive until the refreshed asset is persisted.
+    event.waitUntil(refresh);
+    return cached;
+  }
   return (await refresh) || Response.error();
 }
 
@@ -66,6 +71,6 @@ async function cacheFirst(request) {
   const cached = await cache.match(request);
   if (cached) return cached;
   const response = await fetch(request);
-  if (response.ok || response.type === "opaque") await cache.put(request, response.clone());
+  if (response.ok || response.type === "opaque") await cache.put(request, response.clone()).catch(() => undefined);
   return response;
 }
