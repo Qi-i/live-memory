@@ -98,7 +98,12 @@ export async function synchronizeRecords(
     }
     let acknowledged: CloudRecordEnvelope;
     try {
-      acknowledged = await cloud.compareAndSwap(candidate.record, candidate.expected);
+      // Account-cloud text backups must not receive private photos, ticket scans
+      // or media deletion history even if a future adapter forgets to filter.
+      const upload = cloud.includeMedia
+        ? candidate.record
+        : { ...candidate.record, media: [], mediaTombstones: undefined };
+      acknowledged = await cloud.compareAndSwap(upload, candidate.expected);
     } catch (error) {
       if (error instanceof RemoteRevisionChanged) {
         // Re-check instead of inventing a conflict from one failed CAS.
