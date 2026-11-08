@@ -1,9 +1,17 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vite";
 
+// The standalone V3 prototype is a separate, demo-only entry with no
+// authentication, personal files, application database, or sync dependencies.
+// GitHub Pages production retains the existing /live-memory/ path and entry.
+const standalonePreview = process.env.VITE_V3_STANDALONE === "1";
+
 export default defineConfig({
-  // GitHub Pages project site and OAuth callbacks both live under /live-memory/.
-  base: "/live-memory/",
+  base: standalonePreview ? "/" : "/live-memory/",
   build: {
     sourcemap: false,
+    ...(standalonePreview
+      ? { rollupOptions: { input: resolve(process.cwd(), "v3-preview.html") } }
+      : {}),
   },
 });
