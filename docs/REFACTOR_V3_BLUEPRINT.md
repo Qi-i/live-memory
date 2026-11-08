@@ -87,3 +87,16 @@
 **这些基础模块尚未替换正式同步流程，不能宣称用户看到的恢复弹窗或误冲突已经修好。** 下一步需要原子 RecordRepository、远端 CAS、旧账号基线初始化与真实双端对账；之后再将页面转到新的 AppShell/StatusCenter，替换旧页而非叠 CSS。
 
 任何跳过数据保护、仅改截图或在未验证情况下直接覆盖主分支的操作，都不属于本次重构。
+
+
+### 本分支新增的运行路径（演示适配器验证）
+
+- src/core/ports/RecordRepository.ts：本机记录读写和按修订条件提交的统一接口。
+- src/infrastructure/indexedDb/recordRepository.ts：在既有账户命名空间中以一个读写事务完成 getAll → 核对请求快照 → 条件 put；不再使用 clear/整库覆盖。
+- src/core/ports/CloudRecordAdapter.ts：规定远端须返回服务器端不透明版本号，且全部写入必须携带 expectedRevision；禁止无条件 upsert。
+- src/core/application/synchronizeRecords.ts：纯服务层编排快照、版本决策、重读本机、CAS、增量入库和确认基线；与 React 和 Supabase 实现解耦。
+- scripts/core-v3-orchestration-tests.mjs：模拟双设备正常编辑、双端并发、网络中编辑、服务器条件写入失败、账号隔离以及无基线的旧档案。
+
+这里使用的 CloudRecordAdapter 是**接口**；现有个人 Supabase 后端仍没有对应的原子 CAS 适配器。既然服务端没有可靠的条件写入，新流程就不能在真实账号上贸然启用。因此当前分支是基础性、可验证的重构工程，而不是生产迁移。
+
+下一步除服务端 CAS 外，还应在 CI 构建隔离的双设备 Playwright 会话，使用临时 Supabase 测试项目检查同 ID 修改、图片墓碑和断网恢复，不得让自动测试写入用户的正式云库。
