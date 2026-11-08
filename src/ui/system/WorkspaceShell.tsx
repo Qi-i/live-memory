@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useId, useState } from "react";
+import { useId, useRef, useState } from "react";
 import type { SyncActivity, SyncPresentation } from "../../core/sync/policy";
 import { presentSyncActivity } from "../../core/sync/policy";
 import "./workspace.css";
@@ -163,6 +163,8 @@ export function StageHero({
   description: string;
   posters: StagePoster[];
 }) {
+  const galleryRef = useRef<HTMLDivElement>(null);
+  const move = (direction: number) => galleryRef.current?.scrollBy({ left: direction * Math.min(620, galleryRef.current.clientWidth * .77), behavior: "smooth" });
   return (
     <section className="v3-stage-hero">
       <div className="v3-stage-hero-copy">
@@ -170,16 +172,25 @@ export function StageHero({
         <h1>{title}</h1>
         <p>{description}</p>
       </div>
-      <div className="v3-stage-hero-gallery" aria-label="演出海报画廊">
-        {posters.map((poster, index) => (
-          <PortraitArtwork
-            priority={index < 3}
-            key={poster.id}
-            src={poster.src}
-            alt={poster.title + "海报"}
-            caption={<><strong>{poster.title}</strong>{poster.city && <small>{poster.city}</small>}</>}
-          />
-        ))}
+      <div className="v3-stage-hero-media">
+        <div className="v3-stage-hero-controls">
+          <span>{posters.length} 张现场海报</span>
+          <div>
+            <button type="button" aria-label="上一组海报" onClick={() => move(-1)}>‹</button>
+            <button type="button" aria-label="下一组海报" onClick={() => move(1)}>›</button>
+          </div>
+        </div>
+        <div ref={galleryRef} className="v3-stage-hero-gallery" aria-label="演出海报画廊">
+          {posters.length ? posters.map((poster, index) => (
+            <PortraitArtwork
+              priority={index < 3}
+              key={poster.id}
+              src={poster.src}
+              alt={poster.title + "海报"}
+              caption={<><strong>{poster.title}</strong>{poster.city && <small>{poster.city}</small>}</>}
+            />
+          )) : <p className="v3-stage-hero-empty">没有符合当前条件的海报</p>}
+        </div>
       </div>
     </section>
   );
