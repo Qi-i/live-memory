@@ -721,7 +721,7 @@
 .share-preview-toolbar button { min-height: 34px; }
 @media (min-width: 861px) {
   .share-studio-stage { grid-template-columns: minmax(380px, 430px) minmax(0, 1fr); }
-  .share-studio-panel { padding: 15px 17px; gap: 10px; }
+  .share-studio-panel { padding: 10px 14px; gap: 6px; }
   .share-category-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .share-format-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .share-layout-control { grid-template-columns: repeat(3, minmax(0, 1fr)); }
