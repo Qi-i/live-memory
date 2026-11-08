@@ -5,6 +5,7 @@ import {
   ChevronDown,
   Import,
   Loader2,
+  HardDrive,
   Plus,
   RefreshCw,
 } from "lucide-react";
@@ -72,6 +73,7 @@ export default function AppRoot() {
     permanentlyDeleteRecord,
     updateSettings,
   } = controller;
+  const isDeviceOnly = access.mode === "device";
   const [layout, setLayout] = useState<ArchiveLayout>(settings.defaultView);
   const [shareMode, setShareMode] = useState(false);
   const [shareFormat, setShareFormat] = useState<ShareFormat>("adaptive-landscape");
@@ -158,7 +160,9 @@ export default function AppRoot() {
 
   const utilityActions = (
     <>
-      <div className="sync-action-wrap">
+      {isDeviceOnly ? (
+        <button className="sync-pill" type="button" onClick={() => setRoute("settings")} title="数据保存在本机浏览器。点击打开备份与设置"><HardDrive /><span>本机独立档案</span></button>
+      ) : <div className="sync-action-wrap">
         <button className={`sync-pill${syncing ? " syncing" : ""}`} type="button" aria-expanded={syncMenuOpen} onClick={() => setSyncMenuOpen((value) => !value)}>
           {syncing ? <Loader2 className="spin" /> : syncConflicts.length ? <AlertTriangle /> : <Cloud />}
           <span>{syncLabel}</span><ChevronDown />
@@ -173,7 +177,7 @@ export default function AppRoot() {
             <small>{personalCloudStatus === "reconnect-needed" ? "个人云端连接尚未恢复；系统会在网页重新聚焦或恢复网络时自动重试。" : settings.supabase.syncMedia ? "图片同步已开启；网页恢复可见和网络恢复时也会自动刷新。" : "当前未开启云端图片同步。"}</small>
           </div>
         )}
-      </div>
+      </div>}
       {route === "archive" && !shareMode && (
         <>
           <button className="button ghost" type="button" onClick={() => setImportOpen(true)}><Import />导入</button>
@@ -189,9 +193,9 @@ export default function AppRoot() {
       onRouteChange={setRoute}
       adminVisible={!isGuest && Boolean(access.user) && isAdmin(settings)}
       accountAvatar={<AccountAvatar settings={settings} guest={isGuest} />}
-      accountLabel={isGuest ? "访客" : accountLabel(settings)}
-      accountSecondary={isGuest ? "临时本地" : `@${settings.account.username || "account"}`}
-      accountStatus={<AccountStatus settings={settings} syncing={syncing} conflicts={syncConflicts.length} guest={isGuest} personalCloudStatus={personalCloudStatus} onClick={() => isGuest ? access.leaveGuest() : setRoute("settings")} />}
+      accountLabel={isGuest ? "访客" : isDeviceOnly ? "本机档案" : accountLabel(settings)}
+      accountSecondary={isGuest ? "临时本地" : isDeviceOnly ? "无需云服务 · 离线保存" : `@${settings.account.username || "account"}`}
+      accountStatus={<AccountStatus settings={settings} syncing={syncing} conflicts={syncConflicts.length} guest={isGuest} deviceOnly={isDeviceOnly} personalCloudStatus={personalCloudStatus} onClick={() => isGuest ? access.leaveGuest() : setRoute("settings")} />}
       metrics={metrics}
       utilityActions={utilityActions}
       shareMode={shareMode}
@@ -234,6 +238,7 @@ export default function AppRoot() {
         <SettingsPage
           settings={settings}
           records={records}
+          deviceOnly={isDeviceOnly}
           health={health}
           busy={busy}
           setBusy={setBusy}
@@ -309,8 +314,8 @@ function AccountAvatar({ settings, guest }: { settings: AppSettings; guest: bool
   return <span className="account-avatar">{settings.account.avatarUrl && !guest ? <img src={settings.account.avatarUrl} alt={accountLabel(settings)} /> : <b>{label}</b>}</span>;
 }
 
-function AccountStatus({ settings, syncing, conflicts, guest, personalCloudStatus, onClick }: { settings: AppSettings; syncing: boolean; conflicts: number; guest: boolean; personalCloudStatus: "not-configured" | "connected" | "reconnect-needed"; onClick: () => void }) {
-  const status = guest ? "临时会话" : personalCloudStatus === "reconnect-needed" ? "个人云端需恢复" : syncing ? "同步中…" : conflicts ? `${conflicts} 条冲突` : hasPersonalCloudConnection(settings) ? "云同步已连接" : "已登录";
+function AccountStatus({ settings, syncing, conflicts, guest, deviceOnly, personalCloudStatus, onClick }: { settings: AppSettings; syncing: boolean; conflicts: number; guest: boolean; deviceOnly: boolean; personalCloudStatus: "not-configured" | "connected" | "reconnect-needed"; onClick: () => void }) {
+  const status = guest ? "临时会话" : deviceOnly ? "本机离线保存" : personalCloudStatus === "reconnect-needed" ? "个人云端需恢复" : syncing ? "同步中…" : conflicts ? `${conflicts} 条冲突` : hasPersonalCloudConnection(settings) ? "云同步已连接" : "已登录";
   return <button className="account-chip" type="button" onClick={onClick}><AccountAvatar settings={settings} guest={guest} /><span><strong>{guest ? "访客" : accountLabel(settings)}</strong><small>{status}</small></span></button>;
 }
 

@@ -30,15 +30,18 @@ import {
 } from "./supabase";
 
 const GUEST_SESSION_KEY = "live-memory-guest-session";
+const DEVICE_MODE_KEY = "live-memory-device-only-v1";
+const DEVICE_STORAGE_SCOPE = "device-local";
 
 type AccountUser = NonNullable<Awaited<ReturnType<typeof currentUser>>>;
-export type AccessMode = "loading" | "signed-out" | "guest" | "account";
+export type AccessMode = "loading" | "signed-out" | "guest" | "device" | "account";
 
 interface AccessContextValue {
   mode: AccessMode;
   user: AccountUser | null;
   enterGuest: () => void;
   leaveGuest: () => void;
+  enterDevice: () => void;
   signOutAndReturn: () => Promise<void>;
 }
 
@@ -47,6 +50,7 @@ const AccessContext = createContext<AccessContextValue>({
   user: null,
   enterGuest: () => undefined,
   leaveGuest: () => undefined,
+  enterDevice: () => undefined,
   signOutAndReturn: async () => undefined,
 });
 
@@ -128,15 +132,32 @@ function activateSessionStorage(user: AccountUser) {
 
 export function AccessGate({ children }: { children: ReactNode }) {
   const [mode, setMode] = useState<AccessMode>("loading");
+  // Never initialize the public account client just to open a device-only archive.
+  const [authEnabled, setAuthEnabled] = useState(() => localStorage.getItem(DEVICE_MODE_KEY) !== "1");
   const [user, setUser] = useState<AccountUser | null>(null);
   const activeUserId = useRef("");
 
+  const activateDevice = () => {
+    sessionStorage.removeItem(GUEST_SESSION_KEY);
+    localStorage.setItem(DEVICE_MODE_KEY, "1");
+    setStorageScope(DEVICE_STORAGE_SCOPE, false);
+    setMediaCacheScope(DEVICE_STORAGE_SCOPE);
+    activeUserId.current = "";
+    setUser(null);
+    setMode("device");
+  };
+
   useEffect(() => {
+    if (!authEnabled) {
+      activateDevice();
+      return;
+    }
     let active = true;
 
     const applyUser = (sessionUser: AccountUser | null) => {
       if (!active) return;
       if (sessionUser) {
+        localStorage.removeItem(DEVICE_MODE_KEY);
         sessionStorage.removeItem(GUEST_SESSION_KEY);
         activateSessionStorage(sessionUser);
         activeUserId.current = sessionUser.id;
@@ -175,7 +196,12 @@ export function AccessGate({ children }: { children: ReactNode }) {
       active = false;
       stopWatching();
     };
-  }, []);
+  }, [authEnabled]);
+
+  const enterDevice = () => {
+    activateDevice();
+    setAuthEnabled(false);
+  };
 
   const enterGuest = () => {
     clearStorageScope();
@@ -193,6 +219,16 @@ export function AccessGate({ children }: { children: ReactNode }) {
   };
 
   const signOutAndReturn = async () => {
+    if (mode === "device") {
+      // Exit the UI without deleting IndexedDB, settings, or offline image caches.
+      localStorage.removeItem(DEVICE_MODE_KEY);
+      clearStorageScope();
+      setMediaCacheScope("anonymous");
+      setUser(null);
+      setMode("signed-out");
+      setAuthEnabled(true);
+      return;
+    }
     await signOut(readSettings());
     await clearPersistentMediaCache();
     activeUserId.current = "";
@@ -208,6 +244,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
     user,
     enterGuest,
     leaveGuest,
+    enterDevice,
     signOutAndReturn,
   }), [mode, user]);
 
@@ -220,6 +257,7 @@ export function AccessGate({ children }: { children: ReactNode }) {
       <AccessContext.Provider value={contextValue}>
         <LoginGate
           onGuest={enterGuest}
+          onDevice={enterDevice}
           onGithub={() => signInWithGithub(readSettings()).then(() => undefined)}
           onLogin={async (identifier, password) => {
             validatePassword(password);
@@ -276,11 +314,13 @@ function accessMessage(error: unknown) {
 
 function LoginGate({
   onGuest,
+  onDevice,
   onGithub,
   onLogin,
   onRegister,
 }: {
   onGuest: () => void;
+  onDevice: () => void;
   onGithub: () => Promise<void>;
   onLogin: (identifier: string, password: string) => Promise<void>;
   onRegister: (nickname: string, username: string, password: string) => Promise<void>;
@@ -367,12 +407,17 @@ function LoginGate({
           {registering ? "已有账号，返回登录" : "第一次使用？创建账号"}
         </button>
 
+        <div className="access-device">
+          <div><ShieldCheck /><span><strong>不注册，直接创建本机档案</strong><small>记录长期保存在这台设备的浏览器中。离线可用，日后可导出 JSON 备份。</small></span></div>
+          <button type="button" onClick={onDevice}>使用本机档案<ArrowRight /></button>
+        </div>
+
         <div className="access-guest">
           <div><UserRound /><span><strong>先看看示例</strong><small>内置 5 条公开演出示例；你的修改不会保存，也不会读取个人记录。</small></span></div>
           <button type="button" onClick={onGuest}>进入示例<ArrowRight /></button>
         </div>
 
-        <p className="access-footnote">登录账号用于识别你；只有主动连接个人 Supabase 后，图片才会跨设备同步。</p>
+        <p className="access-footnote">本机档案不需要账号或公共云服务，但不提供设备丢失、清除浏览器数据后的自动恢复。请定期导出完整 JSON 备份。</p>
       </section>
     </main>
   );

@@ -33,6 +33,7 @@ import { withoutLocalMedia } from "./syncModel";
 interface SettingsPageProps {
   settings: AppSettings;
   records: EventRecord[];
+  deviceOnly?: boolean;
   health: {
     localRecords: number;
     mediaAssets: number;
@@ -53,6 +54,7 @@ interface SettingsPageProps {
 export function SettingsPage({
   settings,
   records,
+  deviceOnly = false,
   health,
   busy,
   setBusy,
@@ -68,12 +70,13 @@ export function SettingsPage({
   const [linkedProviders, setLinkedProviders] = useState<string[]>([]);
   useEffect(() => setDraft(settings), [settings]);
   useEffect(() => {
+    if (deviceOnly) return;
     let active = true;
     getLinkedProviders(settings)
       .then((providers) => { if (active) setLinkedProviders(providers); })
       .catch(() => undefined);
     return () => { active = false; };
-  }, [settings.account.username]);
+  }, [deviceOnly, settings.account.username]);
   const cloudReady = hasSupabaseConfig(draft);
   const cloudConnected = hasPersonalCloudConnection(draft);
   const trashRecords = records.filter((record) => record.deletedAt);
@@ -132,12 +135,13 @@ export function SettingsPage({
 
   return (
     <section className="settings-page-v2">
+      {deviceOnly && <aside className="device-local-notice" role="note"><strong>本机独立档案 · 无需公共云</strong><p>所有记录存储在当前浏览器的 IndexedDB。本机数据没有独立登录密码，能访问此浏览器的人可能看到档案；清理网站数据或卸载浏览器可能导致数据丢失，请定期导出“完整 JSON”并单独妥善保管。</p></aside>}
       <ThemeSettingsPanel />
 
       <div className="settings-layout-v2">
         <div className="settings-main-v2">
           <section className="settings-module account-module-v2">
-            <ModuleHeader eyebrow="账号" title="现场记账号" description="查看个人资料、登录方式和密码设置。" />
+            <ModuleHeader eyebrow={deviceOnly ? "本机档案" : "账号"} title={deviceOnly ? "个人档案信息" : "现场记账号"} description={deviceOnly ? "昵称和头像仅保存在当前设备，不需要注册账号。" : "查看个人资料、登录方式和密码设置。"} />
             <div className="account-profile-v2">
               <div className="account-avatar-preview-v2">
                 <span>{draft.account.avatarUrl ? <img src={draft.account.avatarUrl} alt={draft.account.nickname} /> : draft.account.nickname.slice(0, 1).toUpperCase()}</span>
@@ -146,21 +150,21 @@ export function SettingsPage({
               </div>
               <div className="settings-fields-v2">
                 <label>昵称<input value={draft.account.nickname} onChange={(event) => setDraft({ ...draft, account: { ...draft.account, nickname: event.target.value } })} /></label>
-                <label>用户名<input value={draft.account.username} disabled title="用户名与账号身份绑定，不在此处直接修改" /></label>
+                {!deviceOnly && <label>用户名<input value={draft.account.username} disabled title="用户名与账号身份绑定，不在此处直接修改" /></label>}
                 <label className="avatar-picker-v2">头像<span><ImagePlus />{draft.account.avatarUrl ? "更换头像" : "选择头像"}</span><input type="file" accept="image/jpeg,image/png,image/webp" onChange={(event) => void selectAvatar(event.target.files?.[0])} /></label>
-                <label>备用邮箱<input type="email" value={draft.account.recoveryEmail} onChange={(event) => setDraft({ ...draft, account: { ...draft.account, recoveryEmail: event.target.value } })} placeholder="用于身份核对和密码恢复" /></label>
+                {!deviceOnly && <label>备用邮箱<input type="email" value={draft.account.recoveryEmail} onChange={(event) => setDraft({ ...draft, account: { ...draft.account, recoveryEmail: event.target.value } })} placeholder="用于身份核对和密码恢复" /></label>}
               </div>
             </div>
             <div className="settings-actions-v2">
               <button className="button primary" type="button" disabled={busy} onClick={() => void onSave(draft)}><Check />保存账号资料</button>
-              <label className="inline-password-v2">新密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" /></label>
-              <button className="button ghost" type="button" disabled={busy || !password} onClick={() => void run(async () => { await updateAccountPassword(draft, password); setPassword(""); flash("密码已更新"); })}><ShieldCheck />更新密码</button>
-              <button className="button ghost" type="button" disabled={busy || githubLinked} title="绑定后可使用同一个账号的用户名密码或 GitHub 登录" onClick={() => void run(async () => { await linkGithubIdentity(draft); })}><Github />{githubLinked ? "GitHub 已绑定" : "绑定 GitHub"}</button>
-              <button className="button ghost" type="button" disabled={busy} onClick={() => void run(onSignOut)}>退出账号</button>
+              {!deviceOnly && <label className="inline-password-v2">新密码<input type="password" value={password} onChange={(event) => setPassword(event.target.value)} placeholder="至少 8 位" /></label>}
+              {!deviceOnly && <button className="button ghost" type="button" disabled={busy || !password} onClick={() => void run(async () => { await updateAccountPassword(draft, password); setPassword(""); flash("密码已更新"); })}><ShieldCheck />更新密码</button>}
+              {!deviceOnly && <button className="button ghost" type="button" disabled={busy || githubLinked} title="绑定后可使用同一个账号的用户名密码或 GitHub 登录" onClick={() => void run(async () => { await linkGithubIdentity(draft); })}><Github />{githubLinked ? "GitHub 已绑定" : "绑定 GitHub"}</button>}
+              <button className="button ghost" type="button" disabled={busy} onClick={() => void run(onSignOut)}>{deviceOnly ? "关闭本机档案（保留记录）" : "退出账号"}</button>
             </div>
           </section>
 
-          <section className="settings-module cloud-module-v2">
+          {!deviceOnly && <section className="settings-module cloud-module-v2">
             <ModuleHeader eyebrow="同步" title="个人 Supabase" description="连接自己的 Supabase 后，新增与修改会自动同步；无需手动上传整份档案。" />
             <div className="cloud-status-v2">
               <span className={cloudConnected ? "is-connected" : ""}><i />{cloudConnected ? "个人云端已连接" : cloudReady ? "配置已保存，等待连接" : "尚未填写连接信息"}</span>
@@ -179,7 +183,7 @@ export function SettingsPage({
               <button className="button ghost" type="button" disabled={busy || !cloudConnected || !draft.supabase.syncMedia} onClick={() => void run(refreshCloudMedia)}><RefreshCw />刷新图片链接</button>
               <button className="button ghost" type="button" onClick={() => void onSave(draft)}><Check />保存连接设置</button>
             </div>
-          </section>
+          </section>}
 
           <section className="settings-module data-module-v2">
             <ModuleHeader eyebrow="数据" title="导出、导入与回收站" description="可导出备份、恢复记录或处理已删除内容。" />
