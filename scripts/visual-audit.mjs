@@ -571,6 +571,14 @@ await archiveView("海报", ".archive-poster-card");
 
   // The statistics screen also has a dedicated shareable canvas.
   await page.locator(".experience-mobile-nav button").filter({ hasText: "统计" }).click();
+  await page.getByRole("group", { name: "选择统计年份" }).getByRole("button", { name: /2024/ }).click();
+  const selectedYearCount = (await page.locator(".statistics-metrics article").first().locator("strong").textContent())?.trim();
+  if (selectedYearCount !== "2") throw new Error("Year filter did not narrow demo archive to two 2024 concerts: " + selectedYearCount);
+  const firstChart = await page.locator(".statistics-panel").first().innerText();
+  if (!firstChart.includes("2024-03") || !firstChart.includes("2024-08")) {
+    throw new Error("Monthly trend did not retain chronological 2024 observations: " + firstChart);
+  }
+  await page.screenshot({ path: outputDir + "/13e-statistics-2024-mobile.png", fullPage: true });
   await page.getByRole("button", { name: "生成回顾分享图" }).click();
   await page.locator(".keepsake-preview-image").waitFor({ state: "visible", timeout: 25000 });
   await page.screenshot({ path: outputDir + "/13e-keepsake-recap-mobile.png", fullPage: true });
