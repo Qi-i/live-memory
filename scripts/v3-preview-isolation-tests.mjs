@@ -56,6 +56,8 @@ const allowed = [
   "src/v3Standalone.tsx",
   "src/ui/system/V3Preview.tsx",
   "src/ui/system/WorkspaceShell.tsx",
+  "src/ui/system/DemoViews.tsx",
+  "src/ui/useDialogBehavior.ts",
   "src/ui/system/demoData.ts",
   "src/ui/system/DemoViews.tsx",
   "src/ui/system/DemoFeatures.tsx",
