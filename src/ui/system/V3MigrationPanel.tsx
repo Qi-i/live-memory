@@ -37,12 +37,15 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState("");
   const scopeGeneration = useRef(0);
-  const backupInFlight = useRef(false);
+  const backupInFlight = useRef<number | null>(null);
+  const backupJobCounter = useRef(0);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState("");
   useEffect(() => {
     // Never display results obtained for an earlier account/cloud configuration.
     scopeGeneration.current += 1;
+    backupInFlight.current = null;
+    setBackupBusy(false);
     setStates({});
     setPending(null);
     setError("");
@@ -51,7 +54,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   }, [settings.supabase.url, settings.supabase.ownerKey]);
 
   async function inspect(provider: Provider, bootstrap = false, details = false) {
-    if (pending || backupInFlight.current) return;
+    if (pending || backupInFlight.current !== null) return;
     const requestGeneration = scopeGeneration.current;
     const requestScope = currentStorageScope();
     setPending(provider);
@@ -83,8 +86,9 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
 
   /** Explicit read-only export; all media bytes must be verifiably portable. */
   async function exportVerifiedPortableBackup() {
-    if (backupInFlight.current || pending) return;
-    backupInFlight.current = true;
+    if (backupInFlight.current !== null || pending) return;
+    const backupJob = ++backupJobCounter.current;
+    backupInFlight.current = backupJob;
     const scope = currentStorageScope();
     const generation = scopeGeneration.current;
     const assertScope = () => {
@@ -146,11 +150,13 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         请核实下载完成并把备份文件独立保存，之后才能考虑正式切换。`);
     } catch {
       if (scopeGeneration.current === generation && currentStorageScope() === scope) {
-        setBackupStatus("备份未生成：存在无法读取的图片、数据变化或文件超过安全容量上限。请检查媒体链接或缩小批次；原始档案未修改。");
+        setBackupStatus("备份未生成：存在无法读取的图片、数据变化或文件超过安全容量上限。请检查媒体链接或在本机另存原图；原始档案未修改。");
       }
     } finally {
-      backupInFlight.current = false;
-      if (scopeGeneration.current === generation && currentStorageScope() === scope) setBackupBusy(false);
+      if (backupInFlight.current === backupJob) {
+        backupInFlight.current = null;
+        if (scopeGeneration.current === generation && currentStorageScope() === scope) setBackupBusy(false);
+      }
     }
   }
 
