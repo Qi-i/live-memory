@@ -208,7 +208,7 @@ export function SettingsPage({
             </div>
           </section>}
 
-          {!deviceOnly && <V3MigrationPanel settings={settings} personalConnected={cloudConnected} />}
+          {!deviceOnly && <V3MigrationPanel settings={settings} records={records} personalConnected={cloudConnected} />}
 
           <section className="settings-module data-module-v2">
             <ModuleHeader eyebrow="数据" title="导出、导入与回收站" description="可导出备份、恢复记录或处理已删除内容。" />
