@@ -93,4 +93,16 @@ assert.ok(mediaCAS.indexOf("V3_OWNER_NOT_ACTIVATED") <
   "Activation, media validation and writer privilege must be checked in that order");
 assert.doesNotMatch(mediaCAS,/\bsecurity definer\b/i);
 assert.doesNotMatch(mediaCAS,/\b(drop table|truncate|delete from storage\.objects|update public\.echo_)\b/i);
+const accountFence = await readFile(
+  new URL("../supabase/migrations/023_v3_account_session_scoped_cas.sql",import.meta.url),"utf8",
+);
+assert.match(accountFence,/create or replace function public\.live_memory_v3_cas_account_scoped/);
+assert.match(accountFence,/p_expected_user uuid/);
+assert.match(accountFence,/auth\.uid\(\)\) is distinct from p_expected_user/);
+assert.match(accountFence,/V3_ACCOUNT_SESSION_CHANGED/);
+assert.match(accountFence,/security invoker/i);
+assert.match(accountFence,/public\.live_memory_v3_cas_account\(/);
+assert.match(accountFence,/revoke all on function public\.live_memory_v3_cas_account_scoped/);
+assert.doesNotMatch(accountFence,/\bsecurity definer\b/i);
+assert.doesNotMatch(accountFence,/\b(drop table|truncate|delete from public\.echo_|update public\.echo_)\b/i);
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
