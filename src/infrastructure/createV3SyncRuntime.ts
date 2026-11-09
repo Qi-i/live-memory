@@ -25,6 +25,12 @@ export class V3SyncRuntime {
     private readonly ledger: IndexedDbRevisionLedger,
   ) {}
 
+  /** Authenticated read-only gate. No V3 editing is permitted while the
+   * account is still owned by the legacy V2 writer. */
+  async writerMode(): Promise<"v2" | "v3"> {
+    return this.remote.writerMode();
+  }
+
   async audit(): Promise<ReadOnlySyncAudit> {
     const baseline = await this.ledger.snapshot();
     return auditSyncReadOnly(this.local, this.remote, {
