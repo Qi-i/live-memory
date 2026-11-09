@@ -116,3 +116,7 @@
  .v3-real-modal dl { grid-template-columns:1fr; gap:4px; }
  .v3-real-modal dt:not(:first-child) { margin-top:8px; }
 }
+
+/* Device-only optimistic edit feedback; never interpreted as a cloud sync result. */
+.v3-real-save-notice { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:40px; padding:8px 13px; background:#ecf5f2; border:1px solid #c5e1d9; border-radius:12px; color:#285a56; font-size:12px; }
+.v3-real-save-notice button { min-width:28px; min-height:28px; border:0; border-radius:8px; background:transparent; color:inherit; font-size:19px; cursor:pointer; }
