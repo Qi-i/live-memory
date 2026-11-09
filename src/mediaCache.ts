@@ -184,6 +184,7 @@ async function persistInlineSource(asset: MediaAsset, identity: string, epoch: n
     await cache.put(cacheRequest(identity), new Response(blob, {
       headers: { "content-type": blob.type || asset.mimeType || "application/octet-stream" },
     }));
+    verifiedOfflineImages.delete(identity); // An inline source may replace a previously verified object.
   } catch {
     // Inline rendering remains available even if persistent cache priming fails.
   }
@@ -206,6 +207,7 @@ async function fetchAndCache(asset: MediaAsset, identity: string, epoch: number)
     const cache = await caches.open(currentCacheName());
     if (epoch !== mediaCacheEpoch) return "";
     await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
+    verifiedOfflineImages.delete(identity); // HTTP cache writes require SHA revalidation before sync.
   }
   if (epoch !== mediaCacheEpoch) return "";
   const objectUrl = URL.createObjectURL(blob);
