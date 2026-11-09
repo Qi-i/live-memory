@@ -5,6 +5,7 @@ import { IndexedDbRecordRepository } from "./indexedDb/recordRepository";
 import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
 import { SupabaseV3RecordAdapter, type V3RpcClient } from "./supabase/V3CloudRecordAdapter";
 import { auditSyncReadOnly, type ReadOnlySyncAudit } from "../core/application/auditSyncReadOnly";
+import { reviewMigrationReadOnly, type MigrationReview } from "../core/application/reviewMigrationReadOnly";
 import { synchronizeWithLedger } from "../core/application/synchronizeWithLedger";
 import { bootstrapEquivalentBaselines, type BaselineBootstrapReport } from "../core/application/bootstrapEquivalentBaselines";
 import type { SyncRunResult } from "../core/application/synchronizeRecords";
@@ -24,6 +25,14 @@ export class V3SyncRuntime {
   async audit(): Promise<ReadOnlySyncAudit> {
     const baseline = await this.ledger.snapshot();
     return auditSyncReadOnly(this.local, this.remote, {
+      read: (id) => baseline.get(id),
+    });
+  }
+
+  /** Shows only private, in-browser conflict metadata. Never writes any record. */
+  async review(): Promise<MigrationReview> {
+    const baseline = await this.ledger.snapshot();
+    return reviewMigrationReadOnly(this.local, this.remote, {
       read: (id) => baseline.get(id),
     });
   }
