@@ -104,19 +104,39 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         { resolveMediaSource },
         { readAsDataUrl, downloadBlob },
         { createPortableBackup, verifyPortableBackupDocument },
+        { completeBackupInventory, verifyBackupCloudUnchanged },
         { stableSerialize },
       ] = await Promise.all([
         import("../../storage"),
         import("../../mediaCache"),
         import("../../media"),
         import("../../core/application/portableMediaBackup"),
+        import("../../core/application/completeBackupInventory"),
         import("../../core/sync/revision"),
       ]);
       assertScope();
       const original = await listRecords();
       assertScope();
-      if (!original.length) throw new Error("V3_BACKUP_EMPTY_ARCHIVE");
-      const backup = await createPortableBackup(original, {
+      // The historic backup exported ONLY IndexedDB rows, silently omitting
+      // records on other devices. Read the entire personal cloud snapshot if
+      // connected and reconcile the two inventories without choosing winners.
+      const cloudRuntime = personalConnected
+        ? await (await import("../../infrastructure/createV3SyncRuntime"))
+            .createV3SyncRuntime(settings, "personal")
+        : null;
+      assertScope();
+      const remoteBefore = cloudRuntime
+        ? await cloudRuntime.readPersonalCloudForPortableBackup()
+        : [];
+      assertScope();
+      if (!original.length && !remoteBefore.length) throw new Error("V3_BACKUP_EMPTY_ARCHIVE");
+      const inventory = cloudRuntime
+        ? completeBackupInventory(original, remoteBefore)
+        : { records: original, counts: {
+            local: original.length, remote: 0, shared: 0,
+            localOnly: original.length, remoteOnly: 0, total: original.length,
+          } };
+      const backup = await createPortableBackup(inventory.records, {
         assertScope,
         async load(asset) {
           assertScope();
@@ -142,15 +162,32 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           current.some((row) => originals.get(row.id) !== stableSerialize(row))) {
         throw new Error("V3_BACKUP_LOCAL_CHANGED");
       }
+      // A multi-minute image export can race other devices. Re-list through
+      // the same authenticated cloud scope; no changed revision or missing
+      // record is allowed to receive a "complete" backup certificate.
+      if (cloudRuntime) {
+        const remoteAfter = await cloudRuntime.readPersonalCloudForPortableBackup();
+        assertScope();
+        verifyBackupCloudUnchanged(remoteBefore, remoteAfter);
+      }
       assertScope();
       downloadBlob(JSON.stringify(backup),
-        `live-memory-v3-portable-${new Date().toISOString().slice(0, 10)}.json`,
+        `live-memory-v3-${cloudRuntime ? "complete" : "local-only"}-${new Date().toISOString().slice(0, 10)}.json`,
         "application/json");
-      setBackupStatus(`已提交浏览器下载：${checked.records} 条记录、${checked.assets} 个媒体文件。
-        请核实下载完成并把备份文件独立保存，之后才能考虑正式切换。`);
-    } catch {
+      setBackupStatus(cloudRuntime
+        ? `已提交完整备份下载：${checked.records} 条记录、${checked.assets} 个媒体文件；
+          本机独有 ${inventory.counts.localOnly} 条、云端独有 ${inventory.counts.remoteOnly} 条。
+          请验证下载文件并独立保存；本次未修改任何云端或本机数据。`
+        : `已提交仅本机备份下载：${checked.records} 条记录、${checked.assets} 个媒体文件。
+          未连接个人云，此文件不包含其他设备的云端独有档案，不能作为完整切换依据。`);
+    } catch (failure) {
       if (scopeGeneration.current === generation && currentStorageScope() === scope) {
-        setBackupStatus("备份未生成：存在无法读取的图片、数据变化或文件超过安全容量上限。请检查媒体链接或在本机另存原图；原始档案未修改。");
+        const reason = failure instanceof Error ? failure.message : "";
+        setBackupStatus(reason.includes("V3_COMPLETE_BACKUP_DIVERGENT_RECORDS")
+          ? "未导出：本机与个人云有同 ID 但内容不同的记录。必须在差异明细中人工核对；不会替您覆盖或丢弃任一版本。"
+          : reason.includes("V3_COMPLETE_BACKUP_CLOUD_CHANGED") || reason.includes("V3_REMOTE_INVENTORY_CHANGED")
+            ? "未导出：其他设备正在修改云端记录，需在数据稳定后重新生成完整备份。"
+            : "备份未生成：个人云不可用、图片字节无法读取、数据变化或文件超过安全容量上限。没有修改本机或云端档案。");
       }
     } finally {
       if (backupInFlight.current === backupJob) {
@@ -253,9 +290,11 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       </div>
       <div className="v3-migration-portable">
         <button className="button ghost" type="button"
-          disabled={backupBusy || pending !== null || backupAudit.records === 0}
+          disabled={backupBusy || pending !== null || (!personalConnected && backupAudit.records === 0)}
           onClick={() => void exportVerifiedPortableBackup()}>
-          {backupBusy ? "校验原图并生成备份中…" : "生成含全部原图的可验证迁移备份"}
+          {backupBusy ? "对账云端、验证原图并生成备份…" : personalConnected
+            ? "导出本机＋个人云全量可验证备份"
+            : "导出仅本机备份（未连接个人云）"}
         </button>
         <span>仅下载到本机，不上传任何数据；单文件图片不超过 32 MiB、全部图片不超过 256 MiB。</span>
         {backupStatus && <p role="status">{backupStatus}</p>}
