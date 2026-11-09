@@ -54,7 +54,7 @@ try {
     });
   },{rows:[
     fixture("s1","北京现场 · 真实本机回归","北京","watched",{note:"合成测试备注",coordinates:{lat:39.90,lng:116.40,provider:"wgs84"}}),
-    fixture("s2","郑州巡回演出 · 真实本机回归","郑州","planned",{coordinates:{lat:34.75,lng:113.62,provider:"wgs84"}}),
+    fixture("s2","郑州巡回演出 · 真实本机回归","郑州","planned",{date:"2099-09-27",coordinates:{lat:34.75,lng:113.62,provider:"wgs84"}}),
     fixture("s3","应该排除的软删除记录","北京","watched",{deletedAt:"2026-11-08T00:00:00.000Z"}),
   ]});
   await page.reload({waitUntil:"domcontentloaded"});
