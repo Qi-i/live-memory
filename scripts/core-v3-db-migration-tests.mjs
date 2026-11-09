@@ -48,6 +48,9 @@ const activationGate = await readFile(
 );
 assert.match(activationGate, /revoke all on function public\.live_memory_v3_activate_personal\(\)\s+from public, anon, authenticated/i,
   "Anonymous users with legacy leaked owner keys must not be able to lock out V2");
+assert.match(activationGate, /revoke insert on public\.live_memory_v3_writer_modes from anon/i);
+assert.match(activationGate, /for insert to authenticated\s+with check\s*\(\s*provider='account'/i,
+  "Authenticated clients must not use a leaked passkey ownerKey to insert a personal cutover marker");
 for (const provider of ["account","personal"]) {
   const name = "public.live_memory_v3_cas_" + provider;
   const from = activationGate.indexOf("create or replace function " + name);
