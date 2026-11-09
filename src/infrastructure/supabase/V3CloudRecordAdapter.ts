@@ -163,10 +163,9 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
       }
       prepared = { ...record, media: assets };
     }
-    if (this.includeMedia && prepared.media.some((asset) =>
-      /^(?:data:|blob:)/i.test(asset.src) && !asset.storagePath
-    )) {
-      throw new Error("V3_MEDIA_UPLOAD_REQUIRED: Upload local images before committing the record");
+    if (this.includeMedia && (!Array.isArray(prepared.media) ||
+        prepared.media.some((asset) => !asset.storagePath))) {
+      throw new Error("V3_MEDIA_UPLOAD_REQUIRED: Every media item must have a durable private Storage path before CAS");
     }
 
     // Server JSON contains only private Storage paths, never raw image bytes

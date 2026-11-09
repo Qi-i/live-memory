@@ -68,6 +68,14 @@ await assert.rejects(personal.writerMode(),/V3_SERVER_CUTOVER_UNAVAILABLE/);
 client.mode="v2";
 await assert.rejects(personal.compareAndSwap(record,null), /V3_MEDIA_UPLOAD_REQUIRED/,
   "Local ticket bytes must never be committed as record JSON before media upload");
+await assert.rejects(personal.compareAndSwap({
+  ...record,media:[{...record.media[0],src:"https://cdn.example.test/private?token=DO_NOT_STORE"}],
+},null),/V3_MEDIA_UPLOAD_REQUIRED/,
+  "An expiring external image URL without private Storage backing must never enter cloud JSON");
+await assert.rejects(personal.compareAndSwap({
+  ...record,media:[{...record.media[0],src:""}],
+},null),/V3_MEDIA_UPLOAD_REQUIRED/,
+  "A missing picture cannot silently become an incomplete synced record");
 const uploadedRecord = { ...record, media: [{
   ...record.media[0], storagePath:"test/record-one/ticket.png",
   src:"https://storage.example/signed-private?token=SECRET"
