@@ -53,7 +53,7 @@ export async function synchronizeRecords(
       snapshot.some(record => typeof record?.id !== "string" || !record.id.trim()) ||
       remoteRecords.some(row => typeof row?.record?.id !== "string" ||
         !row.record.id.trim() || typeof row.serverRevision !== "string" ||
-        !/^[1-9]\\d*$/.test(row.serverRevision))) {
+        !/^[1-9]\d*$/.test(row.serverRevision))) {
     throw new Error("V3_SYNC_AMBIGUOUS_SNAPSHOT");
   }
   const localById = new Map(snapshot.map((record) => [record.id, record]));
