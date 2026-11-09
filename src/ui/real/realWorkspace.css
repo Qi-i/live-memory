@@ -20,7 +20,7 @@
 .v3-real-poster-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(155px,1fr)); gap:15px; min-width:0; }
 .v3-real-poster-card { display:grid; align-content:start; gap:5px; min-width:0; padding:7px; border:1px solid rgba(134,148,188,.2); border-radius:15px; background:rgba(255,255,255,.64); font:inherit; color:#202d48; text-align:left; cursor:pointer; }
 .v3-real-poster-card:focus-visible { outline:3px solid #7961bd; outline-offset:2px; }
-.v3-real-poster-image { display:grid; place-items:center; width:100%; aspect-ratio:2/3; border-radius:11px; background:linear-gradient(140deg,#e1ddf5,#d1e8ed); overflow:hidden; color:#6a7296; font-size:12px; }
+.v3-real-poster-image { display:grid; place-items:center; width:100%; aspect-ratio:var(--v3-real-poster-ratio,2/3); border-radius:11px; background:linear-gradient(140deg,#e1ddf5,#d1e8ed); overflow:hidden; color:#6a7296; font-size:12px; }
 .v3-real-poster-image img { display:block; max-width:100%; max-height:100%; width:100%; height:100%; object-fit:contain; }
 .v3-real-poster-card strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; font-size:13px; line-height:1.4; }
 .v3-real-poster-card small { color:#6c7991; font-size:11px; }
