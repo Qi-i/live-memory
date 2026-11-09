@@ -45,8 +45,22 @@ export async function synchronizeRecords(
 
   const snapshot = await local.list();
   const remoteRecords = await cloud.list();
+  // The core must NOT assume every transport returns trustworthy unique IDs.
+  // A malformed/duplicate row could collapse in Map() and cause the wrong
+  // cloud revision to overwrite another device's archive. Abort the entire
+  // round BEFORE any CAS, local transaction or baseline acknowledgement.
+  if (!Array.isArray(snapshot) || !Array.isArray(remoteRecords) ||
+      snapshot.some(record => typeof record?.id !== "string" || !record.id.trim()) ||
+      remoteRecords.some(row => typeof row?.record?.id !== "string" ||
+        !row.record.id.trim() || typeof row.serverRevision !== "string" ||
+        !/^[1-9]\\d*$/.test(row.serverRevision))) {
+    throw new Error("V3_SYNC_AMBIGUOUS_SNAPSHOT");
+  }
   const localById = new Map(snapshot.map((record) => [record.id, record]));
   const remoteById = new Map(remoteRecords.map((row) => [row.record.id, row]));
+  if (localById.size !== snapshot.length || remoteById.size !== remoteRecords.length) {
+    throw new Error("V3_SYNC_AMBIGUOUS_SNAPSHOT");
+  }
   const allIds = new Set([...localById.keys(), ...remoteById.keys()]);
   const downloadedIds: string[] = [];
   const uploadedIds: string[] = [];
