@@ -1,7 +1,7 @@
 import type { AppSettings } from "../domain";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
-import { resolveMediaSource } from "../mediaCache";
+import { persistVerifiedOfflineMedia, resolveMediaSource } from "../mediaCache";
 import { SupabaseV3MediaTransport, V3_PRIVATE_MEDIA_BUCKET, type V3MediaStorageClient } from "./supabase/V3MediaTransport";
 import { IndexedDbRecordRepository } from "./indexedDb/recordRepository";
 import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
@@ -127,6 +127,7 @@ export async function createV3SyncRuntime(
       },
       (asset) => resolveMediaSource(asset, true),
       settings.supabase.mediaBucket, // legacy V2 SOURCE only; never a V3 upload target
+      (asset, blob) => persistVerifiedOfflineMedia(asset, blob),
     );
   }
 
