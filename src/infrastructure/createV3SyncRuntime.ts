@@ -79,6 +79,7 @@ export async function createV3SyncRuntime(
   let client: V3RpcClient;
   let identity: string;
   let mediaTransport: SupabaseV3MediaTransport | undefined;
+  let assertIdentity: () => Promise<void>;
   if (provider === "account") {
     const account = getAccountClient();
     const { data, error } = await account.auth.getUser();
@@ -86,8 +87,16 @@ export async function createV3SyncRuntime(
     if (currentStorageScope() !== scope || scope !== data.user.id.toLowerCase()) {
       throw new Error("Authenticated user and active storage account do not match");
     }
-    identity = (import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "").trim().toLowerCase() + "|user:" + data.user.id;
+    const openingUser = data.user.id.toLowerCase();
+    identity = (import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "").trim().toLowerCase() + "|user:" + openingUser;
     client = account as unknown as V3RpcClient;
+    assertIdentity = async () => {
+      if (currentStorageScope() !== scope) throw new Error("V3_ACCOUNT_SESSION_CHANGED");
+      const { data: checked, error: checkError } = await account.auth.getUser();
+      if (checkError || checked.user?.id.toLowerCase() !== openingUser || currentStorageScope() !== scope) {
+        throw new Error("V3_ACCOUNT_SESSION_CHANGED");
+      }
+    };
   } else {
     const endpoint = settings.supabase.url.trim().replace(/\/+$/, "").toLowerCase();
     const owner = settings.supabase.ownerKey?.trim() || "";
@@ -97,6 +106,13 @@ export async function createV3SyncRuntime(
     const personal = makeSupabaseClient(settings);
     client = personal as unknown as V3RpcClient;
     identity = endpoint + "|owner:" + owner;
+    assertIdentity = async () => {
+      if (currentStorageScope() !== scope ||
+          settings.supabase.ownerKey?.trim() !== owner ||
+          settings.supabase.url.trim().replace(/\/+$/, "").toLowerCase() !== endpoint) {
+        throw new Error("V3_PERSONAL_SCOPE_CHANGED");
+      }
+    };
     // V3 is always a full-media personal cloud. Never inherit the V2
     // mediaBucket setting: the legacy echo-media bucket is publicly readable.
     // This dedicated private bucket must pass security review before cutover.
@@ -116,7 +132,7 @@ export async function createV3SyncRuntime(
 
   if (currentStorageScope() !== scope) throw new Error("Account switched during V3 runtime construction");
   const local = new IndexedDbRecordRepository(scope);
-  const remote = new SupabaseV3RecordAdapter(client, provider, identity, scope, mediaTransport);
+  const remote = new SupabaseV3RecordAdapter(client, provider, identity, scope, mediaTransport, assertIdentity);
   const ledger = await IndexedDbRevisionLedger.create(scope, provider, identity);
   return new V3SyncRuntime(local, remote, ledger);
 }

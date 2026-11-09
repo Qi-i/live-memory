@@ -19,10 +19,15 @@ new Function("exports","require",transpile(adapterCode))(adapter, moduleName=>{
   throw Error("Unexpected transport dependency: "+moduleName);
 });
 
+const ACCOUNT_A="11111111-1111-1111-1111-111111111111";
+const ACCOUNT_B="22222222-2222-2222-2222-222222222222";
 class FakeRpc {
   rows=new Map();
   calls=[];
   mode="v2";
+  actor=ACCOUNT_A;
+  onRpc=null;
+  onRange=null;
   from(table) {
     this.calls.push(["select",table]);
     return {select:columns=>{
@@ -31,6 +36,7 @@ class FakeRpc {
         assert.equal(key,"id");
         assert.equal(options.ascending,true);
         return {range:async (start,end)=>{
+          if(this.onRange) await this.onRange();
           const sorted=[...this.rows.values()].sort((a,b)=>a.id.localeCompare(b.id));
           return {data:sorted.slice(start,end+1),error:null};
         }};
@@ -39,11 +45,16 @@ class FakeRpc {
   }
   async rpc(name,args) {
     this.calls.push(["rpc",name,args]);
+    if (this.onRpc) await this.onRpc(name,args);
     if(["live_memory_v3_mode_personal","live_memory_v3_mode_account"].includes(name)){
       assert.deepEqual(args,{});
       return {data:this.mode,error:null};
     }
-    assert.ok(["live_memory_v3_cas_personal","live_memory_v3_cas_account"].includes(name));
+    assert.ok(["live_memory_v3_cas_personal","live_memory_v3_cas_account_scoped"].includes(name));
+    if (name === "live_memory_v3_cas_account_scoped" &&
+        (!args.p_expected_user || args.p_expected_user !== this.actor)) {
+      return {data:null,error:{code:"42501",message:"V3_ACCOUNT_SESSION_CHANGED"}};
+    }
     const old=this.rows.get(args.p_id);
     const expected=old?.v3_revision??null;
     if(expected!==args.p_expected_revision)
@@ -94,13 +105,51 @@ assert.equal((await personal.list())[0].record.title,"已修改");
 await assert.rejects(personal.compareAndSwap(record,"unsafe"),/Invalid server revision/);
 
 const accountClient=new FakeRpc();
-const account=new adapter.SupabaseV3RecordAdapter(accountClient,"account","auth-user","account-test");
+const accountGuard=async()=>{if(accountClient.actor!==ACCOUNT_A)throw Error("V3_ACCOUNT_SESSION_CHANGED");};
+const account=new adapter.SupabaseV3RecordAdapter(
+  accountClient,"account","auth-user",ACCOUNT_A,undefined,accountGuard,
+);
+assert.throws(()=>new adapter.SupabaseV3RecordAdapter(
+  new FakeRpc(),"account","auth-user",ACCOUNT_A,
+),/V3_ACCOUNT_SCOPE_GUARD_REQUIRED/);
 const backup=await account.compareAndSwap(record,null);
 assert.deepEqual(backup.record.media,[],"Text cloud must strip private ticket data on write");
-assert.equal(accountClient.calls.at(-1)[1],"live_memory_v3_cas_account");
+assert.equal(accountClient.calls.at(-1)[1],"live_memory_v3_cas_account_scoped");
+assert.equal(accountClient.calls.at(-1)[2].p_expected_user,ACCOUNT_A);
 assert.equal(account.includeMedia,false);
 assert.equal(await account.writerMode(),"v2");
 assert.equal((await account.list()).length,1);
+
+// A second login during a pending request cannot turn a previously scoped
+// archive into cloud writes for the new user (server and client both check).
+const changingAccount=new FakeRpc();
+const switchingGuard=async()=>{
+  if(changingAccount.actor!==ACCOUNT_A)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+};
+const guardedAccount=new adapter.SupabaseV3RecordAdapter(
+  changingAccount,"account","auth-user",ACCOUNT_A,undefined,switchingGuard,
+);
+changingAccount.onRpc=async(name)=>{
+  if(name==="live_memory_v3_cas_account_scoped") changingAccount.actor=ACCOUNT_B;
+};
+await assert.rejects(guardedAccount.compareAndSwap({...record,media:[]},null),
+  /V3_ACCOUNT_SESSION_CHANGED/);
+assert.equal(changingAccount.rows.size,0,
+  "An in-flight auth switch must not write the former account's archive under the new JWT");
+changingAccount.onRpc=null;
+changingAccount.actor=ACCOUNT_A;
+changingAccount.onRange=async()=>{changingAccount.actor=ACCOUNT_B;};
+await assert.rejects(guardedAccount.list(),/V3_ACCOUNT_SESSION_CHANGED/,
+  "Switching identity during an inventory page must abort the entire read");
+changingAccount.onRange=null;
+changingAccount.actor=ACCOUNT_A;
+const oldMode=changingAccount.mode;
+changingAccount.onRpc=async(name)=>{
+  if(name==="live_memory_v3_mode_account") changingAccount.actor=ACCOUNT_B;
+};
+await assert.rejects(guardedAccount.writerMode(),/V3_ACCOUNT_SESSION_CHANGED/,
+  "A stale mode check must never authorize writes after a login change");
+changingAccount.mode=oldMode;
 
 // The adapter must fetch every page; a provider limit cannot erase archives.
 const many=new FakeRpc();
@@ -109,7 +158,8 @@ for(let index=0; index<1007; index++){
   many.rows.set(id,{id,payload:{...record,id,media:[]},v3_revision:1});
 }
 const all=await new adapter.SupabaseV3RecordAdapter(
-  many,"account","auth-user","account-test",
+  many,"account","auth-user",ACCOUNT_A,undefined,
+  async()=>{if(many.actor!==ACCOUNT_A)throw Error("V3_ACCOUNT_SESSION_CHANGED");},
 ).list();
 assert.equal(all.length,1007,"Every record across 3 server pages must be returned");
 assert.equal(new Set(all.map(row=>row.record.id)).size,1007);
@@ -128,7 +178,8 @@ insertedDuringRead.from = (table) => {
   return originalInsertedFrom(table);
 };
 await assert.rejects(new adapter.SupabaseV3RecordAdapter(
-  insertedDuringRead,"account","test-user","account-test",
+  insertedDuringRead,"account","test-user",ACCOUNT_A,undefined,
+  async()=>{if(insertedDuringRead.actor!==ACCOUNT_A)throw Error("V3_ACCOUNT_SESSION_CHANGED");},
 ).list(), /V3_REMOTE_INVENTORY_CHANGED/,
 "Records inserted between scans must fail closed rather than silently being omitted");
 
@@ -144,7 +195,8 @@ editedDuringRead.from = (table) => {
   return originalEditedFrom(table);
 };
 await assert.rejects(new adapter.SupabaseV3RecordAdapter(
-  editedDuringRead,"account","test-user","account-test",
+  editedDuringRead,"account","test-user",ACCOUNT_A,undefined,
+  async()=>{if(editedDuringRead.actor!==ACCOUNT_A)throw Error("V3_ACCOUNT_SESSION_CHANGED");},
 ).list(), /V3_REMOTE_INVENTORY_CHANGED/,
 "Legacy V2 writes during V3 inventory must trigger retry");
 

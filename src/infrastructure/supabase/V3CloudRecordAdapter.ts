@@ -60,9 +60,18 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     readonly identity: string,
     readonly accountScope: string,
     private readonly mediaTransport?: V3MediaTransport,
+    private readonly assertIdentity?: () => Promise<void>,
   ) {
     if (!identity.trim() || !accountScope.trim()) throw new Error("V3 cloud identity and account scope are mandatory");
+    if (provider === "account" && (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(accountScope) || !assertIdentity)) {
+      throw new Error("V3_ACCOUNT_SCOPE_GUARD_REQUIRED");
+    }
     this.includeMedia = provider === "personal";
+  }
+
+  private async guardIdentity(): Promise<void> {
+    if (this.assertIdentity) await this.assertIdentity();
+    this.mediaTransport?.assertScope();
   }
 
   /**
@@ -70,9 +79,11 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
    * must have an immutable owner cutover marker before V3 may write.
    */
   async writerMode(): Promise<"v2" | "v3"> {
+    await this.guardIdentity();
     const fn = this.provider === "personal"
       ? "live_memory_v3_mode_personal" : "live_memory_v3_mode_account";
     const { data, error } = await this.client.rpc(fn, {});
+    await this.guardIdentity();
     if (error) throw rpcFailure(error.message);
     if (data !== "v2" && data !== "v3") {
       throw new Error("V3_SERVER_CUTOVER_UNAVAILABLE: Writer mode cannot be verified");
@@ -88,8 +99,10 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
    * internally inconsistent multi-page response as a deletion/recovery.
    */
   async list(): Promise<CloudRecordEnvelope[]> {
+    await this.guardIdentity();
     const first = await this.scanAllPages();
     const verified = await this.scanAllPages();
+    await this.guardIdentity();
     if (first.length !== verified.length) {
       throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
     }
@@ -100,7 +113,10 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
         throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
       }
     }
-    if (!this.includeMedia || !this.mediaTransport) return verified;
+    if (!this.includeMedia || !this.mediaTransport) {
+      await this.guardIdentity();
+      return verified;
+    }
     // Keep signing work bounded instead of opening a request for every image
     // at once (which can overwhelm private Storage and lose failure signals).
     const hydrated: CloudRecordEnvelope[] = new Array(verified.length);
@@ -113,11 +129,12 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
           record: await this.mediaTransport!.hydrate(verified[index].record) };
       }
     }));
-    this.mediaTransport.assertScope();
+    await this.guardIdentity();
     return hydrated;
   }
 
   private async scanAllPages(): Promise<CloudRecordEnvelope[]> {
+    await this.guardIdentity();
     const table = this.provider === "personal" ? "echo_passkey_records" : "echo_text_backups";
     // Existing tenant RLS restricts visible rows. No service-role credentials.
     // PostgREST caps response lengths: a short list is NOT proof that a missing
@@ -126,10 +143,12 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     const all: CloudRecordEnvelope[] = [];
     let lastId: string | null = null;
     for (let start = 0; start < 500_000; start += pageSize) {
+      await this.guardIdentity();
       const { data, error } = await this.client.from(table)
         .select("id,payload,v3_revision")
         .order("id", { ascending: true })
         .range(start, start + pageSize - 1);
+      await this.guardIdentity();
       if (error) throw rpcFailure(error.message);
       if (!Array.isArray(data)) throw new Error("V3 remote list returned an invalid result");
       for (const item of data) {
@@ -146,11 +165,11 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
   }
 
   async compareAndSwap(record: EventRecord, expected: string | null): Promise<CloudRecordEnvelope> {
+    await this.guardIdentity();
     if (!record.id?.trim()) throw new Error("Record ID is required for V3 CAS");
     if (expected !== null && (!/^[1-9]\d*$/.test(expected) || !Number.isSafeInteger(Number(expected)))) {
       throw new Error("Invalid server revision, refusing cloud overwrite");
     }
-    this.mediaTransport?.assertScope();
     let prepared = record;
     if (this.includeMedia && this.mediaTransport) {
       // Stage every local image first. Any failed file prevents the CAS call.
@@ -178,11 +197,15 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
           : asset),
       }
       : { ...prepared, media: [], mediaTombstones: undefined };
-    const fn = this.provider === "personal" ? "live_memory_v3_cas_personal" : "live_memory_v3_cas_account";
-    const args = { p_id: prepared.id, p_payload: payload, p_expected_revision: expected === null ? null : Number(expected) };
-    this.mediaTransport?.assertScope();
+    const fn = this.provider === "personal" ? "live_memory_v3_cas_personal" : "live_memory_v3_cas_account_scoped";
+    const args: Record<string, unknown> = {
+      p_id: prepared.id, p_payload: payload,
+      p_expected_revision: expected === null ? null : Number(expected),
+    };
+    if (this.provider === "account") args.p_expected_user = this.accountScope;
+    await this.guardIdentity();
     const { data, error } = await this.client.rpc(fn, args);
-    this.mediaTransport?.assertScope();
+    await this.guardIdentity();
     if (error) throw rpcFailure(error.message);
     const row = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data;
     const committed = parseRow(row);

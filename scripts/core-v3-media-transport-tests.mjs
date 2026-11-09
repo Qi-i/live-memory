@@ -239,7 +239,9 @@ assert.match(runtime,/new SupabaseV3MediaTransport\(/);
 assert.match(runtime,/V3_PRIVATE_MEDIA_BUCKET/);
 assert.doesNotMatch(runtime,/personal as unknown as V3MediaStorageClient,\s*settings\.supabase\.mediaBucket/);
 assert.match(runtime,/resolveMediaSource\(asset, true\)/);
-assert.match(runtime,/new SupabaseV3RecordAdapter\(client, provider, identity, scope, mediaTransport\)/);
+assert.match(runtime,/new SupabaseV3RecordAdapter\(client, provider, identity, scope, mediaTransport, assertIdentity\)/);
+assert.match(runtime,/V3_ACCOUNT_SESSION_CHANGED/);
+assert.match(runtime,/account\.auth\.getUser\(\)/);
 assert.doesNotMatch(transportModule.source,/\.remove\(|\.delete\(|upsert:\s*true/,
   "Never delete staged content immediately after CAS failure");
 console.log("V3 private media tests passed: immutable upload, original local bytes, remote signed restore, CAS race, tamper, owner scope and failure abort.");
