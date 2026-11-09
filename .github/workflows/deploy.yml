@@ -4,9 +4,14 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["Build V3 standalone preview"]
+    types: [completed]
+    branches: [refactor/core-v3-architecture-20261108]
 
 permissions:
   contents: write
+  actions: read
   pages: write
   id-token: write
 
@@ -17,6 +22,7 @@ concurrency:
 jobs:
   build:
     name: Build application
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -40,6 +46,59 @@ jobs:
         env:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+
+      - name: Attach verified V3 demo without changing production app
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          EVENT_TYPE: ${{ github.event_name }}
+          TRIGGER_RUN: ${{ github.event.workflow_run.id }}
+          TRIGGER_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          source_run=""
+          if [ "$EVENT_TYPE" = "workflow_run" ]; then
+            source_run="$TRIGGER_RUN"
+          else
+            source_run="$(gh run list --workflow v3-preview.yml --branch refactor/core-v3-architecture-20261108 --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
+          fi
+          if [ -z "$source_run" ]; then
+            echo "No approved V3 standalone preview artifact yet; production V2 stays available."
+            exit 0
+          fi
+          mkdir -p "$RUNNER_TEMP/v3-preview"
+          if ! gh run download "$source_run" --name v3-static-preview --dir "$RUNNER_TEMP/v3-preview"; then
+            if [ "$EVENT_TYPE" = "workflow_run" ]; then
+              echo "V3 preview build claimed success but its artifact is missing" >&2
+              exit 1
+            fi
+            echo "Latest V3 artifact not available. Leaving existing production app unchanged."
+            exit 0
+          fi
+          test -f "$RUNNER_TEMP/v3-preview/index.html"
+          test -f "$RUNNER_TEMP/v3-preview/preview-info.json"
+          if ! node -e '
+            const fs=require("fs");
+            const info=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+            if (info.browserVerified !== true || info.type !== "demo-only") process.exit(1);
+          ' "$RUNNER_TEMP/v3-preview/preview-info.json"; then
+            if [ "$EVENT_TYPE" = "workflow_run" ]; then
+              echo "V3 artifact is missing required browser and isolation verification" >&2
+              exit 1
+            fi
+            echo "No browser-verified V3 artifact yet; publish V2 unchanged."
+            exit 0
+          fi
+          if [ "$EVENT_TYPE" = "workflow_run" ]; then
+            node -e '
+              const fs=require("fs");
+              const manifest=JSON.parse(fs.readFileSync(process.argv[1],"utf8"));
+              if (manifest.sha !== process.argv[2] || manifest.type !== "demo-only") process.exit(1);
+            ' "$RUNNER_TEMP/v3-preview/preview-info.json" "$TRIGGER_SHA"
+          fi
+          mkdir -p dist/v3-preview
+          cp -a "$RUNNER_TEMP/v3-preview/." dist/v3-preview/
+          echo "V3 isolated preview artifact from Actions run $source_run attached under /v3-preview/"
 
       - name: Write deployment build info
         shell: bash
@@ -110,6 +169,29 @@ jobs:
             const [sha, verifiedAt, url] = process.argv.slice(1);
             fs.writeFileSync("/tmp/live-deployment-status.json", JSON.stringify({ sha, verifiedAt, url, status: "verified" }, null, 2) + "\n");
           ' "$EXPECTED_SHA" "$verified_at" "$LIVE_URL"
+
+      - name: Verify independently published V3 demo
+        if: github.event_name == 'workflow_run'
+        shell: bash
+        env:
+          PREVIEW_SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          set -euo pipefail
+          endpoint="${LIVE_URL%/}/v3-preview/preview-info.json"
+          for attempt in $(seq 1 40); do
+            current="$(curl -fsSL --max-time 15 -H 'Cache-Control: no-cache' "${endpoint}?sha=${PREVIEW_SHA}&attempt=${attempt}" || true)"
+            received="$(printf '%s' "$current" | node -e '
+              let s=""; process.stdin.on("data",x=>s+=x);
+              process.stdin.on("end",()=>{try{process.stdout.write(JSON.parse(s).sha||"")}catch{}});
+            ')"
+            if [ "$received" = "$PREVIEW_SHA" ]; then
+              echo "Public V3 preview verified at ${LIVE_URL%/}/v3-preview/ for $PREVIEW_SHA"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "V3 preview did not reach its requested SHA: ${PREVIEW_SHA}" >&2
+          exit 1
 
       - name: Publish verification record
         uses: actions/checkout@v5
