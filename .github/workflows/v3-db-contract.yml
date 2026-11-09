@@ -11,6 +11,7 @@ on:
       - "supabase/migrations/017_v3_private_media_bucket.sql"
       - "supabase/migrations/018_v3_server_cutover_fence.sql"
       - "supabase/migrations/019_v3_blinded_media_owner_prefix.sql"
+      - "supabase/migrations/020_v3_owner_activation_cas_gate.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -56,6 +57,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_writer_cutover_checks.sql
       - name: Verify actual concurrent CAS row locks and stale-write rejection
         run: node tests/db/v3_cas_parallel_race.mjs
+      - name: Upgrade CAS RPCs to deny pre-cutover writes
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/020_v3_owner_activation_cas_gate.sql
+      - name: Verify inactive owner CAS denial and controlled activation
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_activation_gate_checks.sql
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
