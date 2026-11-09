@@ -31,6 +31,7 @@ import {
 } from "./supabase";
 import { ThemeSettingsPanel, projectUrl } from "./experience";
 import { SectionHeading } from "./ui/PagePrimitives";
+import { V3MigrationPanel } from "./ui/system/V3MigrationPanel";
 import { withoutLocalMedia } from "./syncModel";
 
 interface SettingsPageProps {
@@ -206,6 +207,8 @@ export function SettingsPage({
               <button className="button ghost" type="button" onClick={() => void onSave(draft)}><Check />保存连接设置</button>
             </div>
           </section>}
+
+          {!deviceOnly && <V3MigrationPanel settings={settings} personalConnected={cloudConnected} />}
 
           <section className="settings-module data-module-v2">
             <ModuleHeader eyebrow="数据" title="导出、导入与回收站" description="可导出备份、恢复记录或处理已删除内容。" />

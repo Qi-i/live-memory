@@ -1,0 +1,20 @@
+.v3-migration-panel { display: grid; gap: 12px; }
+.v3-migration-head { display: flex; justify-content: space-between; gap: 16px; align-items: flex-start; }
+.v3-migration-head span { font-size: 11px; font-weight: 700; letter-spacing: .08em; color: var(--accent, #2563eb); }
+.v3-migration-head h3 { font-size: 18px; line-height: 1.35; margin: 3px 0 4px; }
+.v3-migration-head p, .v3-migration-provider p, .v3-migration-notice { margin: 0; font-size: 13px; line-height: 1.55; color: var(--text-muted, #64748b); }
+.v3-migration-head > strong { white-space: nowrap; font-size: 11px; color: #84550d; background: #fff1cc; border-radius: 7px; padding: 5px 8px; }
+.v3-migration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.v3-migration-provider { min-width: 0; border: 1px solid var(--border, #dbe5ef); background: var(--surface, #fff); border-radius: 12px; padding: 13px; display: grid; gap: 10px; align-content: start; }
+.v3-migration-title { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.v3-migration-title strong { font-size: 14px; }
+.v3-migration-title span { font-size: 12px; color: var(--text-muted, #64748b); }
+.v3-migration-counts { display: flex; flex-wrap: wrap; gap: 7px; }
+.v3-migration-counts span { display: inline-flex; gap: 5px; align-items: baseline; background: var(--surface-subtle, #f1f6fd); border-radius: 7px; padding: 5px 8px; font-size: 12px; white-space: nowrap; }
+.v3-migration-counts b { font-size: 15px; }
+.v3-migration-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.v3-migration-actions button { min-height: 34px; font-size: 13px; }
+.v3-migration-provider .v3-migration-result { font-weight: 600; color: var(--accent, #2563eb); }
+.v3-migration-error { margin: 0; border: 1px solid #eaa; color: #a52d35; background: #fff1f1; padding: 9px; border-radius: 8px; font-size: 13px; }
+.v3-migration-notice { border-top: 1px solid var(--border, #dbe5ef); padding-top: 10px; }
+@media (max-width: 700px) { .v3-migration-grid { grid-template-columns: minmax(0, 1fr); } .v3-migration-head { flex-wrap: wrap; } }
