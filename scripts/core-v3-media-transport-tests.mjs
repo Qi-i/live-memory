@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
@@ -23,6 +24,7 @@ const adapter = await load("../src/infrastructure/supabase/V3CloudRecordAdapter.
 });
 
 const owner = "c".repeat(64);
+const mediaFolder = createHash("sha256").update("live-memory-v3-media:" + owner).digest("hex");
 const mediaBytes = Buffer.from("SYNTHETIC PNG STUB ONLY; NEVER REAL PERSONAL DATA");
 const dataURL = "data:image/png;base64," + mediaBytes.toString("base64");
 const first = {
@@ -110,7 +112,8 @@ assert.equal(committed.serverRevision,"1");
 assert.equal(server.rpcCalls.length,1);
 assert.equal(server.staged.length,1);
 const path=server.staged[0];
-assert.match(path,new RegExp("^"+owner+"/v3/[a-f0-9]{64}/[a-f0-9]{64}/[a-f0-9]{64}\\.png$"));
+assert.match(path,new RegExp("^"+mediaFolder+"/v3/[a-f0-9]{64}/[a-f0-9]{64}/[a-f0-9]{64}\\.png$"));
+assert.equal(path.includes(owner),false,"Never reveal the owner authorization key in a private URL or object name");
 assert.equal(server.rpcCalls[0].p_payload.media[0].src,"",
   "Cloud JSON must never include raw tickets or private image bytes");
 assert.equal(server.rpcCalls[0].p_payload.media[0].storagePath,path);
@@ -157,6 +160,9 @@ server.failUpload=false;
 
 const foreign={...first.media[0],src:"",storagePath:"other-owner/private.jpg"};
 await assert.rejects(media.stage(first.id,foreign),/V3_MEDIA_FOREIGN_OR_INVALID_PATH/);
+const leaked={...first.media[0],src:"",storagePath:owner+"/v3/synthetic/private.webp"};
+await assert.rejects(media.stage(first.id,leaked),/V3_MEDIA_FOREIGN_OR_INVALID_PATH/,
+  "Reject historical secret-bearing V3-style object paths");
 const mismatched={...first.media[0],recordId:"different-record"};
 await assert.rejects(media.stage(first.id,mismatched),/V3_MEDIA_RECORD_ID_MISMATCH/);
 scope="user-b";
@@ -176,7 +182,8 @@ assert.ok(afterLegacy.find(e=>e.record.id==="legacy-show")?.record.media[0].src.
 assert.equal(server.staged.length,5,"Read-only signed restoration cannot upload media");
 const migrated=await cloud.compareAndSwap(legacy,"1");
 assert.equal(migrated.serverRevision,"2");
-assert.ok(migrated.record.media[0].storagePath.startsWith(owner+"/v3/"));
+assert.ok(migrated.record.media[0].storagePath.startsWith(mediaFolder+"/v3/"));
+assert.equal(migrated.record.media[0].storagePath.includes(owner),false);
 assert.ok(migrated.record.media[0].src.includes("/echo-private-media-v3/"));
 assert.equal(server.legacyObjects.size,1,"V3 migration must NEVER delete V2 original objects");
 assert.equal(server.objects.size,2,"V3 stores an independent immutable copy");
