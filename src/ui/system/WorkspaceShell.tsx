@@ -244,7 +244,7 @@ export function ActionToolbar({
     <div className="v3-action-toolbar">
       <div className="v3-toolbar-search">{search}</div>
       <div className="v3-toolbar-modes">{modes}</div>
-      <div className="v3-toolbar-actions">{actions}</div>
+      {actions && <div className="v3-toolbar-actions">{actions}</div>}
     </div>
   );
 }
