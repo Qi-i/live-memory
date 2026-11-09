@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - refactor/core-v3-architecture-20261108
+  pull_request:
+    branches:
+      - refactor/core-v3-architecture-20261108
+    paths:
+      - "src/ui/system/**"
+      - "scripts/v3-preview-public-smoke.mjs"
+      - ".github/workflows/v3-preview.yml"
   workflow_dispatch:
 
 permissions:
@@ -11,7 +18,7 @@ permissions:
 
 jobs:
   build:
-    if: github.ref == 'refs/heads/refactor/core-v3-architecture-20261108'
+    if: github.ref == 'refs/heads/refactor/core-v3-architecture-20261108' || github.base_ref == 'refactor/core-v3-architecture-20261108'
     runs-on: ubuntu-24.04
     timeout-minutes: 18
     steps:

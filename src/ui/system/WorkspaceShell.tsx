@@ -135,9 +135,20 @@ export function PortraitArtwork({
   priority?: boolean;
 }) {
   return (
-    <figure className={"v3-portrait-artwork " + className}>
+    <figure className={"v3-portrait-artwork " + className} title={alt}>
       <div className="v3-portrait-frame">
-        {src ? <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" /> : <span aria-hidden="true">LIVE</span>}
+        {src ? <img
+          src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding={priority ? "sync" : "async"}
+          onLoad={(event) => {
+            // A real poster's intrinsic portrait ratio determines its frame width.
+            // Preserve the entire image instead of letterboxing it into a forced 2:3 box.
+            const image = event.currentTarget;
+            const ratio = image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 0;
+            if (ratio >= .45 && ratio <= .95) {
+              image.closest<HTMLElement>(".v3-portrait-artwork")?.style.setProperty("--v3-portrait-ratio", String(ratio));
+            }
+          }}
+        /> : <span aria-hidden="true">LIVE</span>}
       </div>
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
@@ -183,7 +194,7 @@ export function StageHero({
         <div ref={galleryRef} className="v3-stage-hero-gallery" aria-label="演出海报画廊">
           {posters.length ? posters.map((poster, index) => (
             <PortraitArtwork
-              priority={index < 3}
+              priority={index < 4}
               key={poster.id}
               src={poster.src}
               alt={poster.title + "海报"}
