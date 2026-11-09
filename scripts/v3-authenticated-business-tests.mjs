@@ -38,7 +38,7 @@ assert.equal(exports.describeRealArchive(many,"unlikely-string").records.length,
 const accented=exports.describeRealArchive([mk(900,{title:"深深的巡回演唱会"})],"巡回");
 assert.equal(accented.records.length,1);
 const special=exports.describeRealArchive([
-  mk(300,{city:"",media:[]}),mk(301,{city:"北京",title:"A".repeat(800)}),
+  mk(300,{city:"",media:[],status:"planned"}),mk(301,{city:"北京",title:"A".repeat(800)}),
   mk(302,{city:"北京",status:"watched",recordState:"cancelled"}),
 ]);
 assert.equal(special.cities.length,1);
