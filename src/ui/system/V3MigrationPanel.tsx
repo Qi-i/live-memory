@@ -4,12 +4,20 @@ import type { AppSettings, EventRecord } from "../../domain";
 import { auditBackupPortability } from "../../core/application/auditBackupPortability";
 import type { ReadOnlySyncAudit } from "../../core/application/auditSyncReadOnly";
 import type { BaselineBootstrapReport } from "../../core/application/bootstrapEquivalentBaselines";
+import type { MigrationReview, MigrationReviewItem } from "../../core/application/reviewMigrationReadOnly";
 import "./v3MigrationPanel.css";
 
 type Provider = "account" | "personal";
+const REVIEW_LABELS: Record<MigrationReviewItem["action"], string> = {
+  "push-new": "仅本机", "pull-new": "仅云端",
+  "push": "本机单端更新", "pull": "云端单端更新",
+  "conflict": "双端并发修改", "unbased-divergence": "历史基线未知",
+  "defer-absence": "缺失待核实",
+};
 interface ProviderState {
   audit: ReadOnlySyncAudit;
   bootstrap?: BaselineBootstrapReport;
+  review?: MigrationReview;
 }
 interface Props {
   settings: AppSettings;
@@ -38,7 +46,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     return () => { scopeGeneration.current += 1; };
   }, [settings.supabase.url, settings.supabase.ownerKey]);
 
-  async function inspect(provider: Provider, bootstrap = false) {
+  async function inspect(provider: Provider, bootstrap = false, details = false) {
     if (pending) return;
     const requestGeneration = scopeGeneration.current;
     const requestScope = currentStorageScope();
@@ -50,11 +58,13 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       const { createV3SyncRuntime } = await import("../../infrastructure/createV3SyncRuntime");
       const runtime = await createV3SyncRuntime(settings, provider);
       const baseline = bootstrap ? await runtime.bootstrapMatchingHistory() : undefined;
+      const review = details ? await runtime.review() : undefined;
       const audit = await runtime.audit();
       if (scopeGeneration.current !== requestGeneration || currentStorageScope() !== requestScope) return;
       setStates((current) => ({
         ...current,
-        [provider]: { audit, bootstrap: baseline ?? current[provider]?.bootstrap },
+        [provider]: { audit, bootstrap: baseline ?? current[provider]?.bootstrap,
+          review: review ?? current[provider]?.review },
       }));
     } catch (failure) {
       if (scopeGeneration.current !== requestGeneration || currentStorageScope() !== requestScope) return;
@@ -98,6 +108,25 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
                   <p>{state.audit.requiresMigrationReview
                     ? "存在历史差异或缺失，禁止直接切换同步；需要逐条审核。"
                     : "当前对账未发现阻断项；正式切换仍需媒体、备份与双设备验收。"}</p>
+
+                  {state.review && (
+                    <div className="v3-migration-review" role="region" aria-label={label + "迁移差异明细"}>
+                      <p><strong>待核对记录 {state.review.total} 条</strong>
+                        {state.review.truncated ? "（仅展示前 " + state.review.displayed + " 条）" : ""}</p>
+                      <div className="v3-migration-review-items">
+                        {state.review.items.map((item) => (
+                          <div key={item.id} className="v3-migration-review-item">
+                            <strong title={item.title}>{item.title}</strong>
+                            <span>{REVIEW_LABELS[item.action]}</span>
+                            <small>差异字段：{item.differingFields.length
+                              ? item.differingFields.join("、")
+                              : item.localPresent && item.remotePresent ? "待进一步核验" : "仅单侧存在"}</small>
+                          </div>
+                        ))}
+                      </div>
+                      <p>仅展示字段名称，不自动选择本机或云端版本，也不上传、删除记录。</p>
+                    </div>
+                  )}
                   {state.bootstrap && (
                     <p className="v3-migration-result">
                       本次建立一致记录基线 {state.bootstrap.created} 条，
@@ -117,6 +146,9 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
                   disabled={!enabled || pending !== null || !state}
                   title="只为内容一致、二次核验仍未变化的记录建立本机版本摘要；不会上传或覆盖"
                   onClick={() => void inspect(provider, true)}>建立一致记录基线</button>
+                <button type="button" className="button ghost"
+                  disabled={!enabled || pending !== null || !state}
+                  onClick={() => void inspect(provider, false, true)}>查看差异明细</button>
               </div>
             </div>
           );
