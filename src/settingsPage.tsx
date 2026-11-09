@@ -136,6 +136,13 @@ export function SettingsPage({
     } catch {
       throw new Error("JSON 文件无法解析，当前档案没有改动");
     }
+    if (parsed && typeof parsed === "object" && !Array.isArray(parsed) &&
+        Object.prototype.hasOwnProperty.call(parsed, "portableMediaManifest")) {
+      // Reject tampered, incomplete or truncated V3 portable files before
+      // showing an import preview. Legacy V2/JSON backups stay compatible.
+      const { verifyPortableBackupDocument } = await import("./core/application/portableMediaBackup");
+      await verifyPortableBackupDocument(parsed);
+    }
     const plan = parseBackupImport(parsed, records, file.name);
     setImportPreview(plan);
   }
