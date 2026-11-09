@@ -154,14 +154,6 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       assertScope();
       const checked = await verifyPortableBackupDocument(backup);
       assertScope();
-      // A backup based on stale local state cannot be called complete. Check
-      // even inline media bytes (not just timestamps or storage paths).
-      const current = await listRecords();
-      const originals = new Map(original.map((row) => [row.id, stableSerialize(row)]));
-      if (originals.size !== original.length || current.length !== original.length ||
-          current.some((row) => originals.get(row.id) !== stableSerialize(row))) {
-        throw new Error("V3_BACKUP_LOCAL_CHANGED");
-      }
       // A multi-minute image export can race other devices. Re-list through
       // the same authenticated cloud scope; no changed revision or missing
       // record is allowed to receive a "complete" backup certificate.
@@ -169,6 +161,14 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         const remoteAfter = await cloudRuntime.readPersonalCloudForPortableBackup();
         assertScope();
         verifyBackupCloudUnchanged(remoteBefore, remoteAfter);
+      }
+      // A backup based on stale local state cannot be called complete. Check
+      // even inline media bytes (not just timestamps or storage paths).
+      const current = await listRecords();
+      const originals = new Map(original.map((row) => [row.id, stableSerialize(row)]));
+      if (originals.size !== original.length || current.length !== original.length ||
+          current.some((row) => originals.get(row.id) !== stableSerialize(row))) {
+        throw new Error("V3_BACKUP_LOCAL_CHANGED");
       }
       assertScope();
       downloadBlob(JSON.stringify(backup),
