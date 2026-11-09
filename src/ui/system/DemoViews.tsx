@@ -12,11 +12,11 @@ export function DemoArchiveView({ mode, shows, onOpen }: {
   if (mode === "时间线") return <section className="v3-demo-panel"><header><span>LIVE CHRONICLE</span><h2>时间线</h2><p>按日期阅读自己的现场记录。</p></header><div className="v3-demo-timeline">
     {[...shows].sort((a,b) => b.date.localeCompare(a.date)).map(show => <button type="button" key={show.id} onClick={() => onOpen(show)}>
       <time>{show.date}</time><div className="v3-demo-timeline-art">{show.src && <img src={show.src} alt="" />}</div>
-      <span><strong>{show.title}</strong><small>{show.city} · {show.venue}</small></span><em>查看档案</em>
+      <span><strong title={show.title}>{show.title}</strong><small title={show.city + " · " + show.venue}>{show.city} · {show.venue}</small></span><em>查看档案</em>
     </button>)}
   </div></section>;
   if (mode === "列表") return <section className="v3-demo-panel"><header><span>RECORD INDEX</span><h2>演出列表</h2><p>信息优先，操作按钮始终可达。</p></header><div className="v3-demo-table-scroll">
-    <table><thead><tr><th>演出</th><th>日期</th><th>城市</th><th>状态</th><th>操作</th></tr></thead>
+    <table className="v3-demo-table"><thead><tr><th>演出</th><th>日期</th><th>城市</th><th>状态</th><th>操作</th></tr></thead>
       <tbody>{shows.map(show => <tr key={show.id}><td>{show.title}</td><td>{show.date}</td><td>{show.city}</td>
         <td>{show.status}</td><td><button type="button" onClick={() => onOpen(show)}>查看</button></td></tr>)}</tbody>
     </table>
