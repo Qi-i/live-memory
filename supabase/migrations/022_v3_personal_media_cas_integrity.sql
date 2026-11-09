@@ -43,6 +43,11 @@ begin
             )), 'hex'
           ) || '/v3/[a-f0-9]{64}/[a-f0-9]{64}/[a-f0-9]{64}\.(jpg|png|webp|gif|avif)$'
         )
+        or not exists (
+          select 1 from storage.objects as media_object
+          where media_object.bucket_id='echo-private-media-v3'
+            and media_object.name=item.value->>'storagePath'
+        )
     ) then
       raise exception 'V3_MEDIA_PAYLOAD_NOT_PORTABLE' using errcode='22023';
     end if;
