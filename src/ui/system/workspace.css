@@ -157,7 +157,7 @@
 .v3-portrait-frame > span { font-size:32px; font-weight:880; color:#8f87bf; letter-spacing:-.08em; }
 .v3-portrait-artwork figcaption { display:grid; align-content:start; gap:3px; min-width:0; text-align:center; padding-inline:2px; }
 .v3-portrait-artwork figcaption strong {
-  font-size:12px; line-height:1.35; min-height:2.7em; overflow:hidden;
+  font-size:12px; line-height:1.35; overflow:hidden;
   display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow-wrap:anywhere;
 }
 .v3-portrait-artwork figcaption small { font-size:11px; color:var(--v3-muted); }
@@ -214,6 +214,12 @@
   .v3-map-stage { min-height:0; height:clamp(310px,50dvh,480px); }
   .v3-map-side { min-height:0; height:auto; max-height:none; }
   .v3-map-detail-layer { width:calc(100% - 18px); left:9px; bottom:9px; max-height:70%; border-radius:16px; }
+}
+@media (max-width: 1180px) and (min-width: 801px) {
+  .v3-toolbar-search { flex:0 1 200px; min-width:180px; }
+  .v3-toolbar-modes { flex:1 1 300px; gap:5px; }
+  .v3-toolbar-actions { flex:0 0 auto; justify-content:flex-end; gap:5px; }
+  .v3-action-toolbar button { padding-inline:10px; }
 }
 @media (max-width: 1080px) and (min-width: 801px) {
   .v3-stage-hero { grid-template-columns:minmax(210px,.39fr) minmax(0,.61fr); }
