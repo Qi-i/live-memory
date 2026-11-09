@@ -125,9 +125,14 @@ function RealCityMap({ records, chosenCity }: { records: EventRecord[]; chosenCi
         preserveAspectRatio="xMidYMid meet">
         <rect x="16" y="16" width="968" height="448" rx="14" fill="none" stroke="currentColor" opacity=".15"/>
         {mapped.map(row => {
-          const point=row.coordinates!;
-          const x=65+(maxX===minX?.5:0);
-          return null;
+          const point = row.coordinates!;
+          const x = 65 + (maxX === minX ? .5 : (point.lng-minX)/(maxX-minX))*870;
+          const y = 430 - (maxY === minY ? .5 : (point.lat-minY)/(maxY-minY))*375;
+          return <g key={row.id} opacity={chosenCity && chosenCity !== row.city ? .22 : 1}>
+            <circle cx={x} cy={y} r={chosenCity===row.city?11:8}
+              fill={chosenCity===row.city?"#7563bd":"#4c82b8"} stroke="white" strokeWidth="2"/>
+            <title>{row.title} · {row.city}</title>
+          </g>;
         })}
       </svg> : <div className="v3-real-map-empty">
         {providers.size > 1 ? "坐标系混用，已停止叠加显示以免产生错误位置。" :
