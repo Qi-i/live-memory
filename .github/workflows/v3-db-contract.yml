@@ -47,6 +47,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_fixture.sql
       - name: Verify actual PostgreSQL RLS, CAS and V2-update compatibility
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_contract_checks.sql
+      - name: Verify actual concurrent CAS row locks and stale-write rejection
+        run: node tests/db/v3_cas_parallel_race.mjs
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
