@@ -12,6 +12,7 @@ on:
       - "supabase/migrations/018_v3_server_cutover_fence.sql"
       - "supabase/migrations/019_v3_blinded_media_owner_prefix.sql"
       - "supabase/migrations/020_v3_owner_activation_cas_gate.sql"
+      - "supabase/migrations/021_v3_private_storage_cutover_gate.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -61,6 +62,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/020_v3_owner_activation_cas_gate.sql
       - name: Verify inactive owner CAS denial and controlled activation
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_activation_gate_checks.sql
+      - name: Gate V3 private media on real owner activation
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/021_v3_private_storage_cutover_gate.sql
+      - name: Verify inactive owner Storage denial and active owner recovery
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_private_storage_cutover_gate_checks.sql
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
