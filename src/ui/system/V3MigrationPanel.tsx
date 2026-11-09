@@ -37,17 +37,24 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState("");
   const scopeGeneration = useRef(0);
+  const backupInFlight = useRef<number | null>(null);
+  const backupJobCounter = useRef(0);
+  const [backupBusy, setBackupBusy] = useState(false);
+  const [backupStatus, setBackupStatus] = useState("");
   useEffect(() => {
     // Never display results obtained for an earlier account/cloud configuration.
     scopeGeneration.current += 1;
+    backupInFlight.current = null;
+    setBackupBusy(false);
     setStates({});
     setPending(null);
     setError("");
+    setBackupStatus("");
     return () => { scopeGeneration.current += 1; };
   }, [settings.supabase.url, settings.supabase.ownerKey]);
 
   async function inspect(provider: Provider, bootstrap = false, details = false) {
-    if (pending) return;
+    if (pending || backupInFlight.current !== null) return;
     const requestGeneration = scopeGeneration.current;
     const requestScope = currentStorageScope();
     setPending(provider);
@@ -74,6 +81,82 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         : "检查未完成。请核实当前账号、云端连接及浏览器本机存储状态；没有改动任何档案。");
     } finally {
       if (scopeGeneration.current === requestGeneration && currentStorageScope() === requestScope) setPending(null);
+    }
+  }
+
+  /** Explicit read-only export; all media bytes must be verifiably portable. */
+  async function exportVerifiedPortableBackup() {
+    if (backupInFlight.current !== null || pending) return;
+    const backupJob = ++backupJobCounter.current;
+    backupInFlight.current = backupJob;
+    const scope = currentStorageScope();
+    const generation = scopeGeneration.current;
+    const assertScope = () => {
+      if (scopeGeneration.current !== generation || currentStorageScope() !== scope) {
+        throw new Error("V3_BACKUP_ACCOUNT_CHANGED");
+      }
+    };
+    setBackupBusy(true);
+    setBackupStatus("");
+    try {
+      const [
+        { listRecords },
+        { resolveMediaSource },
+        { readAsDataUrl, downloadBlob },
+        { createPortableBackup, verifyPortableBackupDocument },
+        { stableSerialize },
+      ] = await Promise.all([
+        import("../../storage"),
+        import("../../mediaCache"),
+        import("../../media"),
+        import("../../core/application/portableMediaBackup"),
+        import("../../core/sync/revision"),
+      ]);
+      assertScope();
+      const original = await listRecords();
+      assertScope();
+      if (!original.length) throw new Error("V3_BACKUP_EMPTY_ARCHIVE");
+      const backup = await createPortableBackup(original, {
+        assertScope,
+        async load(asset) {
+          assertScope();
+          const source = await resolveMediaSource(asset, true);
+          assertScope();
+          if (!source) throw new Error("V3_BACKUP_MEDIA_UNAVAILABLE");
+          const response = await fetch(source, { mode: "cors", credentials: "omit" });
+          if (!response.ok || response.type === "opaque") {
+            throw new Error("V3_BACKUP_MEDIA_UNAVAILABLE");
+          }
+          return response.blob();
+        },
+        encode: readAsDataUrl,
+      });
+      assertScope();
+      const checked = await verifyPortableBackupDocument(backup);
+      assertScope();
+      // A backup based on stale local state cannot be called complete. Check
+      // even inline media bytes (not just timestamps or storage paths).
+      const current = await listRecords();
+      const originals = new Map(original.map((row) => [row.id, stableSerialize(row)]));
+      if (originals.size !== original.length || current.length !== original.length ||
+          current.some((row) => originals.get(row.id) !== stableSerialize(row))) {
+        throw new Error("V3_BACKUP_LOCAL_CHANGED");
+      }
+      assertScope();
+      downloadBlob(JSON.stringify(backup),
+        `live-memory-v3-portable-${new Date().toISOString().slice(0, 10)}.json`,
+        "application/json");
+      setBackupStatus(`已提交浏览器下载：${checked.records} 条记录、${checked.assets} 个媒体文件。
+        请核实下载完成并把备份文件独立保存，之后才能考虑正式切换。`);
+    } catch {
+      if (scopeGeneration.current === generation && currentStorageScope() === scope) {
+        setBackupStatus("备份未生成：存在无法读取的图片、数据变化或文件超过安全容量上限。请检查媒体链接或在本机另存原图；原始档案未修改。");
+      }
+    } finally {
+      if (backupInFlight.current === backupJob) {
+        backupInFlight.current = null;
+        if (scopeGeneration.current === generation && currentStorageScope() === scope) setBackupBusy(false);
+      }
     }
   }
 
@@ -167,6 +250,15 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         {!backupAudit.requiresSeparateMediaBackup && (
           <p>当前记录未发现仅有图片引用的资源，但仍须验证导出文件可读及图片字节完整后才能签发迁移备份证明。</p>
         )}
+      </div>
+      <div className="v3-migration-portable">
+        <button className="button ghost" type="button"
+          disabled={backupBusy || pending !== null || backupAudit.records === 0}
+          onClick={() => void exportVerifiedPortableBackup()}>
+          {backupBusy ? "校验原图并生成备份中…" : "生成含全部原图的可验证迁移备份"}
+        </button>
+        <span>仅下载到本机，不上传任何数据；单文件图片不超过 32 MiB、全部图片不超过 256 MiB。</span>
+        {backupStatus && <p role="status">{backupStatus}</p>}
       </div>
       {error && <p className="v3-migration-error" role="alert">{error}</p>}
       <p className="v3-migration-notice">
