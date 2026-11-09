@@ -238,6 +238,42 @@ const offlineRecovered = await sync.synchronizeRecords(offlineLocal, offlineClou
 assert.deepEqual(offlineRecovered.downloadedIds,["one"]);
 assert.equal((await offlineLocal.list())[0].title,"新手机上传的离线海报");
 
+// Duplicates and malformed server revisions are a mandatory fail-closed
+// condition, not a timestamp conflict or a situation where Map chooses a winner.
+const ambiguousLocal = new MemoryRepo([first]);
+const ambiguousCloud = new MemoryCloud([first]);
+const ambiguousBaseline = new MemoryBaselines();
+let ambiguousWrites = 0;
+ambiguousCloud.list = async () => [
+  { record: edit(first, "remote-A"), serverRevision: "1" },
+  { record: edit(first, "remote-B"), serverRevision: "2" },
+];
+ambiguousCloud.compareAndSwap = async () => { ambiguousWrites++; throw Error("MUST_NOT_WRITE"); };
+await assert.rejects(sync.synchronizeRecords(ambiguousLocal, ambiguousCloud, ambiguousBaseline),
+  /V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+assert.equal(ambiguousWrites,0);
+assert.equal(ambiguousBaseline.data.size,0);
+assert.equal((await ambiguousLocal.list())[0].title,first.title);
+
+const duplicatedLocal = new MemoryRepo([first,edit(first,"local collision")]);
+await assert.rejects(sync.synchronizeRecords(duplicatedLocal,
+  new MemoryCloud([first]),new MemoryBaselines()),/V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+
+for(const malformed of ["", "0", "nan", null]) {
+  const badCloud=new MemoryCloud([first]);
+  badCloud.list=async()=>[{record:first,serverRevision:malformed}];
+  await assert.rejects(sync.synchronizeRecords(new MemoryRepo([first]),
+    badCloud,new MemoryBaselines()),/V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+}
+const badIds=new MemoryCloud([first]);
+badIds.list=async()=>[{record:{...first,id:""},serverRevision:"1"}];
+await assert.rejects(sync.synchronizeRecords(new MemoryRepo([first]),
+  badIds,new MemoryBaselines()),/V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+const invalidRecord=new MemoryCloud([first]);
+invalidRecord.list=async()=>[{record:null,serverRevision:"1"}];
+await assert.rejects(sync.synchronizeRecords(new MemoryRepo([first]),
+  invalidRecord,new MemoryBaselines()),/V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+
 // Cross-account processing must fail BEFORE reading or mutating records.
 const unrelated = new MemoryCloud([first]);
 unrelated.accountScope = "another-account";
