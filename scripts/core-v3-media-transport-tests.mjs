@@ -35,6 +35,7 @@ const first = {
 const copy = value => structuredClone(value);
 class FakeServer {
   objects = new Map();
+  legacyObjects = new Map();
   rows = new Map();
   staged = [];
   rpcCalls = [];
@@ -43,25 +44,27 @@ class FakeServer {
   conflictingObject = false;
   storage = {
     from: bucket => {
-      assert.equal(bucket,"echo-private-media-v3");
+      assert.ok(["echo-private-media-v3","echo-media"].includes(bucket));
+      const objects = bucket === "echo-media" ? this.legacyObjects : this.objects;
       return {
         upload: async(path, body, options) => {
           assert.equal(options.upsert,false,"Immutable object cannot replace earlier files");
+          assert.equal(bucket,"echo-private-media-v3","Never upload into the legacy public bucket");
           this.staged.push(path);
           if (this.failUpload) return {error:{message:"offline",statusCode:503}};
-          if (this.objects.has(path)) return {error:{message:"Already exists",statusCode:409}};
-          this.objects.set(path,body);
+          if (objects.has(path)) return {error:{message:"Already exists",statusCode:409}};
+          objects.set(path,body);
           return {error:null};
         },
         download: async path => {
           if (this.conflictingObject) return {data:new Blob(["CORRUPTED"],{type:"image/png"}),error:null};
-          return this.objects.has(path) ? {data:this.objects.get(path),error:null} : {data:null,error:{message:"not found"}};
+          return objects.has(path) ? {data:objects.get(path),error:null} : {data:null,error:{message:"not found"}};
         },
         createSignedUrl: async(path,seconds) => {
           assert.equal(seconds,3600);
           if(this.failSign) return {data:null,error:{message:"private URL failure"}};
-          return this.objects.has(path)
-            ? {data:{signedUrl:"https://signed.example/bytes/"+encodeURIComponent(path)},error:null}
+          return objects.has(path)
+            ? {data:{signedUrl:"https://signed.example/"+bucket+"/bytes/"+encodeURIComponent(path)},error:null}
             : {data:null,error:{message:"no such image"}};
         },
       };
@@ -163,12 +166,22 @@ scope="user-a";
 
 // Existing V2 cloud records may have old storage paths. They can be signed,
 // but cannot be overwritten in place by the V3 media pipeline.
-const legacy={...first,media:[{...first.media[0],src:"",storagePath:owner+"/legacy/show/poster.png"}]};
-server.objects.set(legacy.media[0].storagePath,new Blob([mediaBytes],{type:"image/png"}));
-server.rows.set("legacy-show",{id:"legacy-show",payload:{...legacy,id:"legacy-show"},v3_revision:1});
+const legacy={...first,id:"legacy-show",media:[{...first.media[0],
+  recordId:"legacy-show",src:"",storagePath:owner+"/legacy/show/poster.png"}]};
+server.legacyObjects.set(legacy.media[0].storagePath,new Blob([mediaBytes],{type:"image/png"}));
+server.rows.set("legacy-show",{id:"legacy-show",payload:copy(legacy),v3_revision:1});
 const afterLegacy=await cloud.list();
-assert.ok(afterLegacy.find(e=>e.record.id==="legacy-show")?.record.media[0].src.startsWith("https://signed.example/"));
+assert.ok(afterLegacy.find(e=>e.record.id==="legacy-show")?.record.media[0].src.includes("/echo-media/"),
+  "Old records still need to display their original V2 media in a read-only audit");
 assert.equal(server.staged.length,5,"Read-only signed restoration cannot upload media");
+const migrated=await cloud.compareAndSwap(legacy,"1");
+assert.equal(migrated.serverRevision,"2");
+assert.ok(migrated.record.media[0].storagePath.startsWith(owner+"/v3/"));
+assert.ok(migrated.record.media[0].src.includes("/echo-private-media-v3/"));
+assert.equal(server.legacyObjects.size,1,"V3 migration must NEVER delete V2 original objects");
+assert.equal(server.objects.size,2,"V3 stores an independent immutable copy");
+assert.equal(server.staged.length,6);
+assert.ok((await cloud.list()).find(e=>e.record.id==="legacy-show")?.record.media[0].src.includes("/echo-private-media-v3/"));
 
 const runtime=await readFile(new URL("../src/infrastructure/createV3SyncRuntime.ts",import.meta.url),"utf8");
 assert.match(runtime,/new SupabaseV3MediaTransport\(/);
