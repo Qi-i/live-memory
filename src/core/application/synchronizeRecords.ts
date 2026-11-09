@@ -45,8 +45,17 @@ export async function synchronizeRecords(
 
   const snapshot = await local.list();
   const remoteRecords = await cloud.list();
+  // A partial or malformed listing must never be interpreted as a trustworthy
+  // snapshot. Duplicate IDs otherwise collapse silently in Map(), potentially
+  // allowing a CAS upload against the wrong server revision. Reject the entire
+  // round before the first local/cloud write or baseline acknowledgement.
   const localById = new Map(snapshot.map((record) => [record.id, record]));
   const remoteById = new Map(remoteRecords.map((row) => [row.record.id, row]));
+  if (localById.size !== snapshot.length || remoteById.size !== remoteRecords.length ||
+      snapshot.some((record) => !record.id?.trim()) ||
+      remoteRecords.some((row) => !row.record?.id?.trim() || !row.serverRevision?.trim())) {
+    throw new Error("V3_SYNC_AMBIGUOUS_SNAPSHOT: Duplicate or invalid record IDs / server revisions");
+  }
   const allIds = new Set([...localById.keys(), ...remoteById.keys()]);
   const downloadedIds: string[] = [];
   const uploadedIds: string[] = [];
