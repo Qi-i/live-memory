@@ -96,23 +96,46 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       throw new Error("V3_MEDIA_RECORD_ID_MISMATCH");
     }
     const storedKind = asset.storagePath ? await this.classifyPath(asset.storagePath) : null;
-    if (!inlineSource(asset.src)) {
-      if (!asset.storagePath || storedKind === "private") return asset;
-      // V2's original bucket may be publicly readable. Copy actual bytes to
-      // the new private bucket rather than publishing another legacy path.
-      // Never remove the source: V2 remains the authoritative live client.
-      const legacy = await this.client.storage.from(this.legacyBucket).download(asset.storagePath);
+    if (storedKind === "legacy") {
+      // Prefer the existing stored bytes to a transient URL, even when V2
+      // issued a signed URL. Never copy the URL itself into private records.
+      const legacy = await this.client.storage.from(this.legacyBucket).download(asset.storagePath!);
       this.assertScope();
       if (legacy.error || !legacy.data) throw new Error("V3_MEDIA_LEGACY_BYTES_UNAVAILABLE");
       return this.persistBlob(recordId, asset, legacy.data);
     }
+    if (storedKind === "private" && !inlineSource(asset.src)) {
+      return asset;
+    }
+    // A media item with an external URL but no recoverable Storage path is
+    // not portable. Resolve cached browser bytes or fetch CORS-enabled image
+    // bytes before CAS; otherwise ABORT rather than permanently storing a
+    // dead signed URL or a private ticket token in event JSON.
     const resolved = await this.sourceResolver(asset);
     this.assertScope();
-    if (!inlineSource(resolved)) throw new Error("V3_MEDIA_LOCAL_BYTES_UNAVAILABLE");
-    const response = await fetch(resolved);
+    if (!resolved) throw new Error("V3_MEDIA_SOURCE_UNAVAILABLE");
+    if (!inlineSource(resolved)) {
+      let address: URL;
+      try {
+        address = new URL(resolved);
+      } catch {
+        throw new Error("V3_MEDIA_NONPORTABLE_URL");
+      }
+      if (address.protocol !== "https:" || address.username || address.password) {
+        throw new Error("V3_MEDIA_NONPORTABLE_URL");
+      }
+    }
+    let response: Response;
+    try {
+      response = await fetch(resolved, { credentials: "omit", mode: "cors" });
+    } catch {
+      throw new Error("V3_MEDIA_SOURCE_UNAVAILABLE");
+    }
     this.assertScope();
-    if (!response.ok || response.type === "opaque") throw new Error("V3_MEDIA_LOCAL_BYTES_UNAVAILABLE");
-    return this.persistBlob(recordId, asset, await response.blob());
+    if (!response.ok || response.type === "opaque") throw new Error("V3_MEDIA_SOURCE_UNAVAILABLE");
+    const bytes = await response.blob();
+    this.assertScope();
+    return this.persistBlob(recordId, asset, bytes);
   }
 
   private async persistBlob(recordId: string, asset: MediaAsset, blob: Blob): Promise<MediaAsset> {
