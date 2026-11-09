@@ -132,7 +132,7 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
 
   async compareAndSwap(record: EventRecord, expected: string | null): Promise<CloudRecordEnvelope> {
     if (!record.id?.trim()) throw new Error("Record ID is required for V3 CAS");
-    if (expected !== null && (!/^[1-9]\\d*$/.test(expected) || !Number.isSafeInteger(Number(expected)))) {
+    if (expected !== null && (!/^[1-9]\d*$/.test(expected) || !Number.isSafeInteger(Number(expected)))) {
       throw new Error("Invalid server revision, refusing cloud overwrite");
     }
     this.mediaTransport?.assertScope();
