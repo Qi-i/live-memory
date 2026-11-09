@@ -79,8 +79,15 @@ assert.match(component,/resolveMediaSource\(asset,true\)/);
 assert.match(component,/MapSplitPane/);
 assert.match(component,/StageHero/);
 assert.match(component,/read-only|只读/);
+assert.match(component,/canEditLocal=validScope && access\.mode==="device" && actualScope==="device-local"/,
+  "No authenticated cloud account can use the early V3 local editor");
+assert.match(component,/saveRecordDraft\(new IndexedDbRecordRepository\(editing.scope\),draft,editing.baseline\)/,
+  "Editors must use atomic conditional save against the opened version");
+assert.match(component,/result.status==="review-required"/,
+  "Conflicts must keep the user's draft rather than overwrite another tab");
+assert.match(component,/onSave=\{saveLocalDraft\}/);
 assert.doesNotMatch(component,/saveRecord\(|\.upsert\(|\.compareAndSwap\(|replaceAllRecords\(|\.synchronize\(|\.remove\(|deleteRecord\(/,
-  "Unverified real-data workspaces must never mutate V2 archive or cloud");
+  "The real-data workspace must not bypass the local atomic save or write to cloud");
 assert.doesNotMatch(component,/demoShows|demoPosters|demoData|mockCloud/);
 assert.match(styles,/@media\(max-width:610px\)/);
 console.log("V3 real archive read-model and isolated UI passed: 200 records, 20 cities, deletion and cancellation exclusions, search, real account scope and no writes.");
