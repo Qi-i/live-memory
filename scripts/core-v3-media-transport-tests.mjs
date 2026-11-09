@@ -41,6 +41,7 @@ class FakeServer {
   rows = new Map();
   staged = [];
   rpcCalls = [];
+  downloadCalls = [];
   failUpload = false;
   failSign = false;
   failDownload = false;
@@ -60,6 +61,7 @@ class FakeServer {
           return {error:null};
         },
         download: async path => {
+          this.downloadCalls.push([bucket,path]);
           if (this.failDownload) return {data:null,error:{message:"temporary offline"}};
           if (this.conflictingObject) return {data:new Blob(["CORRUPTED"],{type:"image/png"}),error:null};
           return objects.has(path) ? {data:objects.get(path),error:null} : {data:null,error:{message:"not found"}};
@@ -110,6 +112,7 @@ const media = new transportModule.exports.SupabaseV3MediaTransport(
     assert.ok(asset.storagePath);
     cachedOffline.set(asset.storagePath,Buffer.from(await blob.arrayBuffer()));
   },
+  async asset=>cachedOffline.has(asset.storagePath),
 );
 assert.throws(() => new transportModule.exports.SupabaseV3MediaTransport(
   server,"echo-media",owner,()=>{},async asset=>asset.src,
@@ -145,9 +148,15 @@ cachedOffline.clear();
 await cloud.prepareIncoming(hydrated[0].record);
 assert.ok(cachedOffline.get(path)?.equals(mediaBytes),
   "A second device must download and cache actual private picture bytes before accepting a record");
+const downloadCount=server.downloadCalls.length;
+await cloud.prepareIncoming(hydrated[0].record);
+assert.equal(server.downloadCalls.length,downloadCount,
+  "A fully verified offline poster must never be downloaded again during subsequent sync");
+cachedOffline.clear();
 server.failDownload=true;
 await assert.rejects(cloud.prepareIncoming(hydrated[0].record),/V3_OFFLINE_MEDIA_DOWNLOAD_FAILED/);
 server.failDownload=false;
+cachedOffline.clear();
 failCache=true;
 await assert.rejects(cloud.prepareIncoming(hydrated[0].record),/V3_OFFLINE_CACHE_FAILED/);
 failCache=false;
