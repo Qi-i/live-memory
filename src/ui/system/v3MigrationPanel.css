@@ -21,3 +21,11 @@
 .v3-migration-backup { display: grid; gap: 5px; background: var(--surface-subtle, #f1f6fd); border: 1px solid var(--border, #dbe5ef); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55; }
 .v3-migration-backup strong { font-size: 13px; }
 .v3-migration-backup p { margin: 0; color: var(--text-muted, #64748b); }
+
+.v3-migration-review { display: grid; gap: 7px; min-width: 0; border-top: 1px solid var(--border, #dbe5ef); padding-top: 9px; }
+.v3-migration-review > p { margin: 0; font-size: 12px; }
+.v3-migration-review-items { display: grid; gap: 5px; max-height: 300px; overflow-y: auto; overscroll-behavior: contain; }
+.v3-migration-review-item { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 3px 8px; align-items: center; border: 1px solid var(--border, #dbe5ef); border-radius: 8px; padding: 7px 9px; }
+.v3-migration-review-item strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12.5px; }
+.v3-migration-review-item span { white-space: nowrap; font-size: 11px; font-weight: 700; color: #704da0; }
+.v3-migration-review-item small { grid-column: 1 / -1; overflow-wrap: anywhere; font-size: 11px; color: var(--text-muted, #64748b); }
