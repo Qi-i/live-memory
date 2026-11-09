@@ -8,6 +8,19 @@
 revoke all on function public.live_memory_v3_activate_personal()
   from public, anon, authenticated;
 
+-- Do not allow direct table INSERT to bypass the revoked RPC. The old
+-- ownerKey is not proof of independently authenticated ownership. Account
+-- owners may still activate only their OWN account via auth.uid().
+revoke insert on public.live_memory_v3_writer_modes from anon;
+drop policy if exists v3_writer_mode_activate on public.live_memory_v3_writer_modes;
+create policy v3_writer_mode_activate on public.live_memory_v3_writer_modes
+for insert to authenticated
+with check (
+  provider='account' and identity=(select auth.uid())::text
+);
+
+
+
 create or replace function public.live_memory_v3_cas_account(
   p_id text,
   p_payload jsonb,
