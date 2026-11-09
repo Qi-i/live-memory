@@ -109,7 +109,7 @@ try {
     if (width >= 1280 && height <= 925 && geom.hero.height > 425)
       throw Error("Banner steals first-screen space without showing more poster information: " + geom.hero.height);
     if (!geom.brandFits) throw Error("Brand title wraps or clips at " + width);
-    if (width === 1024 && geom.tools.height > 82)
+    if ([768, 1024].includes(width) && geom.tools.height > 82)
       throw Error("Toolbar needlessly occupies two rows at 1024px");
     if (width <= 620 && geom.topbar.height > 155)
       throw Error("Mobile header has unnecessary stacked whitespace at " + width + ": " + geom.topbar.height);
@@ -132,6 +132,9 @@ try {
       throw Error("Toolbar action clipped at " + width);
     if (width >= 1024 && Math.abs(geom.map.height - geom.side.height) > 2)
       throw Error("Map and city listing have different heights at " + width);
+    // Capture the initial viewport BEFORE exercising the carousel so review
+    // screenshots do not mistake an intentionally half-scrolled poster for a bug.
+    await page.screenshot({ path: out + "/landing-" + width + ".png", fullPage: true });
     if (width === 1669) {
       const gallery = page.locator(".v3-stage-hero-gallery");
       const initialScroll = await gallery.evaluate(el => el.scrollLeft);
@@ -140,8 +143,13 @@ try {
         const element = document.querySelector(".v3-stage-hero-gallery");
         return !!element && element.scrollLeft > previous + 15;
       }, initialScroll, { timeout: 3000 });
+      await page.screenshot({ path: out + "/gallery-scrolled-1669.png", fullPage: true });
+      await page.getByRole("button", { name: "上一组海报" }).click();
+      await page.waitForFunction(() => {
+        const element = document.querySelector(".v3-stage-hero-gallery");
+        return !!element && element.scrollLeft < 5;
+      }, null, { timeout: 3000 });
     }
-    await page.screenshot({ path: out + "/landing-" + width + ".png", fullPage: true });
     await page.getByRole("button", { name: "北京", exact: false }).last().click();
     await page.getByRole("dialog", { name: /北京的演出/ }).waitFor({ state: "visible" });
     const modalFit = await page.evaluate(() => {
