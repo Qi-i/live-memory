@@ -1,0 +1,175 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import ts from "typescript";
+
+async function load(relative, modules = {}) {
+  const source = await readFile(new URL(relative, import.meta.url), "utf8");
+  const js = ts.transpileModule(source, { compilerOptions: {
+    module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022,
+  } }).outputText;
+  const exports = {};
+  new Function("exports", "require", js)(exports, name => {
+    if (Object.hasOwn(modules, name)) return modules[name];
+    throw new Error("Unexpected V3 media dependency: " + name);
+  });
+  return { exports, source };
+}
+const transportModule = await load("../src/infrastructure/supabase/V3MediaTransport.ts");
+const rev = await load("../src/core/sync/revision.ts");
+const ports = await load("../src/core/ports/CloudRecordAdapter.ts");
+const adapter = await load("../src/infrastructure/supabase/V3CloudRecordAdapter.ts", {
+  "../../core/sync/revision": rev.exports,
+  "../../core/ports/CloudRecordAdapter": ports.exports,
+});
+
+const owner = "c".repeat(64);
+const mediaBytes = Buffer.from("SYNTHETIC PNG STUB ONLY; NEVER REAL PERSONAL DATA");
+const dataURL = "data:image/png;base64," + mediaBytes.toString("base64");
+const first = {
+  schemaVersion:2, id:"synthetic-show", title:"Private synthetic test",
+  date:"2026-11-09", city:"Test", media:[{
+    id:"synthetic-poster", recordId:"synthetic-show", kind:"poster",
+    src:dataURL, source:"local", mimeType:"image/png",
+  }],
+};
+const copy = value => structuredClone(value);
+class FakeServer {
+  objects = new Map();
+  rows = new Map();
+  staged = [];
+  rpcCalls = [];
+  failUpload = false;
+  failSign = false;
+  conflictingObject = false;
+  storage = {
+    from: bucket => {
+      assert.equal(bucket,"echo-media");
+      return {
+        upload: async(path, body, options) => {
+          assert.equal(options.upsert,false,"Immutable object cannot replace earlier files");
+          this.staged.push(path);
+          if (this.failUpload) return {error:{message:"offline",statusCode:503}};
+          if (this.objects.has(path)) return {error:{message:"Already exists",statusCode:409}};
+          this.objects.set(path,body);
+          return {error:null};
+        },
+        download: async path => {
+          if (this.conflictingObject) return {data:new Blob(["CORRUPTED"],{type:"image/png"}),error:null};
+          return this.objects.has(path) ? {data:this.objects.get(path),error:null} : {data:null,error:{message:"not found"}};
+        },
+        createSignedUrl: async(path,seconds) => {
+          assert.equal(seconds,3600);
+          if(this.failSign) return {data:null,error:{message:"private URL failure"}};
+          return this.objects.has(path)
+            ? {data:{signedUrl:"https://signed.example/bytes/"+encodeURIComponent(path)},error:null}
+            : {data:null,error:{message:"no such image"}};
+        },
+      };
+    },
+  };
+  from(name) {
+    assert.equal(name,"echo_passkey_records");
+    return {select:fields=>{
+      assert.equal(fields,"id,payload,v3_revision");
+      return {order:(_name,_opts)=>({range: async(start,end)=>({
+        data:[...this.rows.values()].sort((a,b)=>a.id.localeCompare(b.id)).slice(start,end+1).map(copy),
+        error:null,
+      })})};
+    }};
+  }
+  async rpc(name,args) {
+    assert.equal(name,"live_memory_v3_cas_personal");
+    this.rpcCalls.push(copy(args));
+    const row=this.rows.get(args.p_id);
+    if ((row?.v3_revision??null)!==args.p_expected_revision) {
+      return {data:null,error:{message:"V3_REVISION_CONFLICT",code:"P0001"}};
+    }
+    const updated={id:args.p_id,payload:copy(args.p_payload),v3_revision:(row?.v3_revision??0)+1};
+    this.rows.set(args.p_id,updated);
+    return {data:copy(updated),error:null};
+  }
+}
+const server=new FakeServer();
+let scope="user-a";
+const media = new transportModule.exports.SupabaseV3MediaTransport(
+  server,"echo-media",owner,()=>{if(scope!=="user-a")throw Error("V3_MEDIA_ACCOUNT_CHANGED");},
+  async asset=>asset.src,
+);
+const cloud=new adapter.exports.SupabaseV3RecordAdapter(
+  server,"personal","personal-owner-test","user-a",media,
+);
+const committed=await cloud.compareAndSwap(first,null);
+assert.equal(committed.serverRevision,"1");
+assert.equal(server.rpcCalls.length,1);
+assert.equal(server.staged.length,1);
+const path=server.staged[0];
+assert.match(path,new RegExp("^"+owner+"/v3/[a-f0-9]{64}/[a-f0-9]{64}/[a-f0-9]{64}\\.png$"));
+assert.equal(server.rpcCalls[0].p_payload.media[0].src,"",
+  "Cloud JSON must never include raw tickets or private image bytes");
+assert.equal(server.rpcCalls[0].p_payload.media[0].storagePath,path);
+assert.equal(committed.record.media[0].src,dataURL,
+  "Successful CAS must retain the original image bytes for local rendering");
+assert.equal(committed.record.media[0].storagePath,path);
+
+const hydrated=await cloud.list();
+assert.equal(hydrated.length,1);
+assert.ok(hydrated[0].record.media[0].src.startsWith("https://signed.example/"),
+  "Second device must receive a renderable private URL");
+assert.equal(await rev.exports.recordRevision(hydrated[0].record,true),
+  await rev.exports.recordRevision(committed.record,true),
+  "Rotating signed URLs must not cause a spurious conflict");
+
+const second=await cloud.compareAndSwap(first,"1");
+assert.equal(second.serverRevision,"2");
+assert.equal(server.objects.size,1,"Retry must reuse the same immutable content-addressed path");
+assert.equal(server.staged.length,2);
+assert.equal(server.rpcCalls.length,2);
+
+// A competing device can win CAS after the image stages. The losing device
+// must not touch either the committed JSON or the original private media.
+await assert.rejects(cloud.compareAndSwap({...first,title:"stale overwrite"},"1"),
+  error=>error instanceof ports.exports.RemoteRevisionChanged);
+assert.equal(server.rows.get(first.id).payload.title,first.title);
+assert.equal(server.objects.size,1);
+assert.equal(server.rpcCalls.length,3);
+
+server.conflictingObject=true;
+await assert.rejects(cloud.compareAndSwap(first,"2"),/V3_MEDIA_EXISTING_OBJECT_MISMATCH/);
+assert.equal(server.rpcCalls.length,3,"Hash mismatch may never trigger metadata CAS");
+server.conflictingObject=false;
+
+server.failSign=true;
+await assert.rejects(cloud.list(),/V3_MEDIA_SIGNING_FAILED/);
+server.failSign=false;
+
+server.failUpload=true;
+const fresh={...first,media:[{...first.media[0],id:"second",src:"data:image/png;base64,"+Buffer.from("different").toString("base64")}]};
+await assert.rejects(cloud.compareAndSwap(fresh,"2"),/V3_MEDIA_STAGE_FAILED/);
+assert.equal(server.rpcCalls.length,3,"Failed media upload must not commit a metadata-only record");
+server.failUpload=false;
+
+const foreign={...first.media[0],src:"",storagePath:"other-owner/private.jpg"};
+await assert.rejects(media.stage(first.id,foreign),/V3_MEDIA_FOREIGN_OR_INVALID_PATH/);
+const mismatched={...first.media[0],recordId:"different-record"};
+await assert.rejects(media.stage(first.id,mismatched),/V3_MEDIA_RECORD_ID_MISMATCH/);
+scope="user-b";
+await assert.rejects(cloud.compareAndSwap(first,"2"),/V3_MEDIA_ACCOUNT_CHANGED/);
+assert.equal(server.rpcCalls.length,3,"Account switches must stop remote writes");
+scope="user-a";
+
+// Existing V2 cloud records may have old storage paths. They can be signed,
+// but cannot be overwritten in place by the V3 media pipeline.
+const legacy={...first,media:[{...first.media[0],src:"",storagePath:owner+"/legacy/show/poster.png"}]};
+server.objects.set(legacy.media[0].storagePath,new Blob([mediaBytes],{type:"image/png"}));
+server.rows.set("legacy-show",{id:"legacy-show",payload:{...legacy,id:"legacy-show"},v3_revision:1});
+const afterLegacy=await cloud.list();
+assert.ok(afterLegacy.find(e=>e.record.id==="legacy-show")?.record.media[0].src.startsWith("https://signed.example/"));
+assert.equal(server.staged.length,5,"Read-only signed restoration cannot upload media");
+
+const runtime=await readFile(new URL("../src/infrastructure/createV3SyncRuntime.ts",import.meta.url),"utf8");
+assert.match(runtime,/new SupabaseV3MediaTransport\(/);
+assert.match(runtime,/resolveMediaSource\(asset, true\)/);
+assert.match(runtime,/new SupabaseV3RecordAdapter\(client, provider, identity, scope, mediaTransport\)/);
+assert.doesNotMatch(transportModule.source,/\.remove\(|\.delete\(|upsert:\s*true/,
+  "Never delete staged content immediately after CAS failure");
+console.log("V3 private media tests passed: immutable upload, original local bytes, remote signed restore, CAS race, tamper, owner scope and failure abort.");
