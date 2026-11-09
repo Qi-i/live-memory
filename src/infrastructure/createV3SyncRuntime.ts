@@ -11,6 +11,7 @@ import { reviewMigrationReadOnly, type MigrationReview } from "../core/applicati
 import { synchronizeWithLedger } from "../core/application/synchronizeWithLedger";
 import { bootstrapEquivalentBaselines, type BaselineBootstrapReport } from "../core/application/bootstrapEquivalentBaselines";
 import type { SyncRunResult } from "../core/application/synchronizeRecords";
+import type { CloudRecordEnvelope } from "../core/ports/CloudRecordAdapter";
 
 /**
  * A real, authenticated V3 runtime, but still OPT-IN and not imported by V2.
@@ -37,6 +38,16 @@ export class V3SyncRuntime {
     return reviewMigrationReadOnly(this.local, this.remote, {
       read: (id) => baseline.get(id),
     });
+  }
+
+  /** Full personal cloud inventory for an explicit, user-downloaded
+   * migration backup. Read-only even while the server is still in V2 mode.
+   * Account text backups cannot stand in for recoverable private images. */
+  async readPersonalCloudForPortableBackup(): Promise<CloudRecordEnvelope[]> {
+    if (this.remote.provider !== "personal" || !this.remote.includeMedia) {
+      throw new Error("V3_COMPLETE_BACKUP_REQUIRES_PERSONAL_CLOUD");
+    }
+    return this.remote.list();
   }
 
   /** Metadata-only V2 adoption: never transfers, edits or removes an archive. */
