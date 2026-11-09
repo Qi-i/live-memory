@@ -105,7 +105,11 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       return this.persistBlob(recordId, asset, legacy.data);
     }
     if (storedKind === "private" && !inlineSource(asset.src)) {
-      return asset;
+      if (asset.src) return asset;
+      const signed = await this.client.storage.from(this.bucket).createSignedUrl(asset.storagePath!, 3600);
+      this.assertScope();
+      if (signed.error || !signed.data?.signedUrl) throw new Error("V3_MEDIA_SIGNING_FAILED");
+      return { ...asset, src: signed.data.signedUrl, source: "supabase" };
     }
     // A media item with an external URL but no recoverable Storage path is
     // not portable. Resolve cached browser bytes or fetch CORS-enabled image
