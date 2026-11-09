@@ -31,8 +31,8 @@ const ui = await readFile(new URL("../src/ui/system/V3MigrationPanel.tsx", impor
 const settings = await readFile(new URL("../src/settingsPage.tsx", import.meta.url), "utf8");
 assert.match(settings, /<V3MigrationPanel settings=\{settings\} records=\{records\}/);
 assert.match(ui, /auditBackupPortability\(records\)/);
-assert.match(ui, /scopeGeneration\\.current !== requestGeneration/);
-assert.match(ui, /currentStorageScope\\(\\) !== requestScope/);
+assert.ok(ui.includes("scopeGeneration.current !== requestGeneration"));
+assert.ok(ui.includes("currentStorageScope() !== requestScope"));
 assert.match(ui, /现有 JSON 不能被认定为完整媒体备份/);
 assert.match(ui, /仍须验证导出文件可读及图片字节完整/);
 assert.doesNotMatch(ui, /\.synchronize\(|\.compareAndSwap\(|replaceAllRecords\(/);
