@@ -9,6 +9,7 @@ on:
     paths:
       - "tests/db/**"
       - "supabase/migrations/017_v3_private_media_bucket.sql"
+      - "supabase/migrations/018_v3_server_cutover_fence.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -50,6 +51,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_contract_checks.sql
       - name: Verify isolated private media bucket and cross-owner RLS
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_private_media_contract_checks.sql
+      - name: Verify owner cutover blocks legacy V2 writers and preserves CAS
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_writer_cutover_checks.sql
       - name: Verify actual concurrent CAS row locks and stale-write rejection
         run: node tests/db/v3_cas_parallel_race.mjs
       - name: Verify no real remote database was configured
