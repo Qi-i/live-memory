@@ -30,9 +30,10 @@ if (v3Preview) {
     root.render(<React.StrictMode><V3Preview /></React.StrictMode>);
   });
 } else if (v3RealWorkspace) {
-  // Real-account V3 business UI is an explicit, read-only test route.
-  // AccessGate still establishes the actual user/device scope, but the V2
-  // AppRoot controller (including V2 automatic sync) is NEVER mounted here.
+  // Real-account V3 workspace remains an explicit opt-in preview route.
+  // AccessGate establishes the actual scoped identity. Only an account with
+  // a verified server-side V3 writer marker may edit and manually sync;
+  // existing V2 owners stay read-only, and V2 AppRoot/timers never mount.
   void import("./ui/real/V3RealWorkspace").then(({ V3RealWorkspace }) => {
     root.render(
       <React.StrictMode><AccessGate><V3RealWorkspace /></AccessGate></React.StrictMode>,
