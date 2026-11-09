@@ -122,8 +122,11 @@ from public.${context.table} where id = '${id}';`);
     console.log("PASS: " + context.name + " row lock, simultaneous CAS conflict and committed payload");
   } finally {
     // On any failure, release the row lock and both test processes immediately.
-    if (!writerA.child.killed) { writerA.send("rollback;"); writerA.end(); writerA.child.kill(); }
-    if (writerB && !writerB.child.killed) writerB.child.kill();
+    if (writerA.child.exitCode === null && !writerA.child.killed) {
+      if (!writerA.child.stdin.writableEnded) { writerA.send("rollback;"); writerA.end(); }
+      writerA.child.kill();
+    }
+    if (writerB && writerB.child.exitCode === null && !writerB.child.killed) writerB.child.kill();
   }
 }
 console.log("PASS: real two-session V3 PostgreSQL CAS races for both cloud providers.");
