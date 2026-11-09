@@ -55,6 +55,29 @@ grant execute on function auth.uid() to authenticated;
 grant select, insert, update on public.echo_passkey_records to anon, authenticated;
 grant select, insert, update on public.echo_text_backups to authenticated;
 
+-- Minimal Storage metadata tables for applying the exact new bucket
+-- migration in an isolated PostgreSQL service with real RLS.
+create schema storage;
+create table storage.buckets (
+  id text primary key, name text not null, public boolean not null default false,
+  file_size_limit bigint, allowed_mime_types text[]
+);
+create table storage.objects (
+  id bigint generated always as identity primary key,
+  bucket_id text not null references storage.buckets(id),
+  name text not null,
+  unique (bucket_id, name)
+);
+create function storage.foldername(path text) returns text[]
+language sql immutable set search_path = pg_catalog
+as $fn$select string_to_array(regexp_replace(path, '/[^/]+$', ''), '/')$fn$;
+alter table storage.objects enable row level security;
+grant usage on schema storage to anon, authenticated;
+grant select, insert on storage.objects to anon, authenticated;
+grant usage, select on sequence storage.objects_id_seq to anon, authenticated;
+grant execute on function storage.foldername(text) to anon, authenticated;
+
 -- These lines are the only source of V3 SQL behavior in the test database.
 \ir ../../supabase/migrations/015_v3_cas_revision.sql
 \ir ../../supabase/migrations/016_v3_account_media_guard.sql
+\ir ../../supabase/migrations/017_v3_private_media_bucket.sql

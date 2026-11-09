@@ -1,6 +1,8 @@
 import type { AppSettings } from "../domain";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
+import { resolveMediaSource } from "../mediaCache";
+import { SupabaseV3MediaTransport, V3_PRIVATE_MEDIA_BUCKET, type V3MediaStorageClient } from "./supabase/V3MediaTransport";
 import { IndexedDbRecordRepository } from "./indexedDb/recordRepository";
 import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
 import { SupabaseV3RecordAdapter, type V3RpcClient } from "./supabase/V3CloudRecordAdapter";
@@ -72,6 +74,7 @@ export async function createV3SyncRuntime(
 
   let client: V3RpcClient;
   let identity: string;
+  let mediaTransport: SupabaseV3MediaTransport | undefined;
   if (provider === "account") {
     const account = getAccountClient();
     const { data, error } = await account.auth.getUser();
@@ -87,13 +90,29 @@ export async function createV3SyncRuntime(
     if (!/^https:\/\//.test(endpoint) || !/^[a-f0-9]{64}$/.test(owner)) {
       throw new Error("A configured secure personal cloud and owner key are required for V3");
     }
-    client = makeSupabaseClient(settings) as unknown as V3RpcClient;
+    const personal = makeSupabaseClient(settings);
+    client = personal as unknown as V3RpcClient;
     identity = endpoint + "|owner:" + owner;
+    // V3 is always a full-media personal cloud. Never inherit the V2
+    // mediaBucket setting: the legacy echo-media bucket is publicly readable.
+    // This dedicated private bucket must pass security review before cutover.
+    mediaTransport = new SupabaseV3MediaTransport(
+      personal as unknown as V3MediaStorageClient,
+      V3_PRIVATE_MEDIA_BUCKET,
+      owner,
+      () => {
+        if (currentStorageScope() !== scope) {
+          throw new Error("V3_MEDIA_ACCOUNT_CHANGED");
+        }
+      },
+      (asset) => resolveMediaSource(asset, true),
+      settings.supabase.mediaBucket, // legacy V2 SOURCE only; never a V3 upload target
+    );
   }
 
   if (currentStorageScope() !== scope) throw new Error("Account switched during V3 runtime construction");
   const local = new IndexedDbRecordRepository(scope);
-  const remote = new SupabaseV3RecordAdapter(client, provider, identity, scope);
+  const remote = new SupabaseV3RecordAdapter(client, provider, identity, scope, mediaTransport);
   const ledger = await IndexedDbRevisionLedger.create(scope, provider, identity);
   return new V3SyncRuntime(local, remote, ledger);
 }

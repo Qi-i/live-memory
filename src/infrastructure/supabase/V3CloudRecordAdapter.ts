@@ -1,5 +1,6 @@
 import type { EventRecord } from "../../domain";
 import { stableSerialize } from "../../core/sync/revision";
+import type { V3MediaTransport } from "./V3MediaTransport";
 import {
   RemoteRevisionChanged,
   type CloudRecordAdapter,
@@ -58,6 +59,7 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     readonly provider: "personal" | "account",
     readonly identity: string,
     readonly accountScope: string,
+    private readonly mediaTransport?: V3MediaTransport,
   ) {
     if (!identity.trim() || !accountScope.trim()) throw new Error("V3 cloud identity and account scope are mandatory");
     this.includeMedia = provider === "personal";
@@ -83,7 +85,21 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
         throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
       }
     }
-    return verified;
+    if (!this.includeMedia || !this.mediaTransport) return verified;
+    // Keep signing work bounded instead of opening a request for every image
+    // at once (which can overwhelm private Storage and lose failure signals).
+    const hydrated: CloudRecordEnvelope[] = new Array(verified.length);
+    let cursor = 0;
+    await Promise.all(Array.from({ length: Math.min(4, verified.length) }, async () => {
+      while (cursor < verified.length) {
+        const index = cursor++;
+        this.mediaTransport!.assertScope();
+        hydrated[index] = { ...verified[index],
+          record: await this.mediaTransport!.hydrate(verified[index].record) };
+      }
+    }));
+    this.mediaTransport.assertScope();
+    return hydrated;
   }
 
   private async scanAllPages(): Promise<CloudRecordEnvelope[]> {
@@ -119,28 +135,54 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     if (expected !== null && (!/^[1-9]\d*$/.test(expected) || !Number.isSafeInteger(Number(expected)))) {
       throw new Error("Invalid server revision, refusing cloud overwrite");
     }
-    // The CAS RPC only commits JSON metadata. Image bytes must first be
-    // uploaded by the media pipeline, not smuggled into public JSON rows.
-    if (this.includeMedia && record.media.some((asset) =>
-      !asset.storagePath && /^(?:data:|blob:)/i.test(asset.src)
+    this.mediaTransport?.assertScope();
+    let prepared = record;
+    if (this.includeMedia && this.mediaTransport) {
+      // Stage every local image first. Any failed file prevents the CAS call.
+      // A second writer can still win CAS; staged content stays immutable and
+      // must NOT be deleted without a separate delayed-reference audit.
+      const assets = [];
+      for (const asset of record.media) {
+        this.mediaTransport.assertScope();
+        assets.push(await this.mediaTransport.stage(record.id, asset));
+      }
+      prepared = { ...record, media: assets };
+    }
+    if (this.includeMedia && prepared.media.some((asset) =>
+      /^(?:data:|blob:)/i.test(asset.src) && !asset.storagePath
     )) {
       throw new Error("V3_MEDIA_UPLOAD_REQUIRED: Upload local images before committing the record");
     }
+
+    // Server JSON contains only private Storage paths, never raw image bytes
+    // or expiring signed URLs. The local result retains its renderable src.
     const payload: EventRecord = this.includeMedia
       ? {
-        ...record,
-        media: record.media.map((asset) => asset.storagePath
+        ...prepared,
+        media: prepared.media.map((asset) => asset.storagePath
           ? { ...asset, src: "" }
           : asset),
       }
-      : {
-        ...record, media: [], mediaTombstones: undefined,
-      };
+      : { ...prepared, media: [], mediaTombstones: undefined };
     const fn = this.provider === "personal" ? "live_memory_v3_cas_personal" : "live_memory_v3_cas_account";
-    const args = { p_id: record.id, p_payload: payload, p_expected_revision: expected === null ? null : Number(expected) };
+    const args = { p_id: prepared.id, p_payload: payload, p_expected_revision: expected === null ? null : Number(expected) };
+    this.mediaTransport?.assertScope();
     const { data, error } = await this.client.rpc(fn, args);
+    this.mediaTransport?.assertScope();
     if (error) throw rpcFailure(error.message);
     const row = Array.isArray(data) ? (data.length === 1 ? data[0] : null) : data;
-    return parseRow(row);
+    const committed = parseRow(row);
+    if (!this.includeMedia || !this.mediaTransport) return committed;
+    const localMedia = new Map(prepared.media.map(asset => [asset.id, asset]));
+    // Reapply client-side display bytes only if the server acknowledged the
+    // expected immutable object path. No image bytes are sent via the RPC.
+    return { ...committed, record: {
+      ...committed.record,
+      media: committed.record.media.map(asset => {
+        const local = localMedia.get(asset.id);
+        return local && local.storagePath === asset.storagePath
+          ? { ...asset, src: local.src, source: local.source } : asset;
+      }),
+    } };
   }
 }
