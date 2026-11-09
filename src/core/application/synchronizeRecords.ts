@@ -124,7 +124,15 @@ export async function synchronizeRecords(
   }
 
   if (downloadCandidates.length) {
-    const accepted = await local.applyRemoteIfUnchanged(snapshot, downloadCandidates, { includeMedia: cloud.includeMedia });
+    // Images must be actual verified offline bytes, not expiring signed URLs,
+    // BEFORE any new local record is committed or its baseline acknowledged.
+    const durableCandidates: EventRecord[] = [];
+    for (const candidate of downloadCandidates) {
+      durableCandidates.push(cloud.prepareIncoming
+        ? await cloud.prepareIncoming(candidate)
+        : candidate);
+    }
+    const accepted = await local.applyRemoteIfUnchanged(snapshot, durableCandidates, { includeMedia: cloud.includeMedia });
     downloadedIds.push(...accepted.acceptedIds);
     accepted.deferredIds.forEach((id) => deferred.add(id));
     for (const acceptedId of accepted.acceptedIds) {
