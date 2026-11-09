@@ -7,7 +7,7 @@ await mkdir(out, { recursive: true });
 const browser = await chromium.launch({ headless: true });
 let failures = [];
 try {
-  for (const [width, height] of [[360, 780], [390, 844], [768, 1024], [1024, 820], [1600, 900], [1669, 925], [1920, 1080]]) {
+  for (const [width, height] of [[360, 780], [390, 844], [430, 932], [768, 1024], [1024, 820], [1280, 800], [1366, 768], [1440, 900], [1600, 900], [1669, 925], [1920, 1080]]) {
     const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: "block", acceptDownloads: true });
     const page = await context.newPage();
     const errors = [];
@@ -42,12 +42,22 @@ try {
         const r = node.getBoundingClientRect();
         return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
       };
-      const art = rect(".v3-portrait-frame");
+      const art = rect(".v3-stage-hero-gallery .v3-portrait-frame");
+      const figure = rect(".v3-stage-hero-gallery .v3-portrait-artwork");
+      const poster = document.querySelector(".v3-stage-hero-gallery .v3-portrait-frame img");
+      const sidePanel = document.querySelector(".v3-map-side");
       return {
         shell: rect(".v3-workspace-shell"), sidebar: rect(".v3-sidebar"),
-        art, hero: rect(".v3-stage-hero"), copy: rect(".v3-stage-hero-copy"),
+        art, figure, hero: rect(".v3-stage-hero"), copy: rect(".v3-stage-hero-copy"),
         gallery: rect(".v3-stage-hero-gallery"), map: rect(".v3-map-stage"),
         side: rect(".v3-map-side"), tools: rect(".v3-action-toolbar"),
+        topbar: rect(".v3-global-toolbar"), headerChildren: [...document.querySelectorAll(".v3-preview-topbar > *")].map(el => {
+          const r=el.getBoundingClientRect();
+          return { left:r.left, right:r.right, top:r.top, bottom:r.bottom };
+        }),
+        sideScrollHeight: sidePanel.scrollHeight, sideClientHeight: sidePanel.clientHeight,
+        sideOverflowY: getComputedStyle(sidePanel).overflowY,
+        naturalAspect: poster.naturalWidth / poster.naturalHeight,
         buttons: [...document.querySelectorAll(".v3-action-toolbar button")].map(el => {
           const r = el.getBoundingClientRect();
           return { left: r.left, right: r.right };
@@ -55,7 +65,7 @@ try {
         bodyWidth: document.documentElement.scrollWidth,
         viewportWidth: innerWidth, viewportHeight: innerHeight,
         bodyHeight: document.documentElement.scrollHeight,
-        artFit: getComputedStyle(document.querySelector(".v3-portrait-frame img")).objectFit,
+        artFit: getComputedStyle(poster).objectFit,
       };
     });
     if (geom.shell.top < -1 || geom.shell.bottom > height + 1 || geom.shell.left < -1 || geom.shell.right > width + 1) {
@@ -68,8 +78,32 @@ try {
       throw Error("Header stats are inconsistent with demo fixtures: " + JSON.stringify(initialMetrics));
     }
     const aspect = geom.art.width / geom.art.height;
-    if (aspect < 0.59 || aspect > 0.75 || geom.art.height < 150 || geom.artFit !== "contain")
-      throw Error("Poster crushed or cropped: " + JSON.stringify({ width, art: geom.art, aspect, fit: geom.artFit }));
+    if (geom.art.height < 180 || geom.artFit !== "contain" ||
+        !Number.isFinite(geom.naturalAspect) ||
+        (geom.naturalAspect >= .45 && geom.naturalAspect <= .95 &&
+         Math.abs(aspect - geom.naturalAspect) > .032)) {
+      throw Error("Poster is cropped or its frame ignores the original aspect: " +
+        JSON.stringify({ width, art: geom.art, actual: aspect, native: geom.naturalAspect, fit: geom.artFit }));
+    }
+    // A hero that is taller than its content wastes the user's first viewport.
+    const unoccupiedGalleryHeight = geom.gallery.height - geom.figure.height;
+    if (unoccupiedGalleryHeight > 24 ||
+        geom.figure.top - geom.gallery.top > 16 ||
+        geom.gallery.bottom - geom.figure.bottom > 19) {
+      throw Error("Banner poster has avoidable upper/lower whitespace: " +
+        JSON.stringify({ width, hero: geom.hero.height, blank: unoccupiedGalleryHeight }));
+    }
+    if (width >= 1280 && height <= 925 && geom.hero.height > 425)
+      throw Error("Banner steals first-screen space without showing more poster information: " + geom.hero.height);
+    if (geom.headerChildren.some(r => r.left < geom.topbar.left - 3 ||
+        r.right > geom.topbar.right + 3 ||
+        r.top < geom.topbar.top - 3 || r.bottom > geom.topbar.bottom + 3))
+      throw Error("Topbar stats or controls clipped at " + width);
+    if (geom.sideOverflowY === "auto" || geom.sideOverflowY === "scroll" ||
+        geom.sideScrollHeight > geom.sideClientHeight + 3) {
+      throw Error("City list has a clipped nested vertical scroller at " + width + ": " +
+        JSON.stringify({ content: geom.sideScrollHeight, viewport: geom.sideClientHeight, overflow: geom.sideOverflowY }));
+    }
     if (geom.gallery.top < geom.copy.bottom - 2 && width <= 800)
       throw Error("Hero typography and portraits overlap at " + width);
     if (geom.bodyWidth > geom.viewportWidth + 3)
@@ -130,6 +164,14 @@ try {
 
     await page.getByRole("button", { name: "列表", exact: true }).click();
     await page.getByRole("cell", { name: "UI 回归验证演出" }).waitFor({ state: "visible" });
+    const tableSafe = await page.locator(".v3-demo-table-scroll").evaluate(el => ({
+      width: el.clientWidth, scrollWidth: el.scrollWidth, overflowX: getComputedStyle(el).overflowX,
+      tableStyled: !!el.querySelector("table.v3-demo-table"),
+    }));
+    if (!tableSafe.tableStyled || tableSafe.width < 150 ||
+        (tableSafe.scrollWidth > tableSafe.width + 2 && !["auto","scroll"].includes(tableSafe.overflowX))) {
+      throw Error("List view clipped instead of providing its own horizontal table scroll: " + JSON.stringify(tableSafe));
+    }
     await page.getByRole("button", { name: "统计", exact: true }).click();
     await page.getByRole("heading", { name: "现场履历" }).waitFor({ state: "visible" });
     await page.getByRole("button", { name: "设置", exact: true }).click();
@@ -223,4 +265,4 @@ try {
 if (failures.length) {
   console.error(failures.join("\n"));
   process.exitCode = 1;
-} else console.log("V3 public preview validated at 360/390/768/1024/1600/1669/1920px, no external requests, map/hero/status interactive.");
+} else console.log("V3 public preview validated at 360/390/430/768/1024/1280/1366/1440/1600/1669/1920px with intrinsic posters, uncut city list and responsive header.");
