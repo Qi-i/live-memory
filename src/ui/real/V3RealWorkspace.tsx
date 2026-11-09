@@ -27,7 +27,14 @@ function PosterCard({ record, onOpen }: { record: EventRecord; onOpen: (id: stri
     <button className="v3-real-poster-card" type="button" onClick={() => onOpen(record.id)}
       aria-label={"查看 " + record.title}>
       <span className="v3-real-poster-image">
-        {src ? <img src={src} loading="lazy" alt={record.title + "海报"} /> : <span>无海报</span>}
+        {src ? <img src={src} loading="lazy" alt={record.title + "海报"}
+          onLoad={event => {
+            const img=event.currentTarget;
+            const ratio=img.naturalHeight>0?img.naturalWidth/img.naturalHeight:0;
+            if(ratio>=.45&&ratio<=.95) {
+              img.closest<HTMLElement>(".v3-real-poster-image")?.style.setProperty("--v3-real-poster-ratio",String(ratio));
+            }
+          }}/> : <span>无海报</span>}
       </span>
       <strong title={record.title}>{record.title}</strong>
       <small>{record.date} · {record.city || "城市待补"}</small>
@@ -266,8 +273,7 @@ export function V3RealWorkspace() {
             onChange={event=>setSearch(event.target.value)}/>}
           modes={archiveModes.map(item=><button type="button" key={item}
             aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
-          actions={<><button type="button" onClick={()=>setPage("统计")}>统计</button>
-            <button type="button" onClick={()=>setPage("城市")}>城市</button></>}/>
+          actions={null}/>
         {!paged.length ? <div className="v3-real-panel"><h2>没有符合条件的记录</h2>
           <p>可更换搜索词。此预览不会生成演示档案。</p></div> :
           mode==="海报" ? <section className="v3-real-panel"><header><span>REAL PORTRAIT ARCHIVE</span>
