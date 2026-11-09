@@ -6,6 +6,7 @@ import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
 import { SupabaseV3RecordAdapter, type V3RpcClient } from "./supabase/V3CloudRecordAdapter";
 import { auditSyncReadOnly, type ReadOnlySyncAudit } from "../core/application/auditSyncReadOnly";
 import { synchronizeWithLedger } from "../core/application/synchronizeWithLedger";
+import { bootstrapEquivalentBaselines, type BaselineBootstrapReport } from "../core/application/bootstrapEquivalentBaselines";
 import type { SyncRunResult } from "../core/application/synchronizeRecords";
 
 /**
@@ -27,6 +28,11 @@ export class V3SyncRuntime {
     });
   }
 
+  /** Metadata-only V2 adoption: never transfers, edits or removes an archive. */
+  async bootstrapMatchingHistory(): Promise<BaselineBootstrapReport> {
+    return bootstrapEquivalentBaselines(this.local, this.remote, this.ledger);
+  }
+
   async synchronize(options: {
     /** Required: the existing V2 timer/handlers were disabled by the caller. */
     v2AutoSyncDisabled: true;
@@ -36,13 +42,12 @@ export class V3SyncRuntime {
     if (options?.v2AutoSyncDisabled !== true) {
       throw new Error("V3 sync cannot run concurrently with the V2 automatic sync engine");
     }
-    const before = await this.ledger.snapshot();
     const review = await this.audit();
     if (review.requiresMigrationReview) {
       throw new Error("V3_SYNC_MIGRATION_REVIEW_REQUIRED: Existing local and remote versions differ");
     }
     const oneSided = review.actions["pull-new"] + review.actions["push-new"];
-    if (before.size === 0 && oneSided > 0 && !options.initialTransferApproved) {
+    if (oneSided > 0 && !options.initialTransferApproved) {
       throw new Error("V3_INITIAL_TRANSFER_APPROVAL_REQUIRED: Confirm old records before first transfer");
     }
     return synchronizeWithLedger(this.local, this.remote, this.ledger);
