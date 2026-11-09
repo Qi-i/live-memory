@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
-import type { AppSettings } from "../../domain";
+import { useEffect, useMemo, useState } from "react";
+import type { AppSettings, EventRecord } from "../../domain";
+import { auditBackupPortability } from "../../core/application/auditBackupPortability";
 import type { ReadOnlySyncAudit } from "../../core/application/auditSyncReadOnly";
 import type { BaselineBootstrapReport } from "../../core/application/bootstrapEquivalentBaselines";
 import "./v3MigrationPanel.css";
@@ -11,6 +12,7 @@ interface ProviderState {
 }
 interface Props {
   settings: AppSettings;
+  records: EventRecord[];
   personalConnected: boolean;
 }
 
@@ -20,7 +22,8 @@ interface Props {
  * mutations. Only user-invoked, identical-content baseline metadata adoption.
  * The V2 app remains authoritative until the complete cutover gate passes.
  */
-export function V3MigrationPanel({ settings, personalConnected }: Props) {
+export function V3MigrationPanel({ settings, records, personalConnected }: Props) {
+  const backupAudit = useMemo(() => auditBackupPortability(records), [records]);
   const [states, setStates] = useState<Partial<Record<Provider, ProviderState>>>({});
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState("");
@@ -109,6 +112,20 @@ export function V3MigrationPanel({ settings, personalConnected }: Props) {
             </div>
           );
         })}
+      </div>
+      <div className="v3-migration-backup" role="note">
+        <strong>备份完整性预检</strong>
+        <span>现有 {backupAudit.records} 条记录，共 {backupAudit.assets} 个媒体资源；
+          JSON 内嵌媒体候选 {backupAudit.embeddedCandidates} 个，
+          仍需单独保存原始文件 {backupAudit.assets - backupAudit.embeddedCandidates} 个。</span>
+        {backupAudit.requiresSeparateMediaBackup && (
+          <p>云端路径 {backupAudit.storageReferences}、临时 Blob 地址 {backupAudit.transientBlobReferences}、
+            外部地址 {backupAudit.externalReferences}、缺失来源 {backupAudit.unavailableReferences}。
+            这些引用并不等于图片文件，现有 JSON 不能被认定为完整媒体备份。</p>
+        )}
+        {!backupAudit.requiresSeparateMediaBackup && (
+          <p>当前记录未发现仅有图片引用的资源，但仍须验证导出文件可读及图片字节完整后才能签发迁移备份证明。</p>
+        )}
       </div>
       {error && <p className="v3-migration-error" role="alert">{error}</p>}
       <p className="v3-migration-notice">
