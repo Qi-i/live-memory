@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { currentStorageScope } from "../../storage";
 import type { AppSettings, EventRecord } from "../../domain";
 import { auditBackupPortability } from "../../core/application/auditBackupPortability";
 import type { ReadOnlySyncAudit } from "../../core/application/auditSyncReadOnly";
@@ -27,14 +28,20 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   const [states, setStates] = useState<Partial<Record<Provider, ProviderState>>>({});
   const [pending, setPending] = useState<Provider | null>(null);
   const [error, setError] = useState("");
+  const scopeGeneration = useRef(0);
   useEffect(() => {
     // Never display results obtained for an earlier account/cloud configuration.
+    scopeGeneration.current += 1;
     setStates({});
+    setPending(null);
     setError("");
+    return () => { scopeGeneration.current += 1; };
   }, [settings.supabase.url, settings.supabase.ownerKey]);
 
   async function inspect(provider: Provider, bootstrap = false) {
     if (pending) return;
+    const requestGeneration = scopeGeneration.current;
+    const requestScope = currentStorageScope();
     setPending(provider);
     setError("");
     try {
@@ -44,17 +51,19 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       const runtime = await createV3SyncRuntime(settings, provider);
       const baseline = bootstrap ? await runtime.bootstrapMatchingHistory() : undefined;
       const audit = await runtime.audit();
+      if (scopeGeneration.current !== requestGeneration || currentStorageScope() !== requestScope) return;
       setStates((current) => ({
         ...current,
         [provider]: { audit, bootstrap: baseline ?? current[provider]?.bootstrap },
       }));
     } catch (failure) {
+      if (scopeGeneration.current !== requestGeneration || currentStorageScope() !== requestScope) return;
       const code = failure instanceof Error ? failure.message : "";
       setError(code.includes("V3_REMOTE_INVENTORY_CHANGED")
         ? "云端正在变化，已取消本次检查；稍后可重新执行，不会丢失档案。"
         : "检查未完成。请核实当前账号、云端连接及浏览器本机存储状态；没有改动任何档案。");
     } finally {
-      setPending(null);
+      if (scopeGeneration.current === requestGeneration && currentStorageScope() === requestScope) setPending(null);
     }
   }
 
