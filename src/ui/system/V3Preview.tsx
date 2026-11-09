@@ -152,7 +152,7 @@ export function V3Preview() {
         <button key={item} type="button" aria-current={item === page ? "page" : undefined}
           onClick={() => selectPage(item)}>{item}</button>)}
       toolbar={<div className="v3-preview-topbar">
-        <div><span>LIVE MEMORY / V3 · DEMO</span><strong>{page === "档案" ? "演出档案" : page} · 新工作区</strong>
+        <div><span>LIVE MEMORY · V3</span><strong>{page === "档案" ? "演出档案" : page} · 新工作区</strong>
           <small className="v3-preview-disclosure">独立演示 · 不读取账号、私人云或本机档案</small></div>
         <div className="v3-preview-topbar-stats" aria-label="当前演示数据统计">
           <b>{visibleShows.length} <small>记录</small></b>
@@ -164,7 +164,7 @@ export function V3Preview() {
       </div>}
       activity={activity}
       activityHistory={activityHistory}
-      account={<span>公开演示 · 未连接个人账号</span>}
+      account={<span>公开演示 · 不连接账号</span>}
       overlay={dialog && (
         dialog.type === "editor"
           ? <DemoEditor key={dialog.showId ?? "new"} existing={selectedShow}
@@ -180,7 +180,7 @@ export function V3Preview() {
     >
       {page === "档案" && <>
         <StageHero
-          eyebrow="LIVE MEMORY · EXPERIENCE LIBRARY"
+          eyebrow="LIVE MEMORY · ARCHIVE"
           title="把现场，留在时间里"
           description="每张海报都保留完整的竖版比例。搜索、编辑和统计均来自同一份临时演示数据。"
           posters={visibleShows.map(({ id, title, city, src }) => ({ id, title, city, src }))}
