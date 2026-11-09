@@ -63,6 +63,9 @@ switchScopeDuringOpen=true;
 await assert.rejects(cache.persistVerifiedOfflineMedia({
   ...record,storagePath:record.storagePath,
 },blob),/V3_OFFLINE_ACCOUNT_CHANGED/);
+assert.equal([...cacheByName.values()].flatMap(m=>[...m.values()]).length,1,
+  "A midflight account switch must not commit the stale download to any cache");
+await cache.persistVerifiedOfflineMedia(record,blob);
 assert.equal(cacheByName.size,2,
-  "After a switch, only partitioned caches may remain; no old data enters the new scope");
+  "A new account has its own isolated offline cache, never the first account's files");
 console.log("V3 offline bytes cache passed: original bytes, SHA-256, bad MIME/path, account-switch fence");
