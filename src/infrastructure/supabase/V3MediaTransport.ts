@@ -26,6 +26,8 @@ export interface V3MediaStorageClient {
   };
 }
 
+/** Never reuse the legacy V2 public echo-media bucket for private tickets. */
+export const V3_PRIVATE_MEDIA_BUCKET = "echo-private-media-v3";
 const MAX_ASSET = 32 * 1024 * 1024;
 const MIME_EXT: Record<string, string> = {
   "image/jpeg": "jpg", "image/png": "png", "image/webp": "webp",
@@ -58,7 +60,7 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
   ) {
     this.bucket = bucket.trim();
     this.owner = ownerKey.trim().toLowerCase();
-    if (!/^[a-f0-9]{64}$/.test(this.owner) || !/^[a-z0-9][a-z0-9_-]{1,62}$/i.test(this.bucket)) {
+    if (!/^[a-f0-9]{64}$/.test(this.owner) || this.bucket !== V3_PRIVATE_MEDIA_BUCKET) {
       throw new Error("V3_MEDIA_INVALID_SCOPE_OR_BUCKET");
     }
   }
