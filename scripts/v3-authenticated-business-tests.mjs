@@ -5,8 +5,17 @@ const content = await readFile(new URL("../src/core/application/describeRealArch
 const js = ts.transpileModule(content,{compilerOptions:{
   target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
 }}).outputText;
+const domainSource=await readFile(new URL("../src/domain.ts",import.meta.url),"utf8");
+const domainJS=ts.transpileModule(domainSource,{compilerOptions:{
+  target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
+}}).outputText;
+const domainExports={};
+new Function("exports",domainJS)(domainExports);
 const exports={};
-new Function("exports",js)(exports);
+new Function("exports","require",js)(exports,name=>{
+  if(name==="../../domain")return domainExports;
+  throw new Error("Unexpected V3 archive dependency: "+name);
+});
 const mk = (i, opts={})=>({
   id:"record-"+i, title:"Long personal concert title ".repeat(i%5+1),
   city:"City-"+String(i%20), venue:"Venue-"+i,
@@ -23,7 +32,8 @@ const many=Array.from({length:200},(_,i)=>mk(i));
 many[0].deletedAt="2026-11-08T00:00:00Z";
 many[2].recordState="cancelled";
 many[4].recordState="refunded";
-const model=exports.describeRealArchive(many);
+const frozenNow=new Date("2026-01-01T00:00:00");
+const model=exports.describeRealArchive(many,"",frozenNow);
 assert.equal(model.records.length,199);
 assert.equal(model.mediaCount,199);
 assert.equal(model.watchedCount,97);
@@ -32,19 +42,24 @@ assert.equal(model.years.length,1);
 assert.equal(new Set(model.records.map(row=>row.id)).size,199);
 assert.equal(model.records.some(row=>row.deletedAt),false);
 assert.ok(model.records.every((row,i,items)=>i===0 || items[i-1].date>=row.date));
-const filtered=exports.describeRealArchive(many,"ARTIST 3");
+const filtered=exports.describeRealArchive(many,"ARTIST 3",frozenNow);
 assert.equal(filtered.records.length,50);
-assert.equal(exports.describeRealArchive(many,"unlikely-string").records.length,0);
-const accented=exports.describeRealArchive([mk(900,{title:"深深的巡回演唱会"})],"巡回");
+assert.equal(exports.describeRealArchive(many,"unlikely-string",frozenNow).records.length,0);
+const accented=exports.describeRealArchive([mk(900,{title:"深深的巡回演唱会"})],"巡回",frozenNow);
 assert.equal(accented.records.length,1);
 const special=exports.describeRealArchive([
   mk(300,{city:"",media:[],status:"planned"}),mk(301,{city:"北京",title:"A".repeat(800)}),
   mk(302,{city:"北京",status:"watched",recordState:"cancelled"}),
-]);
+],"",frozenNow);
 assert.equal(special.cities.length,1);
 assert.equal(special.cities[0].total,2);
 assert.equal(special.mediaCount,2);
 assert.equal(special.watchedCount,0);
+const autoCompleted=exports.describeRealArchive([
+  mk(1000,{status:"planned",date:"2026-01-01"}),
+  mk(1001,{status:"planned",date:"2099-01-01"}),
+],"",new Date("2026-02-01T12:00:00"));
+assert.equal(autoCompleted.watchedCount,1,"Use the same effective watched status as V2");
 assert.equal(many[0].deletedAt,"2026-11-08T00:00:00Z","Read model cannot mutate its input");
 
 const component=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
