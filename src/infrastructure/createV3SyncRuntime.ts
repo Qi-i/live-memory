@@ -53,6 +53,10 @@ export class V3SyncRuntime {
     if (options?.v2AutoSyncDisabled !== true) {
       throw new Error("V3 sync cannot run concurrently with the V2 automatic sync engine");
     }
+    // The server, not the caller, decides whether V2 clients are fenced.
+    if (await this.remote.writerMode() !== "v3") {
+      throw new Error("V3_SERVER_CUTOVER_NOT_ACTIVE: Existing V2 clients may still overwrite cloud records");
+    }
     const review = await this.audit();
     if (review.requiresMigrationReview) {
       throw new Error("V3_SYNC_MIGRATION_REVIEW_REQUIRED: Existing local and remote versions differ");
