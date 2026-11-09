@@ -613,6 +613,12 @@ body {
     transition: transform 180ms ease;
   }
 
+  /* When entering the mobile breakpoint, keep a closed navigation rail
+     completely offscreen immediately; do not animate it across content. */
+  .experience-rail:not(.is-open) {
+    transition: none;
+  }
+
   .experience-rail.is-open {
     transform: translateX(0);
   }
