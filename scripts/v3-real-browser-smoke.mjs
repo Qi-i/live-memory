@@ -116,10 +116,72 @@ try {
     db.close();
     return JSON.stringify(all);
   });
-  if(initial!==after)throw Error("Read-only preview modified IndexedDB real archive");
+  if(initial!==after)throw Error("Read-only browsing modified IndexedDB");
+  // Only the explicitly device-local archive may write; verify a real
+  // conditional transaction, then simulate an external-tab edit conflict.
+  if(width===390){
+    await page.getByRole("button",{name:"新增本机演出"}).click();
+    const createdDialog=page.getByRole("dialog",{name:"新增演出"});
+    await createdDialog.waitFor({state:"visible"});
+    await createdDialog.locator("input[required]").first().fill("本机安全新增 · V3");
+    await createdDialog.getByRole("button",{name:/保存记录/}).click();
+    await createdDialog.waitFor({state:"detached"});
+    await page.getByRole("status").filter({hasText:"已安全保存至此设备"}).waitFor();
+    const persisted=await page.evaluate(async()=>{
+      const db=await new Promise((res,rej)=>{
+        const request=indexedDB.open("echo-archive-v2:device-local",1);
+        request.onsuccess=()=>res(request.result);request.onerror=()=>rej(request.error);
+      });
+      const rows=await new Promise((res,rej)=>{
+        const request=db.transaction("records","readonly").objectStore("records").getAll();
+        request.onsuccess=()=>res(request.result);request.onerror=()=>rej(request.error);
+      });
+      db.close();
+      return rows;
+    });
+    if(persisted.length!==4||!persisted.some(row=>row.title==="本机安全新增 · V3")) {
+      throw Error("Device V3 atomic create did not persist one new record");
+    }
+
+    await page.getByRole("button",{name:"档案",exact:true}).click();
+    await page.getByRole("button",{name:/查看 北京现场/}).click();
+    await page.getByRole("button",{name:"编辑本机演出"}).click();
+    const editDialog=page.getByRole("dialog",{name:"编辑演出"});
+    await editDialog.waitFor({state:"visible"});
+    await editDialog.locator("input[required]").first().fill("绝不能覆盖其他标签页");
+    await page.evaluate(async()=>{
+      const db=await new Promise((res,rej)=>{
+        const request=indexedDB.open("echo-archive-v2:device-local",1);
+        request.onsuccess=()=>res(request.result);request.onerror=()=>rej(request.error);
+      });
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction("records","readwrite");
+        const store=tx.objectStore("records");
+        const get=store.get("s1");
+        get.onsuccess=()=>store.put({...get.result,title:"另一个标签页已保存",updatedAt:new Date().toISOString()});
+        tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);
+      });
+      db.close();
+    });
+    await editDialog.getByRole("button",{name:/保存记录/}).click();
+    await editDialog.getByRole("alert").getByText(/另一标签页已修改/).waitFor();
+    if(!await editDialog.isVisible()) throw Error("Conflicted draft was discarded");
+    const winner=await page.evaluate(async()=>{
+      const db=await new Promise((res,rej)=>{
+        const req=indexedDB.open("echo-archive-v2:device-local",1);
+        req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);
+      });
+      const row=await new Promise((res,rej)=>{
+        const req=db.transaction("records","readonly").objectStore("records").get("s1");
+        req.onsuccess=()=>res(req.result);req.onerror=()=>rej(req.error);
+      });
+      db.close();return row?.title;
+    });
+    if(winner!=="另一个标签页已保存")throw Error("V3 editor overwrote a concurrent-tab edit");
+  }
   if(errors.length||external.length)throw Error("V3 real page errors/network: "+JSON.stringify({errors,external}));
   passed+=1;
   await context.close();
  }
 }finally {await browser.close();}
-console.log("V3 authenticated real workspace browser passed for "+passed+" viewports: real IndexedDB records, all views, no mutation, no cloud requests.");
+console.log("V3 authenticated real workspace browser passed for "+passed+" viewports: real IndexedDB records, all views, read-only views, atomic local edit, stale-tab safety and no cloud requests.");
