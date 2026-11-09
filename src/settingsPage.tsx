@@ -141,7 +141,11 @@ export function SettingsPage({
       // Reject tampered, incomplete or truncated V3 portable files before
       // showing an import preview. Legacy V2/JSON backups stay compatible.
       const { verifyPortableBackupDocument } = await import("./core/application/portableMediaBackup");
-      await verifyPortableBackupDocument(parsed);
+      try {
+        await verifyPortableBackupDocument(parsed);
+      } catch {
+        throw new Error("V3 迁移备份的图片内容或校验清单不完整，导入已取消；请使用原始备份重新导出。");
+      }
     }
     const plan = parseBackupImport(parsed, records, file.name);
     setImportPreview(plan);
