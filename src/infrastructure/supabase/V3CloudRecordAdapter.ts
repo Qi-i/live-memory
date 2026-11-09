@@ -1,5 +1,5 @@
 import type { EventRecord } from "../../domain";
-import { recordContentEqual } from "../../core/sync/revision";
+import { stableSerialize } from "../../core/sync/revision";
 import {
   RemoteRevisionChanged,
   type CloudRecordAdapter,
@@ -79,7 +79,7 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     for (let i = 0; i < first.length; i += 1) {
       if (first[i].record.id !== verified[i].record.id ||
           first[i].serverRevision !== verified[i].serverRevision ||
-          !recordContentEqual(first[i].record, verified[i].record, true)) {
+          stableSerialize(first[i].record) !== stableSerialize(verified[i].record)) {
         throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
       }
     }
