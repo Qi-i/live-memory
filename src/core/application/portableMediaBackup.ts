@@ -176,6 +176,9 @@ export async function verifyPortableBackupDocument(value: unknown): Promise<{
       } catch {
         throw new Error("V3_BACKUP_MEDIA_DECODE_FAILED");
       }
+      if (blob.type.toLowerCase() !== expectedItem.mimeType.toLowerCase()) {
+        throw new Error("V3_BACKUP_MEDIA_TYPE_MISMATCH");
+      }
       if (blob.size !== expectedItem.bytes || await sha256(blob) !== expectedItem.sha256) {
         throw new Error("V3_BACKUP_MEDIA_HASH_MISMATCH");
       }
