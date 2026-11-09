@@ -144,7 +144,7 @@ export function V3Preview() {
     <WorkspaceShell
       appearance={material}
       demoStatus
-      brand={<><span className="v3-preview-brand">◈</span> Live Memory <small>V3 · 独立演示</small></>}
+      brand={<><span className="v3-preview-brand">◈</span><strong className="v3-preview-brand-name">Live Memory</strong><small>V3 · 独立演示</small></>}
       navigation={navigation.map((item) =>
         <button key={item} type="button" aria-current={item === page ? "page" : undefined}
           onClick={() => selectPage(item)}>{item}</button>)}
