@@ -21,6 +21,13 @@ begin
   exception when insufficient_privilege then denied:=true;
   end;
   if not denied then raise exception 'ANON_PERSONAL_OWNER_ACTIVATION_ALLOWED'; end if;
+  denied:=false;
+  begin
+    insert into public.live_memory_v3_writer_modes(provider,identity)
+    values('personal',repeat('a',64));
+  exception when insufficient_privilege then denied:=true;
+  end;
+  if not denied then raise exception 'ANON_DIRECT_MARKER_INSERT_ALLOWED'; end if;
   -- The existing V2 writer continues working until explicit cutover.
   insert into public.echo_passkey_records(owner_key,id,payload)
   values(repeat('a',64),'guard-v2-still-live','{"id":"guard-v2-still-live"}'::jsonb);
@@ -77,6 +84,13 @@ begin
     else raise; end if;
   end;
   if not denied then raise exception 'V3_PRE_CUTOVER_ACCOUNT_CAS_ALLOWED'; end if;
+  denied:=false;
+  begin
+    insert into public.live_memory_v3_writer_modes(provider,identity)
+    values('personal',repeat('a',64));
+  exception when insufficient_privilege then denied:=true;
+  end;
+  if not denied then raise exception 'AUTH_USER_PERSONAL_MARKER_INSERT_ALLOWED'; end if;
   insert into public.echo_text_backups(user_id,id,payload)
   values('11111111-1111-1111-1111-111111111111'::uuid,
    'guard-v2-account','{"id":"guard-v2-account","media":[]}'::jsonb);
