@@ -50,6 +50,7 @@ function inlineSource(src: string) { return /^(?:data:|blob:)/i.test(src); }
 export class SupabaseV3MediaTransport implements V3MediaTransport {
   private readonly bucket: string;
   private readonly owner: string;
+  private readonly legacyBucket: string;
 
   constructor(
     private readonly client: V3MediaStorageClient,
@@ -57,10 +58,13 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     ownerKey: string,
     private readonly scopeCheck: () => void,
     private readonly sourceResolver: (asset: MediaAsset) => Promise<string>,
+    legacyBucket = "echo-media",
   ) {
     this.bucket = bucket.trim();
     this.owner = ownerKey.trim().toLowerCase();
-    if (!/^[a-f0-9]{64}$/.test(this.owner) || this.bucket !== V3_PRIVATE_MEDIA_BUCKET) {
+    this.legacyBucket = legacyBucket.trim();
+    if (!/^[a-f0-9]{64}$/.test(this.owner) || this.bucket !== V3_PRIVATE_MEDIA_BUCKET ||
+        !/^[a-z0-9][a-z0-9_-]{1,62}$/i.test(this.legacyBucket) || this.legacyBucket === this.bucket) {
       throw new Error("V3_MEDIA_INVALID_SCOPE_OR_BUCKET");
     }
   }
@@ -75,16 +79,25 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     }
   }
 
+  private isPrivatePath(path: string): boolean {
+    return path.startsWith(this.owner + "/v3/");
+  }
+
   async stage(recordId: string, asset: MediaAsset): Promise<MediaAsset> {
     this.assertScope();
     if (!asset.id || !recordId || asset.recordId !== recordId) {
       throw new Error("V3_MEDIA_RECORD_ID_MISMATCH");
     }
-    // Existing valid storage references are never overwritten; their signed
-    // URLs are ephemeral transport metadata and not new edits.
+    if (asset.storagePath) this.validatePath(asset.storagePath);
     if (!inlineSource(asset.src)) {
-      if (asset.storagePath) this.validatePath(asset.storagePath);
-      return asset;
+      if (!asset.storagePath || this.isPrivatePath(asset.storagePath)) return asset;
+      // V2's original bucket may be publicly readable. Copy actual bytes to
+      // the new private bucket rather than publishing another legacy path.
+      // Never remove the source: V2 remains the authoritative live client.
+      const legacy = await this.client.storage.from(this.legacyBucket).download(asset.storagePath);
+      this.assertScope();
+      if (legacy.error || !legacy.data) throw new Error("V3_MEDIA_LEGACY_BYTES_UNAVAILABLE");
+      return this.persistBlob(recordId, asset, legacy.data);
     }
     const resolved = await this.sourceResolver(asset);
     this.assertScope();
@@ -92,7 +105,10 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     const response = await fetch(resolved);
     this.assertScope();
     if (!response.ok || response.type === "opaque") throw new Error("V3_MEDIA_LOCAL_BYTES_UNAVAILABLE");
-    const blob = await response.blob();
+    return this.persistBlob(recordId, asset, await response.blob());
+  }
+
+  private async persistBlob(recordId: string, asset: MediaAsset, blob: Blob): Promise<MediaAsset> {
     this.assertScope();
     if (!blob.size || blob.size > MAX_ASSET) throw new Error("V3_MEDIA_INVALID_SIZE");
     const mime = (blob.type || asset.mimeType || "").toLowerCase();
@@ -113,7 +129,7 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     this.assertScope();
     if (result.error) {
       if (!isDuplicateObject(result.error)) throw new Error("V3_MEDIA_STAGE_FAILED");
-      // Reuse a pre-existing immutable key ONLY after checking its bytes.
+      // A prior hash path is safe to reuse only if its real bytes agree.
       const existing = await store.download(path);
       this.assertScope();
       if (existing.error || !existing.data || existing.data.size !== blob.size ||
@@ -121,7 +137,16 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
         throw new Error("V3_MEDIA_EXISTING_OBJECT_MISMATCH");
       }
     }
-    return { ...asset, storagePath: path, mimeType: mime, size: blob.size };
+    let localSrc = asset.src;
+    if (!localSrc) {
+      // Legacy records can have only a Storage path. Keep the restored image
+      // visible immediately after CAS; do not replace its local src with "".
+      const signed = await store.createSignedUrl(path, 3600);
+      this.assertScope();
+      if (signed.error || !signed.data?.signedUrl) throw new Error("V3_MEDIA_SIGNING_FAILED");
+      localSrc = signed.data.signedUrl;
+    }
+    return { ...asset, src: localSrc, storagePath: path, mimeType: mime, size: blob.size };
   }
 
   async hydrate(record: EventRecord): Promise<EventRecord> {
@@ -135,13 +160,15 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       this.assertScope();
       if (!asset.storagePath) { assets.push(asset); continue; }
       this.validatePath(asset.storagePath);
-      let url = signed.get(asset.storagePath);
+      const bucket = this.isPrivatePath(asset.storagePath) ? this.bucket : this.legacyBucket;
+      const cacheKey = bucket + ":" + asset.storagePath;
+      let url = signed.get(cacheKey);
       if (!url) {
-        const result = await this.client.storage.from(this.bucket).createSignedUrl(asset.storagePath, 3600);
+        const result = await this.client.storage.from(bucket).createSignedUrl(asset.storagePath, 3600);
         this.assertScope();
         if (result.error || !result.data?.signedUrl) throw new Error("V3_MEDIA_SIGNING_FAILED");
         url = result.data.signedUrl;
-        signed.set(asset.storagePath, url);
+        signed.set(cacheKey, url);
       }
       assets.push({ ...asset, src: url, source: "supabase" });
     }
