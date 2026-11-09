@@ -139,7 +139,7 @@
 .v3-stage-hero-empty { align-self:center; color:var(--v3-muted); font-size:13px; }
 .v3-portrait-artwork { flex:0 0 clamp(130px,11vw,174px); display:grid; align-content:start; gap:7px; min-width:0; margin:0; scroll-snap-align:start; }
 .v3-stage-hero-gallery .v3-portrait-artwork {
-  --v3-hero-poster-height:clamp(216px,24dvh,284px);
+  --v3-hero-poster-height:clamp(248px,27dvh,300px);
   flex:0 0 auto;
   width:calc(var(--v3-hero-poster-height) * var(--v3-portrait-ratio, .667));
   max-width:none;
@@ -208,7 +208,7 @@
   .v3-stage-hero-copy { padding:2px; gap:9px; }
   .v3-stage-hero-copy h1 { font-size:clamp(28px,6vw,38px); }
   .v3-stage-hero-gallery { padding:4px 2px 7px; }
-  .v3-stage-hero-gallery .v3-portrait-artwork { --v3-hero-poster-height:clamp(195px,26dvh,248px); }
+  .v3-stage-hero-gallery .v3-portrait-artwork { --v3-hero-poster-height:clamp(214px,27dvh,254px); }
   .v3-portrait-artwork { flex-basis:clamp(126px,37vw,165px); }
   .v3-map-split { height:auto; min-height:0; grid-template-columns:minmax(0,1fr); }
   .v3-map-stage { min-height:0; height:clamp(310px,50dvh,480px); }
@@ -217,7 +217,7 @@
 }
 @media (max-width: 1080px) and (min-width: 801px) {
   .v3-stage-hero { grid-template-columns:minmax(210px,.39fr) minmax(0,.61fr); }
-  .v3-stage-hero-gallery .v3-portrait-artwork { --v3-hero-poster-height:clamp(208px,23dvh,256px); }
+  .v3-stage-hero-gallery .v3-portrait-artwork { --v3-hero-poster-height:clamp(230px,25dvh,265px); }
   .v3-toolbar-actions { justify-content:flex-start; }
 }
 @media (max-width: 390px) {
