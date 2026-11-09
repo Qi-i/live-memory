@@ -22,6 +22,7 @@ new Function("exports","require",transpile(adapterCode))(adapter, moduleName=>{
 class FakeRpc {
   rows=new Map();
   calls=[];
+  mode="v2";
   from(table) {
     this.calls.push(["select",table]);
     return {select:columns=>{
@@ -38,6 +39,10 @@ class FakeRpc {
   }
   async rpc(name,args) {
     this.calls.push(["rpc",name,args]);
+    if(["live_memory_v3_mode_personal","live_memory_v3_mode_account"].includes(name)){
+      assert.deepEqual(args,{});
+      return {data:this.mode,error:null};
+    }
     assert.ok(["live_memory_v3_cas_personal","live_memory_v3_cas_account"].includes(name));
     const old=this.rows.get(args.p_id);
     const expected=old?.v3_revision??null;
@@ -55,6 +60,12 @@ const record={
 const client=new FakeRpc();
 const personal=new adapter.SupabaseV3RecordAdapter(client,"personal","owner-test","account-test");
 assert.equal(personal.includeMedia,true);
+assert.equal(await personal.writerMode(),"v2");
+client.mode="v3";
+assert.equal(await personal.writerMode(),"v3");
+client.mode="invalid";
+await assert.rejects(personal.writerMode(),/V3_SERVER_CUTOVER_UNAVAILABLE/);
+client.mode="v2";
 await assert.rejects(personal.compareAndSwap(record,null), /V3_MEDIA_UPLOAD_REQUIRED/,
   "Local ticket bytes must never be committed as record JSON before media upload");
 const uploadedRecord = { ...record, media: [{
@@ -80,6 +91,7 @@ const backup=await account.compareAndSwap(record,null);
 assert.deepEqual(backup.record.media,[],"Text cloud must strip private ticket data on write");
 assert.equal(accountClient.calls.at(-1)[1],"live_memory_v3_cas_account");
 assert.equal(account.includeMedia,false);
+assert.equal(await account.writerMode(),"v2");
 assert.equal((await account.list()).length,1);
 
 // The adapter must fetch every page; a provider limit cannot erase archives.

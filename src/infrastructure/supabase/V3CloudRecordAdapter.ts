@@ -66,6 +66,21 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
   }
 
   /**
+   * A client-side "V2 disabled" boolean is not a writer fence. The database
+   * must have an immutable owner cutover marker before V3 may write.
+   */
+  async writerMode(): Promise<"v2" | "v3"> {
+    const fn = this.provider === "personal"
+      ? "live_memory_v3_mode_personal" : "live_memory_v3_mode_account";
+    const { data, error } = await this.client.rpc(fn, {});
+    if (error) throw rpcFailure(error.message);
+    if (data !== "v2" && data !== "v3") {
+      throw new Error("V3_SERVER_CUTOVER_UNAVAILABLE: Writer mode cannot be verified");
+    }
+    return data;
+  }
+
+  /**
    * Offset paging is not a database snapshot: legacy V2 writers can change a
    * row (or insert another ID) between pages. Read the full inventory twice,
    * then fail closed if its IDs, server revisions, or contents drifted.

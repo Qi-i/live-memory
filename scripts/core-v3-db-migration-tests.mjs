@@ -27,4 +27,20 @@ assert.doesNotMatch(sql, /\b(drop table|truncate|delete from|update public\.echo
   "V3 schema migrations must never rewrite the user's existing records");
 assert.match(sql, /before insert or update on public\.echo_text_backups/);
 assert.match(sql, /before insert or update on public\.echo_passkey_records/);
+const fence = await readFile(new URL("../supabase/migrations/018_v3_server_cutover_fence.sql", import.meta.url), "utf8");
+assert.match(fence, /create table if not exists public\.live_memory_v3_writer_modes/i);
+assert.match(fence, /enable row level security/i);
+assert.match(fence, /V3_LEGACY_WRITE_FENCED/);
+assert.match(fence, /pg_advisory_xact_lock/);
+assert.match(fence, /set_config\('live_memory\.v3_writer','1',true\)/);
+assert.match(fence, /set_config\('live_memory\.v3_writer','0',true\)/);
+assert.match(fence, /public\.live_memory_v3_activate_personal/);
+assert.match(fence, /public\.live_memory_v3_activate_account/);
+assert.match(fence, /grant select,insert on public\.live_memory_v3_writer_modes/);
+assert.doesNotMatch(fence, /grant[^\n]*\bupdate\b|grant[^\n]*\bdelete\b/i,
+  "Owner clients must not undo the write fence or edit cutover markers");
+assert.doesNotMatch(fence, /\bsecurity definer\b/i,
+  "Writer cutover must not bypass RLS");
+assert.doesNotMatch(fence, /\b(drop table|truncate|delete from public\.echo_|update public\.echo_).*?;/i,
+  "Cutover migration cannot alter real archives");
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
