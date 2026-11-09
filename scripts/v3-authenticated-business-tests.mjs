@@ -6,7 +6,10 @@ const js = ts.transpileModule(content,{compilerOptions:{
   target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
 }}).outputText;
 const domainSource=await readFile(new URL("../src/domain.ts",import.meta.url),"utf8");
-const domainJS=ts.transpileModule(domainSource,{compilerOptions:{
+const start=domainSource.indexOf("export function effectiveStatus(");
+const end=domainSource.indexOf("\nexport function ",start+10);
+assert.ok(start>=0 && end>start);
+const domainJS=ts.transpileModule(domainSource.slice(start,end),{compilerOptions:{
   target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.CommonJS,
 }}).outputText;
 const domainExports={};
