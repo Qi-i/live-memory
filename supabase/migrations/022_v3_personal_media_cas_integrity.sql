@@ -25,6 +25,20 @@ begin
     raise exception 'V3_INVALID_PAYLOAD' using errcode = '22023';
   end if;
 
+  -- The writer flag exists only inside the server's CAS transaction.
+  -- Client-side upserts cannot satisfy the fence simply by setting a React flag.
+  -- The server, not the web app, enforces the V3 activation boundary.
+  -- Serialize against activation so a V2 client can never race a pre-cutover
+  -- CAS write into an owner that is still using blind legacy upserts.
+  perform pg_advisory_xact_lock(
+    hashtextextended('lm-v3|personal|' || v_owner, 0)
+  );
+  if not exists (
+    select 1 from public.live_memory_v3_writer_modes
+    where provider='personal' and identity=v_owner
+  ) then
+    raise exception 'V3_OWNER_NOT_ACTIVATED' using errcode='42501';
+  end if;
   -- An RPC caller cannot bypass the browser media staging/portability gate.
   if p_payload ? 'media' then
     if jsonb_typeof(p_payload->'media') <> 'array' then
@@ -53,20 +67,6 @@ begin
     end if;
   end if;
 
-  -- The writer flag exists only inside the server's CAS transaction.
-  -- Client-side upserts cannot satisfy the fence simply by setting a React flag.
-  -- The server, not the web app, enforces the V3 activation boundary.
-  -- Serialize against activation so a V2 client can never race a pre-cutover
-  -- CAS write into an owner that is still using blind legacy upserts.
-  perform pg_advisory_xact_lock(
-    hashtextextended('lm-v3|personal|' || v_owner, 0)
-  );
-  if not exists (
-    select 1 from public.live_memory_v3_writer_modes
-    where provider='personal' and identity=v_owner
-  ) then
-    raise exception 'V3_OWNER_NOT_ACTIVATED' using errcode='42501';
-  end if;
   perform set_config('live_memory.v3_writer','1',true);
   v_updated := coalesce(nullif(p_payload ->> 'updatedAt', '')::timestamptz, now());
   v_deleted := nullif(p_payload ->> 'deletedAt', '')::timestamptz;
