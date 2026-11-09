@@ -18,3 +18,6 @@
 .v3-migration-error { margin: 0; border: 1px solid #eaa; color: #a52d35; background: #fff1f1; padding: 9px; border-radius: 8px; font-size: 13px; }
 .v3-migration-notice { border-top: 1px solid var(--border, #dbe5ef); padding-top: 10px; }
 @media (max-width: 700px) { .v3-migration-grid { grid-template-columns: minmax(0, 1fr); } .v3-migration-head { flex-wrap: wrap; } }
+.v3-migration-backup { display: grid; gap: 5px; background: var(--surface-subtle, #f1f6fd); border: 1px solid var(--border, #dbe5ef); border-radius: 10px; padding: 11px 13px; font-size: 12.5px; line-height: 1.55; }
+.v3-migration-backup strong { font-size: 13px; }
+.v3-migration-backup p { margin: 0; color: var(--text-muted, #64748b); }
