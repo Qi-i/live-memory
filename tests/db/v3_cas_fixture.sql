@@ -82,3 +82,4 @@ grant execute on function storage.foldername(text) to anon, authenticated;
 \ir ../../supabase/migrations/016_v3_account_media_guard.sql
 \ir ../../supabase/migrations/017_v3_private_media_bucket.sql
 \ir ../../supabase/migrations/018_v3_server_cutover_fence.sql
+\ir ../../supabase/migrations/019_v3_blinded_media_owner_prefix.sql
