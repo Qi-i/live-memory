@@ -55,9 +55,8 @@ grant execute on function auth.uid() to authenticated;
 grant select, insert, update on public.echo_passkey_records to anon, authenticated;
 grant select, insert, update on public.echo_text_backups to authenticated;
 
--- Minimal Storage metadata tables for executing the EXACT private-bucket
--- migration in the disposable PostgreSQL CI database. This is not a mock of
--- the owner policy: we run real Postgres RLS against anon roles below.
+-- Minimal Storage metadata tables for applying the exact new bucket
+-- migration in an isolated PostgreSQL service with real RLS.
 create schema storage;
 create table storage.buckets (
   id text primary key, name text not null, public boolean not null default false,
@@ -71,10 +70,7 @@ create table storage.objects (
 );
 create function storage.foldername(path text) returns text[]
 language sql immutable set search_path = pg_catalog
-as $select string_to_array(regexp_replace(path, '/[^/]+
-\ir ../../supabase/migrations/015_v3_cas_revision.sql
-\ir ../../supabase/migrations/016_v3_account_media_guard.sql
-, ''), '/')$;
+as $fn$select string_to_array(regexp_replace(path, '/[^/]+$', ''), '/')$fn$;
 alter table storage.objects enable row level security;
 grant usage on schema storage to anon, authenticated;
 grant select, insert on storage.objects to anon, authenticated;
