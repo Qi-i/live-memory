@@ -215,6 +215,7 @@ begin
   if id is null then
     raise exception 'V3_REVISION_CONFLICT' using errcode = 'P0001';
   end if;
+  perform set_config('live_memory.v3_writer','0',true);
   return next;
 end;
 $body$;
@@ -271,6 +272,7 @@ begin
   if id is null then
     raise exception 'V3_REVISION_CONFLICT' using errcode = 'P0001';
   end if;
+  perform set_config('live_memory.v3_writer','0',true);
   return next;
 end;
 $body$;
