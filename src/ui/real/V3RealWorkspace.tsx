@@ -364,27 +364,34 @@ export function V3RealWorkspace() {
     activity={{type:"idle"}}
     account={<div className="v3-real-account">
       <strong>{access.mode==="account"?"当前账号":"本机独立档案"}</strong>
-      <span>{canEditLocal?"本机可编辑 · 无云端写入":"账号只读 · 未接管同步"}</span>
+      <span>{canEditLocal?"本机可编辑 · 无云端写入"
+        : canEditAccount?"已激活 V3 · 手动安全同步":"账号只读 · V2 仍为写入端"}</span>
       <button type="button" onClick={backToV2}>返回正式 V2</button></div>}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · V3 REAL DATA</span>
         <strong>{page==="档案"?"演出档案":page}</strong>
-        <small>{canEditLocal?"本机原子保存 · 云同步未接管":"真实账号只读验证 · 云同步未接管"}</small></div>
+        <small>{canEditLocal?"本机原子保存 · 云同步未接管"
+          : canEditAccount?"本机原子保存 · 账号云端 CAS 手动同步"
+          : "真实账号只读验证 · 服务器尚未允许 V3 写入"}</small></div>
       <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
         <b>{model.watchedCount}<small>已看</small></b>
         <b>{model.cities.length}<small>城市</small></b></div>
-      {canEditLocal && <button type="button" onClick={()=>startEdit(null)}>新增本机演出</button>}
-      <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy}>刷新本机快照</button>
+      {canEdit && <button type="button" onClick={()=>startEdit(null)}>
+        {canEditLocal?"新增本机演出":"新增演出"}</button>}
+      {canEditAccount && <button type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
+        {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
+      <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
     </div>}
-    overlay={editing && editing.scope===actualScope && canEditLocal
+    overlay={editing && editing.scope===actualScope && canEdit
       ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
       : selected
         ? <RecordDetail record={selected} onClose={()=>setSelectedId(null)}
-            onEdit={canEditLocal?startEdit:undefined}/>
+            onEdit={canEdit?startEdit:undefined}/>
         : undefined}
   >
+    {cloudMode.error && access.mode==="account" && <div role="alert" className="v3-real-save-notice">{cloudMode.error}</div>}
     {notice && <div className="v3-real-save-notice" role="status">{notice}
       <button type="button" onClick={()=>setNotice("")} aria-label="关闭提示">×</button></div>}
     {!validScope || snapshot.error ? <section className="v3-real-panel" role="alert">
@@ -394,7 +401,11 @@ export function V3RealWorkspace() {
     <>
       {page==="档案" && <>
         <StageHero eyebrow="YOUR ARCHIVE · REAL RECORDS" title="把现场，留在时间里"
-          description="读取当前设备实际保存的演出记录。新工作区仍为只读验证，不会触发 V2/V3 并行写入。"
+          description={canEditAccount
+            ? "读取真实档案。编辑先原子保存到本机，安全同步仅在服务器确认 V3 接管后手动执行。"
+            : canEditLocal
+              ? "读取当前设备实际保存的演出记录，本机修改采用原子保存，不启用云端双写。"
+              : "读取当前设备真实档案；服务器仍由 V2 写入，因此此处只读，不会触发并行同步。"}
           posters={posters}/>
         <ActionToolbar
           search={<input aria-label="搜索真实档案" value={search} placeholder="搜索演出、艺人、城市、场馆…"
