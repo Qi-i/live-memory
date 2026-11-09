@@ -818,7 +818,11 @@ await archiveView("海报", ".archive-poster-card");
       await v3Page.locator('[data-ui-system="v3"]').waitFor({ state: "visible", timeout: 15000 });
       await v3Page.locator(".v3-portrait-frame").first().waitFor({ state: "visible", timeout: 10000 });
       await v3Page.waitForFunction(() => [...document.querySelectorAll(".v3-stage-hero-gallery .v3-portrait-frame img")]
-        .slice(0, 2).every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
+        .slice(0, 4).every((image) => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
+      await v3Page.evaluate(async () => {
+        await Promise.all([...document.querySelectorAll(".v3-stage-hero-gallery .v3-portrait-frame img")]
+          .slice(0, 4).map((image) => image.decode()));
+      });
       const layout = await v3Page.evaluate(() => {
         const bounds = (selector) => {
           const rect = document.querySelector(selector)?.getBoundingClientRect();
@@ -834,7 +838,11 @@ await archiveView("海报", ".archive-poster-card");
           viewport: innerWidth,
           workspaceScrollWidth: document.querySelector(".v3-workspace-content")?.scrollWidth,
           workspaceWidth: document.querySelector(".v3-workspace-content")?.clientWidth,
-          fit: getComputedStyle(document.querySelector(".v3-portrait-frame img")).objectFit,
+          fit: getComputedStyle(document.querySelector(".v3-stage-hero-gallery .v3-portrait-frame img")).objectFit,
+          naturalRatio: (() => {
+            const image = document.querySelector(".v3-stage-hero-gallery .v3-portrait-frame img");
+            return image.naturalWidth / image.naturalHeight;
+          })(),
           heroCopy: bounds(".v3-stage-hero-copy"),
           heroGallery: bounds(".v3-stage-hero-gallery"),
           actionBounds: [...document.querySelectorAll(".v3-action-toolbar button")].map((el) => {
@@ -844,8 +852,14 @@ await archiveView("海报", ".archive-poster-card");
         };
       });
       const ratio = layout.artwork.width / layout.artwork.height;
-      if (ratio > 0.75 || ratio < 0.59 || layout.artwork.height < 150 || layout.fit !== "contain") {
-        throw new Error("V3 portrait artwork was crushed or cropped at " + width + "px: " + JSON.stringify(layout));
+      // Natural portrait dimensions are the source of truth; a fixed 2:3
+      // assertion wrongly rejects legitimate 3:4 or 4:5 posters and hides
+      // unwanted letterboxing.
+      if (!Number.isFinite(layout.naturalRatio) || layout.artwork.height < 180 ||
+          layout.fit !== "contain" ||
+          (layout.naturalRatio >= .45 && layout.naturalRatio <= .95 &&
+           Math.abs(ratio - layout.naturalRatio) > .032)) {
+        throw new Error("V3 portrait artwork was distorted, blank or cropped at " + width + "px: " + JSON.stringify(layout));
       }
       if (layout.workspaceScrollWidth > layout.workspaceWidth + 3) {
         throw new Error("V3 workspace has horizontal overflow at " + width + "px: " + JSON.stringify(layout));
