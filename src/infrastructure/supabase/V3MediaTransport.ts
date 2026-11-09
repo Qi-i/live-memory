@@ -171,9 +171,9 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     }
     let localSrc = asset.src;
     const previousKind = asset.storagePath ? await this.classifyPath(asset.storagePath) : null;
-    if (!localSrc || (previousKind === "legacy" && !inlineSource(localSrc))) {
-      // After copying V2 media, replace any expiring V2 signed URL with a new
-      // private V3 URL. Inline bytes stay local for immediate offline use.
+    if (!localSrc || (previousKind !== "private" && !inlineSource(localSrc))) {
+      // A staged external URL may expire or contain access tokens. Replace it
+      // with a freshly signed V3 URL; keep only actual inline bytes on device.
       const signed = await store.createSignedUrl(path, 3600);
       this.assertScope();
       if (signed.error || !signed.data?.signedUrl) throw new Error("V3_MEDIA_SIGNING_FAILED");
