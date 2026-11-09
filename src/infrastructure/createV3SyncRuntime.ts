@@ -2,7 +2,7 @@ import type { AppSettings } from "../domain";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
 import { resolveMediaSource } from "../mediaCache";
-import { SupabaseV3MediaTransport, type V3MediaStorageClient } from "./supabase/V3MediaTransport";
+import { SupabaseV3MediaTransport, V3_PRIVATE_MEDIA_BUCKET, type V3MediaStorageClient } from "./supabase/V3MediaTransport";
 import { IndexedDbRecordRepository } from "./indexedDb/recordRepository";
 import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
 import { SupabaseV3RecordAdapter, type V3RpcClient } from "./supabase/V3CloudRecordAdapter";
@@ -93,19 +93,20 @@ export async function createV3SyncRuntime(
     const personal = makeSupabaseClient(settings);
     client = personal as unknown as V3RpcClient;
     identity = endpoint + "|owner:" + owner;
-    if (settings.supabase.syncMedia) {
-      mediaTransport = new SupabaseV3MediaTransport(
-        personal as unknown as V3MediaStorageClient,
-        settings.supabase.mediaBucket,
-        owner,
-        () => {
-          if (currentStorageScope() !== scope) {
-            throw new Error("V3_MEDIA_ACCOUNT_CHANGED");
-          }
-        },
-        (asset) => resolveMediaSource(asset, true),
-      );
-    }
+    // V3 is always a full-media personal cloud. Never inherit the V2
+    // mediaBucket setting: the legacy echo-media bucket is publicly readable.
+    // This dedicated private bucket must pass security review before cutover.
+    mediaTransport = new SupabaseV3MediaTransport(
+      personal as unknown as V3MediaStorageClient,
+      V3_PRIVATE_MEDIA_BUCKET,
+      owner,
+      () => {
+        if (currentStorageScope() !== scope) {
+          throw new Error("V3_MEDIA_ACCOUNT_CHANGED");
+        }
+      },
+      (asset) => resolveMediaSource(asset, true),
+    );
   }
 
   if (currentStorageScope() !== scope) throw new Error("Account switched during V3 runtime construction");
