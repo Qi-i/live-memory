@@ -216,6 +216,28 @@ const secondPush = await sync.synchronizeRecords(lateLocal, lateCloud, lateBase)
 assert.deepEqual(secondPush.uploadedIds, ["one"]);
 assert.equal(lateCloud.byId.get("one").record.title, "用户保存了第二版");
 
+// A cloud-signed URL is NOT an offline backup. A failed image recovery
+// must abort any downloaded record / baseline without rewriting IndexedDB.
+const offlineLocal = new MemoryRepo([first]);
+const offlineCloud = new MemoryCloud([first]);
+const offlineBase = new MemoryBaselines();
+await sync.synchronizeRecords(offlineLocal, offlineCloud, offlineBase);
+const offlineAck = offlineBase.read("one");
+offlineCloud.updateFromOtherDevice(edit(first,"新手机上传的离线海报"));
+offlineCloud.prepareIncoming = async () => {
+  throw new Error("V3_OFFLINE_MEDIA_DOWNLOAD_FAILED");
+};
+await assert.rejects(sync.synchronizeRecords(offlineLocal, offlineCloud, offlineBase),
+  /V3_OFFLINE_MEDIA_DOWNLOAD_FAILED/);
+assert.equal((await offlineLocal.list())[0].title, first.title,
+  "Local archive must remain unchanged when remote image materialization fails");
+assert.equal(offlineBase.read("one"),offlineAck,
+  "No baseline may acknowledge an image whose bytes are unavailable");
+offlineCloud.prepareIncoming = async row => row;
+const offlineRecovered = await sync.synchronizeRecords(offlineLocal, offlineCloud, offlineBase);
+assert.deepEqual(offlineRecovered.downloadedIds,["one"]);
+assert.equal((await offlineLocal.list())[0].title,"新手机上传的离线海报");
+
 // Cross-account processing must fail BEFORE reading or mutating records.
 const unrelated = new MemoryCloud([first]);
 unrelated.accountScope = "another-account";
