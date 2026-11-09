@@ -138,9 +138,10 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       }
     }
     let localSrc = asset.src;
-    if (!localSrc) {
-      // Legacy records can have only a Storage path. Keep the restored image
-      // visible immediately after CAS; do not replace its local src with "".
+    if (!localSrc || (asset.storagePath && !this.isPrivatePath(asset.storagePath) &&
+        !inlineSource(localSrc))) {
+      // After copying V2 media, replace any expiring V2 signed URL with a new
+      // private V3 URL. Inline bytes stay local for immediate offline use.
       const signed = await store.createSignedUrl(path, 3600);
       this.assertScope();
       if (signed.error || !signed.data?.signedUrl) throw new Error("V3_MEDIA_SIGNING_FAILED");
