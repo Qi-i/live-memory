@@ -43,4 +43,23 @@ assert.doesNotMatch(fence, /\bsecurity definer\b/i,
   "Writer cutover must not bypass RLS");
 assert.doesNotMatch(fence, /\b(drop table|truncate|delete from public\.echo_|update public\.echo_).*?;/i,
   "Cutover migration cannot alter real archives");
+const activationGate = await readFile(
+  new URL("../supabase/migrations/020_v3_owner_activation_cas_gate.sql", import.meta.url),"utf8",
+);
+assert.match(activationGate, /revoke all on function public\.live_memory_v3_activate_personal\(\)\s+from public, anon, authenticated/i,
+  "Anonymous users with legacy leaked owner keys must not be able to lock out V2");
+for (const provider of ["account","personal"]) {
+  const name = "public.live_memory_v3_cas_" + provider;
+  const from = activationGate.indexOf("create or replace function " + name);
+  assert.ok(from >= 0, "Missing secure V3 CAS " + provider);
+  const body = activationGate.slice(from,activationGate.indexOf("$body$;",from)+7);
+  assert.match(body,/security invoker/i);
+  assert.match(body,/pg_advisory_xact_lock/);
+  assert.match(body,/V3_OWNER_NOT_ACTIVATED/);
+  assert.match(body,/public\.live_memory_v3_writer_modes/);
+  assert.ok(body.indexOf("V3_OWNER_NOT_ACTIVATED")<body.indexOf("set_config('live_memory.v3_writer','1',true)"),
+    "Never enable V3 writer flag until activation has been checked");
+}
+assert.doesNotMatch(activationGate, /\b(drop table|truncate|delete from public\.echo_|update public\.echo_).*?;/i,
+  "Activation gate must not alter any real archive");
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
