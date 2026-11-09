@@ -27,7 +27,17 @@ $safety$;
 -- Unlike legacy V2, the new bucket has NO policy for public read,
 -- overwrites or direct deletes. Access requires the current owner secret
 -- in the header and a matching immutable owner prefix in the path.
-alter table storage.objects enable row level security;
+-- storage.objects belongs to Supabase's managed storage role. Its RLS
+-- is already enabled in real projects; asserting it is safer than trying to
+-- ALTER a platform-owned table using the limited postgres migration role.
+do $rls$
+begin
+  if not (select relrowsecurity from pg_catalog.pg_class
+          where oid = 'storage.objects'::regclass) then
+    raise exception 'V3_STORAGE_RLS_NOT_ENABLED' using errcode = '42501';
+  end if;
+end;
+$rls$;
 
 do $policies$
 begin
