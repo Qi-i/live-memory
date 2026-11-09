@@ -378,7 +378,7 @@ export function V3RealWorkspace() {
         <b>{model.cities.length}<small>城市</small></b></div>
       {canEdit && <button type="button" onClick={()=>startEdit(null)}>
         {canEditLocal?"新增本机演出":"新增演出"}</button>}
-      {canEditAccount && <button type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
+      {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
         {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
