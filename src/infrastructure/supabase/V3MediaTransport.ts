@@ -34,7 +34,9 @@ const MIME_EXT: Record<string, string> = {
 const utf8 = new TextEncoder();
 async function sha256(bytes: ArrayBuffer | Uint8Array): Promise<string> {
   const input = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", input));
+  const exact = new Uint8Array(input.byteLength);
+  exact.set(input);
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", exact.buffer as ArrayBuffer));
   return Array.from(digest, value => value.toString(16).padStart(2, "0")).join("");
 }
 function isDuplicateObject(error: { code?: string; statusCode?: string | number; message: string }): boolean {
