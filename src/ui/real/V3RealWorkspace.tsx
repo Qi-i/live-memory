@@ -5,6 +5,10 @@ import { primaryMedia } from "../../domain";
 import { currentStorageScope, listRecords } from "../../storage";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
+import { saveRecordDraft } from "../../core/application/saveRecordDraft";
+import { IndexedDbRecordRepository } from "../../infrastructure/indexedDb/recordRepository";
+import { RecordEditor } from "../../overlays";
+import { blankRecord } from "../../seeds";
 import { ActionToolbar, MapSplitPane, StageHero, WorkspaceShell } from "../system/WorkspaceShell";
 import "../system/preview.css";
 import "./realWorkspace.css";
@@ -41,7 +45,9 @@ function PosterCard({ record, onOpen }: { record: EventRecord; onOpen: (id: stri
     </button>
   );
 }
-function RecordDetail({ record, onClose }: { record: EventRecord; onClose: () => void }) {
+function RecordDetail({ record, onClose, onEdit }: {
+  record: EventRecord; onClose: () => void; onEdit?: (record: EventRecord) => void;
+}) {
   const asset = primaryMedia(record);
   const src = useCachedMediaSrc(asset);
   const closeRef = useRef<HTMLButtonElement>(null);
@@ -60,6 +66,7 @@ function RecordDetail({ record, onClose }: { record: EventRecord; onClose: () =>
         aria-label={record.title + "（只读详情）"}>
         <header><div><small>REAL ARCHIVE · READ ONLY</small><h2>{record.title}</h2>
           <span>{record.date} · {record.city} · {record.venue}</span></div>
+          {onEdit && <button type="button" aria-label="编辑本机演出" onClick={()=>onEdit(record)}>编辑</button>}
           <button type="button" aria-label="关闭只读详情" ref={closeRef} onClick={onClose}>×</button>
         </header>
         <div className="v3-real-modal-body">
@@ -186,6 +193,8 @@ export function V3RealWorkspace() {
   });
   const [reload,setReload]=useState(0);
   const [selectedId,setSelectedId]=useState<string|null>(null);
+  const [editing,setEditing]=useState<{draft:EventRecord;baseline:EventRecord|null;scope:string}|null>(null);
+  const [notice,setNotice]=useState("");
   const [posters,setPosters]=useState<Array<{id:string;title:string;city:string;src?:string}>>([]);
   const actualScope=currentStorageScope();
   const permitted=access.mode==="account" || access.mode==="device";
@@ -195,6 +204,8 @@ export function V3RealWorkspace() {
     let alive=true;
     const scope=currentStorageScope();
     setSelectedId(null);
+    setEditing(null);
+    setNotice("");
     setPosters([]);
     setSnapshot({scope,records:[],error:"",busy:true});
     if (!validScope) {
@@ -229,6 +240,27 @@ export function V3RealWorkspace() {
     return ()=>{alive=false;};
   },[firstPosters]);
   const selected=records.find(row=>row.id===selectedId);
+  // The only permitted V3 write before cloud cutover is to the explicit
+  // standalone local device archive. Authenticated V2 users remain read-only.
+  const canEditLocal=validScope && access.mode==="device" && actualScope==="device-local";
+  const startEdit=(record:EventRecord|null)=>{
+    if(!canEditLocal) return;
+    setEditing({draft:record??blankRecord(),baseline:record??null,scope:actualScope});
+    setSelectedId(null);
+  };
+  const saveLocalDraft=async (draft:EventRecord)=>{
+    if(!canEditLocal || !editing || editing.scope!==currentStorageScope()) {
+      throw new Error("账号作用域已更改；未保存任何记录");
+    }
+    const result=await saveRecordDraft(new IndexedDbRecordRepository(editing.scope),draft,editing.baseline);
+    if(result.status==="review-required") {
+      throw new Error("另一标签页已修改此记录。当前草稿保持打开；请复制修改内容并重新载入最新档案核对。");
+    }
+    if(currentStorageScope()!==editing.scope) throw new Error("保存期间账号已切换，请重新核查档案");
+    setEditing(null);
+    setNotice("已安全保存至此设备；尚未启用云同步");
+    setReload(n=>n+1);
+  };
   const paged=active.slice(PAGE_SIZE*pageIndex,PAGE_SIZE*(pageIndex+1));
   const totalPages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));
   useEffect(()=>{setPageIndex(0);},[search,mode,page]);
@@ -237,7 +269,7 @@ export function V3RealWorkspace() {
   return <WorkspaceShell
     brand={<><span className="v3-preview-brand">◈</span>
       <strong className="v3-preview-brand-name">Live Memory</strong>
-      <small>V3 · 真实档案只读</small></>}
+      <small>V3 · 真实档案验证</small></>}
     navigation={navButtons}
     mobileNavigation={navButtons}
     appearance="liquid"
@@ -245,20 +277,29 @@ export function V3RealWorkspace() {
     activity={{type:"idle"}}
     account={<div className="v3-real-account">
       <strong>{access.mode==="account"?"当前账号":"本机独立档案"}</strong>
-      <span>V3 只读验证 · 未接管同步</span>
+      <span>{canEditLocal?"本机可编辑 · 无云端写入":"账号只读 · 未接管同步"}</span>
       <button type="button" onClick={backToV2}>返回正式 V2</button></div>}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · V3 REAL DATA</span>
         <strong>{page==="档案"?"演出档案":page}</strong>
-        <small>本机真实数据只读预览 · 不执行云同步或记录写入</small></div>
+        <small>{canEditLocal?"本机原子保存 · 云同步未接管":"真实账号只读验证 · 云同步未接管"}</small></div>
       <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
         <b>{model.watchedCount}<small>已看</small></b>
         <b>{model.cities.length}<small>城市</small></b></div>
+      {canEditLocal && <button type="button" onClick={()=>startEdit(null)}>新增本机演出</button>}
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
     </div>}
-    overlay={selected ? <RecordDetail record={selected} onClose={()=>setSelectedId(null)}/> : undefined}
+    overlay={editing && editing.scope===actualScope && canEditLocal
+      ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
+          onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
+      : selected
+        ? <RecordDetail record={selected} onClose={()=>setSelectedId(null)}
+            onEdit={canEditLocal?startEdit:undefined}/>
+        : undefined}
   >
+    {notice && <div className="v3-real-save-notice" role="status">{notice}
+      <button type="button" onClick={()=>setNotice("")} aria-label="关闭提示">×</button></div>}
     {!validScope || snapshot.error ? <section className="v3-real-panel" role="alert">
       <h2>无法读取当前档案</h2><p>{snapshot.error||"当前未登录私有账号。"}</p>
       <button type="button" onClick={backToV2}>返回正式 V2</button>
