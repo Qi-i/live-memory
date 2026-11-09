@@ -1,6 +1,8 @@
 import type { AppSettings } from "../domain";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
+import { resolveMediaSource } from "../mediaCache";
+import { SupabaseV3MediaTransport, type V3MediaStorageClient } from "./supabase/V3MediaTransport";
 import { IndexedDbRecordRepository } from "./indexedDb/recordRepository";
 import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
 import { SupabaseV3RecordAdapter, type V3RpcClient } from "./supabase/V3CloudRecordAdapter";
@@ -72,6 +74,7 @@ export async function createV3SyncRuntime(
 
   let client: V3RpcClient;
   let identity: string;
+  let mediaTransport: SupabaseV3MediaTransport | undefined;
   if (provider === "account") {
     const account = getAccountClient();
     const { data, error } = await account.auth.getUser();
@@ -87,13 +90,27 @@ export async function createV3SyncRuntime(
     if (!/^https:\/\//.test(endpoint) || !/^[a-f0-9]{64}$/.test(owner)) {
       throw new Error("A configured secure personal cloud and owner key are required for V3");
     }
-    client = makeSupabaseClient(settings) as unknown as V3RpcClient;
+    const personal = makeSupabaseClient(settings);
+    client = personal as unknown as V3RpcClient;
     identity = endpoint + "|owner:" + owner;
+    if (settings.supabase.syncMedia) {
+      mediaTransport = new SupabaseV3MediaTransport(
+        personal as unknown as V3MediaStorageClient,
+        settings.supabase.mediaBucket,
+        owner,
+        () => {
+          if (currentStorageScope() !== scope) {
+            throw new Error("V3_MEDIA_ACCOUNT_CHANGED");
+          }
+        },
+        (asset) => resolveMediaSource(asset, true),
+      );
+    }
   }
 
   if (currentStorageScope() !== scope) throw new Error("Account switched during V3 runtime construction");
   const local = new IndexedDbRecordRepository(scope);
-  const remote = new SupabaseV3RecordAdapter(client, provider, identity, scope);
+  const remote = new SupabaseV3RecordAdapter(client, provider, identity, scope, mediaTransport);
   const ledger = await IndexedDbRevisionLedger.create(scope, provider, identity);
   return new V3SyncRuntime(local, remote, ledger);
 }
