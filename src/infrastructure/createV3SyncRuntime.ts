@@ -106,6 +106,7 @@ export async function createV3SyncRuntime(
         }
       },
       (asset) => resolveMediaSource(asset, true),
+      settings.supabase.mediaBucket, // legacy V2 SOURCE only; never a V3 upload target
     );
   }
 
