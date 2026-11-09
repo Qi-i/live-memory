@@ -42,6 +42,8 @@ const record={id:"s1",recordId:"r1",kind:"ticket",mimeType:"image/png",
   src:"https://signed.example.test/one-hour-token"};
 const blob=new Blob([bytes],{type:"image/png"});
 await cache.persistVerifiedOfflineMedia(record,blob);
+assert.equal(await cache.hasVerifiedOfflineMedia(record),true,
+  "A verified offline cache hit must avoid another signed URL download");
 const saved=[...cacheByName.values()].flatMap(m=>[...m.values()]);
 assert.equal(saved.length,1);
 assert.ok(Buffer.from(await saved[0].arrayBuffer()).equals(bytes),
@@ -59,13 +61,20 @@ await assert.rejects(cache.persistVerifiedOfflineMedia(record,new Blob(["<html>b
 assert.equal([...cacheByName.values()].flatMap(m=>[...m.values()]).length,before,
   "Corrupt or nonimage data must not enter CacheStorage");
 
+cache.setMediaCacheScope("account-A");
+assert.equal(await cache.hasVerifiedOfflineMedia({
+  ...record, storagePath:record.storagePath.replace(checksum,"b".repeat(64)),
+}),false,"Unverified content-addressed paths must not be accepted from the cache");
 switchScopeDuringOpen=true;
 await assert.rejects(cache.persistVerifiedOfflineMedia({
   ...record,storagePath:record.storagePath,
 },blob),/V3_OFFLINE_ACCOUNT_CHANGED/);
 assert.equal([...cacheByName.values()].flatMap(m=>[...m.values()]).length,1,
   "A midflight account switch must not commit the stale download to any cache");
+assert.equal(await cache.hasVerifiedOfflineMedia(record),false,
+  "A new account cannot read the old account's cached poster");
 await cache.persistVerifiedOfflineMedia(record,blob);
+assert.equal(await cache.hasVerifiedOfflineMedia(record),true);
 assert.equal(cacheByName.size,2,
   "A new account has its own isolated offline cache, never the first account's files");
 console.log("V3 offline bytes cache passed: original bytes, SHA-256, bad MIME/path, account-switch fence");
