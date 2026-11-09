@@ -86,8 +86,21 @@ assert.match(component,/saveRecordDraft\(new IndexedDbRecordRepository\(editing.
 assert.match(component,/result.status==="review-required"/,
   "Conflicts must keep the user's draft rather than overwrite another tab");
 assert.match(component,/onSave=\{saveLocalDraft\}/);
-assert.doesNotMatch(component,/saveRecord\(|\.upsert\(|\.compareAndSwap\(|replaceAllRecords\(|\.synchronize\(|\.remove\(|deleteRecord\(/,
-  "The real-data workspace must not bypass the local atomic save or write to cloud");
+assert.match(component,/canEditAccount=validScope && access\.mode==="account"/,
+  "Only a verified active account can enable the V3 account editor");
+assert.match(component,/cloudMode\.mode==="v3"/);
+assert.match(component,/await checked\.runtime\.writerMode\(\)!=="v3"/,
+  "The editor must revalidate server cutover before each local save");
+assert.match(component,/await scoped\.runtime\.writerMode\(\)!=="v3"/,
+  "Manual sync must revalidate server cutover before every transfer");
+assert.match(component,/v2AutoSyncDisabled:true/);
+assert.match(component,/initialTransferApproved:push\+pull>0/);
+assert.match(component,/V3_SYNC_MIGRATION_REVIEW_REQUIRED/);
+assert.match(component,/setTransferApproval\(\{scope:scoped\.scope,push,pull\}\)/);
+assert.equal((component.match(/\.synchronize\(/g)||[]).length,1,
+  "Only the explicit V3 runtime's gated synchronization may write to cloud");
+assert.doesNotMatch(component,/saveRecord\(|\.upsert\(|\.compareAndSwap\(|replaceAllRecords\(|\.remove\(|deleteRecord\(/,
+  "The workspace must never bypass optimistic local saves or call raw cloud writes");
 assert.doesNotMatch(component,/demoShows|demoPosters|demoData|mockCloud/);
 assert.match(styles,/@media\(max-width:610px\)/);
 console.log("V3 real archive read-model and isolated UI passed: 200 records, 20 cities, deletion and cancellation exclusions, search, real account scope and no writes.");
