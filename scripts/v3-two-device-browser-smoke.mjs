@@ -70,19 +70,19 @@ try {
     const response=await page.goto(base,{waitUntil:"domcontentloaded"});
     assert.equal(response?.status(),200,label+" test server unavailable");
     await page.evaluate(async()=>{
-      const {setStorageScope}=await import("/src/storage.ts");
+      const {setStorageScope}=await import("/live-memory/src/storage.ts");
       setStorageScope("device-local");
       const {IndexedDbRecordRepository}=await import(
-        "/src/infrastructure/indexedDb/recordRepository.ts"
+        "/live-memory/src/infrastructure/indexedDb/recordRepository.ts"
       );
       const {IndexedDbRevisionLedger}=await import(
-        "/src/infrastructure/indexedDb/revisionLedger.ts"
+        "/live-memory/src/infrastructure/indexedDb/revisionLedger.ts"
       );
       const {RemoteRevisionChanged}=await import(
-        "/src/core/ports/CloudRecordAdapter.ts"
+        "/live-memory/src/core/ports/CloudRecordAdapter.ts"
       );
       const {synchronizeWithLedger}=await import(
-        "/src/core/application/synchronizeWithLedger.ts"
+        "/live-memory/src/core/application/synchronizeWithLedger.ts"
       );
       const local=new IndexedDbRecordRepository("device-local");
       const ledger=await IndexedDbRevisionLedger.create(
@@ -191,19 +191,19 @@ try {
   const ledgerBeforeReload=await ledger(B);
   await B.reload({waitUntil:"domcontentloaded"});
   await B.evaluate(async()=>{
-    const {setStorageScope}=await import("/src/storage.ts");
+    const {setStorageScope}=await import("/live-memory/src/storage.ts");
     setStorageScope("device-local");
     const {IndexedDbRecordRepository}=await import(
-      "/src/infrastructure/indexedDb/recordRepository.ts"
+      "/live-memory/src/infrastructure/indexedDb/recordRepository.ts"
     );
     const {IndexedDbRevisionLedger}=await import(
-      "/src/infrastructure/indexedDb/revisionLedger.ts"
+      "/live-memory/src/infrastructure/indexedDb/revisionLedger.ts"
     );
     const {RemoteRevisionChanged}=await import(
-      "/src/core/ports/CloudRecordAdapter.ts"
+      "/live-memory/src/core/ports/CloudRecordAdapter.ts"
     );
     const {synchronizeWithLedger}=await import(
-      "/src/core/application/synchronizeWithLedger.ts"
+      "/live-memory/src/core/application/synchronizeWithLedger.ts"
     );
     const local=new IndexedDbRecordRepository("device-local");
     const ledger=await IndexedDbRevisionLedger.create(
