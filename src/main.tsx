@@ -20,12 +20,23 @@ import "./ui/editorWorkflow.css";
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 const v3Preview = import.meta.env.VITE_V3_PREVIEW === "1"
   && new URLSearchParams(window.location.search).has("v3-preview");
+const v3RealWorkspace = import.meta.env.VITE_V3_REAL_WORKSPACE === "1"
+  && new URLSearchParams(window.location.search).has("v3-real-workspace");
 
 if (v3Preview) {
   // Independent design laboratory; intentionally never touches user login,
   // IndexedDB, cloud sync or the production application state.
   void import("./ui/system/V3Preview").then(({ V3Preview }) => {
     root.render(<React.StrictMode><V3Preview /></React.StrictMode>);
+  });
+} else if (v3RealWorkspace) {
+  // Real-account V3 business UI is an explicit, read-only test route.
+  // AccessGate still establishes the actual user/device scope, but the V2
+  // AppRoot controller (including V2 automatic sync) is NEVER mounted here.
+  void import("./ui/real/V3RealWorkspace").then(({ V3RealWorkspace }) => {
+    root.render(
+      <React.StrictMode><AccessGate><V3RealWorkspace /></AccessGate></React.StrictMode>,
+    );
   });
 } else {
   root.render(

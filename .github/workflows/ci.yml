@@ -49,6 +49,7 @@ jobs:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
           VITE_V3_PREVIEW: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
+          VITE_V3_REAL_WORKSPACE: ${{ github.base_ref == 'refactor/core-v3-architecture-20261108' && '1' || '0' }}
       - name: Start preview
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/live-memory-preview.log 2>&1 &
@@ -62,6 +63,9 @@ jobs:
         run: node scripts/visual-audit.mjs
         env:
           V3_PREVIEW_AUDIT: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
+      - name: Validate authentic read-only V3 archive, stats, cities and privacy
+        if: github.base_ref == 'refactor/core-v3-architecture-20261108'
+        run: node scripts/v3-real-browser-smoke.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:
