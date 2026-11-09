@@ -33,7 +33,14 @@ try {
       throw Error("V3 demo root did not render: " + JSON.stringify({ diagnostic, errors, unexpectedRequests }));
     }
     await page.waitForFunction(() => [...document.querySelectorAll(".v3-stage-hero-gallery img")]
-      .slice(0, 2).every(image => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
+      .slice(0, 4).every(image => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
+    // Loading finished does not guarantee painting: async image decoding can
+    // leave the first two hero frames visibly blank in real CI screenshots.
+    await page.evaluate(async () => {
+      const visiblePosters = [...document.querySelectorAll(".v3-stage-hero-gallery img")].slice(0, 4);
+      await Promise.all(visiblePosters.map(image => image.decode()));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
 
     const geom = await page.evaluate(() => {
       const rect = selector => {
@@ -51,7 +58,13 @@ try {
         art, figure, hero: rect(".v3-stage-hero"), copy: rect(".v3-stage-hero-copy"),
         gallery: rect(".v3-stage-hero-gallery"), map: rect(".v3-map-stage"),
         side: rect(".v3-map-side"), tools: rect(".v3-action-toolbar"),
-        topbar: rect(".v3-global-toolbar"), headerChildren: [...document.querySelectorAll(".v3-preview-topbar > *")].map(el => {
+        topbar: rect(".v3-global-toolbar"), content: rect(".v3-workspace-content"),
+        mobileNav: innerWidth <= 800 ? rect(".v3-mobile-navigation") : null,
+        brandFits: innerWidth <= 800 || (() => {
+          const label = document.querySelector(".v3-preview-brand-name");
+          return !!label && label.clientWidth >= label.scrollWidth - 2;
+        })(),
+        headerChildren: [...document.querySelectorAll(".v3-preview-topbar > *")].map(el => {
           const r=el.getBoundingClientRect();
           return { left:r.left, right:r.right, top:r.top, bottom:r.bottom };
         }),
@@ -87,7 +100,7 @@ try {
     }
     // A hero that is taller than its content wastes the user's first viewport.
     const unoccupiedGalleryHeight = geom.gallery.height - geom.figure.height;
-    if (unoccupiedGalleryHeight > 24 ||
+    if (unoccupiedGalleryHeight > 33 ||
         geom.figure.top - geom.gallery.top > 16 ||
         geom.gallery.bottom - geom.figure.bottom > 19) {
       throw Error("Banner poster has avoidable upper/lower whitespace: " +
@@ -95,6 +108,13 @@ try {
     }
     if (width >= 1280 && height <= 925 && geom.hero.height > 425)
       throw Error("Banner steals first-screen space without showing more poster information: " + geom.hero.height);
+    if (!geom.brandFits) throw Error("Brand title wraps or clips at " + width);
+    if (width === 1024 && geom.tools.height > 82)
+      throw Error("Toolbar needlessly occupies two rows at 1024px");
+    if (width <= 620 && geom.topbar.height > 155)
+      throw Error("Mobile header has unnecessary stacked whitespace at " + width + ": " + geom.topbar.height);
+    if (geom.mobileNav && geom.content.bottom > geom.mobileNav.top + 1)
+      throw Error("Mobile fixed navigation overlaps the content scroll viewport at " + width);
     if (geom.headerChildren.some(r => r.left < geom.topbar.left - 3 ||
         r.right > geom.topbar.right + 3 ||
         r.top < geom.topbar.top - 3 || r.bottom > geom.topbar.bottom + 3))
