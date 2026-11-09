@@ -75,4 +75,22 @@ assert.match(mediaCutover,/provider='personal' and identity=public\.live_memory_
 assert.match(mediaCutover,/live-memory-v3-media:/);
 assert.doesNotMatch(mediaCutover,/\b(drop table|truncate|delete from storage\.objects|update storage\.objects)\b/i,
   "Storage gate cannot edit or delete existing objects");
+const mediaCAS = await readFile(
+  new URL("../supabase/migrations/022_v3_personal_media_cas_integrity.sql",import.meta.url),"utf8",
+);
+assert.match(mediaCAS,/create or replace function public\.live_memory_v3_cas_personal/);
+assert.match(mediaCAS,/security invoker/i);
+assert.match(mediaCAS,/V3_OWNER_NOT_ACTIVATED/);
+assert.match(mediaCAS,/V3_MEDIA_PAYLOAD_NOT_PORTABLE/);
+assert.match(mediaCAS,/storage\.objects as media_object/);
+assert.match(mediaCAS,/echo-private-media-v3/);
+assert.match(mediaCAS,/recordId' is distinct from p_id/);
+assert.match(mediaCAS,/item\.value->>'src' is distinct from ''/);
+assert.ok(mediaCAS.indexOf("V3_OWNER_NOT_ACTIVATED") <
+  mediaCAS.indexOf("V3_MEDIA_PAYLOAD_NOT_PORTABLE") &&
+  mediaCAS.indexOf("V3_MEDIA_PAYLOAD_NOT_PORTABLE") <
+  mediaCAS.indexOf("set_config('live_memory.v3_writer','1',true)"),
+  "Activation, media validation and writer privilege must be checked in that order");
+assert.doesNotMatch(mediaCAS,/\bsecurity definer\b/i);
+assert.doesNotMatch(mediaCAS,/\b(drop table|truncate|delete from storage\.objects|update public\.echo_)\b/i);
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
