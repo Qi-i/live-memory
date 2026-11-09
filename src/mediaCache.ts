@@ -104,7 +104,8 @@ export async function persistVerifiedOfflineMedia(asset: MediaAsset, blob: Blob)
   if (!asset.storagePath || !identity || typeof caches === "undefined") {
     throw new Error("V3_OFFLINE_CACHE_UNAVAILABLE");
   }
-  const mime = (blob.type || asset.mimeType || "").toLowerCase();
+  const mime = (blob.type && blob.type !== "application/octet-stream"
+    ? blob.type : asset.mimeType || "").toLowerCase();
   if (!/^(image\/jpeg|image\/png|image\/webp|image\/gif|image\/avif)$/.test(mime) ||
       !blob.size || blob.size > 32 * 1024 * 1024) {
     throw new Error("V3_OFFLINE_MEDIA_INVALID");
