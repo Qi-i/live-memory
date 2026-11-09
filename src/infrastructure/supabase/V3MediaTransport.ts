@@ -51,6 +51,7 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
   private readonly bucket: string;
   private readonly owner: string;
   private readonly legacyBucket: string;
+  private readonly privateFolder: Promise<string>;
 
   constructor(
     private readonly client: V3MediaStorageClient,
@@ -67,20 +68,26 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
         !/^[a-z0-9][a-z0-9_-]{1,62}$/i.test(this.legacyBucket) || this.legacyBucket === this.bucket) {
       throw new Error("V3_MEDIA_INVALID_SCOPE_OR_BUCKET");
     }
+    // A signed URL contains the object path. Do not expose the raw ownerKey
+    // there: its value is also used as a bearer authorization credential.
+    this.privateFolder = sha256(utf8.encode("live-memory-v3-media:" + this.owner));
   }
 
   assertScope() { this.scopeCheck(); }
 
-  private validatePath(path: string) {
-    if (!path.startsWith(this.owner + "/") || path.includes("//") ||
-        path.split("/").some(part => !part || part === "." || part === "..") ||
-        /[?#\\]/.test(path)) {
-      throw new Error("V3_MEDIA_FOREIGN_OR_INVALID_PATH");
+  private async classifyPath(path: string): Promise<"private" | "legacy"> {
+    this.assertScope();
+    const folder = await this.privateFolder;
+    this.assertScope();
+    const malformed = path.includes("//") ||
+      path.split("/").some(part => !part || part === "." || part === "..") ||
+      /[?#\\\\]/.test(path);
+    if (malformed) throw new Error("V3_MEDIA_FOREIGN_OR_INVALID_PATH");
+    if (path.startsWith(folder + "/v3/")) return "private";
+    if (path.startsWith(this.owner + "/") && !path.startsWith(this.owner + "/v3/")) {
+      return "legacy";
     }
-  }
-
-  private isPrivatePath(path: string): boolean {
-    return path.startsWith(this.owner + "/v3/");
+    throw new Error("V3_MEDIA_FOREIGN_OR_INVALID_PATH");
   }
 
   async stage(recordId: string, asset: MediaAsset): Promise<MediaAsset> {
@@ -88,9 +95,9 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     if (!asset.id || !recordId || asset.recordId !== recordId) {
       throw new Error("V3_MEDIA_RECORD_ID_MISMATCH");
     }
-    if (asset.storagePath) this.validatePath(asset.storagePath);
+    const storedKind = asset.storagePath ? await this.classifyPath(asset.storagePath) : null;
     if (!inlineSource(asset.src)) {
-      if (!asset.storagePath || this.isPrivatePath(asset.storagePath)) return asset;
+      if (!asset.storagePath || storedKind === "private") return asset;
       // V2's original bucket may be publicly readable. Copy actual bytes to
       // the new private bucket rather than publishing another legacy path.
       // Never remove the source: V2 remains the authoritative live client.
@@ -119,8 +126,10 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     const [recordHash, assetHash, contentHash] = await Promise.all([
       sha256(utf8.encode(recordId)), sha256(utf8.encode(asset.id)), sha256(bytes),
     ]);
-    const path = `${this.owner}/v3/${recordHash}/${assetHash}/${contentHash}.${ext}`;
-    this.validatePath(path);
+    const folder = await this.privateFolder;
+    this.assertScope();
+    const path = `${folder}/v3/${recordHash}/${assetHash}/${contentHash}.${ext}`;
+    await this.classifyPath(path);
     this.assertScope();
     const store = this.client.storage.from(this.bucket);
     const result = await store.upload(path, new Blob([bytes], { type: mime }), {
@@ -138,8 +147,8 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       }
     }
     let localSrc = asset.src;
-    if (!localSrc || (asset.storagePath && !this.isPrivatePath(asset.storagePath) &&
-        !inlineSource(localSrc))) {
+    const previousKind = asset.storagePath ? await this.classifyPath(asset.storagePath) : null;
+    if (!localSrc || (previousKind === "legacy" && !inlineSource(localSrc))) {
       // After copying V2 media, replace any expiring V2 signed URL with a new
       // private V3 URL. Inline bytes stay local for immediate offline use.
       const signed = await store.createSignedUrl(path, 3600);
@@ -160,8 +169,8 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     for (const asset of record.media) {
       this.assertScope();
       if (!asset.storagePath) { assets.push(asset); continue; }
-      this.validatePath(asset.storagePath);
-      const bucket = this.isPrivatePath(asset.storagePath) ? this.bucket : this.legacyBucket;
+      const kind = await this.classifyPath(asset.storagePath);
+      const bucket = kind === "private" ? this.bucket : this.legacyBucket;
       const cacheKey = bucket + ":" + asset.storagePath;
       let url = signed.get(cacheKey);
       if (!url) {
