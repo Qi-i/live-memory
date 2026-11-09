@@ -205,7 +205,6 @@ export function V3RealWorkspace() {
     const scope=currentStorageScope();
     setSelectedId(null);
     setEditing(null);
-    setNotice("");
     setPosters([]);
     setSnapshot({scope,records:[],error:"",busy:true});
     if (!validScope) {
@@ -222,6 +221,9 @@ export function V3RealWorkspace() {
     });
     return ()=>{alive=false;};
   },[access.mode,access.user?.id,validScope,reload]);
+  // A manual refresh must not erase the save confirmation. Only switching
+  // accounts should clear the status notice from the previous identity.
+  useEffect(()=>{setNotice("");},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
   const model=useMemo(()=>describeRealArchive(records,search),[records,search]);
   const active=model.records;
