@@ -2,7 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
 import { primaryMedia } from "../../domain";
-import { currentStorageScope, listRecords } from "../../storage";
+import { currentStorageScope, listRecords, readSettings } from "../../storage";
+import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
 import { saveRecordDraft } from "../../core/application/saveRecordDraft";
@@ -195,11 +196,44 @@ export function V3RealWorkspace() {
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [editing,setEditing]=useState<{draft:EventRecord;baseline:EventRecord|null;scope:string}|null>(null);
   const [notice,setNotice]=useState("");
+  const [cloudMode,setCloudMode]=useState<{scope:string;mode:"v2"|"v3";error:string}>({
+    scope:"",mode:"v2",error:"",
+  });
+  const accountRuntime=useRef<{scope:string;runtime:V3SyncRuntime}|null>(null);
+  const [syncBusy,setSyncBusy]=useState(false);
+  const [transferApproval,setTransferApproval]=useState<{
+    scope:string;push:number;pull:number;
+  }|null>(null);
   const [posters,setPosters]=useState<Array<{id:string;title:string;city:string;src?:string}>>([]);
   const actualScope=currentStorageScope();
   const permitted=access.mode==="account" || access.mode==="device";
   const validScope=permitted && Boolean(actualScope) &&
     (access.mode==="device" || actualScope===access.user?.id?.toLowerCase());
+  useEffect(()=>{
+    // V2 and V3 writers may NEVER run together. This route intentionally
+    // does not mount AppRoot/V2 timers, but a server cutover marker remains
+    // mandatory even for creating a local draft in an authenticated account.
+    let alive=true;
+    const scope=currentStorageScope();
+    accountRuntime.current=null;
+    setCloudMode({scope:"",mode:"v2",error:""});
+    setTransferApproval(null);
+    if (access.mode==="account" && validScope && scope===access.user?.id?.toLowerCase()) {
+      void (async()=>{
+        const {createV3SyncRuntime}=await import("../../infrastructure/createV3SyncRuntime");
+        const runtime=await createV3SyncRuntime(readSettings(),"account");
+        const mode=await runtime.writerMode();
+        if(!alive||currentStorageScope()!==scope)return;
+        accountRuntime.current={scope,runtime};
+        setCloudMode({scope,mode,error:""});
+      })().catch(()=>{
+        if(alive&&currentStorageScope()===scope)
+          setCloudMode({scope,mode:"v2",error:"账号写入状态无法验证，已保持只读。"});
+      });
+    }
+    return ()=>{alive=false;accountRuntime.current=null;};
+  },[access.mode,access.user?.id,validScope,actualScope,reload]);
+
   useEffect(()=>{
     let alive=true;
     const scope=currentStorageScope();
@@ -245,14 +279,23 @@ export function V3RealWorkspace() {
   // The only permitted V3 write before cloud cutover is to the explicit
   // standalone local device archive. Authenticated V2 users remain read-only.
   const canEditLocal=validScope && access.mode==="device" && actualScope==="device-local";
+  const canEditAccount=validScope && access.mode==="account" &&
+    actualScope===cloudMode.scope && cloudMode.mode==="v3";
+  const canEdit=canEditLocal || canEditAccount;
   const startEdit=(record:EventRecord|null)=>{
-    if(!canEditLocal) return;
+    if(!canEdit) return;
     setEditing({draft:record??blankRecord(),baseline:record??null,scope:actualScope});
     setSelectedId(null);
   };
   const saveLocalDraft=async (draft:EventRecord)=>{
-    if(!canEditLocal || !editing || editing.scope!==currentStorageScope()) {
+    if(!canEdit || !editing || editing.scope!==currentStorageScope()) {
       throw new Error("账号作用域已更改；未保存任何记录");
+    }
+    if(canEditAccount) {
+      const checked=accountRuntime.current;
+      if(!checked || checked.scope!==editing.scope || await checked.runtime.writerMode()!=="v3") {
+        throw new Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
+      }
     }
     const result=await saveRecordDraft(new IndexedDbRecordRepository(editing.scope),draft,editing.baseline);
     if(result.status==="review-required") {
@@ -260,8 +303,50 @@ export function V3RealWorkspace() {
     }
     if(currentStorageScope()!==editing.scope) throw new Error("保存期间账号已切换，请重新核查档案");
     setEditing(null);
-    setNotice("已安全保存至此设备；尚未启用云同步");
+    setTransferApproval(null);
+    setNotice(canEditAccount
+      ? "本机已原子保存；点击“安全同步”才会传输至已切换的账号云端。"
+      : "已安全保存至此设备；尚未启用云同步");
     setReload(n=>n+1);
+  };
+
+  const safeSync=async()=>{
+    if(!canEditAccount||syncBusy)return;
+    const scoped=accountRuntime.current;
+    if(!scoped||scoped.scope!==currentStorageScope())return;
+    setSyncBusy(true);
+    try{
+      if(await scoped.runtime.writerMode()!=="v3"||currentStorageScope()!==scoped.scope)
+        throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
+      const audit=await scoped.runtime.audit();
+      if(audit.requiresMigrationReview){
+        setTransferApproval(null);
+        setNotice("检测到历史记录分歧或缺失，已停止同步。请在 V2 设置中查看迁移差异并解决冲突。");
+        return;
+      }
+      const push=audit.actions["push-new"],pull=audit.actions["pull-new"];
+      if((push||pull)&&(!transferApproval||
+          transferApproval.scope!==scoped.scope||
+          transferApproval.push!==push||transferApproval.pull!==pull)){
+        setTransferApproval({scope:scoped.scope,push,pull});
+        setNotice(`首次同步预计本机新增上传 ${push} 条、云端新增下载 ${pull} 条。
+          请检查数量，再点击一次“安全同步”以确认；不会覆盖不同内容的历史记录。`);
+        return;
+      }
+      const result=await scoped.runtime.synchronize({
+        v2AutoSyncDisabled:true, initialTransferApproved:push+pull>0,
+      });
+      if(currentStorageScope()!==scoped.scope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+      setTransferApproval(null);
+      setNotice(`同步完成：上传 ${result.uploadedIds.length} 条、
+        下载 ${result.downloadedIds.length} 条，待重试 ${result.deferredIds.length} 条。`);
+      setReload(n=>n+1);
+    }catch(error){
+      const reason=error instanceof Error?error.message:"";
+      setNotice(reason.includes("V3_SYNC_MIGRATION_REVIEW_REQUIRED")
+        ? "云端或本机存在需要审查的历史差异；没有进行覆盖式同步。"
+        : "同步未完成：身份变化、网络故障或云端版本冲突。已保留本机记录，请重新检查。");
+    }finally{setSyncBusy(false);}
   };
   const paged=active.slice(PAGE_SIZE*pageIndex,PAGE_SIZE*(pageIndex+1));
   const totalPages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));
