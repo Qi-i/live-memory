@@ -28,14 +28,14 @@
 .v3-demo-timeline-art {width:56px;aspect-ratio:2/3;border-radius:8px;overflow:hidden;background:#e2e6f4;}
 .v3-demo-timeline-art img {display:block;width:100%;height:100%;object-fit:contain;}
 .v3-demo-timeline button span {display:grid;gap:5px;min-width:0;}
-.v3-demo-timeline button strong {font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.v3-demo-timeline button strong {display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;overflow:hidden;font-size:14px;line-height:1.4;overflow-wrap:anywhere;}
 .v3-demo-timeline button small {font-size:12px;color:#7a8598;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .v3-demo-timeline button em {font-size:11px;color:#6e67b3;font-style:normal;font-weight:750;}
-.v3-demo-table-scroll {max-width:100%;overflow-x:auto;}
+.v3-demo-table-scroll {max-width:100%;min-width:0;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:thin;}
 .v3-demo-table {border-collapse:separate;border-spacing:0 5px;width:100%;min-width:580px;font-size:13px;text-align:left;}
 .v3-demo-table th {color:#66718e;font-size:11px;white-space:nowrap;padding:12px 10px;}
-.v3-demo-table td {padding:15px 10px;background:rgba(255,255,255,.67);}
-.v3-demo-table td:first-child {border-radius:11px 0 0 11px;font-weight:760;}
+.v3-demo-table td {padding:12px 10px;background:rgba(255,255,255,.67);line-height:1.45;}
+.v3-demo-table td:first-child {border-radius:11px 0 0 11px;font-weight:760;max-width:350px;overflow-wrap:anywhere;}
 .v3-demo-table td:last-child {border-radius:0 11px 11px 0;}
 .v3-demo-table td button {border:1px solid #cbd0e9;background:#f4f2ff;border-radius:9px;min-height:35px;padding:0 14px;cursor:pointer;color:#403982;}
 .v3-demo-years {display:flex;flex-wrap:wrap;gap:7px;}
@@ -75,8 +75,8 @@
 .v3-demo-fields label {display:grid;gap:8px;padding:12px;border:1px solid #dce0ed;border-radius:13px;background:rgba(255,255,255,.69);font-size:12px;font-weight:730;color:#66728a;}
 .v3-demo-fields input,.v3-demo-fields select {width:100%;min-width:0;min-height:35px;padding:0 6px;border:0;border-bottom:1px solid #d4d9eb;border-radius:0;background:transparent;color:#27334e;font:inherit;font-size:14px;outline-offset:3px;}
 .v3-demo-detail-body {display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1fr);gap:20px;align-items:start;}
-.v3-demo-detail-art {display:grid;place-items:center;aspect-ratio:2/3;min-width:0;border-radius:15px;overflow:hidden;background:linear-gradient(140deg,#d4cff9,#cbe9e7);color:#7167b2;font-size:22px;font-weight:800;}
-.v3-demo-detail-art img {display:block;width:100%;height:100%;object-fit:contain;}
+.v3-demo-detail-art {display:grid;place-items:start center;min-height:180px;min-width:0;border-radius:15px;overflow:hidden;background:linear-gradient(140deg,#d4cff9,#cbe9e7);color:#7167b2;font-size:22px;font-weight:800;}
+.v3-demo-detail-art img {display:block;width:100%;height:auto;max-height:min(60dvh,520px);object-fit:contain;}
 .v3-demo-detail-body dl {display:grid;grid-template-columns:70px minmax(0,1fr);gap:14px 9px;margin:0;font-size:13px;}
 .v3-demo-detail-body dt {color:#7b88a1;}
 .v3-demo-detail-body dd {margin:0;font-weight:740;overflow-wrap:anywhere;}
@@ -163,4 +163,14 @@
   border-color: #ad7158;
   color: white;
   background: #a05b42;
+}
+
+/* Shared archive presentation: field text may wrap, controls may not be hidden by long labels. */
+.v3-demo-timeline button { min-width:0; }
+.v3-demo-timeline button span { min-width:0; }
+.v3-demo-timeline button small { line-height:1.45; }
+.v3-demo-table td:not(:first-child) { white-space:nowrap; }
+@media (max-width:720px) {
+  .v3-demo-timeline time { font-size:11px; }
+  .v3-demo-timeline button { grid-template-columns:76px 46px minmax(0,1fr); }
 }
