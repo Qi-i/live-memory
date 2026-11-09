@@ -8,6 +8,7 @@ on:
     branches: [main, refactor/core-v3-architecture-20261108]
     paths:
       - "tests/db/**"
+      - "supabase/migrations/017_v3_private_media_bucket.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -47,6 +48,8 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_fixture.sql
       - name: Verify actual PostgreSQL RLS, CAS and V2-update compatibility
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_contract_checks.sql
+      - name: Verify isolated private media bucket and cross-owner RLS
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_private_media_contract_checks.sql
       - name: Verify actual concurrent CAS row locks and stale-write rejection
         run: node tests/db/v3_cas_parallel_race.mjs
       - name: Verify no real remote database was configured
