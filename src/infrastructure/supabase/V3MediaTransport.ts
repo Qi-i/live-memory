@@ -11,6 +11,7 @@ import type { MediaAsset, EventRecord } from "../../domain";
 export interface V3MediaTransport {
   stage(recordId: string, asset: MediaAsset): Promise<MediaAsset>;
   hydrate(record: EventRecord): Promise<EventRecord>;
+  ensureOffline(record: EventRecord): Promise<void>;
   assertScope(): void;
 }
 interface UploadResult { error: { message: string; statusCode?: string | number; code?: string } | null }
@@ -60,6 +61,8 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     private readonly scopeCheck: () => void,
     private readonly sourceResolver: (asset: MediaAsset) => Promise<string>,
     legacyBucket = "echo-media",
+    private readonly cacheForOffline?: (asset: MediaAsset, blob: Blob) => Promise<void>,
+    private readonly hasOfflineCopy?: (asset: MediaAsset) => Promise<boolean>,
   ) {
     this.bucket = bucket.trim();
     this.owner = ownerKey.trim().toLowerCase();
@@ -173,6 +176,15 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
         throw new Error("V3_MEDIA_EXISTING_OBJECT_MISMATCH");
       }
     }
+    // Stage bytes into scoped CacheStorage while they are still available.
+    // An upload is not acknowledged if the local portable copy cannot persist.
+    if (this.cacheForOffline) {
+      await this.cacheForOffline(
+        { ...asset, storagePath: path, mimeType: mime, size: blob.size },
+        new Blob([bytes], { type: mime }),
+      );
+      this.assertScope();
+    }
     let localSrc = asset.src;
     const previousKind = asset.storagePath ? await this.classifyPath(asset.storagePath) : null;
     if (!localSrc || (previousKind !== "private" && !inlineSource(localSrc))) {
@@ -184,6 +196,37 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       localSrc = signed.data.signedUrl;
     }
     return { ...asset, src: localSrc, storagePath: path, mimeType: mime, size: blob.size };
+  }
+
+  /**
+   * Actual media recovery before local IndexedDB reconciliation. A URL alone
+   * is not a durable picture. No metadata is committed if any byte transfer
+   * or CacheStorage write fails.
+   */
+  async ensureOffline(record: EventRecord): Promise<void> {
+    this.assertScope();
+    if (!this.cacheForOffline) throw new Error("V3_OFFLINE_CACHE_UNAVAILABLE");
+    if (!Array.isArray(record.media)) throw new Error("V3_OFFLINE_INVALID_MEDIA");
+    for (const asset of record.media) {
+      this.assertScope();
+      if (!asset.storagePath) {
+        if (asset.src?.startsWith("data:")) continue;
+        throw new Error("V3_OFFLINE_MEDIA_HAS_NO_DURABLE_SOURCE");
+      }
+      const kind = await this.classifyPath(asset.storagePath);
+      this.assertScope();
+      if (this.hasOfflineCopy && await this.hasOfflineCopy(asset)) {
+        this.assertScope();
+        continue;
+      }
+      this.assertScope();
+      const bucket = kind === "private" ? this.bucket : this.legacyBucket;
+      const file = await this.client.storage.from(bucket).download(asset.storagePath);
+      this.assertScope();
+      if (file.error || !file.data) throw new Error("V3_OFFLINE_MEDIA_DOWNLOAD_FAILED");
+      await this.cacheForOffline(asset, file.data);
+      this.assertScope();
+    }
   }
 
   async hydrate(record: EventRecord): Promise<EventRecord> {

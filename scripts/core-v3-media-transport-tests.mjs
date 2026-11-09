@@ -41,8 +41,10 @@ class FakeServer {
   rows = new Map();
   staged = [];
   rpcCalls = [];
+  downloadCalls = [];
   failUpload = false;
   failSign = false;
+  failDownload = false;
   conflictingObject = false;
   storage = {
     from: bucket => {
@@ -59,6 +61,8 @@ class FakeServer {
           return {error:null};
         },
         download: async path => {
+          this.downloadCalls.push([bucket,path]);
+          if (this.failDownload) return {data:null,error:{message:"temporary offline"}};
           if (this.conflictingObject) return {data:new Blob(["CORRUPTED"],{type:"image/png"}),error:null};
           return objects.has(path) ? {data:objects.get(path),error:null} : {data:null,error:{message:"not found"}};
         },
@@ -96,9 +100,19 @@ class FakeServer {
 }
 const server=new FakeServer();
 let scope="user-a";
+const cachedOffline = new Map();
+let failCache = false;
 const media = new transportModule.exports.SupabaseV3MediaTransport(
   server,"echo-private-media-v3",owner,()=>{if(scope!=="user-a")throw Error("V3_MEDIA_ACCOUNT_CHANGED");},
   async asset=>asset.src,
+  "echo-media",
+  async (asset,blob)=>{
+    if(failCache)throw Error("V3_OFFLINE_CACHE_FAILED");
+    assert.equal(scope,"user-a");
+    assert.ok(asset.storagePath);
+    cachedOffline.set(asset.storagePath,Buffer.from(await blob.arrayBuffer()));
+  },
+  async asset=>cachedOffline.has(asset.storagePath),
 );
 assert.throws(() => new transportModule.exports.SupabaseV3MediaTransport(
   server,"echo-media",owner,()=>{},async asset=>asset.src,
@@ -120,6 +134,8 @@ assert.equal(server.rpcCalls[0].p_payload.media[0].storagePath,path);
 assert.equal(committed.record.media[0].src,dataURL,
   "Successful CAS must retain the original image bytes for local rendering");
 assert.equal(committed.record.media[0].storagePath,path);
+assert.ok(cachedOffline.get(path)?.equals(mediaBytes),
+  "Before metadata CAS, a durable local copy of the staged bytes must exist");
 
 const hydrated=await cloud.list();
 assert.equal(hydrated.length,1);
@@ -128,6 +144,22 @@ assert.ok(hydrated[0].record.media[0].src.startsWith("https://signed.example/"),
 assert.equal(await rev.exports.recordRevision(hydrated[0].record,true),
   await rev.exports.recordRevision(committed.record,true),
   "Rotating signed URLs must not cause a spurious conflict");
+cachedOffline.clear();
+await cloud.prepareIncoming(hydrated[0].record);
+assert.ok(cachedOffline.get(path)?.equals(mediaBytes),
+  "A second device must download and cache actual private picture bytes before accepting a record");
+const downloadCount=server.downloadCalls.length;
+await cloud.prepareIncoming(hydrated[0].record);
+assert.equal(server.downloadCalls.length,downloadCount,
+  "A fully verified offline poster must never be downloaded again during subsequent sync");
+cachedOffline.clear();
+server.failDownload=true;
+await assert.rejects(cloud.prepareIncoming(hydrated[0].record),/V3_OFFLINE_MEDIA_DOWNLOAD_FAILED/);
+server.failDownload=false;
+cachedOffline.clear();
+failCache=true;
+await assert.rejects(cloud.prepareIncoming(hydrated[0].record),/V3_OFFLINE_CACHE_FAILED/);
+failCache=false;
 
 const second=await cloud.compareAndSwap(first,"1");
 assert.equal(second.serverRevision,"2");

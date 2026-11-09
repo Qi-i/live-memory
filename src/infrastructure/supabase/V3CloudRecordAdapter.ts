@@ -133,6 +133,16 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     return hydrated;
   }
 
+  async prepareIncoming(record: EventRecord): Promise<EventRecord> {
+    await this.guardIdentity();
+    if (this.includeMedia) {
+      if (!this.mediaTransport) throw new Error("V3_OFFLINE_MEDIA_TRANSPORT_REQUIRED");
+      await this.mediaTransport.ensureOffline(record);
+    }
+    await this.guardIdentity();
+    return record;
+  }
+
   private async scanAllPages(): Promise<CloudRecordEnvelope[]> {
     await this.guardIdentity();
     const table = this.provider === "personal" ? "echo_passkey_records" : "echo_text_backups";

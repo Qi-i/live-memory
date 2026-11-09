@@ -17,6 +17,8 @@ export interface CloudRecordAdapter {
   readonly accountScope: string;
   readonly includeMedia: boolean;
   list(): Promise<CloudRecordEnvelope[]>;
+  /** Materialize and validate incoming private media before the local row is acknowledged. */
+  prepareIncoming?(record: EventRecord): Promise<EventRecord>;
   /**
    * expected=null means create only if absent. Otherwise the server must
    * update only if its current revision matches the expected value.
