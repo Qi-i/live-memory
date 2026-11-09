@@ -135,9 +135,20 @@ export function PortraitArtwork({
   priority?: boolean;
 }) {
   return (
-    <figure className={"v3-portrait-artwork " + className}>
+    <figure className={"v3-portrait-artwork " + className} title={alt}>
       <div className="v3-portrait-frame">
-        {src ? <img src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async" /> : <span aria-hidden="true">LIVE</span>}
+        {src ? <img
+          src={src} alt={alt} loading={priority ? "eager" : "lazy"} decoding="async"
+          onLoad={(event) => {
+            // A real poster's intrinsic portrait ratio determines its frame width.
+            // Preserve the entire image instead of letterboxing it into a forced 2:3 box.
+            const image = event.currentTarget;
+            const ratio = image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 0;
+            if (ratio >= .45 && ratio <= .95) {
+              image.closest(".v3-portrait-artwork")?.style.setProperty("--v3-portrait-ratio", String(ratio));
+            }
+          }}
+        /> : <span aria-hidden="true">LIVE</span>}
       </div>
       {caption && <figcaption>{caption}</figcaption>}
     </figure>
