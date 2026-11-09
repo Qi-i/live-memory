@@ -190,6 +190,50 @@ assert.equal(server.objects.size,2,"V3 stores an independent immutable copy");
 assert.equal(server.staged.length,6);
 assert.ok((await cloud.list()).find(e=>e.record.id==="legacy-show")?.record.media[0].src.includes("/echo-private-media-v3/"));
 
+// URL-only posters have no durable private backing. Fetch CORS-safe image
+// bytes and store a private copy; NEVER commit an expiring external token.
+const originalFetch = globalThis.fetch;
+try {
+  const urlRecord = {...first,id:"external-show",media:[{
+    ...first.media[0],id:"external-poster",recordId:"external-show",
+    src:"https://cdn.example.test/poster?token=DO_NOT_STORE",
+  }]};
+  globalThis.fetch = async (input, options) => {
+    assert.equal(options?.credentials,"omit");
+    assert.equal(options?.mode,"cors");
+    if(String(input)!==urlRecord.media[0].src)throw new TypeError("synthetic network outage");
+    return new Response(new Blob([mediaBytes],{type:"image/png"}),{status:200});
+  };
+  const committedURL=await cloud.compareAndSwap(urlRecord,null);
+  assert.equal(committedURL.serverRevision,"1");
+  assert.ok(committedURL.record.media[0].storagePath.startsWith(mediaFolder+"/v3/"));
+  assert.ok(committedURL.record.media[0].src.includes("/echo-private-media-v3/"),
+    "A staged remote poster must immediately render using its new private signed URL");
+  assert.equal(committedURL.record.media[0].src.includes("DO_NOT_STORE"),false);
+  assert.equal(server.rows.get("external-show").payload.media[0].src,"");
+  assert.equal(JSON.stringify(server.rpcCalls.at(-1).p_payload).includes("DO_NOT_STORE"),false,
+    "Never save external query tokens to cloud JSON");
+
+  const beforeFailedURL=server.rpcCalls.length;
+  globalThis.fetch=async()=>{throw new TypeError("CORS blocked")};
+  await assert.rejects(cloud.compareAndSwap({
+    ...urlRecord,id:"unrecoverable-show",media:[{...urlRecord.media[0],recordId:"unrecoverable-show"}],
+  },null),/V3_MEDIA_SOURCE_UNAVAILABLE/);
+  assert.equal(server.rpcCalls.length,beforeFailedURL,
+    "An external image that cannot be recovered must block the entire record CAS");
+  await assert.rejects(media.stage("unrecoverable-show",{
+    ...urlRecord.media[0],recordId:"unrecoverable-show",src:"http://insecure.example/unknown.png",
+  }),/V3_MEDIA_NONPORTABLE_URL/);
+  await assert.rejects(cloud.compareAndSwap({
+    ...urlRecord,id:"missing-show",media:[{
+      ...urlRecord.media[0],recordId:"missing-show",src:"",
+    }],
+  },null),/V3_MEDIA_SOURCE_UNAVAILABLE/);
+  assert.equal(server.rpcCalls.length,beforeFailedURL);
+} finally {
+  globalThis.fetch=originalFetch;
+}
+
 const runtime=await readFile(new URL("../src/infrastructure/createV3SyncRuntime.ts",import.meta.url),"utf8");
 assert.match(runtime,/new SupabaseV3MediaTransport\(/);
 assert.match(runtime,/V3_PRIVATE_MEDIA_BUCKET/);
