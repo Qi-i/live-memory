@@ -39,7 +39,7 @@ begin
     perform public.live_memory_v3_cas_personal('show-1', '{"id":"incorrect","title":"invalid"}'::jsonb, 2);
     raise exception 'Expected payload-ID mismatch failure';
   exception when others then
-    if sqlerrm not like '%V3_INVALID_RECORD%' then raise; end if;
+    if sqlerrm not like '%V3_INVALID_PAYLOAD%' then raise; end if;
   end;
 end;
 $$;
@@ -98,7 +98,7 @@ begin
     perform public.live_memory_v3_cas_personal('missing', '{"id":"missing"}'::jsonb, null);
     raise exception 'Expected missing owner-key denial';
   exception when others then
-    if sqlerrm not like '%V3_OWNER_NOT_AUTHORIZED%' then raise; end if;
+    if sqlerrm not like '%V3_UNAUTHORIZED%' then raise; end if;
   end;
 end;
 $$;
