@@ -65,4 +65,14 @@ for (const provider of ["account","personal"]) {
 }
 assert.doesNotMatch(activationGate, /\b(drop table|truncate|delete from public\.echo_|update public\.echo_).*?;/i,
   "Activation gate must not alter any real archive");
+const mediaCutover = await readFile(
+  new URL("../supabase/migrations/021_v3_private_storage_cutover_gate.sql",import.meta.url),"utf8",
+);
+assert.match(mediaCutover,/V3_STORAGE_CUTOVER_GATE_REQUIRES_MEDIA_AUDIT/);
+assert.match(mediaCutover,/bucket_id='echo-private-media-v3'/);
+assert.match(mediaCutover,/public\.live_memory_v3_writer_modes/);
+assert.match(mediaCutover,/provider='personal' and identity=public\.live_memory_owner_key\(\)/);
+assert.match(mediaCutover,/live-memory-v3-media:/);
+assert.doesNotMatch(mediaCutover,/\b(drop table|truncate|delete from storage\.objects|update storage\.objects)\b/i,
+  "Storage gate cannot edit or delete existing objects");
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
