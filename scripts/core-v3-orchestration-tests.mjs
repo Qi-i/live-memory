@@ -216,6 +216,32 @@ const secondPush = await sync.synchronizeRecords(lateLocal, lateCloud, lateBase)
 assert.deepEqual(secondPush.uploadedIds, ["one"]);
 assert.equal(lateCloud.byId.get("one").record.title, "用户保存了第二版");
 
+// A duplicate remote listing must not silently select the last server revision.
+// Reject the entire round before CAS, local writes or baseline changes.
+const ambiguousLocal = new MemoryRepo([first]);
+const ambiguousCloud = new MemoryCloud([first]);
+const ambiguousBaseline = new MemoryBaselines();
+let ambiguousWrites = 0;
+ambiguousCloud.list = async () => [
+  { record: edit(first, "remote-A"), serverRevision: "1" },
+  { record: edit(first, "remote-B"), serverRevision: "2" },
+];
+ambiguousCloud.compareAndSwap = async () => { ambiguousWrites++; throw Error("must not write"); };
+await assert.rejects(sync.synchronizeRecords(ambiguousLocal, ambiguousCloud, ambiguousBaseline),
+  /V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+assert.equal(ambiguousWrites, 0);
+assert.equal(ambiguousBaseline.data.size, 0);
+assert.equal((await ambiguousLocal.list())[0].title, first.title);
+
+// Duplicate local records and missing opaque server revisions are also unsafe.
+const duplicatedLocal = new MemoryRepo([first, edit(first, "duplicate local")]);
+await assert.rejects(sync.synchronizeRecords(duplicatedLocal, new MemoryCloud([first]), new MemoryBaselines()),
+  /V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+const revisionlessCloud = new MemoryCloud([first]);
+revisionlessCloud.list = async () => [{ record: first, serverRevision: "" }];
+await assert.rejects(sync.synchronizeRecords(new MemoryRepo([first]), revisionlessCloud, new MemoryBaselines()),
+  /V3_SYNC_AMBIGUOUS_SNAPSHOT/);
+
 // Cross-account processing must fail BEFORE reading or mutating records.
 const unrelated = new MemoryCloud([first]);
 unrelated.accountScope = "another-account";
