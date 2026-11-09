@@ -175,6 +175,15 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
         throw new Error("V3_MEDIA_EXISTING_OBJECT_MISMATCH");
       }
     }
+    // Stage bytes into scoped CacheStorage while they are still available.
+    // An upload is not acknowledged if the local portable copy cannot persist.
+    if (this.cacheForOffline) {
+      await this.cacheForOffline(
+        { ...asset, storagePath: path, mimeType: mime, size: blob.size },
+        new Blob([bytes], { type: mime }),
+      );
+      this.assertScope();
+    }
     let localSrc = asset.src;
     const previousKind = asset.storagePath ? await this.classifyPath(asset.storagePath) : null;
     if (!localSrc || (previousKind !== "private" && !inlineSource(localSrc))) {
