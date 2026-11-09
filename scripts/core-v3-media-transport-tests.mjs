@@ -43,7 +43,7 @@ class FakeServer {
   conflictingObject = false;
   storage = {
     from: bucket => {
-      assert.equal(bucket,"echo-media");
+      assert.equal(bucket,"echo-private-media-v3");
       return {
         upload: async(path, body, options) => {
           assert.equal(options.upsert,false,"Immutable object cannot replace earlier files");
@@ -92,9 +92,13 @@ class FakeServer {
 const server=new FakeServer();
 let scope="user-a";
 const media = new transportModule.exports.SupabaseV3MediaTransport(
-  server,"echo-media",owner,()=>{if(scope!=="user-a")throw Error("V3_MEDIA_ACCOUNT_CHANGED");},
+  server,"echo-private-media-v3",owner,()=>{if(scope!=="user-a")throw Error("V3_MEDIA_ACCOUNT_CHANGED");},
   async asset=>asset.src,
 );
+assert.throws(() => new transportModule.exports.SupabaseV3MediaTransport(
+  server,"echo-media",owner,()=>{},async asset=>asset.src,
+), /V3_MEDIA_INVALID_SCOPE_OR_BUCKET/,
+  "V3 MUST refuse the legacy public bucket even if settings request it");
 const cloud=new adapter.exports.SupabaseV3RecordAdapter(
   server,"personal","personal-owner-test","user-a",media,
 );
@@ -168,6 +172,8 @@ assert.equal(server.staged.length,5,"Read-only signed restoration cannot upload 
 
 const runtime=await readFile(new URL("../src/infrastructure/createV3SyncRuntime.ts",import.meta.url),"utf8");
 assert.match(runtime,/new SupabaseV3MediaTransport\(/);
+assert.match(runtime,/V3_PRIVATE_MEDIA_BUCKET/);
+assert.doesNotMatch(runtime,/personal as unknown as V3MediaStorageClient,\s*settings\.supabase\.mediaBucket/);
 assert.match(runtime,/resolveMediaSource\(asset, true\)/);
 assert.match(runtime,/new SupabaseV3RecordAdapter\(client, provider, identity, scope, mediaTransport\)/);
 assert.doesNotMatch(transportModule.source,/\.remove\(|\.delete\(|upsert:\s*true/,
