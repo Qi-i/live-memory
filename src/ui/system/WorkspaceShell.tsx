@@ -145,7 +145,7 @@ export function PortraitArtwork({
             const image = event.currentTarget;
             const ratio = image.naturalHeight > 0 ? image.naturalWidth / image.naturalHeight : 0;
             if (ratio >= .45 && ratio <= .95) {
-              image.closest(".v3-portrait-artwork")?.style.setProperty("--v3-portrait-ratio", String(ratio));
+              image.closest<HTMLElement>(".v3-portrait-artwork")?.style.setProperty("--v3-portrait-ratio", String(ratio));
             }
           }}
         /> : <span aria-hidden="true">LIVE</span>}
