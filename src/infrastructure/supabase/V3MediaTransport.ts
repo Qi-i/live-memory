@@ -62,6 +62,7 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
     private readonly sourceResolver: (asset: MediaAsset) => Promise<string>,
     legacyBucket = "echo-media",
     private readonly cacheForOffline?: (asset: MediaAsset, blob: Blob) => Promise<void>,
+    private readonly hasOfflineCopy?: (asset: MediaAsset) => Promise<boolean>,
   ) {
     this.bucket = bucket.trim();
     this.owner = ownerKey.trim().toLowerCase();
@@ -213,6 +214,11 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
         throw new Error("V3_OFFLINE_MEDIA_HAS_NO_DURABLE_SOURCE");
       }
       const kind = await this.classifyPath(asset.storagePath);
+      this.assertScope();
+      if (this.hasOfflineCopy && await this.hasOfflineCopy(asset)) {
+        this.assertScope();
+        continue;
+      }
       this.assertScope();
       const bucket = kind === "private" ? this.bucket : this.legacyBucket;
       const file = await this.client.storage.from(bucket).download(asset.storagePath);
