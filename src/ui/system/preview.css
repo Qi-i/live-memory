@@ -1,9 +1,20 @@
+.v3-sidebar-brand {
+  display:grid; grid-template-columns:32px minmax(0,1fr); column-gap:8px; row-gap:3px;
+  align-items:center;
+}
 .v3-preview-brand {
-  display:inline-grid; place-items:center; width:32px; height:32px;
-  margin-right:5px; border-radius:11px; color:#276b67; font-size:23px;
+  display:grid; place-items:center; width:32px; height:32px;
+  border-radius:11px; color:#276b67; font-size:23px;
   background:linear-gradient(140deg,#ddf0e4,#c5c8fa);
 }
-.v3-sidebar-brand small { display:block; margin:5px 0 0 40px; font-size:10px; letter-spacing:.17em; color:#677394; }
+.v3-sidebar-brand .v3-preview-brand-name {
+  min-width:0; margin:0; font-size:clamp(15px,1.1vw,18px);
+  white-space:nowrap; font-weight:840; letter-spacing:-.045em;
+}
+.v3-sidebar-brand small {
+  grid-column:2; display:block; margin:0; font-size:10px;
+  white-space:nowrap; letter-spacing:.08em; color:#677394;
+}
 .v3-preview-topbar { display:flex; align-items:center; flex-wrap:wrap; width:100%; min-width:0; gap:8px 10px; }
 .v3-preview-topbar > div:first-child { display:grid; flex:1 1 260px; gap:4px; min-width:0; margin-right:auto; }
 .v3-preview-topbar span { color:#6861b7; font-size:10px; font-weight:900; letter-spacing:.12em; }
@@ -61,11 +72,17 @@
   .v3-preview-topbar > div:first-child { min-width:180px; }
 }
 @media (max-width:800px) {
-  .v3-preview-topbar { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
-  .v3-preview-topbar > div:first-child { min-width:0; grid-column:1/-1; }
-  .v3-preview-topbar-stats { display:grid; grid-column:1/-1; grid-template-columns:repeat(3,minmax(0,1fr)); width:100%; }
-  .v3-preview-topbar-stats b { display:flex; flex-direction:row; align-items:baseline; gap:6px; min-width:0; padding:7px 10px; }
-  .v3-preview-topbar > button { min-width:0; text-align:center; }
+  .v3-preview-topbar { display:flex; flex-wrap:wrap; align-items:center; gap:7px 9px; }
+  .v3-preview-topbar > div:first-child { flex:1 1 210px; min-width:0; margin-right:auto; }
+  .v3-preview-topbar-stats {
+    display:grid; grid-template-columns:repeat(3,minmax(0,1fr));
+    flex:0 1 190px; min-width:165px; width:auto; gap:5px;
+  }
+  .v3-preview-topbar-stats b {
+    display:grid; justify-items:center; align-content:center;
+    min-width:0; padding:5px 3px; gap:1px;
+  }
+  .v3-preview-topbar > button { flex:0 0 auto; min-width:0; text-align:center; }
   .v3-preview-topbar strong { font-size:17px; }
   .v3-preview-city-gallery { grid-template-columns:repeat(2,minmax(0,1fr)); }
 }
@@ -124,6 +141,20 @@
   .v3-preview-topbar-stats b { min-width:50px; }
 }
 @media (max-width:620px) {
+  .v3-preview-topbar {
+    display:grid; grid-template-columns:minmax(0,1fr) minmax(145px,.93fr);
+    gap:8px; align-items:center;
+  }
+  .v3-preview-topbar > div:first-child { grid-column:1; grid-row:1; min-width:0; }
+  .v3-preview-topbar-stats {
+    grid-column:2; grid-row:1; width:100%; min-width:0;
+    grid-template-columns:repeat(3,minmax(0,1fr)); gap:4px;
+  }
+  .v3-preview-topbar-stats b { min-width:0; font-size:15px; padding:5px 1px; }
+  .v3-preview-topbar-stats b small { font-size:10px; }
+  .v3-preview-topbar > button { width:100%; min-height:36px; }
+  .v3-preview-topbar > button:nth-last-child(2) { grid-column:1; grid-row:2; }
+  .v3-preview-topbar > button:last-child { grid-column:2; grid-row:2; }
   .v3-preview-city-list > button { grid-template-columns:minmax(0,1fr) minmax(55px,30%) 23px; }
   .v3-preview-topbar .v3-preview-disclosure { line-height:1.35; }
   .v3-preview-map-marker { max-width:95px; }
