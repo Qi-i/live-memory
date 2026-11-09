@@ -108,6 +108,10 @@
  .v3-real-topbar > button:nth-last-child(3) { grid-column:1 / -1; }
  .v3-real-topbar > button:nth-last-child(2) { grid-column:1; }
  .v3-real-topbar > button:last-child { grid-column:2; }
+ /* Four real-account actions use two balanced rows, never a forced-wide chip. */
+ .v3-real-topbar:has(.v3-real-sync-trigger) > button:nth-last-child(4),
+ .v3-real-topbar:has(.v3-real-sync-trigger) > button:nth-last-child(3) { grid-column:auto; }
+
  .v3-real-poster-grid { grid-template-columns:repeat(2,minmax(0,1fr)); gap:10px; }
  .v3-real-metrics { grid-template-columns:repeat(2,minmax(0,1fr)); }
  .v3-real-timeline > button { grid-template-columns:75px minmax(0,1fr); gap:6px; }
