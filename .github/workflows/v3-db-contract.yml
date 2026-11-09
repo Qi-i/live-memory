@@ -13,6 +13,7 @@ on:
       - "supabase/migrations/019_v3_blinded_media_owner_prefix.sql"
       - "supabase/migrations/020_v3_owner_activation_cas_gate.sql"
       - "supabase/migrations/021_v3_private_storage_cutover_gate.sql"
+      - "supabase/migrations/022_v3_personal_media_cas_integrity.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -66,6 +67,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/021_v3_private_storage_cutover_gate.sql
       - name: Verify inactive owner Storage denial and active owner recovery
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_private_storage_cutover_gate_checks.sql
+      - name: Upgrade personal CAS with server-side private media validation
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/022_v3_personal_media_cas_integrity.sql
+      - name: Verify forged media and missing private objects cannot be committed
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_personal_media_payload_checks.sql
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
