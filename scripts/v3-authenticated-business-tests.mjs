@@ -54,7 +54,7 @@ assert.match(main,/VITE_V3_REAL_WORKSPACE === "1"/);
 assert.match(main,/URLSearchParams\(window\.location\.search\)\.has\("v3-real-workspace"\)/);
 assert.match(main,/<AccessGate><V3RealWorkspace \/><\/AccessGate>/);
 assert.match(component,/currentStorageScope\(\)/);
-assert.match(component,/await listRecords\(\)/);
+assert.match(component,/listRecords\(\)\.then/);
 assert.match(component,/snapshot\.scope===actualScope/);
 assert.match(component,/useCachedMediaSrc\(asset\)/);
 assert.match(component,/resolveMediaSource\(asset,true\)/);
