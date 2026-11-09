@@ -16,7 +16,7 @@ const key = (bucket: string, path: string) => JSON.stringify([bucket,path]);
 function valid(item: MediaAuditObject): boolean {
   return typeof item?.bucket === "string" && !!item.bucket.trim() &&
     typeof item?.path === "string" && !!item.path.trim() &&
-    !item.path.startsWith("/") && !item.path.split("/").includes("..");
+    !item.path.startsWith("/") && !item.path.includes("\\") &&\n    !/[\\u0000-\\u001f\\u007f]/.test(item.path) &&\n    !item.path.split("/").includes("..");
 }
 export function auditMediaReferences(input: {
   objects: readonly MediaAuditObject[];
@@ -24,7 +24,7 @@ export function auditMediaReferences(input: {
   inventoryComplete: boolean;
   referencesComplete: boolean;
 }): MediaAuditResult {
-  if (!Array.isArray(input.objects) || !Array.isArray(input.references)) {
+  if (!Array.isArray(input.objects) || !Array.isArray(input.references) ||\n      typeof input.inventoryComplete !== "boolean" ||\n      typeof input.referencesComplete !== "boolean") {
     throw new Error("V3_MEDIA_AUDIT_INVALID_INPUT");
   }
   if (input.objects.some(x => !valid(x)) ||
