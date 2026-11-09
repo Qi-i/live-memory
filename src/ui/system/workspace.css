@@ -226,6 +226,13 @@
   .v3-stage-hero-gallery .v3-portrait-artwork { --v3-hero-poster-height:clamp(230px,25dvh,265px); }
   .v3-toolbar-actions { justify-content:flex-start; }
 }
+@media (min-width:701px) and (max-width:800px) {
+  /* A 768px tablet has room for all actions if unused search width is released. */
+  .v3-toolbar-search { flex:0 1 183px; min-width:170px; }
+  .v3-toolbar-modes { flex:1 1 280px; gap:4px; }
+  .v3-toolbar-actions { flex:0 0 auto; justify-content:flex-end; gap:5px; }
+  .v3-action-toolbar button { padding-inline:9px; }
+}
 @media (max-width: 390px) {
   .v3-action-toolbar { padding:9px; gap:8px; }
   .v3-toolbar-search,.v3-toolbar-modes,.v3-toolbar-actions { flex-basis:100%; justify-content:flex-start; }
