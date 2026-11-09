@@ -7,11 +7,15 @@ const adapterCode = await readFile(new URL("../src/infrastructure/supabase/V3Clo
 const transpile = code => ts.transpileModule(code,{
   compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022},
 }).outputText;
+const revisionCode = await readFile(new URL("../src/core/sync/revision.ts", import.meta.url), "utf8");
+const revisions={};
+new Function("exports",transpile(revisionCode))(revisions);
 const ports={};
 new Function("exports",transpile(portCode))(ports);
 const adapter={};
 new Function("exports","require",transpile(adapterCode))(adapter, moduleName=>{
   if(moduleName==="../../core/ports/CloudRecordAdapter")return ports;
+  if(moduleName==="../../core/sync/revision")return revisions;
   throw Error("Unexpected transport dependency: "+moduleName);
 });
 
@@ -90,6 +94,40 @@ const all=await new adapter.SupabaseV3RecordAdapter(
 assert.equal(all.length,1007,"Every record across 3 server pages must be returned");
 assert.equal(new Set(all.map(row=>row.record.id)).size,1007);
 
+// Concurrent V2 uploads can shift offset pages or change revisions while V3
+// enumerates cloud records. Neither result is a safe deletion signal.
+const insertedDuringRead = new FakeRpc();
+insertedDuringRead.rows.set("one", {id:"one",payload:{...record,id:"one",media:[]},v3_revision:1});
+const originalInsertedFrom = insertedDuringRead.from.bind(insertedDuringRead);
+let insertionReads = 0;
+insertedDuringRead.from = (table) => {
+  insertionReads += 1;
+  if (insertionReads === 2) insertedDuringRead.rows.set("two", {
+    id:"two",payload:{...record,id:"two",media:[]},v3_revision:1,
+  });
+  return originalInsertedFrom(table);
+};
+await assert.rejects(new adapter.SupabaseV3RecordAdapter(
+  insertedDuringRead,"account","test-user","account-test",
+).list(), /V3_REMOTE_INVENTORY_CHANGED/,
+"Records inserted between scans must fail closed rather than silently being omitted");
+
+const editedDuringRead = new FakeRpc();
+editedDuringRead.rows.set("one", {id:"one",payload:{...record,id:"one",media:[]},v3_revision:1});
+const originalEditedFrom = editedDuringRead.from.bind(editedDuringRead);
+let editReads = 0;
+editedDuringRead.from = (table) => {
+  editReads += 1;
+  if (editReads === 2) editedDuringRead.rows.set("one", {
+    id:"one",payload:{...record,id:"one",title:"A concurrent V2 edit",media:[]},v3_revision:2,
+  });
+  return originalEditedFrom(table);
+};
+await assert.rejects(new adapter.SupabaseV3RecordAdapter(
+  editedDuringRead,"account","test-user","account-test",
+).list(), /V3_REMOTE_INVENTORY_CHANGED/,
+"Legacy V2 writes during V3 inventory must trigger retry");
+
 const missingRevision=new FakeRpc();
 missingRevision.rows.set(record.id,{id:record.id,payload:record});
 await assert.rejects(new adapter.SupabaseV3RecordAdapter(
@@ -97,4 +135,4 @@ await assert.rejects(new adapter.SupabaseV3RecordAdapter(
 ).list(),/version/i,"Old schema cannot be silently treated as CAS-capable");
 assert.doesNotMatch(adapterCode, /\.upsert\(|\.delete\(/,
   "V3 cloud adapter cannot fall back to an unconditional public write");
-console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, local-byte guard, signed-URL stripping, account privacy, schema fail-close.");
+console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, local-byte guard, signed-URL stripping, account privacy, schema fail-close, concurrent inventory drift detection.");

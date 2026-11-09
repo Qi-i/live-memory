@@ -1,4 +1,5 @@
 import type { EventRecord } from "../../domain";
+import { stableSerialize } from "../../core/sync/revision";
 import {
   RemoteRevisionChanged,
   type CloudRecordAdapter,
@@ -62,16 +63,37 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     this.includeMedia = provider === "personal";
   }
 
+  /**
+   * Offset paging is not a database snapshot: legacy V2 writers can change a
+   * row (or insert another ID) between pages. Read the full inventory twice,
+   * then fail closed if its IDs, server revisions, or contents drifted.
+   * This does not replace CAS at write-time, but prevents applying an
+   * internally inconsistent multi-page response as a deletion/recovery.
+   */
   async list(): Promise<CloudRecordEnvelope[]> {
+    const first = await this.scanAllPages();
+    const verified = await this.scanAllPages();
+    if (first.length !== verified.length) {
+      throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
+    }
+    for (let i = 0; i < first.length; i += 1) {
+      if (first[i].record.id !== verified[i].record.id ||
+          first[i].serverRevision !== verified[i].serverRevision ||
+          stableSerialize(first[i].record) !== stableSerialize(verified[i].record)) {
+        throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
+      }
+    }
+    return verified;
+  }
+
+  private async scanAllPages(): Promise<CloudRecordEnvelope[]> {
     const table = this.provider === "personal" ? "echo_passkey_records" : "echo_text_backups";
-    // The caller must supply its own configured auth / owner-key client.
-    // Existing RLS restricts visible rows. No service_role is used.
-    // PostgREST caps unbounded queries (typically 1,000 rows). A truncated
-    // response must never be mistaken for a deleted record. Key-order paging
-    // makes the result deterministic for each request window.
+    // Existing tenant RLS restricts visible rows. No service-role credentials.
+    // PostgREST caps response lengths: a short list is NOT proof that a missing
+    // record was deleted, so every page must be retrieved before reconciliation.
     const pageSize = 500;
     const all: CloudRecordEnvelope[] = [];
-    const seenIds = new Set<string>();
+    let lastId: string | null = null;
     for (let start = 0; start < 500_000; start += pageSize) {
       const { data, error } = await this.client.from(table)
         .select("id,payload,v3_revision")
@@ -81,10 +103,10 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
       if (!Array.isArray(data)) throw new Error("V3 remote list returned an invalid result");
       for (const item of data) {
         const row = parseRow(item);
-        if (seenIds.has(row.record.id)) {
-          throw new Error("V3 remote listing changed across pages; retry without changing local data");
+        if (lastId !== null && row.record.id <= lastId) {
+          throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud pagination order shifted or repeated an ID");
         }
-        seenIds.add(row.record.id);
+        lastId = row.record.id;
         all.push(row);
       }
       if (data.length < pageSize) return all;
