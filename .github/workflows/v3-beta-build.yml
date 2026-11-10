@@ -8,6 +8,8 @@ on:
       - "src/ui/real/**"
       - "scripts/v3-beta-release-guards.mjs"
       - ".github/workflows/v3-beta-build.yml"
+      - ".github/workflows/v3-beta-publish.yml"
+      - ".github/workflows/v3-preview.yml"
   workflow_dispatch:
 permissions:
   contents: read
