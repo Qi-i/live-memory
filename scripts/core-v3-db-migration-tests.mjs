@@ -153,6 +153,7 @@ assert.match(verifiedCutover,/V3_ACCOUNT_CUTOVER_ARCHIVE_CHANGED/);
 assert.match(verifiedCutover,/V3_ACCOUNT_ACTIVATION_GUARD_REQUIRED/);
 assert.match(verifiedCutover,/hashtextextended\('lm-v3\|account\|'/);
 assert.match(verifiedCutover,/missing_legacy_count/);
+assert.match(verifiedCutover,/lock table public\.live_memory_v3_secure_records in share mode/);
 assert.match(verifiedCutover,/v_approval\.media_bytes_verified/);
 assert.match(verifiedCutover,/v_approval\.personal_sources_verified/);
 assert.match(verifiedCutover,/v_approval\.full_backup_verified/);
