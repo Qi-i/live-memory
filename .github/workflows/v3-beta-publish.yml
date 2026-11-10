@@ -9,6 +9,7 @@ permissions:
   contents: read
   actions: read
   pages: write
+  issues: write
   id-token: write
 
 concurrency:
@@ -49,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           v2_sha="$(git -C v2 rev-parse HEAD)"
-          printf '{"sha":"%s","source":"main","deployment":"v2-unchanged"}\n' "$v2_sha" > v2/dist/build-info.json
+          printf '{"sha":"%s","builtAt":"%s","source":"main","deployment":"v2-unchanged"}\n' "$v2_sha" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > v2/dist/build-info.json
           printf '%s\n' "$v2_sha" > /tmp/v2-source-sha
           sha256sum v2/dist/index.html | cut -d' ' -f1 > /tmp/v2-index-sha
       - name: Test V3 beta without activating a cloud writer
@@ -195,3 +196,29 @@ jobs:
           done
           echo "Live V3 beta SHA verification failed; do not claim deployment" >&2
           exit 1
+
+  report:
+    if: always()
+    needs: [prepare, deploy, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post live beta SHA result to Draft PR 54
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BETA_SHA: ${{ github.sha }}
+          PAGES_ROOT: ${{ needs.deploy.outputs.page_url }}
+          PREPARE: ${{ needs.prepare.result }}
+          DEPLOY: ${{ needs.deploy.result }}
+          VERIFY: ${{ needs.verify.result }}
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY" = "success" ]; then
+            beta_url="${PAGES_ROOT%/}/v3-beta/"
+            body="V3 real-data beta ONLINE VERIFIED: beta SHA $BETA_SHA at $beta_url. Same deployed artifact builds V2 from untouched main and independently verifies both live manifests. This is NOT full V3 release or writer cutover. Actions: $GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID"
+          else
+            body="V3 beta publishing NOT YET VERIFIED: SHA $BETA_SHA; jobs prepare=$PREPARE, deploy=$DEPLOY, verify=$VERIFY. Original V2 main is unchanged. Inspect: $GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID"
+          fi
+          gh issue comment 54 --repo "$REPO" --body "$body"
