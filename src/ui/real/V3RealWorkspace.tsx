@@ -27,6 +27,12 @@ const navigation: Page[] = ["档案", "完整档案", "统计", "城市", "迁�
 const archiveModes: Mode[] = ["海报", "时间线", "列表"];
 
 function backToV2() {
+  if(import.meta.env.VITE_V3_BETA==="1"){
+    // The beta hostname is intentionally a separate origin; it does not
+    // contain the production V2 bundle or the user's old local IndexedDB.
+    window.location.assign("https://qi-i.github.io/live-memory/");
+    return;
+  }
   const url = new URL(window.location.href);
   url.searchParams.delete("v3-real-workspace");
   window.location.assign(url.href);
@@ -534,7 +540,7 @@ export function V3RealWorkspace() {
     demoStatus={false}
     activity={{type:"idle"}}
     account={<div className="v3-real-account">
-      <strong>{access.mode==="account"?"当前账号":"本机独立档案"}</strong>
+      <strong>{import.meta.env.VITE_V3_BETA==="1"?"V3 安全试用 · 独立站点":access.mode==="account"?"当前账号":"本机独立档案"}</strong>
       <span>{canEditLocal?"本机可编辑 · 无云端写入"
         : canEditAccount?"已激活 V3 · 手动安全同步":"账号只读 · V2 仍为写入端"}</span>
       <button type="button" onClick={backToV2}>返回正式 V2</button></div>}
@@ -595,6 +601,10 @@ export function V3RealWorkspace() {
             onEdit={canEdit?startEdit:undefined}/>
         : undefined}
   >
+    {import.meta.env.VITE_V3_BETA==="1" && <aside role="note" className="v3-real-save-notice">
+      此站点是与 V2 分离的 V3 试用入口。原 V2 本机记录不会自动跨域出现；可从 V2 导出备份，再在此处导入。
+      旧账号仍为 V2 写入端时，V3 对该账号只读；不要将试用站误认为已切换的正式版。
+    </aside>}
     {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
       <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>
