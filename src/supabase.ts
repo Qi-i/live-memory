@@ -265,6 +265,17 @@ export async function deriveStorageOwnerKey(settings: AppSettings, password: str
   return deriveStorageOwnerKeyFromSecret(settings, password);
 }
 
+/** The V2 account-linked personal key is PBKDF2(account:<auth.uid()>).
+ * Re-derive it only for a signed-in matching Supabase account. A copied
+ * legacy public media URL does NOT prove account ownership. This browser
+ * preflight is NOT a server-side migration authorization check. */
+export async function deriveAccountLinkedLegacyOwnerKey(settings: AppSettings, accountUserId: string) {
+  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i.test(accountUserId)) {
+    throw new Error("V3_LEGACY_INVALID_AUTH_ID");
+  }
+  return deriveStorageOwnerKeyFromSecret(settings, "account:" + accountUserId.toLowerCase(), "account");
+}
+
 async function deriveStorageOwnerKeyFromSecret(settings: AppSettings, secret: string, identity?: string) {
   const ownerIdentity = identity || validateUsername(settings.account.username);
   const endpoint = settings.supabase.url.trim().replace(/\/+$/, "").toLowerCase();
