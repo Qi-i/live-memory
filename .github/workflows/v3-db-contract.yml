@@ -15,6 +15,7 @@ on:
       - "supabase/migrations/021_v3_private_storage_cutover_gate.sql"
       - "supabase/migrations/022_v3_personal_media_cas_integrity.sql"
       - "supabase/migrations/023_v3_account_session_scoped_cas.sql"
+      - "supabase/migrations/024_v3_authenticated_media_staging.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -76,6 +77,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/023_v3_account_session_scoped_cas.sql
       - name: Reject cross-account cloud writes after session changes
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_account_session_scoped_cas_checks.sql
+      - name: Install authenticated private image staging bucket
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/024_v3_authenticated_media_staging.sql
+      - name: Verify staging allows only authenticated matching account and hashed immutable paths
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_authenticated_media_staging_checks.sql
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
