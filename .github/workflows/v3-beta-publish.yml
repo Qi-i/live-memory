@@ -79,7 +79,7 @@ jobs:
             const html=fs.readFileSync("beta/dist/index.html","utf8");
             if (!html.includes("/live-memory/v3-beta/assets/") ||
                 html.includes("src=\"/live-memory/assets/") ||
-                !fs.existsSync("beta/dist/assets")) {
+                (!fs.existsSync("beta/dist/assets") || !fs.existsSync("beta/dist/beta-sw.js"))) {
               throw Error("V3_BETA_INVALID_PAGES_ASSET_PREFIX");
             }
           '
