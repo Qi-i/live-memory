@@ -78,6 +78,25 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
 
   assertScope() { this.scopeCheck(); }
 
+  /** Bind immutable paths to this record, asset and the actual content hash. */
+  private async privateContentHash(recordId: string, asset: MediaAsset): Promise<string> {
+    this.assertScope();
+    if (!recordId || !asset.id || !asset.storagePath) {
+      throw new Error("V3_MEDIA_FOREIGN_OR_INVALID_PATH");
+    }
+    const [folder, recordHash, assetHash] = await Promise.all([
+      this.privateFolder, sha256(utf8.encode(recordId)), sha256(utf8.encode(asset.id)),
+    ]);
+    this.assertScope();
+    const prefix = folder + "/v3/" + recordHash + "/" + assetHash + "/";
+    if (!asset.storagePath.startsWith(prefix)) {
+      throw new Error("V3_MEDIA_FOREIGN_OR_INVALID_PATH");
+    }
+    const match = /^([a-f0-9]{64})\.(jpg|png|webp|gif|avif)$/.exec(asset.storagePath.slice(prefix.length));
+    if (!match) throw new Error("V3_MEDIA_FOREIGN_OR_INVALID_PATH");
+    return match[1];
+  }
+
   private async classifyPath(path: string): Promise<"private" | "legacy"> {
     this.assertScope();
     const folder = await this.privateFolder;
@@ -108,11 +127,31 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       return this.persistBlob(recordId, asset, legacy.data);
     }
     if (storedKind === "private" && !inlineSource(asset.src)) {
-      if (asset.src) return asset;
-      const signed = await this.client.storage.from(this.bucket).createSignedUrl(asset.storagePath!, 3600);
+      // A stale signed URL, or a hash-shaped path, is not recoverable media.
+      // Verify actual Storage bytes BEFORE the record's metadata CAS.
+      const expected = await this.privateContentHash(recordId, asset);
+      const store = this.client.storage.from(this.bucket);
+      const existing = await store.download(asset.storagePath!);
+      this.assertScope();
+      if (existing.error || !existing.data || existing.data.size < 1 ||
+          existing.data.size > MAX_ASSET ||
+          await sha256(await existing.data.arrayBuffer()) !== expected) {
+        throw new Error("V3_MEDIA_EXISTING_OBJECT_MISMATCH");
+      }
+      this.assertScope();
+      const signed = await store.createSignedUrl(asset.storagePath!, 3600);
       this.assertScope();
       if (signed.error || !signed.data?.signedUrl) throw new Error("V3_MEDIA_SIGNING_FAILED");
-      return { ...asset, src: signed.data.signedUrl, source: "supabase" };
+      if (this.cacheForOffline) {
+        const cached = this.hasOfflineCopy ? await this.hasOfflineCopy(asset) : false;
+        this.assertScope();
+        if (!cached) {
+          await this.cacheForOffline(asset, existing.data);
+          this.assertScope();
+        }
+      }
+      return { ...asset, src: signed.data.signedUrl, source: "supabase",
+        size: existing.data.size };
     }
     // A media item with an external URL but no recoverable Storage path is
     // not portable. Resolve cached browser bytes or fetch CORS-enabled image
@@ -166,16 +205,18 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       upsert: false, contentType: mime, cacheControl: "31536000",
     });
     this.assertScope();
-    if (result.error) {
-      if (!isDuplicateObject(result.error)) throw new Error("V3_MEDIA_STAGE_FAILED");
-      // A prior hash path is safe to reuse only if its real bytes agree.
-      const existing = await store.download(path);
-      this.assertScope();
-      if (existing.error || !existing.data || existing.data.size !== blob.size ||
-          await sha256(await existing.data.arrayBuffer()) !== contentHash) {
-        throw new Error("V3_MEDIA_EXISTING_OBJECT_MISMATCH");
-      }
+    if (result.error && !isDuplicateObject(result.error)) {
+      throw new Error("V3_MEDIA_STAGE_FAILED");
     }
+    // A successful upload is not proof of durable, correct server bytes.
+    // Read back on both first upload and 409 immutable retry before CAS.
+    const existing = await store.download(path);
+    this.assertScope();
+    if (existing.error || !existing.data || existing.data.size !== blob.size ||
+        await sha256(await existing.data.arrayBuffer()) !== contentHash) {
+      throw new Error("V3_MEDIA_EXISTING_OBJECT_MISMATCH");
+    }
+    this.assertScope();
     // Stage bytes into scoped CacheStorage while they are still available.
     // An upload is not acknowledged if the local portable copy cannot persist.
     if (this.cacheForOffline) {
@@ -214,6 +255,7 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
         throw new Error("V3_OFFLINE_MEDIA_HAS_NO_DURABLE_SOURCE");
       }
       const kind = await this.classifyPath(asset.storagePath);
+      const expected = kind === "private" ? await this.privateContentHash(record.id, asset) : null;
       this.assertScope();
       if (this.hasOfflineCopy && await this.hasOfflineCopy(asset)) {
         this.assertScope();
@@ -223,7 +265,11 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       const bucket = kind === "private" ? this.bucket : this.legacyBucket;
       const file = await this.client.storage.from(bucket).download(asset.storagePath);
       this.assertScope();
-      if (file.error || !file.data) throw new Error("V3_OFFLINE_MEDIA_DOWNLOAD_FAILED");
+      if (file.error || !file.data ||
+          (expected && await sha256(await file.data.arrayBuffer()) !== expected)) {
+        throw new Error("V3_OFFLINE_MEDIA_DOWNLOAD_FAILED");
+      }
+      this.assertScope();
       await this.cacheForOffline(asset, file.data);
       this.assertScope();
     }
@@ -240,6 +286,8 @@ export class SupabaseV3MediaTransport implements V3MediaTransport {
       this.assertScope();
       if (!asset.storagePath) { assets.push(asset); continue; }
       const kind = await this.classifyPath(asset.storagePath);
+      if (kind === "private") await this.privateContentHash(record.id, asset);
+      this.assertScope();
       const bucket = kind === "private" ? this.bucket : this.legacyBucket;
       const cacheKey = bucket + ":" + asset.storagePath;
       let url = signed.get(cacheKey);
