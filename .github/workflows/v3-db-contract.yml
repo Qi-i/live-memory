@@ -17,6 +17,7 @@ on:
       - "supabase/migrations/023_v3_account_session_scoped_cas.sql"
       - "supabase/migrations/024_v3_authenticated_media_staging.sql"
       - "supabase/migrations/025_v3_authenticated_full_media_archive.sql"
+      - "supabase/migrations/026_v3_verified_account_cutover_approval.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -86,6 +87,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/025_v3_authenticated_full_media_archive.sql
       - name: Reject cross-user writes, media forgery and stale CAS revisions
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_authenticated_full_media_archive_checks.sql
+      - name: Require independently approved, snapshot-bound full-media cutover
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/026_v3_verified_account_cutover_approval.sql
+      - name: Reject direct mode changes, stale approvals and cross-account activation
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_verified_account_cutover_approval_checks.sql
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
