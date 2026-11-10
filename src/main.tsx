@@ -20,10 +20,17 @@ import "./ui/editorWorkflow.css";
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 const v3Preview = import.meta.env.VITE_V3_PREVIEW === "1"
   && new URLSearchParams(window.location.search).has("v3-preview");
+const migrationLab = import.meta.env.VITE_V3_MIGRATION_LAB === "1";
 const v3RealWorkspace = import.meta.env.VITE_V3_REAL_WORKSPACE === "1"
   && new URLSearchParams(window.location.search).has("v3-real-workspace");
 
-if (v3Preview) {
+if (migrationLab) {
+  // The isolated release-preparation artifact has NO V2 AppRoot fallback.
+  // Only authenticated, explicit preflight/private-staging operations exist.
+  void import("./ui/system/V3MigrationLab").then(({ V3MigrationLab }) => {
+    root.render(<React.StrictMode><AccessGate><V3MigrationLab /></AccessGate></React.StrictMode>);
+  });
+} else if (v3Preview) {
   // Independent design laboratory; intentionally never touches user login,
   // IndexedDB, cloud sync or the production application state.
   void import("./ui/system/V3Preview").then(({ V3Preview }) => {
@@ -51,7 +58,7 @@ if (v3Preview) {
   );
 }
 
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
+if ("serviceWorker" in navigator && import.meta.env.PROD && !migrationLab) {
   window.addEventListener("load", () => {
     const base = import.meta.env.BASE_URL || "./";
     navigator.serviceWorker.register(`${base}sw.js`).catch(() => undefined);
