@@ -119,6 +119,20 @@ from public.live_memory_v3_secure_account_readiness() as ready
 where approve.user_id='11111111-1111-1111-1111-111111111111';
 
 set local role authenticated;
+do $before_final$
+declare state record; approval record;
+begin
+  select * into state from public.live_memory_v3_secure_account_readiness();
+  select * into approval from public.live_memory_v3_cutover_approvals
+  where user_id='11111111-1111-1111-1111-111111111111';
+  raise notice 'Preflight counts legacy=% mirror=% missing=%; digests equal legacy=% mirror=%; caller_has_proof=%',
+    state.legacy_count,state.mirror_count,state.missing_legacy_count,
+    state.legacy_digest=approval.legacy_digest,
+    state.mirror_digest=approval.mirror_digest,
+    approval.full_backup_verified and approval.media_bytes_verified
+      and approval.personal_sources_verified;
+end;
+$before_final$;
 do $final$
 declare blocked boolean:=false;
 begin
