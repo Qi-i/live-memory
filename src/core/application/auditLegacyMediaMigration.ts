@@ -53,8 +53,8 @@ function checkPath(path: string, owner: string): string {
       /[?#\\]/.test(path) || path.startsWith(owner + "/v3/")) {
     throw new Error("V3_LEGACY_MEDIA_FOREIGN_PATH");
   }
-  const extension = path.split(".").at(-1)?.toLowerCase() || "";
-  if (!Object.hasOwn(MIME, extension)) throw new Error("V3_LEGACY_MEDIA_UNSUPPORTED_TYPE");
+  const extension = path.split(".").slice(-1)[0]?.toLowerCase() || "";
+  if (!Object.prototype.hasOwnProperty.call(MIME, extension)) throw new Error("V3_LEGACY_MEDIA_UNSUPPORTED_TYPE");
   return extension;
 }
 function key(id: string, recordId: string): string {
