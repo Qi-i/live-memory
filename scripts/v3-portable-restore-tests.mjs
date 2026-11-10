@@ -42,7 +42,7 @@ const port={
     }
     return {insertedIds,alreadyPresentIds};
   },
-  async list(){return [...records.values()].map(structuredClone);},
+  async list(){return [...records.values()].map(row=>structuredClone(row));},
 };
 const restored=await service.out.restoreVerifiedPortableArchive(backup,port,()=>{});
 assert.deepEqual(restored,{inserted:1,alreadyPresent:0,
