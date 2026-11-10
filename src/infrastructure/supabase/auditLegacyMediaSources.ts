@@ -30,9 +30,19 @@ function fingerprintPaths(rows: readonly string[]): string {
  * opening account + device storage scope; on logout the manifest is discarded.
  * This is only a PRE-MIGRATION audit: backend must independently verify the
  * authenticated account owner on any later rekey/copy operation. */
+interface VerifiedLegacyAuditContext {
+  manifest: LegacyMediaMigrationManifest;
+  /** Ephemeral private inputs; the downloaded report must not contain these. */
+  objectNames: readonly string[];
+  userId: string;
+  personal: ReturnType<typeof makeSupabaseClient>;
+  account: ReturnType<typeof getAccountClient>;
+  assertScope(): void;
+}
 export async function auditAuthenticatedLegacyMedia(
   settings: AppSettings,
   onScopeCheck?: () => void,
+  onVerified?: (context: VerifiedLegacyAuditContext) => Promise<void>,
 ): Promise<LegacyMediaMigrationManifest> {
   const ownerKey = settings.supabase.ownerKey?.trim().toLowerCase() || "";
   if (!/^[a-f0-9]{64}$/.test(ownerKey) || settings.supabase.mediaBucket !== BUCKET) {
@@ -144,6 +154,30 @@ export async function auditAuthenticatedLegacyMedia(
   verifyScope();
   if(finalUser.error||finalUser.data.user?.id.toLowerCase()!==userId) {
     throw Error("V3_LEGACY_ACCOUNT_CHANGED");
+  }
+  if (onVerified) {
+    // Copies to an additional private, auth-bound staging bucket are allowed
+    // ONLY after a complete two-pass, account-bound read-only audit. They do
+    // not update V2 records, old images or the V3 writer marker.
+    await onVerified({
+      manifest:audit,objectNames:objectsAfter,userId,personal,account,
+      assertScope:verifyScope,
+    });
+    verifyScope();
+    const [cloudFinal,linkedFinal,objectsFinal]=await Promise.all([
+      runtime.readPersonalCloudForPortableBackup(),loadRows(),listObjects(),
+    ]);
+    verifyScope();
+    verifyBackupCloudUnchanged(cloudBefore,cloudFinal);
+    if(fingerprintRows(linkedBefore)!==fingerprintRows(linkedFinal) ||
+       fingerprintPaths(objectsBefore)!==fingerprintPaths(objectsFinal)) {
+      throw Error("V3_LEGACY_MEDIA_INVENTORY_CHANGED");
+    }
+    const checkedUser=await account.auth.getUser();
+    verifyScope();
+    if(checkedUser.error || checkedUser.data.user?.id.toLowerCase()!==userId){
+      throw Error("V3_LEGACY_ACCOUNT_CHANGED");
+    }
   }
   return audit;
 }
