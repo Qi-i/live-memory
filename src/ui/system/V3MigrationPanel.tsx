@@ -197,6 +197,54 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     }
   }
 
+  /** User-triggered read-only source-by-source migration proof. The report
+   * contains only hashes and blinded future paths, never the legacy ownerKey. */
+  async function exportLegacyMediaAudit() {
+    if (backupInFlight.current !== null || pending || !personalConnected) return;
+    const job=++backupJobCounter.current;
+    backupInFlight.current=job;
+    const scope=currentStorageScope(),generation=scopeGeneration.current;
+    const assertScope=()=>{
+      if(scopeGeneration.current!==generation||currentStorageScope()!==scope)
+        throw Error("V3_LEGACY_ACCOUNT_CHANGED");
+    };
+    setBackupBusy(true);
+    setBackupStatus("");
+    try{
+      const [{auditAuthenticatedLegacyMedia},{downloadBlob}] = await Promise.all([
+        import("../../infrastructure/supabase/auditLegacyMediaSources"),
+        import("../../media"),
+      ]);
+      assertScope();
+      const result=await auditAuthenticatedLegacyMedia(settings,assertScope);
+      assertScope();
+      // Rejected paths, missing bytes and concurrent changes prevent export.
+      // No paths beginning with the old ownerKey enter this portable manifest.
+      downloadBlob(JSON.stringify(result),
+        "live-memory-legacy-media-audit-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      setBackupStatus("历史媒体审计已通过：校验 "+result.objects+
+        " 个真实对象、"+result.references+" 条引用，原图共 "+
+        (result.totalBytes/(1024*1024)).toFixed(1)+
+        " MiB。已下载不含原始鉴权密钥的哈希校验清单；尚未迁移或删除任何对象。");
+    }catch(error){
+      if(scopeGeneration.current===generation&&currentStorageScope()===scope){
+        const code=error instanceof Error?error.message:"";
+        setBackupStatus(code.includes("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT")
+          ? "无法证明此旧个人云与当前登录账号绑定。为防止泄露密钥被冒领，已拒绝自动迁移审计。"
+          : code.includes("V3_LEGACY_MEDIA_INVENTORY_CHANGED") ||
+            code.includes("V3_COMPLETE_BACKUP_CLOUD_CHANGED")
+            ? "审计期间云端记录或图片发生变化；已取消验证，所有数据保持原状。"
+            : "历史媒体审计未通过：可能有缺失原图、无引用对象或访问失败。没有修改云端数据。");
+      }
+    }finally{
+      if(backupInFlight.current===job){
+        backupInFlight.current=null;
+        if(scopeGeneration.current===generation&&currentStorageScope()===scope)setBackupBusy(false);
+      }
+    }
+  }
+
   return (
     <section className="settings-module v3-migration-panel" aria-label="V3 数据迁移诊断">
       <header className="v3-migration-head">
@@ -296,6 +344,11 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
             ? "导出本机＋个人云全量可验证备份"
             : "导出仅本机备份（未连接个人云）"}
         </button>
+        {personalConnected && <button className="button ghost" type="button"
+          disabled={backupBusy||pending!==null}
+          onClick={()=>void exportLegacyMediaAudit()}>
+          {backupBusy?"正在检查云端原图…":"生成旧公开媒体逐对象迁移校验清单"}
+        </button>}
         <span>仅下载到本机，不上传任何数据；单文件图片不超过 32 MiB、全部图片不超过 256 MiB。</span>
         {backupStatus && <p role="status">{backupStatus}</p>}
       </div>
