@@ -140,4 +140,24 @@ assert.match(fullMediaArchive, /echo-v3-media-staging/);
 assert.match(fullMediaArchive, /revoke all on function public\.live_memory_v3_cas_secure_account/);
 assert.doesNotMatch(fullMediaArchive, /security definer|for delete|grant\s+delete|delete from storage\.objects|drop table|truncate/i,
   "The new full-media private mirror must never bypass tenant RLS or delete historical data");
+const verifiedCutover = await readFile(
+  new URL("../supabase/migrations/026_v3_verified_account_cutover_approval.sql",import.meta.url),"utf8",
+);
+assert.match(verifiedCutover,/create table if not exists public\.live_memory_v3_cutover_approvals/);
+assert.match(verifiedCutover,/alter table public\.live_memory_v3_cutover_approvals enable row level security/);
+assert.match(verifiedCutover,/grant select on public\.live_memory_v3_cutover_approvals to authenticated/);
+assert.doesNotMatch(verifiedCutover,/grant insert on public\.live_memory_v3_cutover_approvals|grant update on public\.live_memory_v3_cutover_approvals/i);
+assert.match(verifiedCutover,/live_memory_v3_secure_account_readiness/);
+assert.match(verifiedCutover,/V3_ACCOUNT_CUTOVER_NOT_APPROVED/);
+assert.match(verifiedCutover,/V3_ACCOUNT_CUTOVER_ARCHIVE_CHANGED/);
+assert.match(verifiedCutover,/V3_ACCOUNT_ACTIVATION_GUARD_REQUIRED/);
+assert.match(verifiedCutover,/hashtextextended\('lm-v3\|account\|'/);
+assert.match(verifiedCutover,/missing_legacy_count/);
+assert.match(verifiedCutover,/lock table public\.live_memory_v3_secure_records in share mode/);
+assert.match(verifiedCutover,/v_approval\.media_bytes_verified/);
+assert.match(verifiedCutover,/v_approval\.personal_sources_verified/);
+assert.match(verifiedCutover,/v_approval\.full_backup_verified/);
+assert.match(verifiedCutover,/security invoker/);
+assert.doesNotMatch(verifiedCutover,/\bsecurity definer\b|drop table|delete from storage\.objects|update public\.echo_/i,
+  "Cutover approval must never bypass RLS or modify legacy records");
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
