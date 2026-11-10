@@ -41,5 +41,11 @@ for (const spoofed of ["safe\u202e.jpg", "safe\u2066.jpg"]) {
  assert.throws(() => audit({objects:[{bucket:"echo-media",path:spoofed}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
  assert.throws(() => audit({objects,references:[{bucket:"echo-media",path:"safe.jpg",source:spoofed}],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
 }
+for (const path of [" ", " a.jpg", "a.jpg ", "folder/  "]) {
+ assert.throws(() => audit({objects:[{bucket:"echo-media",path}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
+}
+for (const sourceName of [" cloud", "cloud ", "  "]) {
+ assert.throws(() => audit({objects,references:[{bucket:"echo-media",path:"valid.jpg",source:sourceName}],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
+}
 assert.doesNotMatch(source,/\.remove\(|\.delete\(|\.update\(|\.upload\(/,"Audit must remain read-only");
 console.log("V3 read-only media audit tests passed");
