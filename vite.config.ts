@@ -6,8 +6,24 @@ import { defineConfig, loadEnv } from "vite";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
   const standalonePreview = env.VITE_V3_STANDALONE === "1";
+  const isolatedRealBeta = env.VITE_V3_BETA === "1";
   return {
-    base: standalonePreview ? "/live-memory/v3-preview/" : "/live-memory/",
+    base: standalonePreview ? "/live-memory/v3-preview/" : isolatedRealBeta ? "/" : "/live-memory/",
+    plugins: isolatedRealBeta ? [{
+      name: "live-memory-v3-beta-build-info",
+      generateBundle() {
+        this.emitFile({
+          type: "asset",
+          fileName: "v3-build-info.json",
+          source: JSON.stringify({
+            sha: process.env.VERCEL_GIT_COMMIT_SHA || process.env.GITHUB_SHA || "unknown",
+            version: "v3-isolated-beta",
+            release: false,
+            cloudWriterCutover: false,
+          }),
+        });
+      },
+    }] : [],
     build: {
       sourcemap: false,
       ...(standalonePreview ? { rollupOptions: { input: "v3-preview.html" } } : {}),

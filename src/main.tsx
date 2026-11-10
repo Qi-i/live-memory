@@ -20,8 +20,13 @@ import "./ui/editorWorkflow.css";
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
 const v3Preview = import.meta.env.VITE_V3_PREVIEW === "1"
   && new URLSearchParams(window.location.search).has("v3-preview");
-const v3RealWorkspace = import.meta.env.VITE_V3_REAL_WORKSPACE === "1"
-  && new URLSearchParams(window.location.search).has("v3-real-workspace");
+// The isolated beta is intentionally a separate origin and build. It mounts
+// ONLY the scoped V3 application, never V2's automatic writer/timers.
+const v3Beta = import.meta.env.VITE_V3_BETA === "1";
+const v3RealWorkspace = v3Beta || (
+  import.meta.env.VITE_V3_REAL_WORKSPACE === "1"
+  && new URLSearchParams(window.location.search).has("v3-real-workspace")
+);
 
 if (v3Preview) {
   // Independent design laboratory; intentionally never touches user login,
@@ -51,7 +56,7 @@ if (v3Preview) {
   );
 }
 
-if ("serviceWorker" in navigator && import.meta.env.PROD) {
+if ("serviceWorker" in navigator && import.meta.env.PROD && !v3Beta) {
   window.addEventListener("load", () => {
     const base = import.meta.env.BASE_URL || "./";
     navigator.serviceWorker.register(`${base}sw.js`).catch(() => undefined);

@@ -27,6 +27,12 @@ const navigation: Page[] = ["档案", "完整档案", "统计", "城市", "迁�
 const archiveModes: Mode[] = ["海报", "时间线", "列表"];
 
 function backToV2() {
+  // Never mount V2 and its automatic writer in an isolated beta origin.
+  // Navigate back to the unmodified official production deployment instead.
+  if (import.meta.env.VITE_V3_BETA === "1") {
+    window.location.assign("https://qi-i.github.io/live-memory/");
+    return;
+  }
   const url = new URL(window.location.href);
   url.searchParams.delete("v3-real-workspace");
   window.location.assign(url.href);
