@@ -8,6 +8,10 @@ import {
   type LegacyMediaReference, type LegacyMediaMigrationManifest,
 } from "../../core/application/auditLegacyMediaMigration";
 import { createV3SyncRuntime } from "../createV3SyncRuntime";
+import {
+  stageLegacyMediaCopies,
+  type LegacyMediaStagingResult,
+} from "../../core/application/stageLegacyMediaCopies";
 
 const PAGE = 100;
 const MAX_OBJECTS = 2000;
@@ -180,4 +184,50 @@ export async function auditAuthenticatedLegacyMedia(
     }
   }
   return audit;
+}
+
+/** Explicit action: copy old images to a NEW private, per-auth-user bucket.
+ * Every copy is byte-verified. V2 originals and writer markers are untouched.
+ * This is preparatory staging, NOT a credential rotation or final cutover. */
+export async function stageAuthenticatedLegacyMedia(
+  settings: AppSettings,
+  onScopeCheck?: () => void,
+): Promise<LegacyMediaStagingResult> {
+  let result: LegacyMediaStagingResult | null = null;
+  await auditAuthenticatedLegacyMedia(settings,onScopeCheck,async(ctx)=>{
+    const staging="echo-v3-media-staging";
+    result=await stageLegacyMediaCopies(ctx.manifest,{
+      accountUserId:ctx.userId,
+      sourcePaths:ctx.objectNames,
+      assertScope:ctx.assertScope,
+      downloadOriginal:async(path)=>{
+        ctx.assertScope();
+        const {data,error}=await ctx.personal.storage.from(BUCKET).download(path);
+        ctx.assertScope();
+        if(error||!data)throw Error("V3_STAGING_SOURCE_DOWNLOAD_FAILED");
+        return data;
+      },
+      uploadPrivate:async(path,blob,mimeType)=>{
+        ctx.assertScope();
+        const {error}=await ctx.account.storage.from(staging).upload(path,blob,{
+          upsert:false,contentType:mimeType,cacheControl:"31536000",
+        });
+        ctx.assertScope();
+        if(!error)return "uploaded";
+        if(String(error.statusCode)==="409" ||
+           error.name==="AssetAlreadyExists" ||
+           /already exists|duplicate/i.test(error.message||""))return "exists";
+        throw Error("V3_STAGING_PRIVATE_UPLOAD_FAILED");
+      },
+      downloadPrivate:async(path)=>{
+        ctx.assertScope();
+        const {data,error}=await ctx.account.storage.from(staging).download(path);
+        ctx.assertScope();
+        if(error||!data)throw Error("V3_STAGING_PRIVATE_DOWNLOAD_FAILED");
+        return data;
+      },
+    });
+  });
+  if(!result)throw Error("V3_STAGING_UNVERIFIED");
+  return result;
 }
