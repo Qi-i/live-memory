@@ -152,6 +152,25 @@ const downloadCount=server.downloadCalls.length;
 await cloud.prepareIncoming(hydrated[0].record);
 assert.equal(server.downloadCalls.length,downloadCount,
   "A fully verified offline poster must never be downloaded again during subsequent sync");
+
+const reused=await media.stage(first.id,{
+  ...hydrated[0].record.media[0],src:"https://expired.invalid/unsafe-token",
+});
+assert.equal(reused.storagePath,path);
+assert.ok(reused.src.startsWith("https://signed.example/"),
+  "Reuse must replace expired image tokens with fresh private URLs");
+const storedOriginal=server.objects.get(path);
+server.objects.delete(path);
+await assert.rejects(media.stage(first.id,reused),/V3_MEDIA_EXISTING_OBJECT_MISMATCH/,
+  "Missing private originals cannot be acknowledged during unrelated record edits");
+server.objects.set(path,new Blob(["CORRUPTED"],{type:"image/png"}));
+await assert.rejects(media.stage(first.id,reused),/V3_MEDIA_EXISTING_OBJECT_MISMATCH/,
+  "Hash-shaped paths cannot hide corrupted original media bytes");
+server.objects.set(path,storedOriginal);
+const forged={...reused,storagePath:mediaFolder+"/v3/invalid/not-an-asset.png"};
+await assert.rejects(media.stage(first.id,forged),/V3_MEDIA_FOREIGN_OR_INVALID_PATH/);
+await assert.rejects(media.hydrate({...first,media:[forged]}),/V3_MEDIA_FOREIGN_OR_INVALID_PATH/);
+
 cachedOffline.clear();
 server.failDownload=true;
 await assert.rejects(cloud.prepareIncoming(hydrated[0].record),/V3_OFFLINE_MEDIA_DOWNLOAD_FAILED/);
