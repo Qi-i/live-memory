@@ -23,6 +23,13 @@ for(const contract of [
   /writerMode\(\)!=="v3"/,
   /new IndexedDbRecordRepository\(actualScope\)/,
   /saveRecordDraft\(/,
+  /exportVerifiedLocalBackup\(/,
+  /createPortableBackup\(original/,
+  /verifyPortableBackupDocument\(archive\)/,
+  /V3_BACKUP_LOCAL_CHANGED/,
+  /导出可恢复本机备份/,
+  /本机可恢复备份/,
+
   /deleteCandidate[\s\S]*<ConfirmDialog/,
 ]) assert.match(workspace,contract);
 assert.match(archive,/function AmapFootprintMap\(/);
