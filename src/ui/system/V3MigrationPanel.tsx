@@ -41,6 +41,13 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   const backupJobCounter = useRef(0);
   const [backupBusy, setBackupBusy] = useState(false);
   const [backupStatus, setBackupStatus] = useState("");
+  const [mirrorFile,setMirrorFile]=useState<File|null>(null);
+  const [mirrorPreview,setMirrorPreview]=useState<{
+    scope:string;filename:string;total:number;assets:number;bytes:number;
+    create:number;already:number;
+  }|null>(null);
+  const [mirrorStatus,setMirrorStatus]=useState("");
+  const [mirrorBusy,setMirrorBusy]=useState(false);
   useEffect(() => {
     // Never display results obtained for an earlier account/cloud configuration.
     scopeGeneration.current += 1;
@@ -50,6 +57,10 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     setPending(null);
     setError("");
     setBackupStatus("");
+    setMirrorFile(null);
+    setMirrorPreview(null);
+    setMirrorStatus("");
+    setMirrorBusy(false);
     return () => { scopeGeneration.current += 1; };
   }, [settings.supabase.url, settings.supabase.ownerKey]);
 
@@ -284,6 +295,70 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     }
   }
 
+  /** Two user actions: preview a fully verified portable file, then copy
+   * into a NEW JWT-protected full-media mirror. Legacy V2 is unchanged. */
+  async function runMirrorImport(action:"inspect"|"copy") {
+    const file=mirrorFile;
+    if(!file||backupInFlight.current!==null||pending!==null)return;
+    const scope=currentStorageScope(),generation=scopeGeneration.current;
+    const check=()=>{
+      if(currentStorageScope()!==scope||scopeGeneration.current!==generation)
+        throw Error("V3_MIRROR_ACCOUNT_CHANGED");
+    };
+    if(action==="copy"&&(!mirrorPreview||mirrorPreview.scope!==scope||
+        mirrorPreview.filename!==file.name))return;
+    const job=++backupJobCounter.current;
+    backupInFlight.current=job;
+    setMirrorBusy(true);
+    setMirrorStatus("");
+    try{
+      if(file.size>400*1024*1024)throw Error("V3_MIRROR_BACKUP_TOO_LARGE");
+      const parsed=JSON.parse(await file.text());
+      check();
+      const {inspectSecureArchiveMirror,importSecureArchiveMirror}=
+        await import("../../infrastructure/supabase/importSecureArchiveMirror");
+      check();
+      if(action==="inspect"){
+        const review=await inspectSecureArchiveMirror(parsed);
+        check();
+        setMirrorPreview({
+          scope,filename:file.name,total:review.records,assets:review.assets,
+          bytes:review.bytes,create:review.toCreate.length,
+          already:review.alreadyPresent,
+        });
+        setMirrorStatus("已核验原图字节与现有私有档案：总记录 "+
+          review.records+" 条，其中新建 "+review.toCreate.length+
+          " 条、已存在且完全一致 "+review.alreadyPresent+
+          " 条。再次点击确认后，仅复制到新的私有镜像，不会修改旧 V2 数据。");
+      }else{
+        const result=await importSecureArchiveMirror(parsed);
+        check();
+        setMirrorPreview(null);
+        setMirrorFile(null);
+        setMirrorStatus("私有档案镜像复制完成：新建 "+result.created+
+          " 条，已存在且一致 "+result.alreadyPresent+
+          " 条，经过源文件与云端回读核验的图片 "+result.mediaVerified+
+          " 个。V2 记录与旧图片仍保留，尚未切换写入。");
+      }
+    }catch(failure){
+      if(currentStorageScope()===scope&&scopeGeneration.current===generation){
+        const reason=failure instanceof Error?failure.message:"";
+        setMirrorPreview(null);
+        setMirrorStatus(reason.includes("EXISTING_RECORD_CONFLICT")||
+          reason.includes("CONCURRENT_CONFLICT")
+          ? "镜像中有相同 ID 但内容不同的档案，已停止复制；绝不自动覆盖任何一侧。"
+          : reason.includes("MIRROR_ACCOUNT")?"登录账号或本机作用域已变化，本次操作中止。"
+          : "未能完成私有档案镜像核验/复制：文件、原图、网络或云端版本可能不一致。已复制的正确副本可安全重试；V2 原件不变。");
+      }
+    }finally{
+      if(backupInFlight.current===job){
+        backupInFlight.current=null;
+        if(currentStorageScope()===scope&&scopeGeneration.current===generation)
+          setMirrorBusy(false);
+      }
+    }
+  }
+
   return (
     <section className="settings-module v3-migration-panel" aria-label="V3 数据迁移诊断">
       <header className="v3-migration-head">
@@ -395,6 +470,34 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         </button>}
         <span>备份与审计只读；私有暂存按钮仅新增独立加密访问的图片副本，不修改或删除旧 V2 数据。单张图片上限 32 MiB，总量 256 MiB。</span>
         {backupStatus && <p role="status">{backupStatus}</p>}
+      </div>
+      <div className="v3-migration-portable" role="region" aria-label="账号私有完整档案镜像导入">
+        <strong>私有完整档案镜像 · 迁移预演</strong>
+        <p>选择之前导出的、包含全部原图的可验证备份。先检查图片哈希及账号云端冲突，再手动确认复制。
+        数据只写入新建的账号私有镜像表和私有图片空间，不修改旧版档案或启动新同步。</p>
+        <input type="file" accept=".json,application/json"
+          aria-label="选择已验证的完整档案备份"
+          disabled={mirrorBusy||backupBusy||pending!==null}
+          onChange={event=>{
+            const chosen=event.currentTarget.files?.[0]||null;
+            setMirrorFile(chosen);setMirrorPreview(null);setMirrorStatus("");
+          }}/>
+        <button className="button ghost" type="button"
+          disabled={!mirrorFile||mirrorBusy||backupBusy||pending!==null}
+          onClick={()=>void runMirrorImport("inspect")}>
+          {mirrorBusy?"校验备份中…":"检查图片与私有档案差异（不写入）"}
+        </button>
+        {mirrorPreview && mirrorPreview.scope===currentStorageScope() && (
+          <div className="v3-migration-result">
+            <p>记录 {mirrorPreview.total} 条 · 图片 {mirrorPreview.assets} 个 ·
+              新建 {mirrorPreview.create} 条 · 已存在 {mirrorPreview.already} 条</p>
+            <button className="button ghost" type="button" disabled={mirrorBusy||backupBusy||pending!==null}
+              onClick={()=>void runMirrorImport("copy")}>
+              确认复制到账号私有镜像（不替换 V2）
+            </button>
+          </div>
+        )}
+        {mirrorStatus && <p role="status">{mirrorStatus}</p>}
       </div>
       {error && <p className="v3-migration-error" role="alert">{error}</p>}
       <p className="v3-migration-notice">
