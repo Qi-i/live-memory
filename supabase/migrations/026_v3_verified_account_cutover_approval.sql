@@ -93,6 +93,13 @@ begin
     hashtextextended('lm-v3|account|'||v_user::text,0)
   );
 
+  -- Secure-account CAS uses per-record locks, not the old V2 owner lock.
+  -- A concurrent mirror INSERT/UPDATE could otherwise land after the
+  -- approval digest was read but before the writer marker was created.
+  -- SHARE conflicts with their ROW EXCLUSIVE DML locks until commit.
+  -- This is a rare promotion-only lock; it changes no archive contents.
+  lock table public.live_memory_v3_secure_records in share mode;
+
   select * into v_state
   from public.live_memory_v3_secure_account_readiness();
   select * into v_approval
