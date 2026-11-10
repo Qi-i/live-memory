@@ -1,9 +1,9 @@
 name: Build V3 standalone preview
 
 on:
-  push:
-    branches:
-      - refactor/core-v3-architecture-20261108
+  # The V3 branch now publishes a composite, SHA-checked V2 + V3 beta.
+  # Keep the demo available by manual dispatch, not by triggering a
+  # competing V2-only GitHub Pages deployment on every V3 commit.
   pull_request:
     branches:
       - refactor/core-v3-architecture-20261108

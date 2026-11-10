@@ -1,0 +1,71 @@
+name: Validate isolated V3 real-data beta
+on:
+  pull_request:
+    branches: [refactor/core-v3-architecture-20261108]
+    paths:
+      - "src/main.tsx"
+      - "vite.config.ts"
+      - "src/ui/real/**"
+      - "scripts/v3-beta-release-guards.mjs"
+      - ".github/workflows/v3-beta-build.yml"
+      - ".github/workflows/v3-beta-publish.yml"
+      - ".github/workflows/v3-preview.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  real-beta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/v3-beta-release-guards.mjs
+      - name: Build isolated root with real V3 entry
+        env:
+          VITE_V3_BETA: "1"
+          VITE_V3_REAL_WORKSPACE: "1"
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+      - name: Confirm beta root and assets are separate from V2
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const html=fs.readFileSync("dist/index.html","utf8");
+            if(!html.includes("/assets/")||html.includes("/live-memory/assets/"))
+              throw Error("V3_BETA_WRONG_ASSET_BASE");
+            if(!fs.existsSync("dist/assets"))
+              throw Error("V3_BETA_ASSETS_MISSING");
+          '
+      - name: Install browser
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Run isolated beta
+        env:
+          VITE_V3_BETA: "1"
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/v3-beta-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/v3-beta-preview.log
+          exit 1
+      - name: Browser verify real device import, backup restore and sharing
+        env:
+          V3_REAL_AUDIT_URL: http://127.0.0.1:4173/
+        run: node scripts/v3-real-browser-smoke.mjs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: v3-beta-browser-failure
+          path: visual-artifacts/v3-real/
+          retention-days: 7
