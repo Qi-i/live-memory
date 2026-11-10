@@ -6,8 +6,10 @@ import { defineConfig, loadEnv } from "vite";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
   const standalonePreview = env.VITE_V3_STANDALONE === "1";
+  const migrationLab = env.VITE_V3_MIGRATION_LAB === "1";
   return {
-    base: standalonePreview ? "/live-memory/v3-preview/" : "/live-memory/",
+    base: standalonePreview ? "/live-memory/v3-preview/" :
+      migrationLab ? "/live-memory/v3-migration/" : "/live-memory/",
     build: {
       sourcemap: false,
       ...(standalonePreview ? { rollupOptions: { input: "v3-preview.html" } } : {}),
