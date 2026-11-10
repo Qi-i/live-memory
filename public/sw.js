@@ -27,6 +27,8 @@ self.addEventListener("fetch", (event) => {
   // V2 service worker cache or serve stale prototype HTML and assets.
   const previewPath = new URL("v3-preview/", self.registration.scope).pathname;
   if (sameOrigin && url.pathname.startsWith(previewPath)) return;
+  const migrationPath = new URL("v3-migration/", self.registration.scope).pathname;
+  if (sameOrigin && url.pathname.startsWith(migrationPath)) return;
 
   if (request.mode === "navigate") {
     event.respondWith(networkFirst(request));
