@@ -245,6 +245,45 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     }
   }
 
+  async function stageLegacyMedia() {
+    if(backupInFlight.current!==null||pending||!personalConnected)return;
+    const job=++backupJobCounter.current;
+    backupInFlight.current=job;
+    const scope=currentStorageScope(),generation=scopeGeneration.current;
+    const check=()=>{
+      if(currentStorageScope()!==scope||scopeGeneration.current!==generation)
+        throw Error("V3_LEGACY_ACCOUNT_CHANGED");
+    };
+    setBackupBusy(true);
+    setBackupStatus("");
+    try{
+      const {stageAuthenticatedLegacyMedia}=await import(
+        "../../infrastructure/supabase/auditLegacyMediaSources");
+      check();
+      const result=await stageAuthenticatedLegacyMedia(settings,check);
+      check();
+      setBackupStatus("已复制并逐张回读核验：旧原图 "+
+        result.objectsVerified+" 个、私有暂存副本 "+result.copiesVerified+
+        " 个，原文件总量 "+(result.bytesVerified/(1024*1024)).toFixed(1)+
+        " MiB。原有 V2 图片、云记录和登录凭据全部保留；尚未进行正式切换。");
+    }catch(error){
+      if(currentStorageScope()===scope&&scopeGeneration.current===generation){
+        const reason=error instanceof Error?error.message:"";
+        setBackupStatus(reason.includes("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT")
+          ? "未复制：当前登录账号未能证明旧个人云归属，禁止借助泄露的旧媒体路径冒领。"
+          : reason.includes("V3_LEGACY_MEDIA_INVENTORY_CHANGED")||
+            reason.includes("V3_COMPLETE_BACKUP_CLOUD_CHANGED")
+            ? "暂存未获完整验收：旧云数据在复制期间发生变化。已有的私有暂存副本不会删除；可重新校验。"
+            : "暂存未完成：网络、权限或图片字节校验失败。旧 V2 原图和档案完全保留；安全重试不会覆盖已有副本。");
+      }
+    }finally{
+      if(backupInFlight.current===job){
+        backupInFlight.current=null;
+        if(currentStorageScope()===scope&&scopeGeneration.current===generation)setBackupBusy(false);
+      }
+    }
+  }
+
   return (
     <section className="settings-module v3-migration-panel" aria-label="V3 数据迁移诊断">
       <header className="v3-migration-head">
@@ -349,13 +388,18 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           onClick={()=>void exportLegacyMediaAudit()}>
           {backupBusy?"正在检查云端原图…":"生成旧公开媒体逐对象迁移校验清单"}
         </button>}
-        <span>仅下载到本机，不上传任何数据；单文件图片不超过 32 MiB、全部图片不超过 256 MiB。</span>
+        {personalConnected && <button className="button ghost" type="button"
+          disabled={backupBusy||pending!==null}
+          onClick={()=>void stageLegacyMedia()}>
+          {backupBusy?"正在核验或复制…":"将旧原图无损复制到账号私有暂存区"}
+        </button>}
+        <span>备份与审计只读；私有暂存按钮仅新增独立加密访问的图片副本，不修改或删除旧 V2 数据。单张图片上限 32 MiB，总量 256 MiB。</span>
         {backupStatus && <p role="status">{backupStatus}</p>}
       </div>
       {error && <p className="v3-migration-error" role="alert">{error}</p>}
       <p className="v3-migration-notice">
         正式切换前仍须核验完整 JSON 与私有图片备份、解决历史分歧，并通过双设备并发测试。
-        当前页面不提供任何 V3 云端写入操作，原 V2 同步继续运行。
+        本页面不切换 V3 写入模式、不修改现有 V2 档案；独立私有暂存区仅存放有校验的原图副本，原 V2 同步继续运行。
       </p>
     </section>
   );
