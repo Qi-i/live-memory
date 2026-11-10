@@ -137,11 +137,18 @@ try {
     // Real UI path: locally import an original poster through the existing
     // multi-source import drawer. No cloud writer or legacy V2 timers run.
     await page.getByRole("button",{name:"批量导入",exact:true}).click();
-    const importer=page.getByRole("dialog",{name:"批量添加"});
+    const importer=page.locator('.import-drawer-v2[role="dialog"]');
     await importer.waitFor({state:"visible"});
-    const pixel=Buffer.from(
-      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVQIHWP4z8DwHwAFgAI/ScL/nwAAAABJRU5ErkJggg==",
-      "base64");
+    // Browser-generated PNG guarantees real decodable original image bytes.
+    const encoded=await page.evaluate(()=>{
+      const canvas=document.createElement("canvas");
+      canvas.width=4;canvas.height=4;
+      const ctx=canvas.getContext("2d");
+      if(!ctx)throw Error("Canvas API unavailable");
+      ctx.fillStyle="#7f5a9c";ctx.fillRect(0,0,4,4);
+      return canvas.toDataURL("image/png");
+    });
+    const pixel=Buffer.from(encoded.split(",")[1],"base64");
     await importer.locator('label:has-text("海报导入") input[type="file"]').setInputFiles({
       name:"v3-import-browser.png",mimeType:"image/png",buffer:pixel,
     });
