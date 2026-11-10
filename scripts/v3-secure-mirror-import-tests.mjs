@@ -22,6 +22,7 @@ const planMod=await load("../src/core/application/planPrivateMirrorImport.ts",{
 const importer=await load("../src/core/application/importPortableBackupToSecureMirror.ts",{
   "./planPrivateMirrorImport":planMod,"../sync/revision":revision,
 });
+const approvals=await load("../src/core/application/verifyApprovedMirrorCopy.ts");
 const uid="11111111-1111-1111-1111-111111111111";
 const bytes=Buffer.from("SYNTHETIC POSTER, NOT ANY USER MEDIA");
 const digest=createHash("sha256").update(bytes).digest("hex");
@@ -59,6 +60,21 @@ assert.match(purePlan.toCreate[0].media[0].storagePath,
   /^11111111-1111-1111-1111-111111111111\/v3\/[a-f0-9]{64}\/[a-f0-9]{64}\/[a-f0-9]{64}\.png$/);
 assert.equal(purePlan.toCreate[0].media[0].storagePath.split("/").at(-1),
   digest+".png");
+
+const reviewedFile=createHash("sha256").update(JSON.stringify(doc)).digest("hex");
+const approved=approvals.mirrorApprovalFingerprint(reviewedFile,purePlan);
+assert.equal(approved,approvals.mirrorApprovalFingerprint(reviewedFile,purePlan));
+assert.doesNotThrow(()=>approvals.verifyMirrorApproval(approved,approved));
+const changedBytes=createHash("sha256").update("DIFFERENT FILE SAME NAME").digest("hex");
+assert.throws(()=>approvals.verifyMirrorApproval(
+  approved,approvals.mirrorApprovalFingerprint(changedBytes,purePlan)),
+  /APPROVED_FILE_OR_REMOTE_PLAN_CHANGED/);
+assert.throws(()=>approvals.verifyMirrorApproval(
+  approved,approvals.mirrorApprovalFingerprint(reviewedFile,{
+    ...purePlan,alreadyPresent:1,toCreate:purePlan.toCreate.slice(0,1),
+  })),/APPROVED_FILE_OR_REMOTE_PLAN_CHANGED/);
+assert.throws(()=>approvals.mirrorApprovalFingerprint("insecure",purePlan),/APPROVAL_INVALID/);
+
 
 let account=uid,stageCalls=0,writeCalls=0,readCalls=0;
 const remote=new Map();
@@ -165,5 +181,9 @@ assert.doesNotMatch(infra,/echo_text_backups|echo_passkey_records|\.remove\(|\.d
 assert.match(ui,/runMirrorImport\("inspect"\)/);
 assert.match(ui,/runMirrorImport\("copy"\)/);
 assert.match(ui,/确认复制到账号私有镜像（不替换 V2）/);
+assert.match(ui,/mirrorApprovalFingerprint\(fileSha256,review\)/);
+assert.match(ui,/mirrorApprovalFingerprint\(fileSha256,currentPlan\)/);
+assert.match(ui,/verifyMirrorApproval\(/);
+assert.match(ui,/crypto\.subtle\.digest\(/);
 assert.doesNotMatch(ui,/live_memory_v3_activate_account\(\)|live_memory_v3_activate_personal\(\)/);
 console.log("V3 authenticated private mirror passed: manifest SHA, image paths, resumability, conflicts, drift, account switch and no V2 writes.");
