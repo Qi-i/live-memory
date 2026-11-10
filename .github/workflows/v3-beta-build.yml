@@ -63,6 +63,10 @@ jobs:
         env:
           V3_REAL_AUDIT_URL: http://127.0.0.1:4173/
         run: node scripts/v3-real-browser-smoke.mjs
+      - name: Verify beta service worker does not hijack V2 or cache media
+        env:
+          V3_BETA_TEST_URL: http://127.0.0.1:4173/
+        run: node scripts/v3-beta-child-sw-browser.mjs
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

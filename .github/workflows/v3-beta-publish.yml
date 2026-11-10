@@ -79,7 +79,7 @@ jobs:
             const html=fs.readFileSync("beta/dist/index.html","utf8");
             if (!html.includes("/live-memory/v3-beta/assets/") ||
                 html.includes("src=\"/live-memory/assets/") ||
-                !fs.existsSync("beta/dist/assets")) {
+                (!fs.existsSync("beta/dist/assets") || !fs.existsSync("beta/dist/beta-sw.js"))) {
               throw Error("V3_BETA_INVALID_PAGES_ASSET_PREFIX");
             }
           '
@@ -106,6 +106,11 @@ jobs:
         env:
           V3_REAL_AUDIT_URL: http://127.0.0.1:4173/live-memory/v3-beta/
         run: node scripts/v3-real-browser-smoke.mjs
+      - name: Verify scoped passive worker at exact published beta subpath
+        working-directory: beta
+        env:
+          V3_BETA_TEST_URL: http://127.0.0.1:4173/live-memory/v3-beta/
+        run: node scripts/v3-beta-child-sw-browser.mjs
       - name: Preserve V2 and package verified real-data beta
         shell: bash
         run: |
@@ -189,6 +194,7 @@ jobs:
               }catch{process.exit(1)}
             '; then
               curl -fsSL --max-time 12 "$base/v3-beta/" | grep -q '/live-memory/v3-beta/assets/'
+              curl -fsSL --max-time 12 "$base/v3-beta/beta-sw.js" | grep -q 'self.clients.claim()'
               echo "V2 main and V3 real beta live, browser-verified and SHA-verified: $V3_SHA"
               exit 0
             fi

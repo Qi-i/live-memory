@@ -56,9 +56,17 @@ if (v3Preview) {
   );
 }
 
-if ("serviceWorker" in navigator && import.meta.env.PROD && !v3Beta) {
+if ("serviceWorker" in navigator && import.meta.env.PROD) {
   window.addEventListener("load", () => {
     const base = import.meta.env.BASE_URL || "./";
-    navigator.serviceWorker.register(`${base}sw.js`).catch(() => undefined);
+    if (v3Beta) {
+      // GitHub Pages V2's broader /live-memory/ worker also matches /v3-beta/.
+      // Give only this beta path a more specific, pass-through worker so it
+      // cannot be served a stale V2 HTML shell or cross-version media cache.
+      // It never caches data and cannot control the official V2 route.
+      navigator.serviceWorker.register(`${base}beta-sw.js`,{scope:base}).catch(() => undefined);
+    } else {
+      navigator.serviceWorker.register(`${base}sw.js`).catch(() => undefined);
+    }
   });
 }
