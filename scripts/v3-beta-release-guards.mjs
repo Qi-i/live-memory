@@ -7,7 +7,7 @@ assert.match(main,/const v3Beta = import\.meta\.env\.VITE_V3_BETA === "1"/);
 assert.match(main,/const v3RealWorkspace = v3Beta \|\|/);
 assert.match(main,/import\("\.\/ui\/real\/V3RealWorkspace"\)/);
 assert.match(main,/import\.meta\.env\.PROD && !v3Beta/);
-assert.match(vite,/env\.VITE_V3_BETA === "1" \? "\/"/);
+assert.match(vite,/env\.VITE_V3_BETA === "1" \? \(env\.VITE_V3_BETA_BASE === "pages"/);
 assert.match(vite,/standalonePreview \? "\/live-memory\/v3-preview\/" : "\/live-memory\/"/);
 assert.match(ws,/window\.location\.assign\("https:\/\/qi-i\.github\.io\/live-memory\/"\)/);
 assert.match(ws,/V3 安全试用 · 独立站点/);
