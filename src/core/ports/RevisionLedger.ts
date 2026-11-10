@@ -15,7 +15,7 @@ export interface LedgerCommitResult {
  */
 export interface RevisionLedger {
   readonly accountScope: string;
-  readonly provider: "personal" | "account";
+  readonly provider: "personal" | "account" | "secure-account";
   readonly identity: string;
   snapshot(): Promise<LedgerSnapshot>;
   commitIfUnchanged(
