@@ -1,5 +1,6 @@
 import { chromium } from "playwright";
 import { mkdir } from "node:fs/promises";
+import { createHash } from "node:crypto";
 
 const base=process.env.V3_REAL_AUDIT_URL||"http://127.0.0.1:4173/live-memory/?v3-real-workspace=1";
 const output="visual-artifacts/v3-real";
@@ -96,6 +97,19 @@ try {
   await dialog.getByText("合成测试备注").waitFor();
   await dialog.getByRole("button",{name:"关闭只读详情"}).click();
   await dialog.waitFor({state:"detached"});
+  // The real V3 shell now mounts the complete archive controls, but keeps
+  // the old V2 automatic sync engine unmounted and never changes account scope.
+  if(await page.getByRole("button",{name:"迁移",exact:true}).count())
+    throw Error("Authenticated legacy-media migration must not appear in device-only mode");
+  await page.getByRole("button",{name:"完整档案",exact:true}).first().click();
+  await page.locator(".archive-page").waitFor({state:"visible"});
+  await page.getByText("北京现场 · 真实本机回归",{exact:false}).first().waitFor();
+  await page.getByRole("button",{name:"制作分享图",exact:true}).click();
+  const share=page.getByRole("dialog",{name:"分享工作室"});
+  await share.waitFor({state:"visible"});
+  await share.getByRole("button",{name:"退出分享制作"}).click();
+  await share.waitFor({state:"detached"});
+  await page.getByRole("button",{name:"档案",exact:true}).first().click();
   await page.getByRole("button",{name:"统计",exact:true}).click();
   await page.getByRole("heading",{name:"观演统计"}).waitFor();
   await page.screenshot({path:`${output}/stats-${width}.png`,fullPage:true});
@@ -120,6 +134,49 @@ try {
   // Only the explicitly device-local archive may write; verify a real
   // conditional transaction, then simulate an external-tab edit conflict.
   if(width===390){
+    // Exercise actual user-file -> byte-verification -> single IndexedDB
+    // transaction -> persisted data-URL readback, not just mock unit tests.
+    const sourceBytes=Buffer.from("SYNTHETIC PORTABLE TICKET ORIGINAL");
+    const assetSrc="data:image/png;base64,"+sourceBytes.toString("base64");
+    const asset={id:"restore-poster",recordId:"verified-import-1",kind:"poster",
+      src:assetSrc,source:"local",mimeType:"image/png",size:sourceBytes.length};
+    const restoredRow={
+      schemaVersion:2,id:"verified-import-1",title:"浏览器验证原图恢复",
+      category:"concert",status:"watched",recordState:"normal",
+      date:"2026-09-27",time:"",city:"北京",venue:"测试场馆",
+      artists:["测试艺人"],lineup:[{name:"测试艺人",role:"artist"}],
+      companions:[],tags:[],setlist:[],sourceChannel:"",favorite:false,
+      colors:["#6671ab","#d2e2f2"],createdAt:"2026-09-27T00:00:00.000Z",
+      updatedAt:"2026-09-27T00:00:00.000Z",media:[asset],mediaTombstones:[],
+    };
+    const document={
+      app:"live-memory",version:3,mediaIncluded:true,
+      exportedAt:"2026-11-10T00:00:00.000Z",records:[restoredRow],
+      portableMediaManifest:{version:1,totalBytes:sourceBytes.length,
+        assets:[{recordId:restoredRow.id,assetId:asset.id,
+          bytes:sourceBytes.length,mimeType:"image/png",
+          sha256:createHash("sha256").update(sourceBytes).digest("hex")}]},
+    };
+    await page.locator('input[aria-label="选择 V3 原图完整备份"]').setInputFiles({
+      name:"verified-restore.json",mimeType:"application/json",
+      buffer:Buffer.from(JSON.stringify(document)),
+    });
+    await page.getByRole("button",{name:"确认安全恢复到本机"}).waitFor({state:"visible"});
+    await page.getByRole("button",{name:"确认安全恢复到本机"}).click();
+    await page.getByRole("status").filter({hasText:"已在单个本机事务中安全新增 1 条"}).waitFor();
+    const persistedMedia=await page.evaluate(async()=>{
+      const db=await new Promise((resolve,reject)=>{
+        const req=indexedDB.open("echo-archive-v2:device-local",1);
+        req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+      });
+      const row=await new Promise((resolve,reject)=>{
+        const req=db.transaction("records","readonly").objectStore("records").get("verified-import-1");
+        req.onsuccess=()=>resolve(req.result);req.onerror=()=>reject(req.error);
+      });
+      db.close();
+      return row?.media?.[0]?.src||null;
+    });
+    if(persistedMedia!==assetSrc)throw Error("Portable restore did not persist exact original media bytes");
     await page.getByRole("button",{name:"新增本机演出"}).click();
     const createdDialog=page.getByRole("dialog",{name:"新增演出"});
     await createdDialog.waitFor({state:"visible"});
@@ -139,7 +196,7 @@ try {
       db.close();
       return rows;
     });
-    if(persisted.length!==4||!persisted.some(row=>row.title==="本机安全新增 · V3")) {
+    if(persisted.length!==5||!persisted.some(row=>row.title==="本机安全新增 · V3")) {
       throw Error("Device V3 atomic create did not persist one new record");
     }
 
