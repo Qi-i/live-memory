@@ -6,7 +6,7 @@ import { decideRecordSync, type RecordSyncAction } from "../sync/policy";
 
 /** No record content or private IDs leave this report. */
 export interface ReadOnlySyncAudit {
-  provider: "personal" | "account";
+  provider: "personal" | "account" | "secure-account";
   checkedRecords: number;
   localRecords: number;
   remoteRecords: number;
