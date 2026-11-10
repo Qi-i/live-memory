@@ -23,7 +23,7 @@ const DIGEST_PATTERN = /^[a-f0-9]{64}$/;
 
 export async function createBaselineKey(
   accountScope: string,
-  provider: "personal" | "account",
+  provider: "personal" | "account" | "secure-account",
   providerIdentity: string,
 ): Promise<string> {
   if (!accountScope.trim() || !providerIdentity.trim()) {
