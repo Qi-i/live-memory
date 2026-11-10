@@ -114,7 +114,7 @@ assert.match(stagingSQL,/for insert to authenticated/);
 assert.match(stagingSQL,/for select to authenticated/);
 assert.match(stagingSQL,/auth\.uid\(\)/);
 assert.match(stagingSQL,/storage\.foldername\(name\)/);
-assert.match(stagingSQL,/storage\.filename\(name\)/);
+assert.match(stagingSQL,/split_part\(name,'\/',5\)/);
 assert.doesNotMatch(stagingSQL,/for (update|delete)|security definer/i,
   "Staged pictures must remain immutable and auth-account scoped");
 assert.doesNotMatch(stagingSQL,/\b(delete from storage\.objects|update storage\.objects|update public\.echo_|truncate)\b/i,
