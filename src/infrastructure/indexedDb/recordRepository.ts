@@ -91,6 +91,71 @@ export class IndexedDbRecordRepository implements RecordRepository {
     });
   }
 
+
+  /**
+   * Portable restore is additive and transactional: old V2/V3 rows are never
+   * rewritten, even if another tab edits between the import preview and commit.
+   * A collision with DIFFERENT content aborts the complete transaction. No
+   * destructive clear/put of the existing archive is allowed.
+   */
+  async insertMissingAtomic(records: readonly EventRecord[]): Promise<{
+    insertedIds: string[]; alreadyPresentIds: string[];
+  }> {
+    this.checkScope();
+    const normalized = records.map(normalizeRecord);
+    const ids = new Set(normalized.map(row => row.id));
+    if (ids.size !== normalized.length ||
+        normalized.some(row => !row.id.trim())) {
+      throw new Error("V3_RESTORE_INVALID_RECORD_IDS");
+    }
+    const db = await this.open();
+    this.checkScope();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(RECORD_STORE, "readwrite");
+      const store = tx.objectStore(RECORD_STORE);
+      const req = store.getAll();
+      let cause: Error | null = null;
+      const insertedIds: string[] = [];
+      const alreadyPresentIds: string[] = [];
+      req.onsuccess = () => {
+        try {
+          this.checkScope();
+          const existing = new Map((req.result as EventRecord[]).map(row => [row.id, normalizeRecord(row)]));
+          // Check ALL collisions before adding ANY row. A later transaction
+          // abort also rolls back every newly inserted row atomically.
+          for (const row of normalized) {
+            const current = existing.get(row.id);
+            if (!current) continue;
+            if (JSON.stringify(current) !== JSON.stringify(row)) {
+              throw new Error("V3_RESTORE_EXISTING_RECORD_CONFLICT");
+            }
+            alreadyPresentIds.push(row.id);
+          }
+          for (const row of normalized) {
+            if (existing.has(row.id)) continue;
+            store.add(row);
+            insertedIds.push(row.id);
+          }
+        } catch (error) {
+          cause = error instanceof Error ? error : new Error("V3_RESTORE_PRECONDITION_FAILED");
+          tx.abort();
+        }
+      };
+      tx.oncomplete = () => {
+        db.close();
+        resolve({ insertedIds, alreadyPresentIds });
+      };
+      tx.onabort = () => {
+        db.close();
+        reject(cause ?? tx.error ?? new Error("V3_RESTORE_ATOMIC_TRANSACTION_ABORTED"));
+      };
+      tx.onerror = () => {
+        db.close();
+        reject(cause ?? tx.error ?? new Error("V3_RESTORE_ATOMIC_TRANSACTION_FAILED"));
+      };
+    });
+  }
+
   async applyRemoteIfUnchanged(
     requestSnapshot: EventRecord[],
     remoteResult: EventRecord[],

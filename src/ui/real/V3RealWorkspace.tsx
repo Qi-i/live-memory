@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
 import { primaryMedia } from "../../domain";
-import { currentStorageScope, listRecords, readSettings } from "../../storage";
+import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
 import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
@@ -10,6 +10,7 @@ import { saveRecordDraft } from "../../core/application/saveRecordDraft";
 import { IndexedDbRecordRepository } from "../../infrastructure/indexedDb/recordRepository";
 import { RecordEditor } from "../../overlays";
 import { blankRecord } from "../../seeds";
+import { ShareStudio, type ShareFormat } from "../../shareStudio";
 import { ActionToolbar, MapSplitPane, StageHero, WorkspaceShell } from "../system/WorkspaceShell";
 import "../system/preview.css";
 import "./realWorkspace.css";
@@ -194,6 +195,12 @@ export function V3RealWorkspace() {
   });
   const [reload,setReload]=useState(0);
   const [selectedId,setSelectedId]=useState<string|null>(null);
+  const [sharing,setSharing]=useState(false);
+  const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-landscape");
+  const [restoreBusy,setRestoreBusy]=useState(false);
+  const [restorePreview,setRestorePreview]=useState<{
+    scope:string;name:string;document:unknown;records:number;assets:number;bytes:number;
+  }|null>(null);
   const [editing,setEditing]=useState<{draft:EventRecord;baseline:EventRecord|null;scope:string}|null>(null);
   const [notice,setNotice]=useState("");
   const [cloudMode,setCloudMode]=useState<{scope:string;mode:"v2"|"v3";error:string}>({
@@ -257,7 +264,7 @@ export function V3RealWorkspace() {
   },[access.mode,access.user?.id,validScope,reload]);
   // A manual refresh must not erase the save confirmation. Only switching
   // accounts should clear the status notice from the previous identity.
-  useEffect(()=>{setNotice("");},[access.mode,access.user?.id]);
+  useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
   const model=useMemo(()=>describeRealArchive(records,search),[records,search]);
   const active=model.records;
@@ -308,6 +315,56 @@ export function V3RealWorkspace() {
       ? "本机已原子保存；点击“安全同步”才会传输至已切换的账号云端。"
       : "已安全保存至此设备；尚未启用云同步");
     setReload(n=>n+1);
+  };
+
+  const inspectRestore=async(file?:File)=>{
+    if(!file||!canEdit||restoreBusy)return;
+    const scope=currentStorageScope();
+    setRestoreBusy(true);setRestorePreview(null);
+    try{
+      if(file.size>400*1024*1024)throw Error("V3_RESTORE_FILE_TOO_LARGE");
+      const parsed:unknown=JSON.parse(await file.text());
+      if(currentStorageScope()!==scope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");
+      const {verifyPortableBackupDocument}=await import("../../core/application/portableMediaBackup");
+      const {stableSerialize}=await import("../../core/sync/revision");
+      const checked=await verifyPortableBackupDocument(parsed);
+      if(currentStorageScope()!==scope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");
+      const rows=(parsed as {records:EventRecord[]}).records;
+      // A restore must not silently modify fields or discard media while
+      // normalizing an old archive. Request a fresh canonical export instead.
+      if(rows.some(row=>stableSerialize(normalizeRecord(row))!==stableSerialize(row))){
+        throw Error("V3_RESTORE_NONCANONICAL_BACKUP");
+      }
+      setRestorePreview({scope,name:file.name,document:parsed,
+        records:checked.records,assets:checked.assets,bytes:checked.totalBytes});
+      setNotice(`已校验备份：${checked.records} 条记录、${checked.assets} 个原始媒体文件；仅本机增量恢复，不覆盖已有 ID。确认前不会写入。`);
+    }catch(error){
+      setNotice("备份预检未通过（格式、原图 SHA-256 或规范化字段不一致）；没有写入任何记录。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setRestoreBusy(false);}
+  };
+  const confirmRestore=async()=>{
+    const preview=restorePreview;
+    if(!preview||restoreBusy||!canEdit||preview.scope!==currentStorageScope())return;
+    setRestoreBusy(true);
+    try{
+      if(canEditAccount){
+        const active=accountRuntime.current;
+        if(!active||active.scope!==preview.scope||await active.runtime.writerMode()!=="v3")
+          throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
+      }
+      const {restoreVerifiedPortableArchive}=await import("../../core/application/restoreVerifiedPortableArchive");
+      const result=await restoreVerifiedPortableArchive(preview.document,
+        new IndexedDbRecordRepository(preview.scope),
+        ()=>{if(currentStorageScope()!==preview.scope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");});
+      setRestorePreview(null);
+      setNotice(`已在单个本机事务中安全新增 ${result.inserted} 条、原样保留 ${result.alreadyPresent} 条；新增媒体回读核验 ${result.verifiedAssets} 项、${result.verifiedBytes} 字节。未启动云端写入。`);
+      setReload(n=>n+1);
+    }catch(error){
+      const reason=error instanceof Error?error.message:"";
+      setRestorePreview(null);
+      setNotice("恢复未取得完整验收：未覆盖、清空或删除现有档案。如事务已提交但后续回读失败，已新增记录仍保留，需重新核验。"+reason);
+    }finally{setRestoreBusy(false);}
   };
 
   const safeSync=async()=>{
@@ -380,10 +437,19 @@ export function V3RealWorkspace() {
         {canEditLocal?"新增本机演出":"新增演出"}</button>}
       {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
         {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
+      <button type="button" onClick={()=>setSharing(true)} disabled={!records.length}>制作分享图</button>
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
     </div>}
-    overlay={editing && editing.scope===actualScope && canEdit
+    overlay={sharing
+      ? <ShareStudio records={records} format={shareFormat} setFormat={setShareFormat}
+          mapSettings={readSettings().map}
+          onOpenMapSettings={()=>{
+            setSharing(false);
+            setNotice("地图密钥尚未在 V3 中单独配置；请先在 V2 设置页配置，再返回 V3 分享。");
+          }}
+          onClose={()=>setSharing(false)}/>
+      : editing && editing.scope===actualScope && canEdit
       ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
       : selected
@@ -391,6 +457,20 @@ export function V3RealWorkspace() {
             onEdit={canEdit?startEdit:undefined}/>
         : undefined}
   >
+    {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
+      <strong>完整档案备份恢复</strong>
+      <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>
+      <input type="file" accept=".json,application/json" aria-label="选择 V3 原图完整备份"
+        disabled={restoreBusy} onChange={event=>void inspectRestore(event.currentTarget.files?.[0])}/>
+      {restorePreview&&restorePreview.scope===actualScope&&
+        <div className="v3-real-restore-review">
+          <span>{restorePreview.name} · {restorePreview.records} 条 · {restorePreview.assets} 份原图 · {restorePreview.bytes} 字节</span>
+          <button type="button" disabled={restoreBusy} onClick={()=>void confirmRestore()}>
+            {restoreBusy?"校验与恢复中…":"确认安全恢复到本机"}
+          </button>
+          <button type="button" disabled={restoreBusy} onClick={()=>setRestorePreview(null)}>取消</button>
+        </div>}
+    </section>}
     {cloudMode.error && access.mode==="account" && <div role="alert" className="v3-real-save-notice">{cloudMode.error}</div>}
     {notice && <div className="v3-real-save-notice" role="status">{notice}
       <button type="button" onClick={()=>setNotice("")} aria-label="关闭提示">×</button></div>}

@@ -125,3 +125,16 @@
 /* Device-only optimistic edit feedback; never interpreted as a cloud sync result. */
 .v3-real-save-notice { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:40px; padding:8px 13px; background:#ecf5f2; border:1px solid #c5e1d9; border-radius:12px; color:#285a56; font-size:12px; }
 .v3-real-save-notice button { min-width:28px; min-height:28px; border:0; border-radius:8px; background:transparent; color:inherit; font-size:19px; cursor:pointer; }
+
+/* V3 real, authenticated and local-only verified portable restore. */
+.v3-real-restore { display:flex; flex-wrap:wrap; align-items:center; gap:10px; padding:12px 15px;
+  border:1px solid #d0d9ea; background:rgba(255,255,255,.84); border-radius:14px; }
+.v3-real-restore > strong { color:#243f62; font-size:13px; }
+.v3-real-restore > p { flex:1 1 100%; margin:0; color:#697992; font-size:12px; }
+.v3-real-restore input[type="file"] { max-width:100%; font:inherit; font-size:12px; }
+.v3-real-restore-review { flex:1 1 100%; display:flex; flex-wrap:wrap; align-items:center; gap:8px; }
+.v3-real-restore-review span { flex:1 1 200px; font-size:12px; overflow-wrap:anywhere; }
+.v3-real-restore-review button { min-height:36px; border:1px solid #b8c9dc; border-radius:9px;
+  padding:7px 12px; font:inherit; background:#f6f8fc; cursor:pointer; }
+.v3-real-restore-review button:first-of-type { background:#174e75; color:white; border-color:#174e75; }
+.v3-real-restore-review button:disabled { cursor:wait; opacity:.55; }
