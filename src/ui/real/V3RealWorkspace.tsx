@@ -206,6 +206,7 @@ export function V3RealWorkspace() {
   const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
   const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-landscape");
   const [restoreBusy,setRestoreBusy]=useState(false);
+  const [exportBusy,setExportBusy]=useState(false);
   const [restorePreview,setRestorePreview]=useState<{
     scope:string;name:string;document:unknown;records:number;assets:number;bytes:number;
   }|null>(null);
@@ -355,6 +356,56 @@ export function V3RealWorkspace() {
     setReload(n=>n+1);
   };
 
+  const exportVerifiedLocalBackup=async()=>{
+    if(!canEditLocal||exportBusy)return;
+    const scope=currentStorageScope();
+    const assertScope=()=>{
+      if(currentStorageScope()!==scope)throw Error("V3_BACKUP_ACCOUNT_CHANGED");
+    };
+    setExportBusy(true);
+    try{
+      const {createPortableBackup,verifyPortableBackupDocument}=
+        await import("../../core/application/portableMediaBackup");
+      const {readAsDataUrl,downloadBlob}=await import("../../media");
+      const {stableSerialize}=await import("../../core/sync/revision");
+      assertScope();
+      const original=await listRecords();
+      assertScope();
+      if(!original.length)throw Error("V3_BACKUP_EMPTY_LOCAL_ARCHIVE");
+      const archive=await createPortableBackup(original,{
+        assertScope,
+        async load(asset){
+          assertScope();
+          const src=await resolveMediaSource(asset,true);
+          assertScope();
+          if(!src)throw Error("V3_BACKUP_MEDIA_UNAVAILABLE");
+          const response=await fetch(src,{mode:"cors",credentials:"omit"});
+          assertScope();
+          if(!response.ok||response.type==="opaque")
+            throw Error("V3_BACKUP_MEDIA_UNAVAILABLE");
+          return response.blob();
+        },
+        encode:readAsDataUrl,
+      });
+      assertScope();
+      const proof=await verifyPortableBackupDocument(archive);
+      assertScope();
+      const live=await listRecords();
+      const baseline=new Map(original.map(row=>[row.id,stableSerialize(row)]));
+      if(live.length!==original.length||baseline.size!==original.length||
+        live.some(row=>baseline.get(row.id)!==stableSerialize(row)))
+        throw Error("V3_BACKUP_LOCAL_CHANGED");
+      assertScope();
+      downloadBlob(JSON.stringify(archive),
+        "live-memory-v3-local-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      setNotice(`已请求下载本机可恢复备份：${proof.records} 条记录、${proof.assets} 个原图文件，原图总计 ${proof.totalBytes} 字节。请独立保存并用恢复入口验证；此文件不包含其他设备的云端独有记录。`);
+    }catch(error){
+      setNotice("未生成完整本机备份：原图字节缺失、文件超限或导出期间记录变化。未更改任何数据。"+
+        (error instanceof Error?error.message:""));
+    }finally{setExportBusy(false);}
+  };
+
   const inspectRestore=async(file?:File)=>{
     if(!file||!canEdit||restoreBusy)return;
     const scope=currentStorageScope();
@@ -476,6 +527,10 @@ export function V3RealWorkspace() {
       {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
         {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
       <button type="button" onClick={()=>setSharing(true)} disabled={!records.length}>制作分享图</button>
+      {canEditLocal && <button type="button" onClick={()=>void exportVerifiedLocalBackup()}
+        disabled={exportBusy||restoreBusy||snapshot.busy}>
+        {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}
+      </button>}
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
     </div>}
