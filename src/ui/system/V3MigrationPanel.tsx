@@ -44,7 +44,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   const [mirrorFile,setMirrorFile]=useState<File|null>(null);
   const [mirrorPreview,setMirrorPreview]=useState<{
     scope:string;filename:string;total:number;assets:number;bytes:number;
-    create:number;already:number;
+    create:number;already:number;approvalFingerprint:string;
   }|null>(null);
   const [mirrorStatus,setMirrorStatus]=useState("");
   const [mirrorBusy,setMirrorBusy]=useState(false);
@@ -313,8 +313,17 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     setMirrorStatus("");
     try{
       if(file.size>400*1024*1024)throw Error("V3_MIRROR_BACKUP_TOO_LARGE");
-      const parsed=JSON.parse(await file.text());
+      const raw=await file.text();
       check();
+      const hashed=new Uint8Array(await crypto.subtle.digest(
+        "SHA-256",new TextEncoder().encode(raw),
+      ));
+      check();
+      const fileSha256=Array.from(hashed,x=>x.toString(16).padStart(2,"0")).join("");
+      const parsed=JSON.parse(raw);
+      check();
+      const {mirrorApprovalFingerprint,verifyMirrorApproval}=
+        await import("../../core/application/verifyApprovedMirrorCopy");
       const {inspectSecureArchiveMirror,importSecureArchiveMirror}=
         await import("../../infrastructure/supabase/importSecureArchiveMirror");
       check();
@@ -325,12 +334,23 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           scope,filename:file.name,total:review.records,assets:review.assets,
           bytes:review.bytes,create:review.toCreate.length,
           already:review.alreadyPresent,
+          approvalFingerprint:mirrorApprovalFingerprint(fileSha256,review),
         });
         setMirrorStatus("已核验原图字节与现有私有档案：总记录 "+
           review.records+" 条，其中新建 "+review.toCreate.length+
           " 条、已存在且完全一致 "+review.alreadyPresent+
           " 条。再次点击确认后，仅复制到新的私有镜像，不会修改旧 V2 数据。");
       }else{
+        // The selected file can change between preview and confirmation.
+        // Also re-read the authenticated remote plan before ANY new object
+        // upload so previously unapproved changes cannot be silently copied.
+        const currentPlan=await inspectSecureArchiveMirror(parsed);
+        check();
+        verifyMirrorApproval(
+          mirrorPreview!.approvalFingerprint,
+          mirrorApprovalFingerprint(fileSha256,currentPlan),
+        );
+        check();
         const result=await importSecureArchiveMirror(parsed);
         check();
         setMirrorPreview(null);
@@ -344,7 +364,9 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       if(currentStorageScope()===scope&&scopeGeneration.current===generation){
         const reason=failure instanceof Error?failure.message:"";
         setMirrorPreview(null);
-        setMirrorStatus(reason.includes("EXISTING_RECORD_CONFLICT")||
+        setMirrorStatus(reason.includes("APPROVED_FILE_OR_REMOTE_PLAN_CHANGED")
+          ? "文件内容或账号私有档案已在预览后变化，已拒绝复制。请重新检查原图与档案数量后再次确认。"
+          : reason.includes("EXISTING_RECORD_CONFLICT")||
           reason.includes("CONCURRENT_CONFLICT")
           ? "镜像中有相同 ID 但内容不同的档案，已停止复制；绝不自动覆盖任何一侧。"
           : reason.includes("MIRROR_ACCOUNT")?"登录账号或本机作用域已变化，本次操作中止。"
