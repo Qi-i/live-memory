@@ -20,6 +20,10 @@ export interface LegacyMediaStagingResult {
 const hex = /^[a-f0-9]{64}$/;
 const uuid = /^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
 const encoder = new TextEncoder();
+const EXT_BY_MIME: Record<string,string> = {
+  "image/jpeg":"jpg", "image/png":"png", "image/webp":"webp",
+  "image/gif":"gif", "image/avif":"avif",
+};
 async function sha256(data: string | ArrayBuffer) {
   const src = typeof data === "string" ? encoder.encode(data) : new Uint8Array(data);
   const copy = new Uint8Array(src.byteLength);
@@ -43,9 +47,19 @@ export async function stageLegacyMediaCopies(
     proof?.format!=="live-memory-v3-legacy-media-preflight" ||
     proof.version!==1 || !hex.test(proof.sha256) ||
     !Array.isArray(proof.entries) || proof.objects!==proof.entries.length ||
-    proof.objects>2000 || proof.totalBytes>256*1024*1024) {
+    proof.objects>2000 || !Number.isSafeInteger(proof.references) ||
+    proof.references<proof.objects || !Number.isSafeInteger(proof.totalBytes) ||
+    proof.totalBytes>256*1024*1024 ||
+    proof.privateBucket!=="echo-private-media-v3") {
     throw Error("V3_STAGING_INVALID_PROOF");
   }
+  const canonical = {
+    entries:[...proof.entries].sort((a,b)=>a.sourcePathSha256.localeCompare(b.sourcePathSha256)),
+    objects:proof.objects,references:proof.references,totalBytes:proof.totalBytes,
+  };
+  const proofDigest = await sha256(JSON.stringify(canonical));
+  io.assertScope();
+  if(proofDigest!==proof.sha256)throw Error("V3_STAGING_PROOF_TAMPERED");
   const sourceByHash=new Map<string,string>();
   for(const name of io.sourcePaths) {
     const digest=await sha256(name);
@@ -55,6 +69,7 @@ export async function stageLegacyMediaCopies(
   }
   if(sourceByHash.size!==proof.objects) throw Error("V3_STAGING_SOURCE_INVENTORY_CHANGED");
   const seenTargets=new Set<string>();
+  const provenSources=new Set<string>();
   let verified=0,bytes=0;
   for(const entry of proof.entries) {
     io.assertScope();
@@ -64,7 +79,11 @@ export async function stageLegacyMediaCopies(
       throw Error("V3_STAGING_INVALID_PROOF");
     }
     const source=sourceByHash.get(entry.sourcePathSha256);
-    if(!source) throw Error("V3_STAGING_SOURCE_INVENTORY_CHANGED");
+    if(!source || provenSources.has(entry.sourcePathSha256)) {
+      throw Error("V3_STAGING_SOURCE_INVENTORY_CHANGED");
+    }
+    provenSources.add(entry.sourcePathSha256);
+    if(!EXT_BY_MIME[entry.mimeType])throw Error("V3_STAGING_INVALID_PROOF");
     const blob=await io.downloadOriginal(source);
     io.assertScope();
     if(!blob || blob.size!==entry.size ||
@@ -76,7 +95,8 @@ export async function stageLegacyMediaCopies(
       const match=blindedTarget.match(
         /^[a-f0-9]{64}(\/v3\/[a-f0-9]{64}\/[a-f0-9]{64}\/([a-f0-9]{64})\.(jpg|png|webp|gif|avif))$/
       );
-      if(!match||match[2]!==entry.contentSha256)throw Error("V3_STAGING_INVALID_TARGET");
+      if(!match||match[2]!==entry.contentSha256||
+        match[3]!==EXT_BY_MIME[entry.mimeType])throw Error("V3_STAGING_INVALID_TARGET");
       const path=userId+match[1];
       if(seenTargets.has(path))throw Error("V3_STAGING_DUPLICATE_TARGET");
       seenTargets.add(path);
@@ -98,7 +118,9 @@ export async function stageLegacyMediaCopies(
     bytes+=blob.size;
     io.assertScope();
   }
-  if(bytes!==proof.totalBytes)throw Error("V3_STAGING_SOURCE_INVENTORY_CHANGED");
+  if(bytes!==proof.totalBytes||provenSources.size!==sourceByHash.size) {
+    throw Error("V3_STAGING_SOURCE_INVENTORY_CHANGED");
+  }
   return {
     objectsVerified:proof.objects,copiesVerified:verified,
     bytesVerified:bytes,manifestSha256:proof.sha256,
