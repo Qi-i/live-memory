@@ -48,7 +48,7 @@ function parseRow(input: unknown): CloudRecordEnvelope {
 }
 
 function rpcFailure(message: string): Error {
-  if (message.includes("V3_REVISION_CONFLICT")) return new RemoteRevisionChanged();
+  if (message.includes("V3_REVISION_CONFLICT") || message.includes("V3_SECURE_REVISION_CONFLICT")) return new RemoteRevisionChanged();
   return new Error("V3 cloud operation failed: " + message);
 }
 
@@ -56,17 +56,17 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
   readonly includeMedia: boolean;
   constructor(
     private readonly client: V3RpcClient,
-    readonly provider: "personal" | "account",
+    readonly provider: "personal" | "account" | "secure-account",
     readonly identity: string,
     readonly accountScope: string,
     private readonly mediaTransport?: V3MediaTransport,
     private readonly assertIdentity?: () => Promise<void>,
   ) {
     if (!identity.trim() || !accountScope.trim()) throw new Error("V3 cloud identity and account scope are mandatory");
-    if (provider === "account" && (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(accountScope) || !assertIdentity)) {
+    if (provider !== "personal" && (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(accountScope) || !assertIdentity)) {
       throw new Error("V3_ACCOUNT_SCOPE_GUARD_REQUIRED");
     }
-    this.includeMedia = provider === "personal";
+    this.includeMedia = provider === "personal" || provider === "secure-account";
   }
 
   private async guardIdentity(): Promise<void> {
@@ -145,7 +145,9 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
 
   private async scanAllPages(): Promise<CloudRecordEnvelope[]> {
     await this.guardIdentity();
-    const table = this.provider === "personal" ? "echo_passkey_records" : "echo_text_backups";
+    const table = this.provider === "personal" ? "echo_passkey_records"
+      : this.provider === "secure-account" ? "live_memory_v3_secure_records"
+      : "echo_text_backups";
     // Existing tenant RLS restricts visible rows. No service-role credentials.
     // PostgREST caps response lengths: a short list is NOT proof that a missing
     // record was deleted, so every page must be retrieved before reconciliation.
@@ -207,12 +209,14 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
           : asset),
       }
       : { ...prepared, media: [], mediaTombstones: undefined };
-    const fn = this.provider === "personal" ? "live_memory_v3_cas_personal" : "live_memory_v3_cas_account_scoped";
+    const fn = this.provider === "personal" ? "live_memory_v3_cas_personal"
+      : this.provider === "secure-account" ? "live_memory_v3_cas_secure_account"
+      : "live_memory_v3_cas_account_scoped";
     const args: Record<string, unknown> = {
       p_id: prepared.id, p_payload: payload,
       p_expected_revision: expected === null ? null : Number(expected),
     };
-    if (this.provider === "account") args.p_expected_user = this.accountScope;
+    if (this.provider !== "personal") args.p_expected_user = this.accountScope;
     await this.guardIdentity();
     const { data, error } = await this.client.rpc(fn, args);
     await this.guardIdentity();
