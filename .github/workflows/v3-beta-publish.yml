@@ -50,7 +50,7 @@ jobs:
         run: |
           set -euo pipefail
           v2_sha="$(git -C v2 rev-parse HEAD)"
-          printf '{"sha":"%s","builtAt":"%s","source":"main","deployment":"v2-unchanged"}\\n' "$v2_sha" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > v2/dist/build-info.json
+          printf '{"sha":"%s","builtAt":"%s","source":"main","deployment":"v2-unchanged"}\n' "$v2_sha" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > v2/dist/build-info.json
           printf '%s\n' "$v2_sha" > /tmp/v2-source-sha
           sha256sum v2/dist/index.html | cut -d' ' -f1 > /tmp/v2-index-sha
       - name: Test V3 beta without activating a cloud writer
