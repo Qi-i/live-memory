@@ -29,5 +29,13 @@ for (const flag of [undefined, null, 0, 1, "true"]) {
 for (const path of ["folder\\\\secret.jpg", "folder/line\nfeed.jpg", "folder/zero\u0000byte.jpg"]) {
  assert.throws(() => audit({objects:[{bucket:"echo-media",path}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
 }
+
+for (const bucket of [" echo-media", "echo-media ", "echo/media", "echo\\\\media", "echo\nmedia"]) {
+ assert.throws(() => audit({objects:[{bucket,path:"valid.jpg"}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
+}
+for (const path of ["a//b.jpg", "a/./b.jpg", "a/", "./a.jpg"]) {
+ assert.throws(() => audit({objects:[{bucket:"echo-media",path}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
+}
+assert.throws(() => audit({objects,references:[{bucket:"echo-media",path:"valid.jpg",source:"device\nspoof"}],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
 assert.doesNotMatch(source,/\.remove\(|\.delete\(|\.update\(|\.upload\(/,"Audit must remain read-only");
 console.log("V3 read-only media audit tests passed");
