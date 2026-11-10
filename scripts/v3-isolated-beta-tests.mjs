@@ -15,4 +15,13 @@ assert.match(config,/isolatedRealBeta \? "\/" : "\/live-memory\/"/);
 assert.match(config,/fileName: "v3-build-info\.json"/);
 assert.match(config,/cloudWriterCutover: false/);
 assert.match(preview,/branches: \[main\]/);
+const [ci,betaCI]=await Promise.all([
+  ".github/workflows/ci.yml",
+  ".github/workflows/v3-real-beta.yml",
+].map(path=>readFile(new URL("../"+path,import.meta.url),"utf8")));
+for(const workflow of [ci,betaCI]) {
+  assert.match(workflow,/VITE_V3_BETA=1 npx vite preview/,
+    "Serving a beta build with the V2 base path causes a blank startup page");
+}
+
 console.log("Isolated V3 beta contracts passed: opt-in independent build, no V2 production writer, root path, origin-safe navigation, explicit unpromoted build SHA.");
