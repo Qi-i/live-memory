@@ -5,6 +5,7 @@ import { auditBackupPortability } from "../../core/application/auditBackupPortab
 import type { ReadOnlySyncAudit } from "../../core/application/auditSyncReadOnly";
 import type { BaselineBootstrapReport } from "../../core/application/bootstrapEquivalentBaselines";
 import type { MigrationReview, MigrationReviewItem } from "../../core/application/reviewMigrationReadOnly";
+import type { SecureCutoverReadiness } from "../../core/application/classifySecureCutoverReadiness";
 import "./v3MigrationPanel.css";
 
 type Provider = "account" | "personal";
@@ -48,6 +49,9 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
   }|null>(null);
   const [mirrorStatus,setMirrorStatus]=useState("");
   const [mirrorBusy,setMirrorBusy]=useState(false);
+  const [cutoverState,setCutoverState]=useState<SecureCutoverReadiness|null>(null);
+  const [cutoverBusy,setCutoverBusy]=useState(false);
+  const [cutoverError,setCutoverError]=useState("");
   useEffect(() => {
     // Never display results obtained for an earlier account/cloud configuration.
     scopeGeneration.current += 1;
@@ -61,6 +65,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     setMirrorPreview(null);
     setMirrorStatus("");
     setMirrorBusy(false);
+    setCutoverState(null);setCutoverError("");setCutoverBusy(false);
     return () => { scopeGeneration.current += 1; };
   }, [settings.supabase.url, settings.supabase.ownerKey]);
 
@@ -359,6 +364,25 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     }
   }
 
+  async function inspectCutoverReadiness() {
+    if(cutoverBusy||backupInFlight.current!==null||pending!==null)return;
+    const scope=currentStorageScope(),generation=scopeGeneration.current;
+    setCutoverBusy(true);setCutoverError("");setCutoverState(null);
+    try{
+      const {readSecureCutoverReadiness}=await import(
+        "../../infrastructure/supabase/readSecureCutoverReadiness");
+      const result=await readSecureCutoverReadiness();
+      if(scopeGeneration.current!==generation||currentStorageScope()!==scope)return;
+      setCutoverState(result);
+    }catch{
+      if(scopeGeneration.current===generation&&currentStorageScope()===scope)
+        setCutoverError("未能核验服务器的账号迁移条件：请检查登录状态与网络。没有写入或切换任何档案。");
+    }finally{
+      if(scopeGeneration.current===generation&&currentStorageScope()===scope)
+        setCutoverBusy(false);
+    }
+  }
+
   return (
     <section className="settings-module v3-migration-panel" aria-label="V3 数据迁移诊断">
       <header className="v3-migration-head">
@@ -369,6 +393,30 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         </div>
         <strong>仅测试通道</strong>
       </header>
+      <div className="v3-migration-portable" role="region" aria-label="账号正式切换条件检查">
+        <strong>账号云端切换就绪检查</strong>
+        <p>读取服务器实际保存的旧版数量、私有镜像覆盖率与独立审批情况。
+        这里只诊断，不提供跳过审批或直接切换的按钮。</p>
+        <button className="button ghost" type="button"
+          disabled={cutoverBusy||backupBusy||pending!==null}
+          onClick={()=>void inspectCutoverReadiness()}>
+          {cutoverBusy?"核查服务器迁移条件中…":"检查账号完整档案与正式切换条件"}
+        </button>
+        {cutoverState && (
+          <div className="v3-migration-result" role="status">
+            <p>当前写入模式：{cutoverState.mode==="v3"?"已接管":"旧版仍在运行"}；
+              旧版账号记录 {cutoverState.legacyRecords} 条、
+              私有镜像 {cutoverState.mirrorRecords} 条、
+              尚未迁入 {cutoverState.missingLegacy} 条。
+            </p>
+            {cutoverState.ready
+              ? <p>服务器检查的记录覆盖率、审批与快照摘要已匹配。
+                这只是当前状态，不代替两台真实设备验收，也不会自动激活。</p>
+              : <p>仍未满足：{cutoverState.reasons.join("；")}。未修改云端数据。</p>}
+          </div>
+        )}
+        {cutoverError && <p role="alert">{cutoverError}</p>}
+      </div>
       <div className="v3-migration-grid">
         {(["account", "personal"] as Provider[]).map((provider) => {
           const enabled = provider === "account" || personalConnected;
