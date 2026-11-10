@@ -13,7 +13,13 @@ do $bucket$
 begin
   if not exists(select 1 from storage.buckets
     where id='echo-v3-media-staging' and public=false
-      and file_size_limit=33554432) then
+      and file_size_limit=33554432
+      and allowed_mime_types @> array[
+        'image/jpeg','image/png','image/webp','image/gif','image/avif'
+      ]::text[]
+      and allowed_mime_types <@ array[
+        'image/jpeg','image/png','image/webp','image/gif','image/avif'
+      ]::text[]) then
     raise exception 'V3_STAGING_BUCKET_UNSAFE' using errcode='42501';
   end if;
   if not (select relrowsecurity from pg_class where oid='storage.objects'::regclass) then
