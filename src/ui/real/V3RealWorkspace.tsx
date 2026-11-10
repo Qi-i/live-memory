@@ -602,8 +602,10 @@ export function V3RealWorkspace() {
         : undefined}
   >
     {import.meta.env.VITE_V3_BETA==="1" && <aside role="note" className="v3-real-save-notice">
-      此站点是与 V2 分离的 V3 试用入口。原 V2 本机记录不会自动跨域出现；可从 V2 导出备份，再在此处导入。
-      旧账号仍为 V2 写入端时，V3 对该账号只读；不要将试用站误认为已切换的正式版。
+      {import.meta.env.VITE_V3_BETA_BASE==="pages"
+        ? "此试用页与正式 V2 共用域名和本机存储；本机模式编辑可能同步体现在 V2。请先导出可恢复备份。"
+        : "此试用站使用独立域名，旧 V2 本机数据不会自动跨域出现；可从 V2 导出后在此导入。"}
+      账号模式仍以 V2 为写入端时，此处只读；试用页不代表正式切换。
     </aside>}
     {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
