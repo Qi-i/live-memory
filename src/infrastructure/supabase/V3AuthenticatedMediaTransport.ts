@@ -58,7 +58,7 @@ export class SupabaseV3AccountMediaTransport implements V3MediaTransport {
 
     // An existing complete, signed image can keep its immutable object ref.
     // Never treat old public V2 paths as account-private objects.
-    if(asset.storagePath&&!sourceIsInline(asset.src)){
+    if(asset.storagePath?.startsWith(this.owner+"/v3/")&&!sourceIsInline(asset.src)){
       await this.verifyPath(asset);
       if(asset.src)return asset;
       const signed=await this.client.storage.from(V3_ACCOUNT_MEDIA_BUCKET)
