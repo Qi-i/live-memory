@@ -3,6 +3,8 @@ import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
 import { hasVerifiedOfflineMedia, persistVerifiedOfflineMedia, resolveMediaSource } from "../mediaCache";
 import { SupabaseV3MediaTransport, V3_PRIVATE_MEDIA_BUCKET, type V3MediaStorageClient } from "./supabase/V3MediaTransport";
+import { SupabaseV3AccountMediaTransport } from "./supabase/V3AuthenticatedMediaTransport";
+import type { V3MediaTransport } from "./supabase/V3MediaTransport";
 import { IndexedDbRecordRepository } from "./indexedDb/recordRepository";
 import { IndexedDbRevisionLedger } from "./indexedDb/revisionLedger";
 import { SupabaseV3RecordAdapter, type V3RpcClient } from "./supabase/V3CloudRecordAdapter";
@@ -88,16 +90,16 @@ export class V3SyncRuntime {
 
 export async function createV3SyncRuntime(
   settings: AppSettings,
-  provider: "personal" | "account",
+  provider: "personal" | "account" | "secure-account",
 ): Promise<V3SyncRuntime> {
   const scope = currentStorageScope();
   if (!scope.trim()) throw new Error("An authenticated and scoped local archive is required");
 
   let client: V3RpcClient;
   let identity: string;
-  let mediaTransport: SupabaseV3MediaTransport | undefined;
+  let mediaTransport: V3MediaTransport | undefined;
   let assertIdentity: () => Promise<void>;
-  if (provider === "account") {
+  if (provider === "account" || provider === "secure-account") {
     const account = getAccountClient();
     const { data, error } = await account.auth.getUser();
     if (error || !data.user?.id) throw new Error("Sign in before preparing V3 account synchronization");
@@ -105,7 +107,8 @@ export async function createV3SyncRuntime(
       throw new Error("Authenticated user and active storage account do not match");
     }
     const openingUser = data.user.id.toLowerCase();
-    identity = (import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "").trim().toLowerCase() + "|user:" + openingUser;
+    identity = (import.meta.env.VITE_ACCOUNT_SUPABASE_URL || "").trim().toLowerCase() +
+      "|user:" + openingUser + (provider === "secure-account" ? "|full-media" : "");
     client = account as unknown as V3RpcClient;
     assertIdentity = async () => {
       if (currentStorageScope() !== scope) throw new Error("V3_ACCOUNT_SESSION_CHANGED");
@@ -114,6 +117,20 @@ export async function createV3SyncRuntime(
         throw new Error("V3_ACCOUNT_SESSION_CHANGED");
       }
     };
+    if (provider === "secure-account") {
+      // Unlike the historical text-only account backup, full-media V3 uses
+      // account JWT Storage and CAS without any leaked personal ownerKey.
+      mediaTransport = new SupabaseV3AccountMediaTransport(
+        account as unknown as V3MediaStorageClient,
+        openingUser,
+        () => {
+          if (currentStorageScope() !== scope) throw new Error("V3_ACCOUNT_SESSION_CHANGED");
+        },
+        (asset) => resolveMediaSource(asset,true),
+        (asset,blob) => persistVerifiedOfflineMedia(asset,blob),
+        (asset) => hasVerifiedOfflineMedia(asset),
+      );
+    }
   } else {
     const endpoint = settings.supabase.url.trim().replace(/\/+$/, "").toLowerCase();
     const owner = settings.supabase.ownerKey?.trim() || "";

@@ -12,7 +12,7 @@ export interface CloudRecordEnvelope {
 }
 
 export interface CloudRecordAdapter {
-  readonly provider: "personal" | "account";
+  readonly provider: "personal" | "account" | "secure-account";
   readonly identity: string;
   readonly accountScope: string;
   readonly includeMedia: boolean;

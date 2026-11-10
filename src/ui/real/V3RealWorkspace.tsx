@@ -221,7 +221,7 @@ export function V3RealWorkspace() {
     if (access.mode==="account" && validScope && scope===access.user?.id?.toLowerCase()) {
       void (async()=>{
         const {createV3SyncRuntime}=await import("../../infrastructure/createV3SyncRuntime");
-        const runtime=await createV3SyncRuntime(readSettings(),"account");
+        const runtime=await createV3SyncRuntime(readSettings(),"secure-account");
         const mode=await runtime.writerMode();
         if(!alive||currentStorageScope()!==scope)return;
         accountRuntime.current={scope,runtime};
