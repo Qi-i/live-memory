@@ -1,0 +1,17 @@
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+const main=await readFile(new URL("../src/main.tsx",import.meta.url),"utf8");
+const vite=await readFile(new URL("../vite.config.ts",import.meta.url),"utf8");
+const ws=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
+assert.match(main,/const v3Beta = import\.meta\.env\.VITE_V3_BETA === "1"/);
+assert.match(main,/const v3RealWorkspace = v3Beta \|\|/);
+assert.match(main,/import\("\.\/ui\/real\/V3RealWorkspace"\)/);
+assert.match(main,/import\.meta\.env\.PROD && !v3Beta/);
+assert.match(vite,/env\.VITE_V3_BETA === "1" \? "\/"/);
+assert.match(vite,/standalonePreview \? "\/live-memory\/v3-preview\/" : "\/live-memory\/"/);
+assert.match(ws,/window\.location\.assign\("https:\/\/qi-i\.github\.io\/live-memory\/"\)/);
+assert.match(ws,/V3 安全试用 · 独立站点/);
+assert.match(ws,/旧账号仍为 V2 写入端时，V3 对该账号只读/);
+assert.match(ws,/writerMode\(\)!=="v3"/);
+assert.doesNotMatch(main,/serviceWorker\.register\(.*v3Beta/, "Service worker must stay disabled for beta");
+console.log("V3 beta guard passed: isolated root, opt-in build only, V2 return, read-only account fence, no PWA cache.");
