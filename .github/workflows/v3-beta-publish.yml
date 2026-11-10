@@ -162,6 +162,9 @@ jobs:
         uses: actions/deploy-pages@v4
 
   verify:
+    permissions:
+      contents: read
+      issues: write
     needs: deploy
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -195,3 +198,35 @@ jobs:
           done
           echo "Live V3 beta SHA verification failed; do not claim deployment" >&2
           exit 1
+
+      - name: Record independently verified beta SHA in release gate
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          base="${PAGES_ROOT%/}"
+          v2_info="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$base/build-info.json")"
+          v2_sha="$(printf '%s' "$v2_info" | node -e '
+            let input="";
+            process.stdin.on("data",chunk=>input+=chunk);
+            process.stdin.on("end",()=>{
+              try {
+                const obj=JSON.parse(input);
+                if(obj.source!=="main"||obj.deployment!=="v2-unchanged"||
+                   !/^[a-f0-9]{40}$/.test(obj.sha))process.exit(1);
+                process.stdout.write(obj.sha);
+              }catch{process.exit(1)}
+            });
+          ')"
+          cat > /tmp/v3-beta-live-proof.md <<EOF
+          ### V3 isolated beta live SHA verification succeeded
+
+          - **Testable beta:** ${base}/v3-beta/
+          - **Beta commit SHA:** ${V3_SHA}
+          - **Preserved V2 main SHA:** ${v2_sha}
+          - **Run:** https://github.com/Qi-i/live-memory/actions/runs/${GITHUB_RUN_ID}
+          - **Verification:** GitHub Pages served build-info + beta-info; browser-verified beta artifact; the deployed beta SHA matched this workflow run; V2 main was rebuilt from its original commit and was not edited.
+          - **Release status:** beta only; not the official V3 release, no user writer cutover, no old-owner credential rotation, no data or image deletion.
+          EOF
+          gh issue comment 54 --repo Qi-i/live-memory --body-file /tmp/v3-beta-live-proof.md
