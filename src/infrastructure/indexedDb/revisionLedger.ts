@@ -23,14 +23,14 @@ interface StoredEntry {
 export class IndexedDbRevisionLedger implements RevisionLedger {
   private constructor(
     readonly accountScope: string,
-    readonly provider: "personal" | "account",
+    readonly provider: "personal" | "account" | "secure-account",
     readonly identity: string,
     private readonly prefix: string,
   ) {}
 
   static async create(
     accountScope: string,
-    provider: "personal" | "account",
+    provider: "personal" | "account" | "secure-account",
     identity: string,
   ): Promise<IndexedDbRevisionLedger> {
     const prefix = await createBaselineKey(accountScope, provider, identity);
