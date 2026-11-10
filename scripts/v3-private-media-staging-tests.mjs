@@ -71,6 +71,23 @@ await assert.rejects(stage.stageLegacyMediaCopies(manifest,{
 await assert.rejects(stage.stageLegacyMediaCopies(manifest,{
   ...adapter,sourcePaths:[],
 }),/V3_STAGING_SOURCE_INVENTORY_CHANGED/);
+
+const alteredProof=structuredClone(manifest);
+alteredProof.totalBytes+=1;
+const originalUploadCalls=uploadCalls;
+await assert.rejects(stage.stageLegacyMediaCopies(alteredProof,adapter),
+  /V3_STAGING_PROOF_TAMPERED/);
+assert.equal(uploadCalls,originalUploadCalls,
+  "A tampered manifest must be rejected before the first private object upload");
+const swappedSource=structuredClone(manifest);
+swappedSource.entries[0].sourcePathSha256="f".repeat(64);
+await assert.rejects(stage.stageLegacyMediaCopies(swappedSource,adapter),
+  /V3_STAGING_PROOF_TAMPERED/);
+const wrongDestination=structuredClone(manifest);
+wrongDestination.privateBucket="echo-media";
+await assert.rejects(stage.stageLegacyMediaCopies(wrongDestination,adapter),
+  /V3_STAGING_INVALID_PROOF/);
+
 await assert.rejects(stage.stageLegacyMediaCopies(manifest,{
   ...adapter,accountUserId:"a".repeat(64),
 }),/V3_STAGING_INVALID_PROOF/);
