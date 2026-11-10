@@ -11,7 +11,8 @@ assert.match(vite,/env\.VITE_V3_BETA === "1" \? \(env\.VITE_V3_BETA_BASE === "pa
 assert.match(vite,/standalonePreview \? "\/live-memory\/v3-preview\/" : "\/live-memory\/"/);
 assert.match(ws,/window\.location\.assign\("https:\/\/qi-i\.github\.io\/live-memory\/"\)/);
 assert.match(ws,/V3 安全试用 · 独立站点/);
-assert.match(ws,/旧账号仍为 V2 写入端时，V3 对该账号只读/);
+assert.match(ws,/账号模式仍以 V2 为写入端时，此处只读/);
+assert.match(ws,/本机模式编辑可能同步体现在 V2/);
 assert.match(ws,/writerMode\(\)!=="v3"/);
 assert.doesNotMatch(main,/serviceWorker\.register\(.*v3Beta/, "Service worker must stay disabled for beta");
 console.log("V3 beta guard passed: isolated root, opt-in build only, V2 return, read-only account fence, no PWA cache.");
