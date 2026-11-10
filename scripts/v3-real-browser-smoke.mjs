@@ -103,7 +103,7 @@ try {
   await page.getByRole("button",{name:"完整档案",exact:true}).first().click();
   await page.locator(".archive-page").waitFor({state:"visible"});
   await page.getByText("北京现场 · 真实本机回归",{exact:false}).first().waitFor();
-  await page.getByRole("button",{name:"生成分享图"}).click();
+  await page.getByRole("button",{name:"制作分享图",exact:true}).click();
   const share=page.getByRole("dialog",{name:"分享工作室"});
   await share.waitFor({state:"visible"});
   await share.getByRole("button",{name:"退出分享制作"}).click();
