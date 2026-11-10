@@ -57,7 +57,7 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Start local isolated beta
         run: |
-          npx vite preview --configLoader runner --host 127.0.0.1 --port 4176 > /tmp/v3-real-beta.log 2>&1 &
+          VITE_V3_BETA=1 npx vite preview --configLoader runner --host 127.0.0.1 --port 4176 > /tmp/v3-real-beta.log 2>&1 &
           for attempt in {1..30}; do
             if curl -fsS http://127.0.0.1:4176/ >/dev/null; then exit 0; fi
             sleep 1
