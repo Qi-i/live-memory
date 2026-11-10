@@ -121,6 +121,28 @@ const before=downloads.length;
 await account.prepareIncoming(hydrated[0].record);
 assert.equal(downloads.length,before,"Verified private offline image must not redownload");
 
+const renewed=await media.stage(record.id,{
+  ...hydrated[0].record.media[0],src:"https://expired.invalid/old-token",
+});
+assert.equal(renewed.storagePath,path);
+assert.match(renewed.src,/^https:\/\/signed\.test\//,
+  "Never trust an old signed URL when reusing a private object");
+assert.notEqual(renewed.src,"https://expired.invalid/old-token");
+const originalObject=saved.get(path);
+saved.delete(path);
+await assert.rejects(media.stage(record.id,renewed),
+  /V3_ACCOUNT_MEDIA_EXISTING_BYTES_MISMATCH/,
+  "A previously uploaded but now missing media object must block record CAS");
+saved.set(path,new Blob(["CORRUPTED PRIVATE BYTES"],{type:"image/png"}));
+await assert.rejects(media.stage(record.id,renewed),
+  /V3_ACCOUNT_MEDIA_EXISTING_BYTES_MISMATCH/,
+  "A hash-named path must never substitute for byte-level integrity");
+saved.set(path,originalObject);
+const revived=await media.stage(record.id,{...renewed,src:""});
+assert.match(revived.src,/^https:\/\/signed\.test\//,
+  "Valid unchanged objects must recover a fresh signed URL");
+
+
 await assert.rejects(account.compareAndSwap({...record,title:"stale"},null),
   error=>error instanceof port.RemoteRevisionChanged);
 assert.equal(fake.rows.get("concert-1").payload.title,"Synthetic");

@@ -56,16 +56,31 @@ export class SupabaseV3AccountMediaTransport implements V3MediaTransport {
     if(!recordId||!asset.id||asset.recordId!==recordId)
       throw Error("V3_ACCOUNT_MEDIA_RECORD_MISMATCH");
 
-    // An existing complete, signed image can keep its immutable object ref.
-    // Never treat old public V2 paths as account-private objects.
+    // A private-looking path and a stale signed URL do NOT prove that the
+    // original object still exists. Verify actual immutable bytes before CAS
+    // can acknowledge this record, then refresh the signed URL.
     if(asset.storagePath?.startsWith(this.owner+"/v3/")&&!sourceIsInline(asset.src)){
-      await this.verifyPath(asset);
-      if(asset.src)return asset;
-      const signed=await this.client.storage.from(V3_ACCOUNT_MEDIA_BUCKET)
-        .createSignedUrl(asset.storagePath,3600);
+      const expected=await this.verifyPath(asset);
+      const store=this.client.storage.from(V3_ACCOUNT_MEDIA_BUCKET);
+      const checked=await store.download(asset.storagePath);
+      this.assertScope();
+      if(checked.error||!checked.data||checked.data.size<1||checked.data.size>MAX)
+        throw Error("V3_ACCOUNT_MEDIA_EXISTING_BYTES_MISMATCH");
+      const actual=await sha256(await checked.data.arrayBuffer());
+      this.assertScope();
+      if(actual!==expected)throw Error("V3_ACCOUNT_MEDIA_EXISTING_BYTES_MISMATCH");
+      const signed=await store.createSignedUrl(asset.storagePath,3600);
       this.assertScope();
       if(signed.error||!signed.data?.signedUrl)throw Error("V3_ACCOUNT_MEDIA_SIGNING_FAILED");
-      return {...asset,src:signed.data.signedUrl,source:"supabase"};
+      if(this.cacheForOffline){
+        const cached=this.hasOfflineCopy?await this.hasOfflineCopy(asset):false;
+        this.assertScope();
+        if(!cached){
+          await this.cacheForOffline(asset,checked.data);
+          this.assertScope();
+        }
+      }
+      return {...asset,src:signed.data.signedUrl,source:"supabase",size:checked.data.size};
     }
 
     const resolved=await this.sourceResolver(asset);
