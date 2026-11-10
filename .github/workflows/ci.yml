@@ -27,6 +27,29 @@ jobs:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
 
+      - name: Build separately usable V3 real beta candidate
+        if: github.head_ref == 'release/v3-isolated-usable-beta-20261111'
+        run: |
+          node scripts/v3-isolated-beta-tests.mjs
+          npm run build
+          node -e '
+            const fs=require("fs");
+            const p=JSON.parse(fs.readFileSync("dist/v3-build-info.json","utf8"));
+            if(p.sha!==process.env.GITHUB_SHA || p.version!=="v3-isolated-beta" ||
+               p.release!==false || p.cloudWriterCutover!==false)process.exit(1);
+          '
+        env:
+          VITE_V3_BETA: "1"
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      - uses: actions/upload-artifact@v4
+        if: github.head_ref == 'release/v3-isolated-usable-beta-20261111'
+        with:
+          name: v3-real-beta-static-bundle
+          path: dist
+          retention-days: 14
+          if-no-files-found: error
+
   visual:
     if: github.event_name == 'pull_request'
     needs: verify
@@ -81,6 +104,19 @@ jobs:
         run: node scripts/v3-two-device-browser-smoke.mjs
         env:
           V3_TWO_DEVICE_URL: http://127.0.0.1:5173/live-memory/
+      - name: Verify isolated V3 beta actual root page with device data and import
+        if: github.head_ref == 'release/v3-isolated-usable-beta-20261111'
+        run: |
+          VITE_V3_BETA=1 npm run build
+          npx vite preview --configLoader runner --host 127.0.0.1 --port 4176 > /tmp/v3-beta.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4176/ >/dev/null; then break; fi
+            sleep 1
+          done
+          V3_REAL_AUDIT_URL=http://127.0.0.1:4176/ node scripts/v3-real-browser-smoke.mjs
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
       - uses: actions/upload-artifact@v4
         if: always()
         with:
