@@ -11,14 +11,19 @@ import { IndexedDbRecordRepository } from "../../infrastructure/indexedDb/record
 import { RecordEditor } from "../../overlays";
 import { blankRecord } from "../../seeds";
 import { ShareStudio, type ShareFormat } from "../../shareStudio";
+import { ArchivePage, type ArchiveLayout } from "../../archive";
+import { duplicateRecordForNextShow } from "../../recordActions";
+import { hasPersonalCloudConnection } from "../../supabase";
+import { ConfirmDialog, ImageZoom } from "../../overlays";
+import { V3MigrationPanel } from "../system/V3MigrationPanel";
 import { ActionToolbar, MapSplitPane, StageHero, WorkspaceShell } from "../system/WorkspaceShell";
 import "../system/preview.css";
 import "./realWorkspace.css";
 
-type Page = "档案" | "统计" | "城市";
+type Page = "档案" | "完整档案" | "统计" | "城市" | "迁移";
 type Mode = "海报" | "时间线" | "列表";
 const PAGE_SIZE = 18;
-const navigation: Page[] = ["档案", "统计", "城市"];
+const navigation: Page[] = ["档案", "完整档案", "统计", "城市", "迁移"];
 const archiveModes: Mode[] = ["海报", "时间线", "列表"];
 
 function backToV2() {
@@ -188,6 +193,7 @@ export function V3RealWorkspace() {
   const access=useAccess();
   const [page,setPage]=useState<Page>("档案");
   const [mode,setMode]=useState<Mode>("海报");
+  const [fullLayout,setFullLayout]=useState<ArchiveLayout>("poster");
   const [search,setSearch]=useState("");
   const [pageIndex,setPageIndex]=useState(0);
   const [snapshot,setSnapshot]=useState<{scope:string;records:EventRecord[];error:string;busy:boolean}>({
@@ -196,6 +202,8 @@ export function V3RealWorkspace() {
   const [reload,setReload]=useState(0);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [sharing,setSharing]=useState(false);
+  const [zoomMedia,setZoomMedia]=useState<MediaAsset|null>(null);
+  const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
   const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-landscape");
   const [restoreBusy,setRestoreBusy]=useState(false);
   const [restorePreview,setRestorePreview]=useState<{
@@ -246,6 +254,9 @@ export function V3RealWorkspace() {
     const scope=currentStorageScope();
     setSelectedId(null);
     setEditing(null);
+    setZoomMedia(null);
+    setDeleteCandidate(null);
+    setSharing(false);
     setPosters([]);
     setSnapshot({scope,records:[],error:"",busy:true});
     if (!validScope) {
@@ -294,6 +305,33 @@ export function V3RealWorkspace() {
     setEditing({draft:record??blankRecord(),baseline:record??null,scope:actualScope});
     setSelectedId(null);
   };
+
+  const requestBusinessEdit=(record:EventRecord)=>{
+    if(!canEdit){setNotice("旧 V2 账号仍是正式写入端；完整业务页面可查看，但 V3 编辑须等通过服务器安全切换后启用。");return;}
+    startEdit(record);
+  };
+  const requestDuplicate=(record:EventRecord)=>{
+    if(!canEdit){setNotice("当前账号保持 V2 写入模式，V3 不会创建重复记录。");return;}
+    setEditing({draft:duplicateRecordForNextShow(record),baseline:null,scope:actualScope});
+    setSelectedId(null);
+  };
+  const trashRecord=async(record:EventRecord)=>{
+    if(!canEdit || currentStorageScope()!==actualScope)throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
+    if(canEditAccount){
+      const runtime=accountRuntime.current;
+      if(!runtime || runtime.scope!==actualScope || await runtime.runtime.writerMode()!=="v3")
+        throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
+    }
+    const timestamp=new Date().toISOString();
+    const result=await saveRecordDraft(new IndexedDbRecordRepository(actualScope),
+      {...record,deletedAt:timestamp,updatedAt:timestamp},record);
+    if(result.status!=="saved")throw Error("V3_RECORD_EDITED_ELSEWHERE");
+    if(currentStorageScope()!==actualScope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+    setSelectedId(null);
+    setNotice("已按记录版本原子移入本机回收站；原图没有删除。云端变更仍须另行安全同步。");
+    setReload(n=>n+1);
+  };
+
   const saveLocalDraft=async (draft:EventRecord)=>{
     if(!canEdit || !editing || editing.scope!==currentStorageScope()) {
       throw new Error("账号作用域已更改；未保存任何记录");
@@ -408,7 +446,7 @@ export function V3RealWorkspace() {
   const paged=active.slice(PAGE_SIZE*pageIndex,PAGE_SIZE*(pageIndex+1));
   const totalPages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));
   useEffect(()=>{setPageIndex(0);},[search,mode,page]);
-  const navButtons=navigation.map(label=><button type="button" key={label}
+  const navButtons=navigation.filter(label=>label!=="迁移"||access.mode==="account").map(label=><button type="button" key={label}
     aria-current={page===label?"page":undefined} onClick={()=>setPage(label)}>{label}</button>);
   return <WorkspaceShell
     brand={<><span className="v3-preview-brand">◈</span>
@@ -426,7 +464,7 @@ export function V3RealWorkspace() {
       <button type="button" onClick={backToV2}>返回正式 V2</button></div>}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · V3 REAL DATA</span>
-        <strong>{page==="档案"?"演出档案":page}</strong>
+        <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
         <small>{canEditLocal?"本机原子保存 · 云同步未接管"
           : canEditAccount?"本机原子保存 · 账号云端 CAS 手动同步"
           : "真实账号只读验证 · 服务器尚未允许 V3 写入"}</small></div>
@@ -441,7 +479,15 @@ export function V3RealWorkspace() {
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
     </div>}
-    overlay={sharing
+    overlay={deleteCandidate
+      ? <ConfirmDialog action={{
+          title:"将演出移入回收站",message:"只标记删除此演出；不删除原图，保留版本冲突保护。",
+          confirmLabel:"确认移入回收站",danger:true,
+          onConfirm:()=>trashRecord(deleteCandidate),
+        }} onClose={()=>setDeleteCandidate(null)}/>
+      : zoomMedia
+        ? <ImageZoom media={zoomMedia} onClose={()=>setZoomMedia(null)}/>
+      : sharing
       ? <ShareStudio records={records} format={shareFormat} setFormat={setShareFormat}
           mapSettings={readSettings().map}
           onOpenMapSettings={()=>{
@@ -520,7 +566,22 @@ export function V3RealWorkspace() {
             onClick={()=>setPageIndex(n=>n+1)}>下一页</button>
         </div>}
       </>}
+      {page==="完整档案" && <ArchivePage
+        records={records.filter(row=>!row.deletedAt)}
+        settings={readSettings()} layout={fullLayout} setLayout={setFullLayout}
+        shareMode={false} setShareMode={setSharing}
+        shareFormat={shareFormat} setShareFormat={setShareFormat}
+        onOpen={row=>setSelectedId(row.id)}
+        onEdit={requestBusinessEdit} onDuplicate={requestDuplicate}
+        onDelete={row=>canEdit?setDeleteCandidate(row):setNotice("此账号 V3 仍是只读；不能执行删除或迁移写入。")}
+        onZoom={setZoomMedia}
+        onOpenMapSettings={()=>setNotice("如需配置地图密钥，请返回 V2 设置页；完整档案地图读取现有地图配置。")}
+      />}
       {page==="统计" && <RealStatistics records={records}/>}
+      {page==="迁移" && access.mode==="account" && validScope &&
+        <V3MigrationPanel settings={readSettings()} records={records}
+          personalConnected={hasPersonalCloudConnection(readSettings())}/>}
+
       {page==="城市" && <RealCityView records={records} onOpen={setSelectedId}/>}
     </>}
   </WorkspaceShell>;
