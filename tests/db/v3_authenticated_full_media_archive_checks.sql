@@ -152,9 +152,14 @@ do $anon$
 declare
   blocked boolean:=false;
 begin
-  if exists(select 1 from public.live_memory_v3_secure_records) then
-    raise exception 'ANONYMOUS_READ_SECURE_ARCHIVE';
-  end if;
+  -- The stronger behavior is that anon lacks table SELECT permission
+  -- entirely (rather than merely receiving zero rows through RLS).
+  blocked:=false;
+  begin
+    perform 1 from public.live_memory_v3_secure_records limit 1;
+  exception when insufficient_privilege then blocked:=true; end;
+  if not blocked then raise exception 'ANONYMOUS_READ_SECURE_ARCHIVE'; end if;
+  blocked:=false;
   begin
     perform public.live_memory_v3_cas_secure_account(
       'anonymous','{"id":"anonymous","media":[]}'::jsonb,null,
