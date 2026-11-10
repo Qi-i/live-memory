@@ -31,7 +31,8 @@ with check (
   and (storage.foldername(name))[2]='v3'
   and (storage.foldername(name))[3] ~ '^[a-f0-9]{64}$'
   and (storage.foldername(name))[4] ~ '^[a-f0-9]{64}$'
-  and storage.filename(name) ~ '^[a-f0-9]{64}\.(jpg|png|webp|gif|avif)$'
+  and array_length(storage.foldername(name),1)=4
+  and split_part(name,'/',5) ~ '^[a-f0-9]{64}\.(jpg|png|webp|gif|avif)$'
 );
 
 create policy "v3 authenticated media staging owner read" on storage.objects
@@ -43,7 +44,8 @@ using (
   and (storage.foldername(name))[2]='v3'
   and (storage.foldername(name))[3] ~ '^[a-f0-9]{64}$'
   and (storage.foldername(name))[4] ~ '^[a-f0-9]{64}$'
-  and storage.filename(name) ~ '^[a-f0-9]{64}\.(jpg|png|webp|gif|avif)$'
+  and array_length(storage.foldername(name),1)=4
+  and split_part(name,'/',5) ~ '^[a-f0-9]{64}\.(jpg|png|webp|gif|avif)$'
 );
 -- No UPDATE or DELETE policy: once staged, original content-addressed media
 -- cannot be replaced by a different client or silently erased.
