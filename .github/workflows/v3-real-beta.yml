@@ -1,0 +1,83 @@
+name: Package isolated V3 real-data beta
+
+on:
+  pull_request:
+    branches: [refactor/core-v3-architecture-20261108]
+    paths:
+      - "src/main.tsx"
+      - "src/ui/real/**"
+      - "vite.config.ts"
+      - "scripts/v3-isolated-beta-tests.mjs"
+      - ".github/workflows/v3-real-beta.yml"
+  push:
+    branches: [release/v3-isolated-usable-beta-20261111]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify-real-beta:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Verify V3 isolated beta boundaries
+        run: node scripts/v3-isolated-beta-tests.mjs
+      - name: Build authenticated, device-ready beta without production cutover
+        run: npm run build
+        env:
+          VITE_V3_BETA: "1"
+          GITHUB_SHA: ${{ github.sha }}
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Verify beta build manifest and no legacy base path
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ github.sha }}
+        run: |
+          node -e '
+            const fs=require("fs");
+            const m=JSON.parse(fs.readFileSync("dist/v3-build-info.json","utf8"));
+            if(m.sha!==process.env.EXPECTED_SHA || m.version!=="v3-isolated-beta" ||
+               m.release!==false || m.cloudWriterCutover!==false)process.exit(1);
+            const h=fs.readFileSync("dist/index.html","utf8");
+            if(h.includes("/live-memory/assets/"))process.exit(1);
+          '
+      - name: Install browser
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Start local isolated beta
+        run: |
+          npx vite preview --configLoader runner --host 127.0.0.1 --port 4176 > /tmp/v3-real-beta.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4176/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/v3-real-beta.log
+          exit 1
+      - name: Browser E2E: original media backup restore and real archive
+        run: node scripts/v3-real-browser-smoke.mjs
+        env:
+          V3_REAL_AUDIT_URL: http://127.0.0.1:4176/
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: v3-real-beta-e2e
+          path: visual-artifacts/v3-real
+          retention-days: 14
+          if-no-files-found: warn
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v3-real-beta-dist
+          path: dist
+          retention-days: 14
+          if-no-files-found: error
