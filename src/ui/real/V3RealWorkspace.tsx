@@ -14,7 +14,7 @@ import { ShareStudio, type ShareFormat } from "../../shareStudio";
 import { ArchivePage, type ArchiveLayout } from "../../archive";
 import { duplicateRecordForNextShow } from "../../recordActions";
 import { hasPersonalCloudConnection } from "../../supabase";
-import { ConfirmDialog, ImageZoom } from "../../overlays";
+import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
 import { ActionToolbar, MapSplitPane, StageHero, WorkspaceShell } from "../system/WorkspaceShell";
 import "../system/preview.css";
@@ -204,6 +204,7 @@ export function V3RealWorkspace() {
   const [sharing,setSharing]=useState(false);
   const [zoomMedia,setZoomMedia]=useState<MediaAsset|null>(null);
   const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
+  const [importOpen,setImportOpen]=useState(false);
   const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-landscape");
   const [restoreBusy,setRestoreBusy]=useState(false);
   const [exportBusy,setExportBusy]=useState(false);
@@ -257,6 +258,7 @@ export function V3RealWorkspace() {
     setEditing(null);
     setZoomMedia(null);
     setDeleteCandidate(null);
+    setImportOpen(false);
     setSharing(false);
     setPosters([]);
     setSnapshot({scope,records:[],error:"",busy:true});
@@ -354,6 +356,29 @@ export function V3RealWorkspace() {
       ? "本机已原子保存；点击“安全同步”才会传输至已切换的账号云端。"
       : "已安全保存至此设备；尚未启用云同步");
     setReload(n=>n+1);
+  };
+
+
+  const saveImportedRecord=async(record:EventRecord)=>{
+    const scope=currentStorageScope();
+    if(!canEdit || !importOpen || !scope || scope!==actualScope)
+      throw Error("V3_IMPORT_WRITER_NOT_ACTIVE");
+    // The client-side UI permission alone is not a writer fence. A fresh
+    // authenticated server marker is mandatory for EACH account write.
+    if(canEditAccount){
+      const current=accountRuntime.current;
+      if(!current||current.scope!==scope||await current.runtime.writerMode()!=="v3")
+        throw Error("V3_IMPORT_ACCOUNT_WRITER_NOT_ACTIVE");
+    }else if(!canEditLocal){
+      throw Error("V3_IMPORT_SCOPE_NOT_ALLOWED");
+    }
+    if(currentStorageScope()!==scope)throw Error("V3_IMPORT_ACCOUNT_CHANGED");
+    const result=await saveRecordDraft(new IndexedDbRecordRepository(scope),record,null);
+    if(result.status!=="saved")throw Error("V3_IMPORT_RECORD_ID_CONFLICT");
+    if(currentStorageScope()!==scope)throw Error("V3_IMPORT_ACCOUNT_CHANGED");
+    setTransferApproval(null);
+    // Imported media is local until the user explicitly triggers authorized
+    // CAS synchronization. No V2 upload, no silent account-cloud writer.
   };
 
   const exportVerifiedLocalBackup=async()=>{
@@ -527,6 +552,10 @@ export function V3RealWorkspace() {
       {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
         {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
       <button type="button" onClick={()=>setSharing(true)} disabled={!records.length}>制作分享图</button>
+      {canEdit && <button type="button" onClick={()=>setImportOpen(true)}
+        disabled={snapshot.busy||syncBusy||restoreBusy}>
+        批量导入
+      </button>}
       {canEditLocal && <button type="button" onClick={()=>void exportVerifiedLocalBackup()}
         disabled={exportBusy||restoreBusy||snapshot.busy}>
         {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}
@@ -534,7 +563,15 @@ export function V3RealWorkspace() {
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
       <button type="button" onClick={backToV2}>返回 V2</button>
     </div>}
-    overlay={deleteCandidate
+    overlay={importOpen && canEdit
+      ? <ImportDrawer
+          onClose={()=>{
+            setImportOpen(false);
+            setReload(n=>n+1);
+          }}
+          onSave={saveImportedRecord}
+          flash={message=>setNotice(message+" · 当前仅保存本机；云端同步需另行确认。")}/>
+      : deleteCandidate
       ? <ConfirmDialog action={{
           title:"将演出移入回收站",message:"只标记删除此演出；不删除原图，保留版本冲突保护。",
           confirmLabel:"确认移入回收站",danger:true,

@@ -134,6 +134,46 @@ try {
   // Only the explicitly device-local archive may write; verify a real
   // conditional transaction, then simulate an external-tab edit conflict.
   if(width===390){
+    // Real UI path: locally import an original poster through the existing
+    // multi-source import drawer. No cloud writer or legacy V2 timers run.
+    await page.getByRole("button",{name:"批量导入",exact:true}).click();
+    const importer=page.locator('.import-drawer-v2[role="dialog"]');
+    await importer.waitFor({state:"visible"});
+    // Browser-generated PNG guarantees real decodable original image bytes.
+    const encoded=await page.evaluate(()=>{
+      const canvas=document.createElement("canvas");
+      canvas.width=4;canvas.height=4;
+      const ctx=canvas.getContext("2d");
+      if(!ctx)throw Error("Canvas API unavailable");
+      ctx.fillStyle="#7f5a9c";ctx.fillRect(0,0,4,4);
+      return canvas.toDataURL("image/png");
+    });
+    const pixel=Buffer.from(encoded.split(",")[1],"base64");
+    await importer.locator('label:has-text("海报导入") input[type="file"]').setInputFiles({
+      name:"v3-import-browser.png",mimeType:"image/png",buffer:pixel,
+    });
+    await page.getByRole("status").filter({hasText:"已导入 1 张海报档案"}).waitFor();
+    await importer.getByRole("button",{name:"关闭批量导入"}).click();
+    await importer.waitFor({state:"detached"});
+    const imported=await page.evaluate(async()=>{
+      const db=await new Promise((resolve,reject)=>{
+        const request=indexedDB.open("echo-archive-v2:device-local",1);
+        request.onsuccess=()=>resolve(request.result);
+        request.onerror=()=>reject(request.error);
+      });
+      const rows=await new Promise((resolve,reject)=>{
+        const request=db.transaction("records","readonly").objectStore("records").getAll();
+        request.onsuccess=()=>resolve(request.result);
+        request.onerror=()=>reject(request.error);
+      });
+      db.close();return rows;
+    });
+    const newPoster=imported.find(row=>row.title==="v3-import-browser");
+    if(imported.length!==4 || !newPoster?.media?.[0]?.src?.startsWith("data:image/png;base64,")){
+      throw Error("V3 batch import must persist a complete original poster without V2 writes");
+    }
+  }
+  if(width===390){
     // Exercise actual user-file -> byte-verification -> single IndexedDB
     // transaction -> persisted data-URL readback, not just mock unit tests.
     const sourceBytes=Buffer.from("SYNTHETIC PORTABLE TICKET ORIGINAL");
@@ -196,7 +236,7 @@ try {
       db.close();
       return rows;
     });
-    if(persisted.length!==5||!persisted.some(row=>row.title==="本机安全新增 · V3")) {
+    if(persisted.length!==6||!persisted.some(row=>row.title==="本机安全新增 · V3")) {
       throw Error("Device V3 atomic create did not persist one new record");
     }
 
