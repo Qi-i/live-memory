@@ -31,7 +31,19 @@ try {
   });
   const response=await page.goto(base,{waitUntil:"domcontentloaded"});
   if(!response||response.status()!==200)throw Error("V3 real workspace endpoint failed: "+response?.status());
-  await page.locator('[data-ui-system="v3"]').waitFor({state:"visible",timeout:15000});
+  try {
+    await page.locator('[data-ui-system="v3"]').waitFor({state:"visible",timeout:15000});
+  } catch (error) {
+    console.error("V3_ROUTE_DIAGNOSTIC",JSON.stringify({
+      href:page.url(),
+      body:(await page.locator("body").innerText().catch(()=>"")).slice(0,1400),
+      pageErrors:errors.slice(0,12),
+      external:external.slice(0,6),
+      scripts:await page.locator("script[src]").evaluateAll(nodes=>nodes.map(n=>n.src)),
+      startup:{deviceOnly:await page.evaluate(()=>localStorage.getItem("live-memory-device-only-v1"))},
+    }));
+    throw error;
+  }
   // Create ONLY disposable synthetic device rows. This test is never allowed
   // to read any real account, contact Supabase or invoke V2 automatic sync.
   await page.evaluate(async ({rows})=>{
