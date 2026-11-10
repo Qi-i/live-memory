@@ -105,4 +105,18 @@ assert.match(accountFence,/public\.live_memory_v3_cas_account\(/);
 assert.match(accountFence,/revoke all on function public\.live_memory_v3_cas_account_scoped/);
 assert.doesNotMatch(accountFence,/\bsecurity definer\b/i);
 assert.doesNotMatch(accountFence,/\b(drop table|truncate|delete from public\.echo_|update public\.echo_)\b/i);
+const stagingSQL=await readFile(
+  new URL("../supabase/migrations/024_v3_authenticated_media_staging.sql",import.meta.url),"utf8",
+);
+assert.match(stagingSQL,/echo-v3-media-staging/);
+assert.match(stagingSQL,/public=false/);
+assert.match(stagingSQL,/for insert to authenticated/);
+assert.match(stagingSQL,/for select to authenticated/);
+assert.match(stagingSQL,/auth\.uid\(\)/);
+assert.match(stagingSQL,/storage\.foldername\(name\)/);
+assert.match(stagingSQL,/split_part\(name,'\/',5\)/);
+assert.doesNotMatch(stagingSQL,/for (update|delete)|security definer/i,
+  "Staged pictures must remain immutable and auth-account scoped");
+assert.doesNotMatch(stagingSQL,/\b(delete from storage\.objects|update storage\.objects|update public\.echo_|truncate)\b/i,
+  "Staging bucket migration must never change historical objects or records");
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");

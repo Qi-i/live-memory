@@ -105,6 +105,8 @@ assert.match(service,/fingerprintPaths\(objectsBefore\)!==fingerprintPaths\(obje
 assert.match(panel,/exportLegacyMediaAudit/);
 assert.match(panel,/auditAuthenticatedLegacyMedia\(settings,assertScope\)/);
 assert.match(supabase,/deriveAccountLinkedLegacyOwnerKey/);
-assert.doesNotMatch(service,/\.upload\(|\.remove\(|\.update\(|\.upsert\(|\.copy\(/);
+assert.doesNotMatch(service.split("export async function stageAuthenticatedLegacyMedia(")[0],
+  /\.upload\(|\.remove\(|\.update\(|\.upsert\(|\.copy\(/,
+  "The source audit must remain strictly read-only, even when a separate staging action exists");
 assert.doesNotMatch(panel,/activate_personal|activate_account/);
 console.log("V3 read-only legacy media proof passed: exact Storage inventory, SHA-256, redaction, account binding, no writes.");
