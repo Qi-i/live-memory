@@ -7,7 +7,7 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, ".", "VITE_");
   const standalonePreview = env.VITE_V3_STANDALONE === "1";
   return {
-    base: standalonePreview ? "/live-memory/v3-preview/" : "/live-memory/",
+    base: env.VITE_V3_BETA === "1" ? "/" : standalonePreview ? "/live-memory/v3-preview/" : "/live-memory/",
     build: {
       sourcemap: false,
       ...(standalonePreview ? { rollupOptions: { input: "v3-preview.html" } } : {}),
