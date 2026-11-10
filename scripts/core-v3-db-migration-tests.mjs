@@ -119,4 +119,25 @@ assert.doesNotMatch(stagingSQL,/for (update|delete)|security definer/i,
   "Staged pictures must remain immutable and auth-account scoped");
 assert.doesNotMatch(stagingSQL,/\b(delete from storage\.objects|update storage\.objects|update public\.echo_|truncate)\b/i,
   "Staging bucket migration must never change historical objects or records");
+const fullMediaArchive = await readFile(
+  new URL("../supabase/migrations/025_v3_authenticated_full_media_archive.sql", import.meta.url), "utf8",
+);
+assert.match(fullMediaArchive, /create table if not exists public\.live_memory_v3_secure_records/);
+assert.match(fullMediaArchive, /alter table public\.live_memory_v3_secure_records enable row level security/);
+assert.match(fullMediaArchive, /create policy "v3 secure archive account select"/);
+assert.match(fullMediaArchive, /create policy "v3 secure archive account insert"/);
+assert.match(fullMediaArchive, /create policy "v3 secure archive account update"/);
+assert.match(fullMediaArchive, /user_id=\(select auth\.uid\(\)\)/);
+assert.match(fullMediaArchive, /create or replace function public\.live_memory_v3_cas_secure_account/);
+assert.match(fullMediaArchive, /security invoker set search_path=pg_catalog/);
+assert.match(fullMediaArchive, /V3_SECURE_DIRECT_WRITE_FENCED/);
+assert.match(fullMediaArchive, /V3_SECURE_MEDIA_NOT_STAGED/);
+assert.match(fullMediaArchive, /V3_SECURE_REVISION_CONFLICT/);
+assert.match(fullMediaArchive, /V3_SECURE_ACCOUNT_CHANGED/);
+assert.match(fullMediaArchive, /pg_advisory_xact_lock/);
+assert.match(fullMediaArchive, /storage\.objects as object/);
+assert.match(fullMediaArchive, /echo-v3-media-staging/);
+assert.match(fullMediaArchive, /revoke all on function public\.live_memory_v3_cas_secure_account/);
+assert.doesNotMatch(fullMediaArchive, /security definer|for delete|grant\s+delete|delete from storage\.objects|drop table|truncate/i,
+  "The new full-media private mirror must never bypass tenant RLS or delete historical data");
 console.log("V3 CAS migration contract passed: additive schema, atomic revisions, RLS invoker, owner checks, no destructive updates.");
