@@ -22,5 +22,12 @@ assert.deepEqual(audit({objects,references:[...references,{...references[0],sour
 assert.throws(()=>audit({objects:[objects[0],objects[0]],references:[],inventoryComplete:true,referencesComplete:true}),/DUPLICATE_OBJECT/);
 assert.throws(()=>audit({objects:[{bucket:"x",path:"../secret"}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
 assert.throws(()=>audit({objects,references:[{bucket:"x",path:"a",source:""}],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
+for (const flag of [undefined, null, 0, 1, "true"]) {
+ assert.throws(() => audit({objects,references,inventoryComplete:flag,referencesComplete:true}),/INVALID_INPUT/);
+ assert.throws(() => audit({objects,references,inventoryComplete:true,referencesComplete:flag}),/INVALID_INPUT/);
+}
+for (const path of ["folder\\\\secret.jpg", "folder/line\nfeed.jpg", "folder/zero\u0000byte.jpg"]) {
+ assert.throws(() => audit({objects:[{bucket:"echo-media",path}],references:[],inventoryComplete:true,referencesComplete:true}),/INVALID_INPUT/);
+}
 assert.doesNotMatch(source,/\.remove\(|\.delete\(|\.update\(|\.upload\(/,"Audit must remain read-only");
 console.log("V3 read-only media audit tests passed");
