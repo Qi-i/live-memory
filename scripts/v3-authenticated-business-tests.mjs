@@ -74,7 +74,8 @@ assert.match(main,/<AccessGate><V3RealWorkspace \/><\/AccessGate>/);
 assert.match(component,/currentStorageScope\(\)/);
 assert.match(component,/listRecords\(\)\.then/);
 assert.match(component,/snapshot\.scope===actualScope/);
-assert.match(component,/useCachedMediaSrc\(asset\)/);
+assert.match(component,/useCachedMediaSrc\(media\)/);
+assert.match(component,/useCachedMediaSrc\(primaryMedia\(record\)\)/);
 assert.match(component,/resolveMediaSource\(asset,true\)/);
 assert.match(component,/MapSplitPane/);
 assert.match(component,/<V3FeaturedHero posters=\{posters\}/);
@@ -89,7 +90,7 @@ assert.match(component,/onSave=\{saveLocalDraft\}/);
 assert.match(component,/canEditAccount=validScope && access\.mode==="account"/,
   "Only a verified active account can enable the V3 account editor");
 assert.match(component,/cloudMode\.mode==="v3"/);
-assert.match(component,/await checked\.runtime\.writerMode\(\)!=="v3"/,
+assert.match(component,/await requireAuthorizedWriter\(editing\.scope\)/,
   "The editor must revalidate server cutover before each local save");
 assert.match(component,/await scoped\.runtime\.writerMode\(\)!=="v3"/,
   "Manual sync must revalidate server cutover before every transfer");

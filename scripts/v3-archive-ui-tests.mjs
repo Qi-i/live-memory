@@ -32,13 +32,38 @@ assert.equal(rows.length,9,"Curation is non-destructive");
 const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
 const hero=await readFile(new URL("../src/ui/real/V3FeaturedHero.tsx",import.meta.url),"utf8");
 const css=await readFile(new URL("../src/ui/real/realWorkspace.css",import.meta.url),"utf8");
-assert.doesNotMatch(workspace,/page==="完整档案"|<ArchivePage/);
+const adaptive=await readFile(new URL("../src/ui/real/adaptivePoster.css",import.meta.url),"utf8");
+const ratioSource=await readFile(new URL("../src/ui/real/posterFraming.ts",import.meta.url),"utf8");
+const ratioJs=ts.transpileModule(ratioSource,{compilerOptions:{
+  module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,
+}}).outputText;
+const framingEnv={exports:{}};
+runInNewContext(ratioJs,framingEnv);
+const {dominantPosterRatio,posterDisplayMode,visibleCropFraction}=framingEnv.exports;
+assert.ok(Math.abs(dominantPosterRatio([.67,.66,.75,.65,.66])-.66)<.01,
+  "Majority source shape must decide frame, not the tallest outlier");
+assert.equal(posterDisplayMode(.64,.67),"cover");
+assert.equal(posterDisplayMode(.42,.67),"backdrop");
+assert.ok(visibleCropFraction(.64,.67)<.24);
+assert.ok(visibleCropFraction(.42,.67)>.24);
+assert.match(workspace,/type Page = "档案" \| "统计" \| "城市" \| "迁移"/);
+assert.doesNotMatch(workspace,/page==="完整档案"/);
+assert.match(workspace,/Object\.values\(posterRatios\)/);
+assert.match(workspace,/active\.map\(record=><PosterCard/);
+assert.doesNotMatch(workspace,/PAGE_SIZE|pageIndex|totalPages|上一页|下一页/);
+assert.match(workspace,/showStatusCenter=\{false\}/);
+assert.match(workspace,/canEditLegacyAccount/);
+assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
+assert.match(workspace,/<ArchivePage records=/);
+for(const label of ["画报","票夹","票根","日历","城市/场馆","票价","汇总"]){
+  assert.ok(workspace.includes('"' + label + '"'),"Missing historic archive view: "+label);
+}
 assert.match(workspace,/describeRealArchive\(records\)\.records, record=>Boolean\(primaryMedia\(record\)\),5/);
 assert.match(hero,/posters\.slice\(0,5\)/);
-assert.doesNotMatch(hero,/scrollBy|scrollIntoView|上一组海报|下一组海报/);
+assert.doesNotMatch(hero,/scrollBy|上一组海报|下一组海报/);
 assert.match(css,/\.v3-real-featured-gallery\s*\{[^}]*grid-template-columns:repeat\(5/);
-assert.match(css,/\.v3-real-featured-image img\s*\{[^}]*object-fit:contain/);
-assert.match(css,/\.v3-real-poster-image\s*\{[^}]*aspect-ratio:2\/3/);
-assert.match(css,/\.v3-real-poster-image img\s*\{[^}]*object-fit:contain/);
-assert.doesNotMatch(workspace,/--v3-real-poster-ratio|object-fit:cover/);
-console.log("V3 featured curation, one archive navigation and uncropped poster geometry passed.");
+assert.match(adaptive,/\.v3-adaptive-poster\.is-extreme > img\.v3-adaptive-poster-image\s*\{[^}]*object-fit:contain/);
+assert.match(adaptive,/\.v3-adaptive-poster > img\.v3-adaptive-poster-image\s*\{[^}]*object-fit:cover/);
+assert.match(adaptive,/\.v3-adaptive-poster > img\.v3-adaptive-poster-backdrop/);
+assert.doesNotMatch(workspace,/--v3-real-poster-ratio/);
+console.log("V3 majority-ratio, bounded crop, continuous scroll, inline edit, archived layouts passed.");

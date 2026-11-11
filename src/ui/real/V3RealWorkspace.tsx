@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
-import { primaryMedia } from "../../domain";
+import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
 import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
 import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
@@ -18,14 +18,24 @@ import { V3MigrationPanel } from "../system/V3MigrationPanel";
 import { ActionToolbar, MapSplitPane, WorkspaceShell } from "../system/WorkspaceShell";
 import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
+import { AdaptivePoster } from "./AdaptivePoster";
+import { dominantPosterRatio } from "./posterFraming";
+import { ArchivePage, type ArchiveLayout } from "../../archive";
 import "../system/preview.css";
 import "./realWorkspace.css";
+import "./v3ShareStudio.css";
+import "./adaptivePoster.css";
+import "./v3ArchiveRefinements.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
-type Mode = "海报" | "时间线" | "列表";
-const PAGE_SIZE = 18;
+type Mode = "海报" | "时间线" | "列表" | "画报" | "票夹" | "票根" |
+  "日历" | "城市/场馆" | "票价" | "汇总";
 const navigation: Page[] = ["档案", "统计", "城市", "迁移"];
-const archiveModes: Mode[] = ["海报", "时间线", "列表"];
+const archiveModes: Mode[] = ["海报","时间线","列表"];
+const advancedLayouts: Record<string,ArchiveLayout> = {
+  "画报":"showcase","票夹":"wallet","票根":"ticket",
+  "日历":"calendar","城市/场馆":"venue","票价":"price","汇总":"summary",
+};
 
 function backToV2() {
   if(import.meta.env.VITE_V3_BETA==="1"){
@@ -42,79 +52,125 @@ function backToV2() {
   }
   window.location.assign(url.href);
 }
-function PosterCard({ record, onOpen }: { record: EventRecord; onOpen: (id: string) => void }) {
-  const asset = primaryMedia(record);
-  const src = useCachedMediaSrc(asset);
-  return (
-    <button className="v3-real-poster-card" type="button" onClick={() => onOpen(record.id)}
-      aria-label={"查看 " + record.title}>
-      <span className="v3-real-poster-image">
-        {src?<img src={src} loading="lazy" decoding="async" alt={record.title+"海报"}/>:<span>无海报</span>}
-      </span>
+function PosterCard({record,onOpen,onEdit,frameRatio,onNaturalRatio}:{
+  record:EventRecord;
+  onOpen:(id:string)=>void;
+  onEdit?: (record:EventRecord)=>void;
+  frameRatio:number;
+  onNaturalRatio:(id:string,ratio:number)=>void;
+}){
+  const src=useCachedMediaSrc(primaryMedia(record));
+  return <article className="v3-real-poster-card" data-record-id={record.id}>
+    <button className="v3-real-poster-open" type="button" onClick={()=>onOpen(record.id)}
+      aria-label={"查看 "+record.title}>
+      <AdaptivePoster className="v3-real-poster-image" src={src}
+        alt={record.title+"海报"} frameRatio={frameRatio}
+        onNaturalRatio={ratio=>onNaturalRatio(record.id,ratio)}/>
       <strong title={record.title}>{record.title}</strong>
-      <small>{record.date} · {record.city || "城市待补"}</small>
+      <small>{record.date} · {record.city||"城市待补"}</small>
     </button>
-  );
-}
-function RecordDetail({ record, onClose, onEdit, onDuplicate, onTrash }: {
-  record: EventRecord; onClose: () => void; onEdit?: (record: EventRecord) => void;
-  onDuplicate?: (record: EventRecord) => void; onTrash?: (record: EventRecord) => void;
-}) {
-  const asset = primaryMedia(record);
-  const src = useCachedMediaSrc(asset);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
-    closeRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="v3-real-modal-backdrop" role="presentation"
-      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="v3-real-modal" role="dialog" aria-modal="true"
-        aria-label={record.title + "（只读详情）"}>
-        <header><div><small>REAL ARCHIVE · READ ONLY</small><h2>{record.title}</h2>
-          <span>{record.date} · {record.city} · {record.venue}</span></div>
-          {onEdit && <button type="button" aria-label="编辑本机演出" onClick={()=>onEdit(record)}>编辑</button>}
-          <button type="button" aria-label="关闭只读详情" ref={closeRef} onClick={onClose}>×</button>
-        </header>
-        <div className="v3-real-modal-body">
-          <div className="v3-real-modal-art">
-            {src ? <img src={src} alt={record.title + "海报"} /> : <span>此记录暂无可用海报</span>}
-          </div>
-          <dl>
-            <dt>艺人</dt><dd>{record.artists.join("、") || "未填写"}</dd>
-            <dt>场馆</dt><dd>{record.venue || "未填写"}</dd>
-            <dt>观演状态</dt><dd>{record.status === "watched" ? "已看" : record.status === "planned" ? "待看" : "想看"}</dd>
-            <dt>归档媒体</dt><dd>{record.media.length} 项</dd>
-            <dt>标签</dt><dd>{record.tags.join("、") || "无"}</dd>
-            {record.note && <><dt>备注</dt><dd className="v3-real-detail-note">{record.note}</dd></>}
-          </dl>
-        </div>
-        <footer><span>仅查看不会更改记录或原图。</span>
-          <div className="v3-real-detail-actions">
-            {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
-            {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
-            <button type="button" onClick={onClose}>返回档案</button>
-          </div>
-        </footer>
-      </section>
+    <div className="v3-real-card-actions">
+      {onEdit&&<button type="button" onClick={()=>onEdit(record)} aria-label={"编辑 "+record.title}>编辑</button>}
+      <button type="button" onClick={()=>onOpen(record.id)} aria-label={"更多详情 "+record.title}>详情</button>
     </div>
-  );
+  </article>;
 }
-function RecordIndexCard({record,onOpen}:{record:EventRecord;onOpen:(id:string)=>void;}){
-  const cover=useCachedMediaSrc(primaryMedia(record));
-  return <button type="button" className="v3-real-index-row" onClick={()=>onOpen(record.id)}>
-    <span className="v3-real-index-thumb">{cover?<img src={cover} loading="lazy" alt=""/>:<span>LIVE</span>}</span>
-    <span className="v3-real-index-heading"><strong>{record.title}</strong>
-      <small>{record.artists.join(" · ")||"艺人待补"} · {record.venue||"场馆待补"}</small></span>
+function RecordMediaPreview({media,onOpen}:{
+  media:MediaAsset;onOpen:(media:MediaAsset)=>void;
+}){
+  const src=useCachedMediaSrc(media);
+  return <button type="button" className="v3-real-media-preview" onClick={()=>onOpen(media)}>
+    {src?<img src={src} alt={media.title||mediaKindLabels[media.kind]} loading="lazy"/>:
+      <span>暂无预览</span>}
+    <small>{mediaKindLabels[media.kind]}{media.title?" · "+media.title:""}</small>
+  </button>;
+}
+function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}:{
+  record:EventRecord;onClose:()=>void;onEdit?:(record:EventRecord)=>void;
+  onDuplicate?:(record:EventRecord)=>void;onTrash?:(record:EventRecord)=>void;
+  onShare:(record:EventRecord)=>void;
+  onZoom:(media:MediaAsset)=>void;
+}){
+  const src=useCachedMediaSrc(primaryMedia(record));
+  const closeRef=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
+    closeRef.current?.focus();
+    const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
+    document.addEventListener("keydown",onKey);
+    return()=>document.removeEventListener("keydown",onKey);
+  },[onClose]);
+  return <div className="v3-real-modal-backdrop" role="presentation"
+    onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
+    <section className="v3-real-modal v3-real-rich-detail" role="dialog"
+      aria-modal="true" aria-label={record.title+"（档案详情）"}>
+      <header>
+        <div><small>LIVE MEMORY · EVENT ARCHIVE</small><h2>{record.title}</h2>
+          <span>{record.date} · {record.city} · {record.venue}</span></div>
+        <div className="v3-real-detail-header-actions">
+          {onEdit&&<button type="button" aria-label="编辑本机演出"
+            onClick={()=>onEdit(record)}>编辑</button>}
+          <button type="button" aria-label="关闭档案详情" ref={closeRef} onClick={onClose}>×</button>
+        </div>
+      </header>
+      <div className="v3-real-modal-body">
+        <button className="v3-real-modal-art" type="button"
+          onClick={()=>{const art=primaryMedia(record);if(art)onZoom(art);}}
+          aria-label="放大主海报">
+          {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
+        </button>
+        <dl>
+          <dt>类别</dt><dd>{categoryLabels[record.category]}</dd>
+          <dt>艺人</dt><dd>{record.artists.join("、")||"未填写"}</dd>
+          <dt>演出时间</dt><dd>{record.date}{record.time?" "+record.time:""}</dd>
+          <dt>场馆</dt><dd>{record.venue||"未填写"}{record.address?" · "+record.address:""}</dd>
+          <dt>状态</dt><dd>{statusLabels[record.status]}{record.recordState!=="normal"?" · "+record.recordState:""}</dd>
+          {record.price!=null&&<><dt>票价</dt><dd>¥{record.price}</dd></>}
+          {record.seat&&<><dt>座位</dt><dd>{record.seat}</dd></>}
+          {record.sourceChannel&&<><dt>购票渠道</dt><dd>{sourceLabels[record.sourceChannel]}</dd></>}
+          {record.companions.length>0&&<><dt>同行</dt><dd>{record.companions.join("、")}</dd></>}
+          <dt>媒体</dt><dd>{record.media.length} 项</dd>
+          <dt>标签</dt><dd>{record.tags.join("、")||"无"}</dd>
+          {record.setlist.length>0&&<><dt>歌单</dt><dd>{record.setlist.join(" / ")}</dd></>}
+          {record.note&&<><dt>备注</dt><dd className="v3-real-detail-note">{record.note}</dd></>}
+        </dl>
+      </div>
+      {record.media.length>0&&<section className="v3-real-detail-media">
+        <h3>现场媒体 <small>· {record.media.length} 项</small></h3>
+        <div className="v3-real-media-grid">
+          {record.media.map(media=><RecordMediaPreview key={media.id} media={media} onOpen={onZoom}/>)}
+        </div>
+      </section>}
+      <footer><span>原图始终保留，编辑采用版本校验。</span>
+        <div className="v3-real-detail-actions">
+          <button type="button" onClick={()=>onShare(record)}>分享本场</button>
+          {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
+          {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
+          <button type="button" onClick={onClose}>返回档案</button>
+        </div>
+      </footer>
+    </section>
+  </div>;
+}
+function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
+  record:EventRecord;
+  onOpen:(id:string)=>void;
+  onEdit?: (record:EventRecord)=>void;
+  frameRatio:number;
+}){
+  const src=useCachedMediaSrc(primaryMedia(record));
+  return <article className="v3-real-index-row" data-record-id={record.id}>
+    <AdaptivePoster className="v3-real-index-thumb" src={src} alt="" frameRatio={frameRatio}/>
+    <button type="button" className="v3-real-index-heading" onClick={()=>onOpen(record.id)}>
+      <strong>{record.title}</strong>
+      <small>{record.artists.join(" · ")||"艺人待补"} · {record.venue||"场馆待补"}</small>
+    </button>
     <time>{record.date||"日期待补"}</time>
     <span className="v3-real-index-place">{record.city||"城市待补"}</span>
-    <span className="v3-real-index-status">{isWatchedRealRecord(record)?"已看":"未观演"}</span>
-  </button>;
+    <div className="v3-real-index-actions">
+      {onEdit&&<button type="button" onClick={()=>onEdit(record)}>编辑</button>}
+      <button type="button" onClick={()=>onOpen(record.id)}>查看</button>
+    </div>
+  </article>;
 }
 function RealStatistics({ records }: { records: EventRecord[] }) {
   const data = useMemo(() => describeRealArchive(records), [records]);
@@ -214,13 +270,13 @@ export function V3RealWorkspace() {
   const [page,setPage]=useState<Page>("档案");
   const [mode,setMode]=useState<Mode>("海报");
   const [search,setSearch]=useState("");
-  const [pageIndex,setPageIndex]=useState(0);
   const [snapshot,setSnapshot]=useState<{scope:string;records:EventRecord[];error:string;busy:boolean}>({
     scope:"",records:[],error:"",busy:true,
   });
   const [reload,setReload]=useState(0);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [sharing,setSharing]=useState(false);
+  const [shareRecord,setShareRecord]=useState<EventRecord|null>(null);
   const [zoomMedia,setZoomMedia]=useState<MediaAsset|null>(null);
   const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
   const [importOpen,setImportOpen]=useState(false);
@@ -241,6 +297,7 @@ export function V3RealWorkspace() {
     scope:string;push:number;pull:number;
   }|null>(null);
   const [posters,setPosters]=useState<Array<{id:string;title:string;city:string;src?:string}>>([]);
+  const [posterRatios,setPosterRatios]=useState<Record<string,number>>({});
   const actualScope=currentStorageScope();
   const permitted=access.mode==="account" || access.mode==="device";
   const validScope=permitted && Boolean(actualScope) &&
@@ -299,6 +356,11 @@ export function V3RealWorkspace() {
   // accounts should clear the status notice from the previous identity.
   useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
+  const frameRatio=useMemo(()=>dominantPosterRatio(Object.values(posterRatios)),
+    [posterRatios]);
+  const measurePoster=(id:string,ratio:number)=>{
+    setPosterRatios(previous=>previous[id]===ratio?previous:{...previous,[id]:ratio});
+  };
   const model=useMemo(()=>describeRealArchive(records,search),[records,search]);
   const active=model.records;
   const firstPosters=useMemo(()=>curateFeaturedRecords(
@@ -323,7 +385,25 @@ export function V3RealWorkspace() {
   const canEditLocal=validScope && access.mode==="device" && actualScope==="device-local";
   const canEditAccount=validScope && access.mode==="account" &&
     actualScope===cloudMode.scope && cloudMode.mode==="v3";
-  const canEdit=canEditLocal || canEditAccount;
+  // V2 is still the sole account cloud writer. Its authenticated account may
+  // edit the same *local* scoped draft through the V3 UI. This is not a V3
+  // writer cutover and never initiates V3 cloud writes.
+  const canEditLegacyAccount=validScope && access.mode==="account" &&
+    actualScope===cloudMode.scope && cloudMode.mode==="v2" && !cloudMode.error;
+  const canEdit=canEditLocal || canEditAccount || canEditLegacyAccount;
+  const requireAuthorizedWriter=async (scope:string)=>{
+    if(currentStorageScope()!==scope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+    if(canEditAccount || canEditLegacyAccount){
+      const active=accountRuntime.current;
+      if(!active||active.scope!==scope)throw Error("V3_WRITER_AUTH_REQUIRED");
+      const serverMode=await active.runtime.writerMode();
+      if(serverMode!==(canEditAccount?"v3":"v2"))
+        throw Error("V3_WRITER_MODE_CHANGED");
+    }else if(!canEditLocal){
+      throw Error("V3_WRITER_NOT_ACTIVE");
+    }
+    if(currentStorageScope()!==scope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+  };
   const startEdit=(record:EventRecord|null)=>{
     if(!canEdit) return;
     setEditing({draft:record??blankRecord(),baseline:record??null,scope:actualScope});
@@ -337,11 +417,7 @@ export function V3RealWorkspace() {
   };
   const trashRecord=async(record:EventRecord)=>{
     if(!canEdit || currentStorageScope()!==actualScope)throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
-    if(canEditAccount){
-      const runtime=accountRuntime.current;
-      if(!runtime || runtime.scope!==actualScope || await runtime.runtime.writerMode()!=="v3")
-        throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
-    }
+    await requireAuthorizedWriter(actualScope);
     const timestamp=new Date().toISOString();
     const result=await saveRecordDraft(new IndexedDbRecordRepository(actualScope),
       {...record,deletedAt:timestamp,updatedAt:timestamp},record);
@@ -356,12 +432,7 @@ export function V3RealWorkspace() {
     if(!canEdit || !editing || editing.scope!==currentStorageScope()) {
       throw new Error("账号作用域已更改；未保存任何记录");
     }
-    if(canEditAccount) {
-      const checked=accountRuntime.current;
-      if(!checked || checked.scope!==editing.scope || await checked.runtime.writerMode()!=="v3") {
-        throw new Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
-      }
-    }
+    await requireAuthorizedWriter(editing.scope);
     const result=await saveRecordDraft(new IndexedDbRecordRepository(editing.scope),draft,editing.baseline);
     if(result.status==="review-required") {
       throw new Error("另一标签页已修改此记录。当前草稿保持打开；请复制修改内容并重新载入最新档案核对。");
@@ -371,7 +442,9 @@ export function V3RealWorkspace() {
     setTransferApproval(null);
     setNotice(canEditAccount
       ? "本机已原子保存；点击“安全同步”才会传输至已切换的账号云端。"
-      : "已安全保存至此设备；尚未启用云同步");
+      : canEditLegacyAccount
+        ? "已安全保存到当前账号的本机 V2 档案；云端 V2 尚未同步，原图未删除。"
+        : "已安全保存至此设备；尚未启用云同步");
     setReload(n=>n+1);
   };
 
@@ -382,13 +455,9 @@ export function V3RealWorkspace() {
       throw Error("V3_IMPORT_WRITER_NOT_ACTIVE");
     // The client-side UI permission alone is not a writer fence. A fresh
     // authenticated server marker is mandatory for EACH account write.
-    if(canEditAccount){
-      const current=accountRuntime.current;
-      if(!current||current.scope!==scope||await current.runtime.writerMode()!=="v3")
-        throw Error("V3_IMPORT_ACCOUNT_WRITER_NOT_ACTIVE");
-    }else if(!canEditLocal){
+    if(!canEditLocal && !canEditAccount && !canEditLegacyAccount)
       throw Error("V3_IMPORT_SCOPE_NOT_ALLOWED");
-    }
+    await requireAuthorizedWriter(scope);
     if(currentStorageScope()!==scope)throw Error("V3_IMPORT_ACCOUNT_CHANGED");
     const result=await saveRecordDraft(new IndexedDbRecordRepository(scope),record,null);
     if(result.status!=="saved")throw Error("V3_IMPORT_RECORD_ID_CONFLICT");
@@ -536,17 +605,15 @@ export function V3RealWorkspace() {
         : "同步未完成：身份变化、网络故障或云端版本冲突。已保留本机记录，请重新检查。");
     }finally{setSyncBusy(false);}
   };
-  const paged=active.slice(PAGE_SIZE*pageIndex,PAGE_SIZE*(pageIndex+1));
-  const totalPages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));
+  // One continuous scroll contains every matching record; images load lazily.
   const yearGroups=useMemo(()=>{
     const groups=new Map<string,EventRecord[]>();
-    for(const row of paged){
+    for(const row of active){
       const year=/^\d{4}/.test(row.date)?row.date.slice(0,4):"日期待补";
       groups.set(year,[...(groups.get(year)||[]),row]);
     }
     return [...groups.entries()];
-  },[paged]);
-  useEffect(()=>{setPageIndex(0);},[search,mode,page]);
+  },[active]);
   const navButtons=navigation.map(label=><button type="button" key={label}
     aria-current={page===label?"page":undefined} onClick={()=>setPage(label)}>{label}</button>);
   return <WorkspaceShell
@@ -557,18 +624,15 @@ export function V3RealWorkspace() {
     mobileNavigation={navButtons}
     appearance="liquid"
     demoStatus={false}
+    showStatusCenter={false}
     activity={{type:"idle"}}
-    account={<div className="v3-real-account">
-      <strong>{import.meta.env.VITE_V3_BETA==="1"?"V3 安全试用 · 独立站点":access.mode==="account"?"当前账号":"本机独立档案"}</strong>
-      <span>{canEditLocal?"本机可编辑 · 无云端写入"
-        : canEditAccount?"已激活 V3 · 手动安全同步":"账号只读 · V2 仍为写入端"}</span>
-      <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button></div>}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
         <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
-        <small>{canEditLocal?"本机原子保存 · 云同步未接管"
-          : canEditAccount?"本机原子保存 · 账号云端 CAS 手动同步"
-          : "真实账号只读验证 · 服务器尚未允许 V3 写入"}</small></div>
+        <small>{canEditLocal?"本机编辑"
+          : canEditAccount?"账号已启用 V3 安全同步"
+          : canEditLegacyAccount?"账号本机可编辑 · 云端仍由 V2 管理"
+          : "正在验证账号写入权限"}</small></div>
       <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
         <b>{model.watchedCount}<small>已看</small></b>
         <b>{model.cities.length}<small>城市</small></b></div>
@@ -576,7 +640,8 @@ export function V3RealWorkspace() {
         {canEditLocal?"新增本机演出":"新增演出"}</button>}
       {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
         {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
-      <button type="button" onClick={()=>setSharing(true)} disabled={!records.length}>制作分享图</button>
+      <button type="button" onClick={()=>{setShareRecord(null);setSharing(true);}}
+        disabled={!records.length}>制作分享图</button>
       {canEdit && <button type="button" onClick={()=>setImportOpen(true)}
         disabled={snapshot.busy||syncBusy||restoreBusy}>
         批量导入
@@ -585,8 +650,8 @@ export function V3RealWorkspace() {
         disabled={exportBusy||restoreBusy||snapshot.busy}>
         {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}
       </button>}
-      <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
-      <button type="button" onClick={backToV2}>经典版 V2</button>
+      <button type="button" onClick={()=>setReload(n=>n+1)}
+        disabled={snapshot.busy||syncBusy}>刷新</button>
     </div>}
     overlay={importOpen && canEdit
       ? <ImportDrawer
@@ -605,13 +670,13 @@ export function V3RealWorkspace() {
       : zoomMedia
         ? <ImageZoom media={zoomMedia} onClose={()=>setZoomMedia(null)}/>
       : sharing
-      ? <ShareStudio records={records} format={shareFormat} setFormat={setShareFormat}
+      ? <ShareStudio experience="v3" records={shareRecord?[shareRecord]:records} format={shareFormat} setFormat={setShareFormat}
           mapSettings={readSettings().map}
           onOpenMapSettings={()=>{
             setSharing(false);
             setNotice("地图密钥尚未在 V3 中单独配置；请先在 V2 设置页配置，再返回 V3 分享。");
           }}
-          onClose={()=>setSharing(false)}/>
+          onClose={()=>{setSharing(false);setShareRecord(null);}}/>
       : editing && editing.scope===actualScope && canEdit
       ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
@@ -619,7 +684,9 @@ export function V3RealWorkspace() {
         ? <RecordDetail record={selected} onClose={()=>setSelectedId(null)}
             onEdit={canEdit?startEdit:undefined}
             onDuplicate={canEdit?requestDuplicate:undefined}
-            onTrash={canEdit?setDeleteCandidate:undefined}/>
+            onTrash={canEdit?setDeleteCandidate:undefined}
+            onShare={record=>{setShareRecord(record);setSelectedId(null);setSharing(true);}}
+            onZoom={setZoomMedia}/>
         : undefined}
   >
     {import.meta.env.VITE_V3_BETA==="1" && <aside role="note" className="v3-real-save-notice">
@@ -637,7 +704,8 @@ export function V3RealWorkspace() {
     </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
     <>
       {page==="档案" && <>
-        <V3FeaturedHero posters={posters} onBrowse={()=>
+        <V3FeaturedHero posters={posters} frameRatio={frameRatio}
+          onNaturalRatio={measurePoster} onBrowse={()=>
           document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>
         <div id="v3-real-archive-controls" className="v3-real-archive-controls">
           <ActionToolbar
@@ -645,14 +713,38 @@ export function V3RealWorkspace() {
               placeholder="搜索演出、艺人、城市、场馆…" onChange={event=>setSearch(event.target.value)}/>}
             modes={archiveModes.map(item=><button type="button" key={item}
               aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
-            actions={null}/>
+            actions={<select className="v3-real-extra-views" aria-label="更多档案视图"
+              value={advancedLayouts[mode]?mode:""}
+              onChange={event=>setMode(event.target.value as Mode)}>
+              <option value="">更多视图</option>
+              {Object.keys(advancedLayouts).map(label=>
+                <option key={label} value={label}>{label}</option>)}
+            </select>}/>
         </div>
-        {!paged.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
+        {!active.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
           <p>请调整搜索词；此页不会生成任何演示档案。</p></div>:
+        advancedLayouts[mode]?<div className="v3-real-embedded-archive">
+          <ArchivePage records={records.filter(row=>!row.deletedAt)}
+            settings={readSettings()}
+            layout={advancedLayouts[mode]} setLayout={layout=>{
+              const found=Object.entries(advancedLayouts).find(([,value])=>value===layout);
+              setMode(found?.[0] as Mode || "海报");
+            }}
+            shareMode={false} setShareMode={setSharing}
+            shareFormat={shareFormat} setShareFormat={setShareFormat}
+            onOpen={row=>setSelectedId(row.id)}
+            onEdit={row=>startEdit(row)}
+            onDuplicate={requestDuplicate}
+            onDelete={row=>canEdit?setDeleteCandidate(row):setNotice("账号当前不允许写入，未删除记录")}
+            onZoom={setZoomMedia}
+            onOpenMapSettings={()=>setNotice("地图密钥沿用原有设置。")}/>
+          </div>:
         mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
           <header><span>LIVE MEMORY · ARCHIVE</span><h2>全部演出 <small>({active.length})</small></h2></header>
           <div className="v3-real-poster-grid">
-            {paged.map(record=><PosterCard key={record.id} record={record} onOpen={setSelectedId}/>)}
+            {active.map(record=><PosterCard key={record.id} record={record}
+              onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
+              frameRatio={frameRatio} onNaturalRatio={measurePoster}/>)}
           </div></section>:
         mode==="时间线"?<section className="v3-real-panel v3-real-chronicle">
           <header><span>CHRONICLE · BY YEAR</span><h2>演出时间线</h2></header>
@@ -669,22 +761,22 @@ export function V3RealWorkspace() {
         <section className="v3-real-panel v3-real-index-panel">
           <header><span>ARCHIVE INDEX · ALL SHOWS</span><h2>演出索引</h2></header>
           <div className="v3-real-index-list">
-            {paged.map(record=><RecordIndexCard key={record.id} record={record} onOpen={setSelectedId}/>)}
+            {active.map(record=><RecordIndexCard key={record.id} record={record}
+              onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
+              frameRatio={frameRatio}/>)}
           </div>
         </section>}
-        {active.length>PAGE_SIZE&&<div className="v3-real-pagination">
-          <button type="button" disabled={pageIndex===0} onClick={()=>setPageIndex(n=>Math.max(0,n-1))}>上一页</button>
-          <span>第 {pageIndex+1} / {totalPages} 页 · 共 {active.length} 条</span>
-          <button type="button" disabled={pageIndex>=totalPages-1} onClick={()=>setPageIndex(n=>n+1)}>下一页</button>
-        </div>}
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="迁移" && <>
+        <button type="button" className="v3-real-classic-fallback" onClick={backToV2}>
+          进入经典 V2（兼容编辑与原有同步）
+        </button>
         <section className="v3-real-panel">
           <header><span>SAFE DATA MANAGEMENT</span><h2>备份与迁移</h2></header>
           <p>保护原图和现有档案；迁移必须经过真实账号授权与可恢复备份验收。</p>
         </section>
-        {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
+        {(canEditLocal||canEditAccount) && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
       <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>
       <input type="file" accept=".json,application/json" aria-label="选择 V3 原图完整备份"

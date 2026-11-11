@@ -9,7 +9,7 @@ const controller = await readFile(new URL("../src/appController.ts", import.meta
 const amap = await readFile(new URL("../src/amap.ts", import.meta.url), "utf8");
 
 assert.match(share, /type ShareLayout = [^;]*"tickets"/);
-assert.match(share, /useState<ItemLimit>\("all"\)/);
+assert.match(share, /useState<ItemLimit>\(experience === "v3" \? 12 : "all"\)/);
 assert.match(share, /value:\s*"tickets"/);
 assert.match(share, /share-ticket-grid/);
 assert.match(share, /drawTicket/i);

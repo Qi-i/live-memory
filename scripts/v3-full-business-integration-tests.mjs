@@ -13,7 +13,10 @@ assert.equal((result.diagnostics||[]).filter(x=>x.category===ts.DiagnosticCatego
 // V2 ArchivePage no longer creates a second visually inconsistent archive.
 assert.match(workspace,/type Page = "档案" \| "统计" \| "城市" \| "迁移"/);
 assert.match(workspace,/navigation: Page\[\] = \["档案", "统计", "城市", "迁移"\]/);
-assert.doesNotMatch(workspace,/page==="完整档案"|<ArchivePage|fullLayout/);
+assert.doesNotMatch(workspace,/page==="完整档案"|fullLayout/);
+assert.match(workspace,/<ArchivePage records=/);
+assert.match(workspace,/canEditLegacyAccount/);
+assert.match(workspace,/await requireAuthorizedWriter\(editing.scope\)/);
 for(const pattern of [
   /<V3FeaturedHero posters=\{posters\}/,
   /curateFeaturedRecords\(/,

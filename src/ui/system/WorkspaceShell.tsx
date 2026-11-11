@@ -82,6 +82,7 @@ export function WorkspaceShell({
   overlay,
   appearance = "liquid",
   demoStatus = false,
+  showStatusCenter = true,
 }: {
   brand: ReactNode;
   navigation: ReactNode;
@@ -94,6 +95,7 @@ export function WorkspaceShell({
   overlay?: ReactNode;
   appearance?: "liquid" | "editorial";
   demoStatus?: boolean;
+  showStatusCenter?: boolean;
 }) {
   return (
     <div className="v3-workspace-shell" data-ui-system="v3" data-v3-surface={appearance}>
@@ -101,7 +103,7 @@ export function WorkspaceShell({
         <div className="v3-sidebar-brand">{brand}</div>
         <nav className="v3-sidebar-navigation" aria-label="主导航">{navigation}</nav>
         <div className="v3-sidebar-utility">
-          <StatusCenter current={activity} history={activityHistory} demo={demoStatus} />
+          {showStatusCenter && <StatusCenter current={activity} history={activityHistory} demo={demoStatus} />}
           {account && <div className="v3-sidebar-account">{account}</div>}
         </div>
       </aside>
