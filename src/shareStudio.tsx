@@ -419,7 +419,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
             </button>
             <button type="button" onClick={selectV3AllArchive}>全部演出</button>
           </div>
-        </div>
+        </div>}
 
         <div className="share-studio-summary">
           <strong>{selectedRecords.length}</strong><span>项档案进入成图</span><small>{period} · {cities} 个城市 · {sortMode === "date-desc" ? "最新在前" : "最早在前"}</small>
