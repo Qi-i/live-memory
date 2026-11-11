@@ -177,6 +177,18 @@ try {
     if(imported.length!==4 || !newPoster?.media?.[0]?.src?.startsWith("data:image/png;base64,")){
       throw Error("V3 batch import must persist a complete original poster without V2 writes");
     }
+    // Real browser geometry test: even a square source is letterboxed in a
+    // consistent portrait frame, never cropped or stretched.
+    const realPoster=page.locator(".v3-real-poster-image img").first();
+    await realPoster.waitFor({state:"visible"});
+    const fit=await realPoster.evaluate(image=>{
+      const frame=image.closest(".v3-real-poster-image");
+      const rect=frame?.getBoundingClientRect();
+      return {objectFit:getComputedStyle(image).objectFit,
+        ratio:rect?rect.width/rect.height:0};
+    });
+    if(fit.objectFit!=="contain"||Math.abs(fit.ratio-2/3)>.025)
+      throw Error("V3 original poster cropped or card aspect ratio drifted: "+JSON.stringify(fit));
   }
   if(width===390){
     // Exercise actual user-file -> byte-verification -> single IndexedDB
