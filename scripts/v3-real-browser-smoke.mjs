@@ -97,18 +97,23 @@ try {
   await dialog.getByText("合成测试备注").waitFor();
   await dialog.getByRole("button",{name:"关闭只读详情"}).click();
   await dialog.waitFor({state:"detached"});
-  // The real V3 shell now mounts the complete archive controls, but keeps
-  // the old V2 automatic sync engine unmounted and never changes account scope.
-  if(await page.getByRole("button",{name:"迁移",exact:true}).count())
-    throw Error("Authenticated legacy-media migration must not appear in device-only mode");
-  await page.getByRole("button",{name:"完整档案",exact:true}).first().click();
-  await page.locator(".archive-page").waitFor({state:"visible"});
-  await page.getByText("北京现场 · 真实本机回归",{exact:false}).first().waitFor();
+  // The single real V3 archive replaces the redundant nested V2 archive.
+  if(await page.getByRole("button",{name:"完整档案",exact:true}).count())
+    throw Error("Redundant complete archive tab remains in V3");
+  await page.locator(".v3-real-featured").waitFor({state:"visible"});
+  if(await page.getByRole("button",{name:"上一组海报"}).count())
+    throw Error("Featured hero must never require manual horizontal scrolling");
   await page.getByRole("button",{name:"制作分享图",exact:true}).click();
   const share=page.getByRole("dialog",{name:"分享工作室"});
   await share.waitFor({state:"visible"});
   await share.getByRole("button",{name:"退出分享制作"}).click();
   await share.waitFor({state:"detached"});
+  // Device-only users can still restore their own portable backup without
+  // receiving any authenticated ownerKey/Cloud migration operation.
+  await page.getByRole("button",{name:"迁移",exact:true}).first().click();
+  await page.getByRole("heading",{name:"备份与迁移"}).waitFor();
+  if(await page.locator(".v3-migration-panel").count())
+    throw Error("Account migration panel must not appear in device-only mode");
   await page.getByRole("button",{name:"档案",exact:true}).first().click();
   await page.getByRole("button",{name:"统计",exact:true}).click();
   await page.getByRole("heading",{name:"观演统计"}).waitFor();
