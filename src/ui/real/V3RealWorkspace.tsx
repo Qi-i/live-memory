@@ -20,6 +20,7 @@ import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
 import "../system/preview.css";
 import "./realWorkspace.css";
+import "./v3ShareStudio.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
 type Mode = "海报" | "时间线" | "列表";
@@ -605,7 +606,7 @@ export function V3RealWorkspace() {
       : zoomMedia
         ? <ImageZoom media={zoomMedia} onClose={()=>setZoomMedia(null)}/>
       : sharing
-      ? <ShareStudio records={records} format={shareFormat} setFormat={setShareFormat}
+      ? <ShareStudio experience="v3" records={records} format={shareFormat} setFormat={setShareFormat}
           mapSettings={readSettings().map}
           onOpenMapSettings={()=>{
             setSharing(false);
