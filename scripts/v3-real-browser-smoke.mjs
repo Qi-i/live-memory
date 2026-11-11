@@ -209,7 +209,11 @@ try {
     // Real browser geometry test: even a square source is letterboxed in a
     // consistent portrait frame, never cropped or stretched.
     await page.getByRole("button",{name:"档案",exact:true}).first().click();
-    const realPoster=page.locator(".v3-real-poster-image img.v3-adaptive-poster-image").first();
+    // The square imported sample is an extreme aspect ratio. Wait for the
+    // intrinsic-image onLoad decision before inspecting its display policy.
+    const extremeFrame=page.locator(".v3-real-poster-image.is-extreme").first();
+    await extremeFrame.waitFor({state:"visible"});
+    const realPoster=extremeFrame.locator("img.v3-adaptive-poster-image");
     await realPoster.waitFor({state:"visible"});
     const fit=await realPoster.evaluate(image=>{
       const frame=image.closest(".v3-real-poster-image");
