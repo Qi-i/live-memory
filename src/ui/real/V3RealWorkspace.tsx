@@ -105,6 +105,17 @@ function RecordDetail({ record, onClose, onEdit, onDuplicate, onTrash }: {
     </div>
   );
 }
+function RecordIndexCard({record,onOpen}:{record:EventRecord;onOpen:(id:string)=>void;}){
+  const cover=useCachedMediaSrc(primaryMedia(record));
+  return <button type="button" className="v3-real-index-row" onClick={()=>onOpen(record.id)}>
+    <span className="v3-real-index-thumb">{cover?<img src={cover} loading="lazy" alt=""/>:<span>LIVE</span>}</span>
+    <span className="v3-real-index-heading"><strong>{record.title}</strong>
+      <small>{record.artists.join(" · ")||"艺人待补"} · {record.venue||"场馆待补"}</small></span>
+    <time>{record.date||"日期待补"}</time>
+    <span className="v3-real-index-place">{record.city||"城市待补"}</span>
+    <span className="v3-real-index-status">{isWatchedRealRecord(record)?"已看":"未观演"}</span>
+  </button>;
+}
 function RealStatistics({ records }: { records: EventRecord[] }) {
   const data = useMemo(() => describeRealArchive(records), [records]);
   return (
@@ -527,8 +538,16 @@ export function V3RealWorkspace() {
   };
   const paged=active.slice(PAGE_SIZE*pageIndex,PAGE_SIZE*(pageIndex+1));
   const totalPages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));
+  const yearGroups=useMemo(()=>{
+    const groups=new Map<string,EventRecord[]>();
+    for(const row of paged){
+      const year=/^\d{4}/.test(row.date)?row.date.slice(0,4):"日期待补";
+      groups.set(year,[...(groups.get(year)||[]),row]);
+    }
+    return [...groups.entries()];
+  },[paged]);
   useEffect(()=>{setPageIndex(0);},[search,mode,page]);
-  const navButtons=navigation.filter(label=>label!=="迁移"||access.mode==="account").map(label=><button type="button" key={label}
+  const navButtons=navigation.map(label=><button type="button" key={label}
     aria-current={page===label?"page":undefined} onClick={()=>setPage(label)}>{label}</button>);
   return <WorkspaceShell
     brand={<><span className="v3-preview-brand">◈</span>
@@ -609,7 +628,63 @@ export function V3RealWorkspace() {
         : "此试用站使用独立域名，旧 V2 本机数据不会自动跨域出现；可从 V2 导出后在此导入。"}
       账号模式仍以 V2 为写入端时，此处只读；试用页不代表正式切换。
     </aside>}
-    {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
+    {cloudMode.error && access.mode==="account" && <div role="alert" className="v3-real-save-notice">{cloudMode.error}</div>}
+    {notice && <div className="v3-real-save-notice" role="status">{notice}
+      <button type="button" onClick={()=>setNotice("")} aria-label="关闭提示">×</button></div>}
+    {!validScope || snapshot.error ? <section className="v3-real-panel" role="alert">
+      <h2>无法读取当前档案</h2><p>{snapshot.error||"当前未登录私有账号。"}</p>
+      <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button>
+    </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
+    <>
+      {page==="档案" && <>
+        <V3FeaturedHero posters={posters} onBrowse={()=>
+          document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>
+        <div id="v3-real-archive-controls" className="v3-real-archive-controls">
+          <ActionToolbar
+            search={<input aria-label="搜索真实档案" value={search}
+              placeholder="搜索演出、艺人、城市、场馆…" onChange={event=>setSearch(event.target.value)}/>}
+            modes={archiveModes.map(item=><button type="button" key={item}
+              aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
+            actions={null}/>
+        </div>
+        {!paged.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
+          <p>请调整搜索词；此页不会生成任何演示档案。</p></div>:
+        mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
+          <header><span>LIVE MEMORY · ARCHIVE</span><h2>全部演出 <small>({active.length})</small></h2></header>
+          <div className="v3-real-poster-grid">
+            {paged.map(record=><PosterCard key={record.id} record={record} onOpen={setSelectedId}/>)}
+          </div></section>:
+        mode==="时间线"?<section className="v3-real-panel v3-real-chronicle">
+          <header><span>CHRONICLE · BY YEAR</span><h2>演出时间线</h2></header>
+          {yearGroups.map(([year,rows])=><div className="v3-real-year-group" key={year}>
+            <h3>{year}<small> · {rows.length} 场</small></h3>
+            <div className="v3-real-timeline">
+              {rows.map(row=><button type="button" key={row.id} onClick={()=>setSelectedId(row.id)}>
+                <time>{row.date.slice(5)||row.date}</time>
+                <strong>{row.title}</strong><small>{row.city} · {row.venue||"场馆待补"}</small>
+              </button>)}
+            </div>
+          </div>)}
+        </section>:
+        <section className="v3-real-panel v3-real-index-panel">
+          <header><span>ARCHIVE INDEX · ALL SHOWS</span><h2>演出索引</h2></header>
+          <div className="v3-real-index-list">
+            {paged.map(record=><RecordIndexCard key={record.id} record={record} onOpen={setSelectedId}/>)}
+          </div>
+        </section>}
+        {active.length>PAGE_SIZE&&<div className="v3-real-pagination">
+          <button type="button" disabled={pageIndex===0} onClick={()=>setPageIndex(n=>Math.max(0,n-1))}>上一页</button>
+          <span>第 {pageIndex+1} / {totalPages} 页 · 共 {active.length} 条</span>
+          <button type="button" disabled={pageIndex>=totalPages-1} onClick={()=>setPageIndex(n=>n+1)}>下一页</button>
+        </div>}
+      </>}
+      {page==="统计" && <RealStatistics records={records}/>}
+      {page==="迁移" && <>
+        <section className="v3-real-panel">
+          <header><span>SAFE DATA MANAGEMENT</span><h2>备份与迁移</h2></header>
+          <p>保护原图和现有档案；迁移必须经过真实账号授权与可恢复备份验收。</p>
+        </section>
+        {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
       <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>
       <input type="file" accept=".json,application/json" aria-label="选择 V3 原图完整备份"
@@ -623,70 +698,10 @@ export function V3RealWorkspace() {
           <button type="button" disabled={restoreBusy} onClick={()=>setRestorePreview(null)}>取消</button>
         </div>}
     </section>}
-    {cloudMode.error && access.mode==="account" && <div role="alert" className="v3-real-save-notice">{cloudMode.error}</div>}
-    {notice && <div className="v3-real-save-notice" role="status">{notice}
-      <button type="button" onClick={()=>setNotice("")} aria-label="关闭提示">×</button></div>}
-    {!validScope || snapshot.error ? <section className="v3-real-panel" role="alert">
-      <h2>无法读取当前档案</h2><p>{snapshot.error||"当前未登录私有账号。"}</p>
-      <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button>
-    </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
-    <>
-      {page==="档案" && <>
-        <StageHero eyebrow="YOUR ARCHIVE · REAL RECORDS" title="把现场，留在时间里"
-          description={canEditAccount
-            ? "读取真实档案。编辑先原子保存到本机，安全同步仅在服务器确认 V3 接管后手动执行。"
-            : canEditLocal
-              ? "读取当前设备实际保存的演出记录，本机修改采用原子保存，不启用云端双写。"
-              : "读取当前设备真实档案；服务器仍由 V2 写入，因此此处只读，不会触发并行同步。"}
-          posters={posters}/>
-        <ActionToolbar
-          search={<input aria-label="搜索真实档案" value={search} placeholder="搜索演出、艺人、城市、场馆…"
-            onChange={event=>setSearch(event.target.value)}/>}
-          modes={archiveModes.map(item=><button type="button" key={item}
-            aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
-          actions={null}/>
-        {!paged.length ? <div className="v3-real-panel"><h2>没有符合条件的记录</h2>
-          <p>可更换搜索词。此预览不会生成演示档案。</p></div> :
-          mode==="海报" ? <section className="v3-real-panel"><header><span>REAL PORTRAIT ARCHIVE</span>
-            <h2>海报档案</h2></header><div className="v3-real-poster-grid">
-              {paged.map(record=><PosterCard key={record.id} record={record} onOpen={setSelectedId}/>)}
-            </div></section> :
-          mode==="时间线" ? <section className="v3-real-panel"><header><span>CHRONICLE</span>
-            <h2>时间线</h2></header><div className="v3-real-timeline">
-              {paged.map(row=><button type="button" key={row.id} onClick={()=>setSelectedId(row.id)}>
-                <time>{row.date}</time><strong>{row.title}</strong>
-                <small>{row.city} · {row.venue}</small></button>)}
-            </div></section> :
-          <section className="v3-real-panel"><header><span>RECORD INDEX</span><h2>演出列表</h2></header>
-            <div className="v3-real-table-scroll"><table><thead><tr>
-              <th>演出</th><th>日期</th><th>城市</th><th>观演状态</th><th>操作</th></tr></thead>
-              <tbody>{paged.map(row=><tr key={row.id}>
-                <td>{row.title}</td><td>{row.date}</td><td>{row.city}</td>
-                <td>{isWatchedRealRecord(row)?"已看":"其他"}</td>
-                <td><button type="button" onClick={()=>setSelectedId(row.id)}>查看</button></td>
-              </tr>)}</tbody></table></div></section>}
-        {active.length>PAGE_SIZE&&<div className="v3-real-pagination">
-          <button type="button" disabled={pageIndex===0} onClick={()=>setPageIndex(n=>Math.max(0,n-1))}>上一页</button>
-          <span>第 {pageIndex+1} / {totalPages} 页 · 共 {active.length} 条</span>
-          <button type="button" disabled={pageIndex>=totalPages-1}
-            onClick={()=>setPageIndex(n=>n+1)}>下一页</button>
-        </div>}
+        {access.mode==="account" && validScope &&
+          <V3MigrationPanel settings={readSettings()} records={records}
+            personalConnected={hasPersonalCloudConnection(readSettings())}/>}
       </>}
-      {page==="完整档案" && <ArchivePage
-        records={records.filter(row=>!row.deletedAt)}
-        settings={readSettings()} layout={fullLayout} setLayout={setFullLayout}
-        shareMode={false} setShareMode={setSharing}
-        shareFormat={shareFormat} setShareFormat={setShareFormat}
-        onOpen={row=>setSelectedId(row.id)}
-        onEdit={requestBusinessEdit} onDuplicate={requestDuplicate}
-        onDelete={row=>canEdit?setDeleteCandidate(row):setNotice("此账号 V3 仍是只读；不能执行删除或迁移写入。")}
-        onZoom={setZoomMedia}
-        onOpenMapSettings={()=>setNotice("如需配置地图密钥，请经典版 V2 设置页；完整档案地图读取现有地图配置。")}
-      />}
-      {page==="统计" && <RealStatistics records={records}/>}
-      {page==="迁移" && access.mode==="account" && validScope &&
-        <V3MigrationPanel settings={readSettings()} records={records}
-          personalConnected={hasPersonalCloudConnection(readSettings())}/>}
 
       {page==="城市" && <RealCityView records={records} onOpen={setSelectedId}/>}
     </>}
