@@ -357,7 +357,25 @@ export function V3RealWorkspace() {
   const canEditLocal=validScope && access.mode==="device" && actualScope==="device-local";
   const canEditAccount=validScope && access.mode==="account" &&
     actualScope===cloudMode.scope && cloudMode.mode==="v3";
-  const canEdit=canEditLocal || canEditAccount;
+  // V2 is still the sole account cloud writer. Its authenticated account may
+  // edit the same *local* scoped draft through the V3 UI. This is not a V3
+  // writer cutover and never initiates V3 cloud writes.
+  const canEditLegacyAccount=validScope && access.mode==="account" &&
+    actualScope===cloudMode.scope && cloudMode.mode==="v2" && !cloudMode.error;
+  const canEdit=canEditLocal || canEditAccount || canEditLegacyAccount;
+  const requireAuthorizedWriter=async (scope:string)=>{
+    if(currentStorageScope()!==scope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+    if(canEditAccount || canEditLegacyAccount){
+      const active=accountRuntime.current;
+      if(!active||active.scope!==scope)throw Error("V3_WRITER_AUTH_REQUIRED");
+      const serverMode=await active.runtime.writerMode();
+      if(serverMode!==(canEditAccount?"v3":"v2"))
+        throw Error("V3_WRITER_MODE_CHANGED");
+    }else if(!canEditLocal){
+      throw Error("V3_WRITER_NOT_ACTIVE");
+    }
+    if(currentStorageScope()!==scope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
+  };
   const startEdit=(record:EventRecord|null)=>{
     if(!canEdit) return;
     setEditing({draft:record??blankRecord(),baseline:record??null,scope:actualScope});
@@ -371,11 +389,7 @@ export function V3RealWorkspace() {
   };
   const trashRecord=async(record:EventRecord)=>{
     if(!canEdit || currentStorageScope()!==actualScope)throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
-    if(canEditAccount){
-      const runtime=accountRuntime.current;
-      if(!runtime || runtime.scope!==actualScope || await runtime.runtime.writerMode()!=="v3")
-        throw Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
-    }
+    await requireAuthorizedWriter(actualScope);
     const timestamp=new Date().toISOString();
     const result=await saveRecordDraft(new IndexedDbRecordRepository(actualScope),
       {...record,deletedAt:timestamp,updatedAt:timestamp},record);
@@ -390,12 +404,7 @@ export function V3RealWorkspace() {
     if(!canEdit || !editing || editing.scope!==currentStorageScope()) {
       throw new Error("账号作用域已更改；未保存任何记录");
     }
-    if(canEditAccount) {
-      const checked=accountRuntime.current;
-      if(!checked || checked.scope!==editing.scope || await checked.runtime.writerMode()!=="v3") {
-        throw new Error("V3_ACCOUNT_WRITER_NOT_ACTIVE");
-      }
-    }
+    await requireAuthorizedWriter(editing.scope);
     const result=await saveRecordDraft(new IndexedDbRecordRepository(editing.scope),draft,editing.baseline);
     if(result.status==="review-required") {
       throw new Error("另一标签页已修改此记录。当前草稿保持打开；请复制修改内容并重新载入最新档案核对。");
@@ -405,7 +414,9 @@ export function V3RealWorkspace() {
     setTransferApproval(null);
     setNotice(canEditAccount
       ? "本机已原子保存；点击“安全同步”才会传输至已切换的账号云端。"
-      : "已安全保存至此设备；尚未启用云同步");
+      : canEditLegacyAccount
+        ? "已安全保存到当前账号的本机 V2 档案；云端 V2 尚未同步，原图未删除。"
+        : "已安全保存至此设备；尚未启用云同步");
     setReload(n=>n+1);
   };
 
@@ -416,13 +427,9 @@ export function V3RealWorkspace() {
       throw Error("V3_IMPORT_WRITER_NOT_ACTIVE");
     // The client-side UI permission alone is not a writer fence. A fresh
     // authenticated server marker is mandatory for EACH account write.
-    if(canEditAccount){
-      const current=accountRuntime.current;
-      if(!current||current.scope!==scope||await current.runtime.writerMode()!=="v3")
-        throw Error("V3_IMPORT_ACCOUNT_WRITER_NOT_ACTIVE");
-    }else if(!canEditLocal){
+    if(!canEditLocal && !canEditAccount && !canEditLegacyAccount)
       throw Error("V3_IMPORT_SCOPE_NOT_ALLOWED");
-    }
+    await requireAuthorizedWriter(scope);
     if(currentStorageScope()!==scope)throw Error("V3_IMPORT_ACCOUNT_CHANGED");
     const result=await saveRecordDraft(new IndexedDbRecordRepository(scope),record,null);
     if(result.status!=="saved")throw Error("V3_IMPORT_RECORD_ID_CONFLICT");
@@ -594,9 +601,10 @@ export function V3RealWorkspace() {
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
         <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
-        <small>{canEditLocal?"本机原子保存 · 云同步未接管"
-          : canEditAccount?"本机原子保存 · 账号云端 CAS 手动同步"
-          : "真实账号只读验证 · 服务器尚未允许 V3 写入"}</small></div>
+        <small>{canEditLocal?"本机编辑"
+          : canEditAccount?"账号已启用 V3 安全同步"
+          : canEditLegacyAccount?"账号本机可编辑 · 云端仍由 V2 管理"
+          : "正在验证账号写入权限"}</small></div>
       <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
         <b>{model.watchedCount}<small>已看</small></b>
         <b>{model.cities.length}<small>城市</small></b></div>
@@ -737,7 +745,7 @@ export function V3RealWorkspace() {
           <header><span>SAFE DATA MANAGEMENT</span><h2>备份与迁移</h2></header>
           <p>保护原图和现有档案；迁移必须经过真实账号授权与可恢复备份验收。</p>
         </section>
-        {canEdit && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
+        {(canEditLocal||canEditAccount) && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
       <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>
       <input type="file" accept=".json,application/json" aria-label="选择 V3 原图完整备份"
