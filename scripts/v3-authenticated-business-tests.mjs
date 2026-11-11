@@ -89,7 +89,7 @@ assert.match(component,/onSave=\{saveLocalDraft\}/);
 assert.match(component,/canEditAccount=validScope && access\.mode==="account"/,
   "Only a verified active account can enable the V3 account editor");
 assert.match(component,/cloudMode\.mode==="v3"/);
-assert.match(component,/await checked\.runtime\.writerMode\(\)!=="v3"/,
+assert.match(component,/await requireAuthorizedWriter\(editing\.scope\)/,
   "The editor must revalidate server cutover before each local save");
 assert.match(component,/await scoped\.runtime\.writerMode\(\)!=="v3"/,
   "Manual sync must revalidate server cutover before every transfer");
