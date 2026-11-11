@@ -1,0 +1,235 @@
+name: Publish verified V2 with optional V3 real-data beta
+
+on:
+  push:
+    branches: [refactor/core-v3-architecture-20261108]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+  pages: write
+  issues: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  prepare:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - name: Check out untouched official V2 from main
+        uses: actions/checkout@v5
+        with:
+          ref: main
+          path: v2
+          persist-credentials: false
+      - name: Check out V3 at exactly this commit
+        uses: actions/checkout@v5
+        with:
+          ref: ${{ github.sha }}
+          path: beta
+          persist-credentials: false
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - uses: actions/configure-pages@v5
+      - name: Build and test actual V2 main, unchanged
+        working-directory: v2
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run check
+      - name: Pin V2 manifest to actual main SHA
+        shell: bash
+        run: |
+          set -euo pipefail
+          v2_sha="$(git -C v2 rev-parse HEAD)"
+          printf '{"sha":"%s","builtAt":"%s","source":"main","deployment":"v2-unchanged"}\n' "$v2_sha" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > v2/dist/build-info.json
+          printf '%s\n' "$v2_sha" > /tmp/v2-source-sha
+          sha256sum v2/dist/index.html | cut -d' ' -f1 > /tmp/v2-index-sha
+      - name: Test V3 beta without activating a cloud writer
+        working-directory: beta
+        env:
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+        run: |
+          npm ci
+          npm run test
+          node scripts/v3-beta-release-guards.mjs
+      - name: Build V3 beta ONLY for the separate /v3-beta path
+        working-directory: beta
+        env:
+          VITE_V3_BETA: "1"
+          VITE_V3_BETA_BASE: "pages"
+          VITE_V3_REAL_WORKSPACE: "1"
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+        run: npm run build
+      - name: Verify beta asset prefix points ONLY into v3-beta
+        shell: bash
+        run: |
+          node --input-type=module -e '
+            import fs from "node:fs";
+            const html=fs.readFileSync("beta/dist/index.html","utf8");
+            if (!html.includes("/live-memory/v3-beta/assets/") ||
+                html.includes("src=\"/live-memory/assets/") ||
+                (!fs.existsSync("beta/dist/assets") || !fs.existsSync("beta/dist/beta-sw.js"))) {
+              throw Error("V3_BETA_INVALID_PAGES_ASSET_PREFIX");
+            }
+          '
+      - name: Install Chromium for V3 real-data browser acceptance
+        working-directory: beta
+        run: |
+          npm install --no-save --package-lock=false playwright@1.56.1
+          npx playwright install --with-deps chromium
+      - name: Preview beta at its real Pages subpath
+        working-directory: beta
+        env:
+          VITE_V3_BETA: "1"
+          VITE_V3_BETA_BASE: "pages"
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/v3-pages-beta-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4173/live-memory/v3-beta/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/v3-pages-beta-preview.log
+          exit 1
+      - name: Browser acceptance of actual beta import, restore and archive
+        working-directory: beta
+        env:
+          V3_REAL_AUDIT_URL: http://127.0.0.1:4173/live-memory/v3-beta/
+        run: node scripts/v3-real-browser-smoke.mjs
+      - name: Verify scoped passive worker at exact published beta subpath
+        working-directory: beta
+        env:
+          V3_BETA_TEST_URL: http://127.0.0.1:4173/live-memory/v3-beta/
+        run: node scripts/v3-beta-child-sw-browser.mjs
+      - name: Preserve V2 and package verified real-data beta
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p v2/dist/v3-beta
+          cp -a beta/dist/. v2/dist/v3-beta/
+          v2_sha="$(cat /tmp/v2-source-sha)"
+          printf '{"sha":"%s","type":"real-data-beta","mainSha":"%s","browserVerified":true}\n' \
+            "$GITHUB_SHA" "$v2_sha" > v2/dist/v3-beta/beta-info.json
+          # Both the public V2 app and its original hashed entry must be unchanged.
+          test "$(sha256sum v2/dist/index.html | cut -d' ' -f1)" = "$(cat /tmp/v2-index-sha)"
+          test "$(node -e 'console.log(require("./v2/dist/build-info.json").sha)')" = "$v2_sha"
+          test -f v2/dist/v3-beta/index.html
+          test -d v2/dist/v3-beta/assets
+      - name: Retain independently validated demonstration when available
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          source_run="$(gh run list --workflow v3-preview.yml --branch refactor/core-v3-architecture-20261108 --status success --limit 1 --json databaseId --jq '.[0].databaseId // empty' || true)"
+          if [ -n "$source_run" ]; then
+            mkdir -p "$RUNNER_TEMP/v3-demo"
+            if gh run download "$source_run" --name v3-static-preview --dir "$RUNNER_TEMP/v3-demo"; then
+              if [ -f "$RUNNER_TEMP/v3-demo/preview-info.json" ] &&
+                 node -e 'const f=require(process.argv[1]); if(f.type!=="demo-only"||f.browserVerified!==true)process.exit(1)' "$RUNNER_TEMP/v3-demo/preview-info.json"; then
+                mkdir -p v2/dist/v3-preview
+                cp -a "$RUNNER_TEMP/v3-demo/." v2/dist/v3-preview/
+              fi
+            fi
+          fi
+      - name: Upload V2-main + V3-beta Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: v2/dist
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: v3-beta-publish-diagnostics
+          path: beta/visual-artifacts/v3-real/
+          retention-days: 7
+
+  deploy:
+    needs: prepare
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page_url }}
+    outputs:
+      page_url: ${{ steps.publish.outputs.page_url }}
+    steps:
+      - name: Deploy combined artifact
+        id: publish
+        uses: actions/deploy-pages@v4
+
+  verify:
+    needs: deploy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      PAGES_ROOT: ${{ needs.deploy.outputs.page_url }}
+      V3_SHA: ${{ github.sha }}
+    steps:
+      - name: Verify published V2 main and real-beta SHA independently
+        shell: bash
+        run: |
+          set -euo pipefail
+          base="${PAGES_ROOT%/}"
+          for attempt in $(seq 1 50); do
+            v2="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$base/build-info.json?try=$attempt" || true)"
+            beta="$(curl -fsSL --max-time 12 -H 'Cache-Control: no-cache' "$base/v3-beta/beta-info.json?try=$attempt" || true)"
+            if V2_INFO="$v2" BETA_INFO="$beta" EXPECTED_SHA="$V3_SHA" node -e '
+              try {
+                const v=JSON.parse(process.env.V2_INFO);
+                const b=JSON.parse(process.env.BETA_INFO);
+                if(v.source!=="main"||v.deployment!=="v2-unchanged"||
+                  b.sha!==process.env.EXPECTED_SHA||
+                  b.type!=="real-data-beta"||b.browserVerified!==true||
+                  b.mainSha!==v.sha)process.exit(1);
+              }catch{process.exit(1)}
+            '; then
+              curl -fsSL --max-time 12 "$base/v3-beta/" | grep -q '/live-memory/v3-beta/assets/'
+              curl -fsSL --max-time 12 "$base/v3-beta/beta-sw.js" | grep -q 'self.clients.claim()'
+              echo "V2 main and V3 real beta live, browser-verified and SHA-verified: $V3_SHA"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Live V3 beta SHA verification failed; do not claim deployment" >&2
+          exit 1
+
+  report:
+    if: always()
+    needs: [prepare, deploy, verify]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Post live beta SHA result to Draft PR 54
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          BETA_SHA: ${{ github.sha }}
+          PAGES_ROOT: ${{ needs.deploy.outputs.page_url }}
+          PREPARE: ${{ needs.prepare.result }}
+          DEPLOY: ${{ needs.deploy.result }}
+          VERIFY: ${{ needs.verify.result }}
+        run: |
+          set -euo pipefail
+          if [ "$VERIFY" = "success" ]; then
+            beta_url="${PAGES_ROOT%/}/v3-beta/"
+            body="V3 real-data beta ONLINE VERIFIED: beta SHA $BETA_SHA at $beta_url. Same deployed artifact builds V2 from untouched main and independently verifies both live manifests. This is NOT full V3 release or writer cutover. Actions: $GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID"
+          else
+            body="V3 beta publishing NOT YET VERIFIED: SHA $BETA_SHA; jobs prepare=$PREPARE, deploy=$DEPLOY, verify=$VERIFY. Original V2 main is unchanged. Inspect: $GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID"
+          fi
+          # Use REST because the GraphQL addComment endpoint was denied for this token.
+          # Always preserve the result in the Actions summary when commenting is denied.
+          printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
+          if ! gh api --method POST "repos/$REPO/issues/54/comments" -f body="$body"; then
+            echo "::warning::Unable to post PR #54 report; check repository Actions token policy and this run summary"
+          fi

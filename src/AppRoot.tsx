@@ -160,6 +160,14 @@ export default function AppRoot() {
 
   const utilityActions = (
     <>
+      {import.meta.env.VITE_V3_PRODUCTION === "1" && (
+        <button className="sync-pill" type="button" title="返回新版 V3 主界面"
+          onClick={() => {
+            const url = new URL(window.location.href);
+            url.searchParams.delete("v2-classic");
+            window.location.assign(url.href);
+          }}>返回 V3</button>
+      )}
       {isDeviceOnly ? (
         <button className="sync-pill" type="button" onClick={() => setRoute("settings")} title="数据保存在本机浏览器。点击打开备份与设置"><HardDrive /><span>本机独立档案</span></button>
       ) : <div className="sync-action-wrap">

@@ -6,6 +6,7 @@ const LEGACY_CACHE_NAMES = ["live-memory-media-v2"];
 const objectUrls = new Map<string, string>();
 const pendingSources = new Map<string, Promise<string>>();
 const decodedImages = new Map<string, Promise<HTMLImageElement | null>>();
+const verifiedOfflineImages = new Set<string>();
 const MEDIA_CACHE_SCOPE_EVENT = "live-memory:media-cache-scope";
 let cleanupRegistered = false;
 let mediaCacheScope = "anonymous";
@@ -20,6 +21,7 @@ function resetObjectUrls() {
   objectUrls.clear();
   pendingSources.clear();
   decodedImages.clear();
+  verifiedOfflineImages.clear();
 }
 
 export function setMediaCacheScope(scope: string) {
@@ -94,6 +96,82 @@ async function readCachedSource(identity: string, epoch: number) {
   return objectUrl;
 }
 
+/** Store actual private image bytes before committing a V3 remote pull.
+ * A signed URL is not an offline backup: it expires and may be uncacheable.
+ * A cache write failure must abort the caller's local-record reconciliation.
+ */
+/** Keep bandwidth bounded: previously verified bytes are reused across sync
+ * checks and app views. The per-scope CacheStorage entry must still exist;
+ * a previously unverified view cache is hashed once before accepting it.
+ */
+export async function hasVerifiedOfflineMedia(asset: MediaAsset): Promise<boolean> {
+  if (!asset.storagePath || typeof caches === "undefined") return false;
+  const epoch = mediaCacheEpoch;
+  const identity = mediaIdentity(asset);
+  const cache = await caches.open(currentCacheName());
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  const response = await cache.match(cacheRequest(identity));
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  if (!response) {
+    verifiedOfflineImages.delete(identity);
+    return false;
+  }
+  if (verifiedOfflineImages.has(identity)) return true;
+  const blob = await response.blob();
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  const mime = (blob.type && blob.type !== "application/octet-stream"
+    ? blob.type : asset.mimeType || "").toLowerCase();
+  if (!blob.size || blob.size > 32 * 1024 * 1024 ||
+      !/^(image\/jpeg|image\/png|image\/webp|image\/gif|image\/avif)$/.test(mime)) return false;
+  if (asset.storagePath.includes("/v3/")) {
+    const match = asset.storagePath.match(
+      /\/v3\/[a-f0-9]{64}\/[a-f0-9]{64}\/([a-f0-9]{64})\.(?:jpg|png|webp|gif|avif)$/
+    );
+    if (!match) return false;
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()));
+    const hash = Array.from(digest, byte => byte.toString(16).padStart(2, "0")).join("");
+    if (hash !== match[1]) return false;
+  }
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  verifiedOfflineImages.add(identity);
+  return true;
+}
+
+export async function persistVerifiedOfflineMedia(asset: MediaAsset, blob: Blob): Promise<void> {
+  const epoch = mediaCacheEpoch;
+  const identity = mediaIdentity(asset);
+  if (!asset.storagePath || !identity || typeof caches === "undefined") {
+    throw new Error("V3_OFFLINE_CACHE_UNAVAILABLE");
+  }
+  const mime = (blob.type && blob.type !== "application/octet-stream"
+    ? blob.type : asset.mimeType || "").toLowerCase();
+  if (!/^(image\/jpeg|image\/png|image\/webp|image\/gif|image\/avif)$/.test(mime) ||
+      !blob.size || blob.size > 32 * 1024 * 1024) {
+    throw new Error("V3_OFFLINE_MEDIA_INVALID");
+  }
+
+  // New private V3 paths are content-addressed; verify the bytes before
+  // trusting them as recoverable images. Never accept corrupted snapshots.
+  if (asset.storagePath.includes("/v3/")) {
+    const matched = asset.storagePath.match(
+      /\/v3\/[a-f0-9]{64}\/[a-f0-9]{64}\/([a-f0-9]{64})\.(?:jpg|png|webp|gif|avif)$/
+    );
+    if (!matched) throw new Error("V3_OFFLINE_MEDIA_INVALID_PATH");
+    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", await blob.arrayBuffer()));
+    const received = Array.from(digest, byte => byte.toString(16).padStart(2, "0")).join("");
+    if (received !== matched[1]) throw new Error("V3_OFFLINE_MEDIA_SHA256_MISMATCH");
+  }
+
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  const cache = await caches.open(currentCacheName());
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  await cache.put(cacheRequest(identity), new Response(blob, {
+    headers: { "content-type": mime },
+  }));
+  if (epoch !== mediaCacheEpoch) throw new Error("V3_OFFLINE_ACCOUNT_CHANGED");
+  verifiedOfflineImages.add(identity);
+}
+
 async function persistInlineSource(asset: MediaAsset, identity: string, epoch: number) {
   if (!identity || typeof caches === "undefined" || !asset.src || !isInlineSource(asset.src)) return;
   try {
@@ -106,6 +184,7 @@ async function persistInlineSource(asset: MediaAsset, identity: string, epoch: n
     await cache.put(cacheRequest(identity), new Response(blob, {
       headers: { "content-type": blob.type || asset.mimeType || "application/octet-stream" },
     }));
+    verifiedOfflineImages.delete(identity); // An inline source may replace a previously verified object.
   } catch {
     // Inline rendering remains available even if persistent cache priming fails.
   }
@@ -128,6 +207,7 @@ async function fetchAndCache(asset: MediaAsset, identity: string, epoch: number)
     const cache = await caches.open(currentCacheName());
     if (epoch !== mediaCacheEpoch) return "";
     await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
+    verifiedOfflineImages.delete(identity); // HTTP cache writes require SHA revalidation before sync.
   }
   if (epoch !== mediaCacheEpoch) return "";
   const objectUrl = URL.createObjectURL(blob);

@@ -1,0 +1,296 @@
+import { chromium } from "playwright";
+import { mkdir } from "node:fs/promises";
+
+const url = process.env.V3_PREVIEW_URL || "http://127.0.0.1:4175/live-memory/v3-preview/";
+const out = process.env.V3_AUDIT_OUTPUT || "visual-artifacts/v3-public";
+await mkdir(out, { recursive: true });
+const browser = await chromium.launch({ headless: true });
+let failures = [];
+try {
+  for (const [width, height] of [[360, 780], [390, 844], [430, 932], [768, 1024], [1024, 820], [1280, 800], [1366, 768], [1440, 900], [1600, 900], [1669, 925], [1920, 1080]]) {
+    const context = await browser.newContext({ viewport: { width, height }, serviceWorkers: "block", acceptDownloads: true });
+    const page = await context.newPage();
+    const errors = [];
+    const unexpectedRequests = [];
+    page.on("pageerror", error => errors.push(error.message));
+    page.on("response", response => { if (response.status() >= 400) errors.push(response.status() + " " + response.url()); });
+    page.on("request", req => {
+      const target = new URL(req.url());
+      if (target.origin !== new URL(url).origin) unexpectedRequests.push(target.href);
+    });
+    const result = await page.goto(url, { waitUntil: "domcontentloaded" });
+    if (!result || result.status() !== 200) throw Error("Standalone preview HTTP " + result?.status());
+    try {
+      await page.locator('[data-ui-system="v3"]').waitFor({ state: "visible", timeout: 10000 });
+    } catch (error) {
+      const diagnostic = await page.evaluate(() => ({
+        href: location.href,
+        title: document.title,
+        text: document.body.innerText.slice(0, 850),
+        scripts: [...document.querySelectorAll("script[src]")].map(el => el.src),
+        rootLength: document.querySelector("#root")?.innerHTML.length,
+      }));
+      throw Error("V3 demo root did not render: " + JSON.stringify({ diagnostic, errors, unexpectedRequests }));
+    }
+    await page.waitForFunction(() => [...document.querySelectorAll(".v3-stage-hero-gallery img")]
+      .slice(0, 4).every(image => image.complete && image.naturalWidth > 0), null, { timeout: 20000 });
+    // Loading finished does not guarantee painting: async image decoding can
+    // leave the first two hero frames visibly blank in real CI screenshots.
+    await page.evaluate(async () => {
+      const visiblePosters = [...document.querySelectorAll(".v3-stage-hero-gallery img")].slice(0, 4);
+      await Promise.all(visiblePosters.map(image => image.decode()));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    });
+
+    const geom = await page.evaluate(() => {
+      const rect = selector => {
+        const node = document.querySelector(selector);
+        if (!node) throw Error("Missing " + selector);
+        const r = node.getBoundingClientRect();
+        return { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height };
+      };
+      const art = rect(".v3-stage-hero-gallery .v3-portrait-frame");
+      const figure = rect(".v3-stage-hero-gallery .v3-portrait-artwork");
+      const poster = document.querySelector(".v3-stage-hero-gallery .v3-portrait-frame img");
+      const sidePanel = document.querySelector(".v3-map-side");
+      return {
+        shell: rect(".v3-workspace-shell"), sidebar: rect(".v3-sidebar"),
+        art, figure, hero: rect(".v3-stage-hero"), copy: rect(".v3-stage-hero-copy"),
+        gallery: rect(".v3-stage-hero-gallery"), map: rect(".v3-map-stage"),
+        side: rect(".v3-map-side"), tools: rect(".v3-action-toolbar"),
+        topbar: rect(".v3-global-toolbar"), content: rect(".v3-workspace-content"),
+        mobileNav: innerWidth <= 800 ? rect(".v3-mobile-navigation") : null,
+        brandFits: innerWidth <= 800 || (() => {
+          const label = document.querySelector(".v3-preview-brand-name");
+          return !!label && label.clientWidth >= label.scrollWidth - 2;
+        })(),
+        headerChildren: [...document.querySelectorAll(".v3-preview-topbar > *")].map(el => {
+          const r=el.getBoundingClientRect();
+          return { left:r.left, right:r.right, top:r.top, bottom:r.bottom };
+        }),
+        sideScrollHeight: sidePanel.scrollHeight, sideClientHeight: sidePanel.clientHeight,
+        sideOverflowY: getComputedStyle(sidePanel).overflowY,
+        naturalAspect: poster.naturalWidth / poster.naturalHeight,
+        buttons: [...document.querySelectorAll(".v3-action-toolbar button")].map(el => {
+          const r = el.getBoundingClientRect();
+          return { left: r.left, right: r.right };
+        }),
+        bodyWidth: document.documentElement.scrollWidth,
+        viewportWidth: innerWidth, viewportHeight: innerHeight,
+        bodyHeight: document.documentElement.scrollHeight,
+        artFit: getComputedStyle(poster).objectFit,
+      };
+    });
+    if (geom.shell.top < -1 || geom.shell.bottom > height + 1 || geom.shell.left < -1 || geom.shell.right > width + 1) {
+      throw Error("Root workspace escapes viewport at " + width + ": " + JSON.stringify(geom.shell));
+    }
+    if (geom.bodyHeight > height + 2) throw Error("The browser document scrolls outside its app shell at " + width);
+    if (width > 800 && geom.sidebar.bottom > height + 1) throw Error("Sidebar account area is clipped below the viewport");
+    const initialMetrics = await page.locator(".v3-preview-topbar-stats b").allInnerTexts();
+    if (!initialMetrics[0]?.trim().startsWith("7") || !initialMetrics[1]?.trim().startsWith("6") || !initialMetrics[2]?.trim().startsWith("5")) {
+      throw Error("Header stats are inconsistent with demo fixtures: " + JSON.stringify(initialMetrics));
+    }
+    const aspect = geom.art.width / geom.art.height;
+    if (geom.art.height < 180 || geom.artFit !== "contain" ||
+        !Number.isFinite(geom.naturalAspect) ||
+        (geom.naturalAspect >= .45 && geom.naturalAspect <= .95 &&
+         Math.abs(aspect - geom.naturalAspect) > .032)) {
+      throw Error("Poster is cropped or its frame ignores the original aspect: " +
+        JSON.stringify({ width, art: geom.art, actual: aspect, native: geom.naturalAspect, fit: geom.artFit }));
+    }
+    // A hero that is taller than its content wastes the user's first viewport.
+    const unoccupiedGalleryHeight = geom.gallery.height - geom.figure.height;
+    if (unoccupiedGalleryHeight > 33 ||
+        geom.figure.top - geom.gallery.top > 16 ||
+        geom.gallery.bottom - geom.figure.bottom > 19) {
+      throw Error("Banner poster has avoidable upper/lower whitespace: " +
+        JSON.stringify({ width, hero: geom.hero.height, blank: unoccupiedGalleryHeight }));
+    }
+    if (width >= 1280 && height <= 925 && geom.hero.height > 425)
+      throw Error("Banner steals first-screen space without showing more poster information: " + geom.hero.height);
+    if (!geom.brandFits) throw Error("Brand title wraps or clips at " + width);
+    if ([768, 1024].includes(width) && geom.tools.height > 82)
+      throw Error("Toolbar needlessly occupies two rows at 1024px");
+    if (width <= 620 && geom.topbar.height > 155)
+      throw Error("Mobile header has unnecessary stacked whitespace at " + width + ": " + geom.topbar.height);
+    if (geom.mobileNav && geom.content.bottom > geom.mobileNav.top + 1)
+      throw Error("Mobile fixed navigation overlaps the content scroll viewport at " + width);
+    if (geom.headerChildren.some(r => r.left < geom.topbar.left - 3 ||
+        r.right > geom.topbar.right + 3 ||
+        r.top < geom.topbar.top - 3 || r.bottom > geom.topbar.bottom + 3))
+      throw Error("Topbar stats or controls clipped at " + width);
+    if (geom.sideOverflowY === "auto" || geom.sideOverflowY === "scroll" ||
+        geom.sideScrollHeight > geom.sideClientHeight + 3) {
+      throw Error("City list has a clipped nested vertical scroller at " + width + ": " +
+        JSON.stringify({ content: geom.sideScrollHeight, viewport: geom.sideClientHeight, overflow: geom.sideOverflowY }));
+    }
+    if (geom.gallery.top < geom.copy.bottom - 2 && width <= 800)
+      throw Error("Hero typography and portraits overlap at " + width);
+    if (geom.bodyWidth > geom.viewportWidth + 3)
+      throw Error("Global horizontal overflow at " + width);
+    if (geom.buttons.some(b => b.left < geom.tools.left - 2 || b.right > geom.tools.right + 2))
+      throw Error("Toolbar action clipped at " + width);
+    if (width >= 1024 && Math.abs(geom.map.height - geom.side.height) > 2)
+      throw Error("Map and city listing have different heights at " + width);
+    // Capture the initial viewport BEFORE exercising the carousel so review
+    // screenshots do not mistake an intentionally half-scrolled poster for a bug.
+    await page.screenshot({ path: out + "/landing-" + width + ".png", fullPage: true });
+    if (width === 1669) {
+      const gallery = page.locator(".v3-stage-hero-gallery");
+      const initialScroll = await gallery.evaluate(el => el.scrollLeft);
+      await page.getByRole("button", { name: "下一组海报" }).click();
+      await page.waitForFunction(previous => {
+        const element = document.querySelector(".v3-stage-hero-gallery");
+        return !!element && element.scrollLeft > previous + 15;
+      }, initialScroll, { timeout: 3000 });
+      await page.screenshot({ path: out + "/gallery-scrolled-1669.png", fullPage: true });
+      await page.getByRole("button", { name: "上一组海报" }).click();
+      await page.waitForFunction(() => {
+        const element = document.querySelector(".v3-stage-hero-gallery");
+        return !!element && element.scrollLeft < 5;
+      }, null, { timeout: 3000 });
+    }
+    await page.getByRole("button", { name: "北京", exact: false }).last().click();
+    await page.getByRole("dialog", { name: /北京的演出/ }).waitFor({ state: "visible" });
+    const modalFit = await page.evaluate(() => {
+      const map = document.querySelector(".v3-map-stage").getBoundingClientRect();
+      const panel = document.querySelector(".v3-map-detail-layer").getBoundingClientRect();
+      return panel.left >= map.left - 1 && panel.top >= map.top - 1
+        && panel.right <= map.right + 1 && panel.bottom <= map.bottom + 1;
+    });
+    if (!modalFit) throw Error("City dialog escapes map panel at " + width);
+    await page.screenshot({ path: out + "/city-" + width + ".png", fullPage: true });
+    await page.getByRole("button", { name: "关闭城市详情" }).click();
+    await page.getByRole("dialog", { name: /北京的演出/ }).waitFor({ state: "detached" });
+    const before = await page.locator(".v3-stage-hero").evaluate(el => el.getBoundingClientRect().top);
+    if (width > 800) {
+      await page.getByRole("button", { name: "模拟冲突" }).click();
+      await page.locator(".v3-sidebar").getByRole("button", { name: "查看同步状态" }).click();
+      const message = await page.locator(".v3-sidebar .v3-status-current").innerText();
+      if (!message.includes("真正的并发修改")) throw Error("No visible active conflict");
+    } else {
+      await page.getByRole("button", { name: "模拟冲突" }).click();
+      await page.locator(".v3-mobile-status").getByRole("button", { name: "查看同步状态" }).click();
+      const message = await page.locator(".v3-mobile-status .v3-status-current").innerText();
+      if (!message.includes("真正的并发修改")) throw Error("Mobile status hidden");
+    }
+    const after = await page.locator(".v3-stage-hero").evaluate(el => el.getBoundingClientRect().top);
+    if (Math.abs(after - before) > 1) throw Error("Status notification shifts content by " + (after - before));
+    // A view selection must change the actual workspace, not only the pressed style.
+    await page.getByRole("button", { name: "海报", exact: true }).click();
+    const initialCards = await page.locator(".v3-demo-poster-grid > button").count();
+    if (initialCards !== 7) throw Error("Poster wall not driven by the shared 7-record fixture: " + initialCards);
+    await page.getByRole("button", { name: "新增记录", exact: true }).click();
+    const editor = page.getByRole("dialog", { name: "新增演示记录" });
+    await editor.waitFor({ state: "visible" });
+    await editor.getByLabel("演出名称").fill("UI 回归验证演出");
+    await editor.getByLabel("城市").fill("杭州");
+    await editor.getByRole("button", { name: "保存演示记录" }).click();
+    await editor.waitFor({ state: "detached" });
+    const afterAdd = (await page.locator(".v3-preview-topbar-stats b").first().innerText()).trim();
+    if (!afterAdd.startsWith("8")) throw Error("Saving a demo record did not update the shared statistics: " + afterAdd);
+
+    await page.getByRole("button", { name: "列表", exact: true }).click();
+    await page.getByRole("cell", { name: "UI 回归验证演出" }).waitFor({ state: "visible" });
+    const tableSafe = await page.locator(".v3-demo-table-scroll").evaluate(el => ({
+      width: el.clientWidth, scrollWidth: el.scrollWidth, overflowX: getComputedStyle(el).overflowX,
+      tableStyled: !!el.querySelector("table.v3-demo-table"),
+    }));
+    if (!tableSafe.tableStyled || tableSafe.width < 150 ||
+        (tableSafe.scrollWidth > tableSafe.width + 2 && !["auto","scroll"].includes(tableSafe.overflowX))) {
+      throw Error("List view clipped instead of providing its own horizontal table scroll: " + JSON.stringify(tableSafe));
+    }
+    await page.getByRole("button", { name: "统计", exact: true }).click();
+    await page.getByRole("heading", { name: "现场履历" }).waitFor({ state: "visible" });
+    await page.getByRole("button", { name: "设置", exact: true }).click();
+    await page.getByRole("button", { name: /Editorial/ }).click();
+    const material = await page.locator(".v3-workspace-shell").getAttribute("data-v3-surface");
+    if (material !== "editorial") throw Error("Theme setting did not reach the shared shell: " + material);
+    await page.getByRole("button", { name: "档案", exact: true }).click();
+    await page.getByRole("button", { name: "海报", exact: true }).click();
+    await page.locator(".v3-demo-poster-grid > button").first().click();
+    const detail = page.getByRole("dialog", { name: /详情/ });
+    await detail.waitFor({ state: "visible" });
+    await detail.getByRole("button", { name: "编辑演示记录" }).click();
+    const editExisting = page.getByRole("dialog", { name: "编辑演示记录" });
+    await editExisting.getByLabel("演出名称").fill("已编辑的临时演出");
+    await editExisting.getByRole("button", { name: "保存演示记录" }).click();
+    await editExisting.waitFor({ state: "detached" });
+    await page.getByRole("button", { name: "列表", exact: true }).click();
+    await page.getByRole("cell", { name: "已编辑的临时演出" }).waitFor({ state: "visible" });
+
+    // One complete task flow verifies the public preview is operable, not just
+    // a screenshot. No personal account, database, or remote endpoint is used.
+    if (width === 390) {
+      const countBefore = Number.parseInt(await page.locator(".v3-preview-topbar-stats b").first().innerText(), 10);
+      await page.getByRole("button", { name: "新增记录", exact: true }).click();
+      const editor = page.getByRole("dialog", { name: "新增演示记录" });
+      await editor.waitFor({ state: "visible" });
+      await editor.getByLabel("演出名称").fill("独立预览的新现场");
+      await editor.getByRole("button", { name: "关闭编辑窗口" }).click();
+      await editor.getByText("修改尚未保存", { exact: false }).waitFor({ state: "visible" });
+      await editor.getByRole("button", { name: "继续编辑" }).click();
+      const preservedDraft = await editor.getByLabel("演出名称").inputValue();
+      if (preservedDraft !== "独立预览的新现场") throw Error("Cancelling unsaved-change warning lost the draft");
+      await editor.getByLabel("城市").fill("北京");
+      await editor.getByLabel("艺人").fill("演示艺人");
+      await editor.getByRole("button", { name: "保存演示记录" }).click();
+      await editor.waitFor({ state: "detached" });
+      await page.waitForFunction(expected => {
+        const text = document.querySelector(".v3-preview-topbar-stats b")?.textContent || "";
+        return Number.parseInt(text, 10) === expected;
+      }, countBefore + 1, { timeout: 10000 });
+      await page.getByRole("button", { name: "海报", exact: true }).click();
+      const addedPoster = page.locator(".v3-demo-poster-grid button").filter({ hasText: "独立预览的新现场" });
+      await addedPoster.waitFor({ state: "visible" });
+      await addedPoster.click();
+      const detail = page.getByRole("dialog", { name: /独立预览的新现场详情/ });
+      await detail.waitFor({ state: "visible" });
+      await detail.getByRole("button", { name: "编辑演示记录" }).click();
+      const editing = page.getByRole("dialog", { name: "编辑演示记录" });
+      await editing.getByLabel("演出名称").fill("独立预览的新现场 · 已编辑");
+      await editing.getByRole("button", { name: "保存演示记录" }).click();
+      await page.locator(".v3-demo-poster-grid").getByText("独立预览的新现场 · 已编辑").waitFor({ state: "visible" });
+
+      await page.getByRole("button", { name: "时间线", exact: true }).click();
+      await page.locator(".v3-demo-timeline").getByText("独立预览的新现场 · 已编辑").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "列表", exact: true }).click();
+      await page.locator(".v3-demo-table-scroll").getByText("独立预览的新现场 · 已编辑").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "统计", exact: true }).click();
+      await page.getByRole("group", { name: "统计年份" }).waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "档案", exact: true }).click();
+      await page.getByRole("button", { name: "更多操作" }).click();
+      await page.getByRole("button", { name: "分享预览" }).click();
+      await page.getByRole("dialog", { name: "分享预览" }).getByRole("button", { name: "生成 4:5 PNG" }).click();
+      const png = page.getByRole("img", { name: "4:5演示回顾PNG预览" });
+      await png.waitFor({ state: "visible", timeout: 15000 });
+      const dims = await png.evaluate(image => ({ width: image.naturalWidth, height: image.naturalHeight }));
+      if (dims.width !== 1080 || dims.height !== 1350) throw Error("Share PNG has wrong dimensions: " + JSON.stringify(dims));
+      const downloaded = page.waitForEvent("download", { timeout: 10000 });
+      await page.getByRole("button", { name: "保存 PNG 图片" }).click();
+      const download = await downloaded;
+      if (!download.suggestedFilename().endsWith(".png")) throw Error("Share export did not download PNG");
+      await page.getByRole("button", { name: "返回预览" }).click();
+      await page.getByRole("button", { name: "导入", exact: true }).click();
+      await page.getByRole("dialog", { name: "导入说明" }).getByRole("button", { name: "导入预置演示记录" }).click();
+      await page.getByRole("button", { name: "海报", exact: true }).click();
+      await page.locator(".v3-demo-poster-grid").getByText("夜色音乐会 · 导入演示").waitFor({ state: "visible" });
+      await page.getByRole("button", { name: "设置", exact: true }).click();
+      await page.getByRole("button", { name: /Editorial/ }).click();
+      const style = await page.locator('[data-ui-system="v3"]').getAttribute("data-v3-surface");
+      if (style !== "editorial") throw Error("Theme selector did not actually change the shell");
+      await page.screenshot({ path: out + "/interactive-390.png", fullPage: true });
+    }
+    if (errors.length) throw Error("Browser errors: " + errors.join(" | "));
+    if (unexpectedRequests.length) throw Error("Standalone preview contacted an external service: " + unexpectedRequests.join(" | "));
+    await context.close();
+  }
+} catch (error) {
+  failures.push(error instanceof Error ? error.message : String(error));
+} finally {
+  await browser.close();
+}
+if (failures.length) {
+  console.error(failures.join("\n"));
+  process.exitCode = 1;
+} else console.log("V3 public preview validated at 360/390/430/768/1024/1280/1366/1440/1600/1669/1920px with intrinsic posters, uncut city list and responsive header.");

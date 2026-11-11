@@ -2,7 +2,7 @@ name: Validate pull request
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, refactor/core-v3-architecture-20261108]
   push:
     branches: [refactor/experience-system-v3]
 
@@ -48,6 +48,8 @@ jobs:
         env:
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+          VITE_V3_PREVIEW: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
+          VITE_V3_REAL_WORKSPACE: ${{ github.base_ref == 'refactor/core-v3-architecture-20261108' && '1' || '0' }}
       - name: Start preview
         run: |
           npm run preview -- --host 127.0.0.1 --port 4173 > /tmp/live-memory-preview.log 2>&1 &
@@ -59,6 +61,26 @@ jobs:
           exit 1
       - name: Capture responsive visual audit
         run: node scripts/visual-audit.mjs
+        env:
+          V3_PREVIEW_AUDIT: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
+      - name: Validate authentic read-only V3 archive, stats, cities and privacy
+        if: github.base_ref == 'refactor/core-v3-architecture-20261108'
+        run: node scripts/v3-real-browser-smoke.mjs
+      - name: Start isolated source-module browser harness
+        if: github.base_ref == 'refactor/core-v3-architecture-20261108'
+        run: |
+          npm run dev:local -- --port 5173 > /tmp/v3-two-device-source.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:5173/live-memory/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/v3-two-device-source.log
+          exit 1
+      - name: Validate independent browser databases, sync and CAS recovery
+        if: github.base_ref == 'refactor/core-v3-architecture-20261108'
+        run: node scripts/v3-two-device-browser-smoke.mjs
+        env:
+          V3_TWO_DEVICE_URL: http://127.0.0.1:5173/live-memory/
       - uses: actions/upload-artifact@v4
         if: always()
         with:

@@ -1,0 +1,98 @@
+name: Verify V3 server CAS in isolated PostgreSQL
+
+on:
+  push:
+    branches:
+      - refactor/core-v3-architecture-20261108
+  pull_request:
+    branches: [main, refactor/core-v3-architecture-20261108]
+    paths:
+      - "tests/db/**"
+      - "supabase/migrations/017_v3_private_media_bucket.sql"
+      - "supabase/migrations/018_v3_server_cutover_fence.sql"
+      - "supabase/migrations/019_v3_blinded_media_owner_prefix.sql"
+      - "supabase/migrations/020_v3_owner_activation_cas_gate.sql"
+      - "supabase/migrations/021_v3_private_storage_cutover_gate.sql"
+      - "supabase/migrations/022_v3_personal_media_cas_integrity.sql"
+      - "supabase/migrations/023_v3_account_session_scoped_cas.sql"
+      - "supabase/migrations/024_v3_authenticated_media_staging.sql"
+      - "supabase/migrations/025_v3_authenticated_full_media_archive.sql"
+      - "supabase/migrations/026_v3_verified_account_cutover_approval.sql"
+      - "src/core/**"
+      - "src/infrastructure/supabase/**"
+      - ".github/workflows/v3-db-contract.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  isolated-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: ephemeral-test-only
+          POSTGRES_DB: v3_contract
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d v3_contract"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 15
+    env:
+      PGPASSWORD: ephemeral-test-only
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: postgres
+      PGDATABASE: v3_contract
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Apply isolated schema and V3 CAS procedures
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_fixture.sql
+      - name: Verify actual PostgreSQL RLS, CAS and V2-update compatibility
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_contract_checks.sql
+      - name: Verify isolated private media bucket and cross-owner RLS
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_private_media_contract_checks.sql
+      - name: Verify owner cutover blocks legacy V2 writers and preserves CAS
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_writer_cutover_checks.sql
+      - name: Verify actual concurrent CAS row locks and stale-write rejection
+        run: node tests/db/v3_cas_parallel_race.mjs
+      - name: Upgrade CAS RPCs to deny pre-cutover writes
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/020_v3_owner_activation_cas_gate.sql
+      - name: Verify inactive owner CAS denial and controlled activation
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_cas_activation_gate_checks.sql
+      - name: Gate V3 private media on real owner activation
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/021_v3_private_storage_cutover_gate.sql
+      - name: Verify inactive owner Storage denial and active owner recovery
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_private_storage_cutover_gate_checks.sql
+      - name: Upgrade personal CAS with server-side private media validation
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/022_v3_personal_media_cas_integrity.sql
+      - name: Verify forged media and missing private objects cannot be committed
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_personal_media_payload_checks.sql
+      - name: Install account-bound CAS RPC in disposable PostgreSQL
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/023_v3_account_session_scoped_cas.sql
+      - name: Reject cross-account cloud writes after session changes
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_account_session_scoped_cas_checks.sql
+      - name: Install authenticated private image staging bucket
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/024_v3_authenticated_media_staging.sql
+      - name: Verify staging allows only authenticated matching account and hashed immutable paths
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_authenticated_media_staging_checks.sql
+      - name: Install private, full-media, account-owned archival mirror
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/025_v3_authenticated_full_media_archive.sql
+      - name: Reject cross-user writes, media forgery and stale CAS revisions
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_authenticated_full_media_archive_checks.sql
+      - name: Require independently approved, snapshot-bound full-media cutover
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/026_v3_verified_account_cutover_approval.sql
+      - name: Reject direct mode changes, stale approvals and cross-account activation
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_verified_account_cutover_approval_checks.sql
+      - name: Verify no real remote database was configured
+        run: |
+          test "$PGHOST" = "127.0.0.1"
+          test "$PGDATABASE" = "v3_contract"
+          echo "All SQL executed only against temporary job-local PostgreSQL 17."

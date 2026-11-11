@@ -31,14 +31,14 @@ runInNewContext(sw, {
     clients: { claim: async () => undefined },
   },
   caches: {
-    keys: async () => ["live-memory-v4", "live-memory-v5", "live-memory-v6", "live-memory-media-v3-private", "other-app-cache"],
+    keys: async () => ["live-memory-v4", "live-memory-v5", "live-memory-v6", "live-memory-v7", "live-memory-media-v3-private", "other-app-cache"],
     delete: async (key) => { deletedCaches.push(key); return true; },
   },
 });
 let activation;
 callbacks.get("activate")({ waitUntil: (promise) => { activation = promise; } });
 await activation;
-assert.deepEqual(deletedCaches, ["live-memory-v4", "live-memory-v5"], "Service worker upgrades must preserve per-account poster caches and unrelated caches");
+assert.deepEqual(deletedCaches, ["live-memory-v4", "live-memory-v5", "live-memory-v6"], "Service worker must expire all old app shells but preserve V3 shell, per-account media and unrelated caches");
 
 const server = await createServer({
   appType: "custom",
