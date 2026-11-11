@@ -30,6 +30,7 @@ import { loadAmap, type AMapLngLatLike, type AMapNamespace } from "./amap";
 import { loadMediaImage, preloadPrimaryRecordMedia, useCachedMediaSrc } from "./mediaCache";
 import "./shareStudio.css";
 import { useDialogBehavior } from "./ui/useDialogBehavior";
+import { curateFeaturedRecords } from "./ui/real/curateFeaturedRecords";
 
 export type ShareFormat =
   | "adaptive-landscape"
@@ -54,6 +55,7 @@ type ShareMapPoint = { position: [number, number]; title: string; date: string }
 
 interface ShareStudioProps {
   records: EventRecord[];
+  experience?: "v3";
   format: ShareFormat;
   setFormat: (format: ShareFormat) => void;
   mapSettings: MapConfig;
@@ -159,7 +161,7 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
   },
 };
 
-export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMapSettings, onClose }: ShareStudioProps) {
+export function ShareStudio({ records, experience, format, setFormat, mapSettings, onOpenMapSettings, onClose }: ShareStudioProps) {
   const eligibleRecords = useMemo(
     () => records
       .slice()
@@ -168,18 +170,18 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
   );
   const earliestDate = eligibleRecords.length ? eligibleRecords[eligibleRecords.length - 1].date : "";
   const latestDate = eligibleRecords.length ? eligibleRecords[0].date : "";
-  const [layout, setLayout] = useState<ShareLayout>("wall");
-  const [palette, setPalette] = useState<SharePalette>("jade");
+  const [layout, setLayout] = useState<ShareLayout>(experience === "v3" ? "magazine" : "wall");
+  const [palette, setPalette] = useState<SharePalette>(experience === "v3" ? "mist" : "jade");
   const [headline, setHeadline] = useState("我的现场档案");
   const [scope, setScope] = useState<ScopeMode>("all");
-  const [itemLimit, setItemLimit] = useState<ItemLimit>("all");
+  const [itemLimit, setItemLimit] = useState<ItemLimit>(experience === "v3" ? 12 : "all");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
   const [categories, setCategories] = useState<Set<EventCategory>>(() => new Set<EventCategory>());
   const [startDate, setStartDate] = useState(earliestDate);
   const [endDate, setEndDate] = useState(latestDate);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(eligibleRecords.map((record) => record.id)));
   const [selectionQuery, setSelectionQuery] = useState("");
-  const [showDetails, setShowDetails] = useState(false);
+  const [showDetails, setShowDetails] = useState(experience === "v3");
   const [showBrand, setShowBrand] = useState(true);
   const [showStats, setShowStats] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -232,6 +234,35 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
     () => itemLimit === "all" ? sortedRecords : sortedRecords.slice(0, itemLimit),
     [itemLimit, sortedRecords],
   );
+
+  const distinctArtistPicks = useMemo(
+    () => curateFeaturedRecords(eligibleRecords.filter(record => !record.deletedAt),
+      record => Boolean(primaryMedia(record)), 5),
+    [eligibleRecords],
+  );
+
+  function selectV3EditorialPicks() {
+    // Real records only; never create demo items or mutate archive data.
+    if (!distinctArtistPicks.length) return;
+    setCategories(new Set<EventCategory>());
+    setScope("manual");
+    setSelectedIds(new Set(distinctArtistPicks.map(record => record.id)));
+    setItemLimit("all");
+    setLayout("magazine");
+    setPalette("mist");
+    setHeadline("我的精选现场");
+    setShowDetails(true);
+    setFormat("adaptive-landscape");
+  }
+
+  function selectV3AllArchive() {
+    setCategories(new Set<EventCategory>());
+    setScope("all");
+    setSelectedIds(new Set(eligibleRecords.map(record => record.id)));
+    setItemLimit("all");
+    setLayout("wall");
+    setHeadline("我的现场档案");
+  }
 
   const visibleSelectionRecords = useMemo(() => {
     const query = selectionQuery.trim().toLowerCase();
@@ -361,7 +392,7 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
   } as CSSProperties;
 
   return (
-    <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}`} onMouseDown={(event) => {
+    <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}${experience === "v3" ? " is-v3" : ""}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) requestClose();
     }}>
       <aside className="share-studio-panel" aria-label="分享图设置">
@@ -371,9 +402,23 @@ export function ShareStudio({ records, format, setFormat, mapSettings, onOpenMap
         </header>
 
         <div className="share-intro-copy">
-          <span>现场分享图</span>
-          <h2>选择真正想分享的现场</h2>
+          <span>{experience === "v3" ? "LIVE MEMORY · V3 STORY STUDIO" : "现场分享图"}</span>
+          <h2>{experience === "v3" ? "把每一场现场，编成故事" : "选择真正想分享的现场"}</h2>
           <p>从类型、时间和具体场次中筛选，再选择适合内容的版式。</p>
+        </div>
+
+        {experience === "v3" && <div className="share-v3-presets" aria-label="V3 快速分享方案">
+          <div className="share-v3-preset-intro">
+            <strong>一键编排</strong>
+            <small>自动从你的真实档案里挑选不同艺人；可继续微调布局和海报。</small>
+          </div>
+          <div className="share-v3-preset-actions">
+            <button type="button" className="share-v3-preset-featured"
+              onClick={selectV3EditorialPicks} disabled={!distinctArtistPicks.length}>
+              精选不同艺人 · {distinctArtistPicks.length} 场
+            </button>
+            <button type="button" onClick={selectV3AllArchive}>全部演出</button>
+          </div>
         </div>
 
         <div className="share-studio-summary">
