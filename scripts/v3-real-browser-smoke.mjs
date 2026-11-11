@@ -87,7 +87,7 @@ try {
   if(layout.docWidth>width+2||layout.docHeight>height+2)throw Error("V3 real workspace escaped viewport: "+JSON.stringify(layout));
   await page.screenshot({path:`${output}/archive-${width}.png`,fullPage:true});
   await page.getByRole("button",{name:"列表",exact:true}).click();
-  await page.getByRole("cell",{name:"北京现场 · 真实本机回归"}).waitFor();
+  await page.locator(".v3-real-index-row").filter({hasText:"北京现场 · 真实本机回归"}).waitFor();
   await page.getByRole("button",{name:"时间线",exact:true}).click();
   await page.getByText("郑州巡回演出 · 真实本机回归").first().waitFor();
   await page.getByRole("button",{name:"海报",exact:true}).click();
