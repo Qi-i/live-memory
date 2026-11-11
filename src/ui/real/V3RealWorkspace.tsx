@@ -34,7 +34,11 @@ function backToV2() {
     return;
   }
   const url = new URL(window.location.href);
-  url.searchParams.delete("v3-real-workspace");
+  if (import.meta.env.VITE_V3_PRODUCTION === "1") {
+    url.searchParams.set("v2-classic", "1");
+  } else {
+    url.searchParams.delete("v3-real-workspace");
+  }
   window.location.assign(url.href);
 }
 function PosterCard({ record, onOpen }: { record: EventRecord; onOpen: (id: string) => void }) {
@@ -543,7 +547,7 @@ export function V3RealWorkspace() {
       <strong>{import.meta.env.VITE_V3_BETA==="1"?"V3 安全试用 · 独立站点":access.mode==="account"?"当前账号":"本机独立档案"}</strong>
       <span>{canEditLocal?"本机可编辑 · 无云端写入"
         : canEditAccount?"已激活 V3 · 手动安全同步":"账号只读 · V2 仍为写入端"}</span>
-      <button type="button" onClick={backToV2}>返回正式 V2</button></div>}
+      <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button></div>}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · V3 REAL DATA</span>
         <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
@@ -567,7 +571,7 @@ export function V3RealWorkspace() {
         {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}
       </button>}
       <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
-      <button type="button" onClick={backToV2}>返回 V2</button>
+      <button type="button" onClick={backToV2}>经典版 V2</button>
     </div>}
     overlay={importOpen && canEdit
       ? <ImportDrawer
@@ -626,7 +630,7 @@ export function V3RealWorkspace() {
       <button type="button" onClick={()=>setNotice("")} aria-label="关闭提示">×</button></div>}
     {!validScope || snapshot.error ? <section className="v3-real-panel" role="alert">
       <h2>无法读取当前档案</h2><p>{snapshot.error||"当前未登录私有账号。"}</p>
-      <button type="button" onClick={backToV2}>返回正式 V2</button>
+      <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button>
     </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
     <>
       {page==="档案" && <>
@@ -679,7 +683,7 @@ export function V3RealWorkspace() {
         onEdit={requestBusinessEdit} onDuplicate={requestDuplicate}
         onDelete={row=>canEdit?setDeleteCandidate(row):setNotice("此账号 V3 仍是只读；不能执行删除或迁移写入。")}
         onZoom={setZoomMedia}
-        onOpenMapSettings={()=>setNotice("如需配置地图密钥，请返回 V2 设置页；完整档案地图读取现有地图配置。")}
+        onOpenMapSettings={()=>setNotice("如需配置地图密钥，请经典版 V2 设置页；完整档案地图读取现有地图配置。")}
       />}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="迁移" && access.mode==="account" && validScope &&
