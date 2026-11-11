@@ -1,0 +1,45 @@
+/* Production V3's story-studio experience. Classic V2 ShareStudio is untouched. */
+.share-studio-stage.is-v3 {
+  grid-template-columns:minmax(355px,440px) minmax(0,1fr);
+  color:#232e49;
+  background:radial-gradient(circle at 80% 8%,rgba(180,180,246,.32),transparent 42%),
+    linear-gradient(135deg,#e6eafb,#eff5fa 63%,#e9e9f6);
+}
+.share-studio-stage.is-v3 .share-studio-panel {
+  gap:13px;
+  padding:20px 21px 24px;
+  background:rgba(252,252,255,.97);
+  border-right:1px solid rgba(120,130,180,.18);
+  box-shadow:15px 0 50px rgba(54,60,110,.12);
+}
+.share-studio-stage.is-v3 .share-intro-copy {gap:6px;}
+.share-studio-stage.is-v3 .share-intro-copy>span {color:#7060b8;letter-spacing:.15em;}
+.share-studio-stage.is-v3 .share-intro-copy h2 {font-size:clamp(21px,1.8vw,26px);line-height:1.25;}
+.share-studio-stage.is-v3 .share-intro-copy p {display:block;color:#6b7892;line-height:1.55;font-size:12px;font-weight:500;}
+.share-studio-stage.is-v3 .share-studio-summary {
+  padding:13px 15px; border-color:#dadbf1;
+  background:linear-gradient(122deg,#f0edff,#e8f2f8);
+}
+.share-studio-stage.is-v3 .share-studio-summary strong {color:#665abb;}
+.share-studio-stage.is-v3 .share-v3-presets {display:grid;gap:12px;padding:15px;border:1px solid #dcdaf2;border-radius:18px;background:linear-gradient(145deg,#eeecff,#f5f7ff 70%,#eaf3fb);}
+.share-studio-stage.is-v3 .share-v3-preset-intro {display:grid;gap:4px;}
+.share-studio-stage.is-v3 .share-v3-preset-intro strong {font-size:14px;}
+.share-studio-stage.is-v3 .share-v3-preset-intro small {font-size:11px;line-height:1.5;color:#687590;}
+.share-studio-stage.is-v3 .share-v3-preset-actions {display:grid;grid-template-columns:1.5fr 1fr;gap:9px;}
+.share-studio-stage.is-v3 .share-v3-preset-actions button {min-height:39px;padding:8px 12px;border:1px solid #d6d7ec;border-radius:11px;background:white;color:#40486f;font:inherit;font-size:12px;font-weight:750;cursor:pointer;}
+.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured {border-color:#7769cf;background:#6c60c7;color:#fff;}
+.share-studio-stage.is-v3 .share-v3-preset-actions button:disabled {opacity:.5;cursor:not-allowed;}
+.share-studio-stage.is-v3 .share-category-control,
+.share-studio-stage.is-v3 .share-format-control,
+.share-studio-stage.is-v3 .share-scope-control,
+.share-studio-stage.is-v3 .share-count-control {background:#edf0f9;border-color:#dce2f1;}
+.share-studio-stage.is-v3 .share-category-control button.is-active,
+.share-studio-stage.is-v3 .share-format-control button.is-active,
+.share-studio-stage.is-v3 .share-scope-control button.is-active,
+.share-studio-stage.is-v3 .share-count-control button.is-active {background:#d8d4f9;color:#353168;box-shadow:0 3px 10px rgba(67,61,145,.12);}
+.share-studio-stage.is-v3 .share-export-button {background:#6259ba;border-color:#6259ba;color:#fff;}
+.share-studio-stage.is-v3 .share-preview-area {background:transparent;}
+@media(max-width:800px) {
+  .share-studio-stage.is-v3 {grid-template-columns:1fr;}
+  .share-studio-stage.is-v3 .share-studio-panel {padding:14px;}
+}
