@@ -11,19 +11,20 @@ import { IndexedDbRecordRepository } from "../../infrastructure/indexedDb/record
 import { RecordEditor } from "../../overlays";
 import { blankRecord } from "../../seeds";
 import { ShareStudio, type ShareFormat } from "../../shareStudio";
-import { ArchivePage, type ArchiveLayout } from "../../archive";
 import { duplicateRecordForNextShow } from "../../recordActions";
 import { hasPersonalCloudConnection } from "../../supabase";
 import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
-import { ActionToolbar, MapSplitPane, StageHero, WorkspaceShell } from "../system/WorkspaceShell";
+import { ActionToolbar, MapSplitPane, WorkspaceShell } from "../system/WorkspaceShell";
+import { curateFeaturedRecords } from "./curateFeaturedRecords";
+import { V3FeaturedHero } from "./V3FeaturedHero";
 import "../system/preview.css";
 import "./realWorkspace.css";
 
-type Page = "档案" | "完整档案" | "统计" | "城市" | "迁移";
+type Page = "档案" | "统计" | "城市" | "迁移";
 type Mode = "海报" | "时间线" | "列表";
 const PAGE_SIZE = 18;
-const navigation: Page[] = ["档案", "完整档案", "统计", "城市", "迁移"];
+const navigation: Page[] = ["档案", "统计", "城市", "迁移"];
 const archiveModes: Mode[] = ["海报", "时间线", "列表"];
 
 function backToV2() {
@@ -48,22 +49,16 @@ function PosterCard({ record, onOpen }: { record: EventRecord; onOpen: (id: stri
     <button className="v3-real-poster-card" type="button" onClick={() => onOpen(record.id)}
       aria-label={"查看 " + record.title}>
       <span className="v3-real-poster-image">
-        {src ? <img src={src} loading="lazy" alt={record.title + "海报"}
-          onLoad={event => {
-            const img=event.currentTarget;
-            const ratio=img.naturalHeight>0?img.naturalWidth/img.naturalHeight:0;
-            if(ratio>=.45&&ratio<=.95) {
-              img.closest<HTMLElement>(".v3-real-poster-image")?.style.setProperty("--v3-real-poster-ratio",String(ratio));
-            }
-          }}/> : <span>无海报</span>}
+        {src?<img src={src} loading="lazy" decoding="async" alt={record.title+"海报"}/>:<span>无海报</span>}
       </span>
       <strong title={record.title}>{record.title}</strong>
       <small>{record.date} · {record.city || "城市待补"}</small>
     </button>
   );
 }
-function RecordDetail({ record, onClose, onEdit }: {
+function RecordDetail({ record, onClose, onEdit, onDuplicate, onTrash }: {
   record: EventRecord; onClose: () => void; onEdit?: (record: EventRecord) => void;
+  onDuplicate?: (record: EventRecord) => void; onTrash?: (record: EventRecord) => void;
 }) {
   const asset = primaryMedia(record);
   const src = useCachedMediaSrc(asset);
@@ -99,8 +94,12 @@ function RecordDetail({ record, onClose, onEdit }: {
             {record.note && <><dt>备注</dt><dd className="v3-real-detail-note">{record.note}</dd></>}
           </dl>
         </div>
-        <footer><span>此窗口不会写入、同步或删除任何数据。</span>
-          <button type="button" onClick={onClose}>返回档案</button>
+        <footer><span>仅查看不会更改记录或原图。</span>
+          <div className="v3-real-detail-actions">
+            {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
+            {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
+            <button type="button" onClick={onClose}>返回档案</button>
+          </div>
         </footer>
       </section>
     </div>
@@ -203,7 +202,6 @@ export function V3RealWorkspace() {
   const access=useAccess();
   const [page,setPage]=useState<Page>("档案");
   const [mode,setMode]=useState<Mode>("海报");
-  const [fullLayout,setFullLayout]=useState<ArchiveLayout>("poster");
   const [search,setSearch]=useState("");
   const [pageIndex,setPageIndex]=useState(0);
   const [snapshot,setSnapshot]=useState<{scope:string;records:EventRecord[];error:string;busy:boolean}>({
@@ -292,7 +290,9 @@ export function V3RealWorkspace() {
   const records=snapshot.scope===actualScope?snapshot.records:[];
   const model=useMemo(()=>describeRealArchive(records,search),[records,search]);
   const active=model.records;
-  const firstPosters=useMemo(()=>active.filter(r=>primaryMedia(r)).slice(0,7),[active]);
+  const firstPosters=useMemo(()=>curateFeaturedRecords(
+    describeRealArchive(records).records, record=>Boolean(primaryMedia(record)),5,
+  ),[records]);
   useEffect(()=>{
     let alive=true;
     const scope=currentStorageScope();
@@ -319,10 +319,6 @@ export function V3RealWorkspace() {
     setSelectedId(null);
   };
 
-  const requestBusinessEdit=(record:EventRecord)=>{
-    if(!canEdit){setNotice("旧 V2 账号仍是正式写入端；完整业务页面可查看，但 V3 编辑须等通过服务器安全切换后启用。");return;}
-    startEdit(record);
-  };
   const requestDuplicate=(record:EventRecord)=>{
     if(!canEdit){setNotice("当前账号保持 V2 写入模式，V3 不会创建重复记录。");return;}
     setEditing({draft:duplicateRecordForNextShow(record),baseline:null,scope:actualScope});
@@ -537,7 +533,7 @@ export function V3RealWorkspace() {
   return <WorkspaceShell
     brand={<><span className="v3-preview-brand">◈</span>
       <strong className="v3-preview-brand-name">Live Memory</strong>
-      <small>V3 · 真实档案验证</small></>}
+      <small>V3 · 现场记忆</small></>}
     navigation={navButtons}
     mobileNavigation={navButtons}
     appearance="liquid"
@@ -549,7 +545,7 @@ export function V3RealWorkspace() {
         : canEditAccount?"已激活 V3 · 手动安全同步":"账号只读 · V2 仍为写入端"}</span>
       <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button></div>}
     toolbar={<div className="v3-real-topbar">
-      <div><span>LIVE MEMORY · V3 REAL DATA</span>
+      <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
         <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
         <small>{canEditLocal?"本机原子保存 · 云同步未接管"
           : canEditAccount?"本机原子保存 · 账号云端 CAS 手动同步"
@@ -602,7 +598,9 @@ export function V3RealWorkspace() {
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
       : selected
         ? <RecordDetail record={selected} onClose={()=>setSelectedId(null)}
-            onEdit={canEdit?startEdit:undefined}/>
+            onEdit={canEdit?startEdit:undefined}
+            onDuplicate={canEdit?requestDuplicate:undefined}
+            onTrash={canEdit?setDeleteCandidate:undefined}/>
         : undefined}
   >
     {import.meta.env.VITE_V3_BETA==="1" && <aside role="note" className="v3-real-save-notice">
