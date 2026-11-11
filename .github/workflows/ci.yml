@@ -63,6 +63,28 @@ jobs:
         run: node scripts/visual-audit.mjs
         env:
           V3_PREVIEW_AUDIT: ${{ (github.base_ref == 'refactor/core-v3-architecture-20261108' || github.head_ref == 'refactor/core-v3-architecture-20261108') && '1' || '0' }}
+      - name: Build actual production V3 UI for independent browser acceptance
+        if: github.base_ref == 'main'
+        run: npm run build
+        env:
+          VITE_V3_PRODUCTION: "1"
+          VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
+          VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
+      - name: Start production V3 preview on isolated port
+        if: github.base_ref == 'main'
+        run: |
+          npm run preview -- --host 127.0.0.1 --port 4174 > /tmp/v3-production-preview.log 2>&1 &
+          for attempt in {1..30}; do
+            if curl -fsS http://127.0.0.1:4174/live-memory/ >/dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat /tmp/v3-production-preview.log
+          exit 1
+      - name: Browser-test actual production V3 archive and media safety
+        if: github.base_ref == 'main'
+        run: node scripts/v3-real-browser-smoke.mjs
+        env:
+          V3_REAL_AUDIT_URL: http://127.0.0.1:4174/live-memory/
       - name: Validate authentic read-only V3 archive, stats, cities and privacy
         if: github.base_ref == 'refactor/core-v3-architecture-20261108'
         run: node scripts/v3-real-browser-smoke.mjs
