@@ -25,6 +25,7 @@ import "../system/preview.css";
 import "./realWorkspace.css";
 import "./v3ShareStudio.css";
 import "./adaptivePoster.css";
+import "./v3ArchiveRefinements.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
 type Mode = "海报" | "时间线" | "列表" | "画报" | "票夹" | "票根" |
