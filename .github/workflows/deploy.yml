@@ -44,6 +44,7 @@ jobs:
       - name: Type-check and build
         run: npm run check
         env:
+          VITE_V3_PRODUCTION: "1"
           VITE_ACCOUNT_SUPABASE_URL: ${{ vars.VITE_ACCOUNT_SUPABASE_URL || vars.VITE_SUPABASE_URL }}
           VITE_ACCOUNT_SUPABASE_ANON_KEY: ${{ vars.VITE_ACCOUNT_SUPABASE_ANON_KEY || vars.VITE_SUPABASE_ANON_KEY }}
 
@@ -103,7 +104,7 @@ jobs:
       - name: Write deployment build info
         shell: bash
         run: |
-          printf '{"sha":"%s","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > dist/build-info.json
+          printf '{"sha":"%s","app":"v3-main-safe","builtAt":"%s"}\n' "$GITHUB_SHA" "$(date -u +'%Y-%m-%dT%H:%M:%SZ')" > dist/build-info.json
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v4
@@ -150,7 +151,7 @@ jobs:
               let input = "";
               process.stdin.on("data", chunk => input += chunk);
               process.stdin.on("end", () => {
-                try { process.stdout.write(JSON.parse(input).sha || ""); }
+                try { const info = JSON.parse(input); process.stdout.write(info.app === "v3-main-safe" ? (info.sha || "") : ""); }
                 catch { process.stdout.write(""); }
               });
             ')"
