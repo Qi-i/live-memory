@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
-import { primaryMedia } from "../../domain";
+import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
 import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
 import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
@@ -75,54 +75,81 @@ function PosterCard({record,onOpen,onEdit,frameRatio,onNaturalRatio}:{
     </div>
   </article>;
 }
-function RecordDetail({ record, onClose, onEdit, onDuplicate, onTrash }: {
-  record: EventRecord; onClose: () => void; onEdit?: (record: EventRecord) => void;
-  onDuplicate?: (record: EventRecord) => void; onTrash?: (record: EventRecord) => void;
-}) {
-  const asset = primaryMedia(record);
-  const src = useCachedMediaSrc(asset);
-  const closeRef = useRef<HTMLButtonElement>(null);
-  useEffect(() => {
+function RecordMediaPreview({media,onOpen}:{
+  media:MediaAsset;onOpen:(media:MediaAsset)=>void;
+}){
+  const src=useCachedMediaSrc(media);
+  return <button type="button" className="v3-real-media-preview" onClick={()=>onOpen(media)}>
+    {src?<img src={src} alt={media.title||mediaKindLabels[media.kind]} loading="lazy"/>:
+      <span>暂无预览</span>}
+    <small>{mediaKindLabels[media.kind]}{media.title?" · "+media.title:""}</small>
+  </button>;
+}
+function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}:{
+  record:EventRecord;onClose:()=>void;onEdit?:(record:EventRecord)=>void;
+  onDuplicate?:(record:EventRecord)=>void;onTrash?:(record:EventRecord)=>void;
+  onShare:(record:EventRecord)=>void;
+  onZoom:(media:MediaAsset)=>void;
+}){
+  const src=useCachedMediaSrc(primaryMedia(record));
+  const closeRef=useRef<HTMLButtonElement>(null);
+  useEffect(()=>{
     closeRef.current?.focus();
-    const onKey = (event: KeyboardEvent) => {
-      if (event.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  return (
-    <div className="v3-real-modal-backdrop" role="presentation"
-      onMouseDown={event => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="v3-real-modal" role="dialog" aria-modal="true"
-        aria-label={record.title + "（只读详情）"}>
-        <header><div><small>REAL ARCHIVE · READ ONLY</small><h2>{record.title}</h2>
+    const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
+    document.addEventListener("keydown",onKey);
+    return()=>document.removeEventListener("keydown",onKey);
+  },[onClose]);
+  return <div className="v3-real-modal-backdrop" role="presentation"
+    onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
+    <section className="v3-real-modal v3-real-rich-detail" role="dialog"
+      aria-modal="true" aria-label={record.title+"（档案详情）"}>
+      <header>
+        <div><small>LIVE MEMORY · EVENT ARCHIVE</small><h2>{record.title}</h2>
           <span>{record.date} · {record.city} · {record.venue}</span></div>
-          {onEdit && <button type="button" aria-label="编辑本机演出" onClick={()=>onEdit(record)}>编辑</button>}
-          <button type="button" aria-label="关闭只读详情" ref={closeRef} onClick={onClose}>×</button>
-        </header>
-        <div className="v3-real-modal-body">
-          <div className="v3-real-modal-art">
-            {src ? <img src={src} alt={record.title + "海报"} /> : <span>此记录暂无可用海报</span>}
-          </div>
-          <dl>
-            <dt>艺人</dt><dd>{record.artists.join("、") || "未填写"}</dd>
-            <dt>场馆</dt><dd>{record.venue || "未填写"}</dd>
-            <dt>观演状态</dt><dd>{record.status === "watched" ? "已看" : record.status === "planned" ? "待看" : "想看"}</dd>
-            <dt>归档媒体</dt><dd>{record.media.length} 项</dd>
-            <dt>标签</dt><dd>{record.tags.join("、") || "无"}</dd>
-            {record.note && <><dt>备注</dt><dd className="v3-real-detail-note">{record.note}</dd></>}
-          </dl>
+        <div className="v3-real-detail-header-actions">
+          {onEdit&&<button type="button" aria-label="编辑本机演出"
+            onClick={()=>onEdit(record)}>编辑</button>}
+          <button type="button" aria-label="关闭档案详情" ref={closeRef} onClick={onClose}>×</button>
         </div>
-        <footer><span>仅查看不会更改记录或原图。</span>
-          <div className="v3-real-detail-actions">
-            {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
-            {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
-            <button type="button" onClick={onClose}>返回档案</button>
-          </div>
-        </footer>
-      </section>
-    </div>
-  );
+      </header>
+      <div className="v3-real-modal-body">
+        <button className="v3-real-modal-art" type="button"
+          onClick={()=>{const art=primaryMedia(record);if(art)onZoom(art);}}
+          aria-label="放大主海报">
+          {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
+        </button>
+        <dl>
+          <dt>类别</dt><dd>{categoryLabels[record.category]}</dd>
+          <dt>艺人</dt><dd>{record.artists.join("、")||"未填写"}</dd>
+          <dt>演出时间</dt><dd>{record.date}{record.time?" "+record.time:""}</dd>
+          <dt>场馆</dt><dd>{record.venue||"未填写"}{record.address?" · "+record.address:""}</dd>
+          <dt>状态</dt><dd>{statusLabels[record.status]}{record.recordState!=="normal"?" · "+record.recordState:""}</dd>
+          {record.price!=null&&<><dt>票价</dt><dd>¥{record.price}</dd></>}
+          {record.seat&&<><dt>座位</dt><dd>{record.seat}</dd></>}
+          {record.sourceChannel&&<><dt>购票渠道</dt><dd>{sourceLabels[record.sourceChannel]}</dd></>}
+          {record.companions.length>0&&<><dt>同行</dt><dd>{record.companions.join("、")}</dd></>}
+          <dt>媒体</dt><dd>{record.media.length} 项</dd>
+          <dt>标签</dt><dd>{record.tags.join("、")||"无"}</dd>
+          {record.setlist.length>0&&<><dt>歌单</dt><dd>{record.setlist.join(" / ")}</dd></>}
+          {record.note&&<><dt>备注</dt><dd className="v3-real-detail-note">{record.note}</dd></>}
+        </dl>
+      </div>
+      {record.media.length>0&&<section className="v3-real-detail-media">
+        <h3>现场媒体 <small>· {record.media.length} 项</small></h3>
+        <div className="v3-real-media-grid">
+          {record.media.map(media=><RecordMediaPreview key={media.id} media={media} onOpen={onZoom}/>)}
+        </div>
+      </section>}
+      <footer><span>原图始终保留，编辑采用版本校验。</span>
+        <div className="v3-real-detail-actions">
+          <button type="button" onClick={()=>onShare(record)}>分享本场</button>
+          {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
+          {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
+          <button type="button" onClick={onClose}>返回档案</button>
+        </div>
+      </footer>
+    </section>
+  </div>;
 }
 function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
   record:EventRecord;
@@ -249,6 +276,7 @@ export function V3RealWorkspace() {
   const [reload,setReload]=useState(0);
   const [selectedId,setSelectedId]=useState<string|null>(null);
   const [sharing,setSharing]=useState(false);
+  const [shareRecord,setShareRecord]=useState<EventRecord|null>(null);
   const [zoomMedia,setZoomMedia]=useState<MediaAsset|null>(null);
   const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
   const [importOpen,setImportOpen]=useState(false);
@@ -612,7 +640,8 @@ export function V3RealWorkspace() {
         {canEditLocal?"新增本机演出":"新增演出"}</button>}
       {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
         {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
-      <button type="button" onClick={()=>setSharing(true)} disabled={!records.length}>制作分享图</button>
+      <button type="button" onClick={()=>{setShareRecord(null);setSharing(true);}}
+        disabled={!records.length}>制作分享图</button>
       {canEdit && <button type="button" onClick={()=>setImportOpen(true)}
         disabled={snapshot.busy||syncBusy||restoreBusy}>
         批量导入
@@ -641,13 +670,13 @@ export function V3RealWorkspace() {
       : zoomMedia
         ? <ImageZoom media={zoomMedia} onClose={()=>setZoomMedia(null)}/>
       : sharing
-      ? <ShareStudio experience="v3" records={records} format={shareFormat} setFormat={setShareFormat}
+      ? <ShareStudio experience="v3" records={shareRecord?[shareRecord]:records} format={shareFormat} setFormat={setShareFormat}
           mapSettings={readSettings().map}
           onOpenMapSettings={()=>{
             setSharing(false);
             setNotice("地图密钥尚未在 V3 中单独配置；请先在 V2 设置页配置，再返回 V3 分享。");
           }}
-          onClose={()=>setSharing(false)}/>
+          onClose={()=>{setSharing(false);setShareRecord(null);}}/>
       : editing && editing.scope===actualScope && canEdit
       ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
@@ -655,7 +684,9 @@ export function V3RealWorkspace() {
         ? <RecordDetail record={selected} onClose={()=>setSelectedId(null)}
             onEdit={canEdit?startEdit:undefined}
             onDuplicate={canEdit?requestDuplicate:undefined}
-            onTrash={canEdit?setDeleteCandidate:undefined}/>
+            onTrash={canEdit?setDeleteCandidate:undefined}
+            onShare={record=>{setShareRecord(record);setSelectedId(null);setSharing(true);}}
+            onZoom={setZoomMedia}/>
         : undefined}
   >
     {import.meta.env.VITE_V3_BETA==="1" && <aside role="note" className="v3-real-save-notice">
