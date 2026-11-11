@@ -215,6 +215,9 @@ try {
           bytes:sourceBytes.length,mimeType:"image/png",
           sha256:createHash("sha256").update(sourceBytes).digest("hex")}]},
     };
+    // Portable restore now lives under the dedicated migration page, not
+    // above every archive view.
+    await page.getByRole("button",{name:"迁移",exact:true}).first().click();
     await page.locator('input[aria-label="选择 V3 原图完整备份"]').setInputFiles({
       name:"verified-restore.json",mimeType:"application/json",
       buffer:Buffer.from(JSON.stringify(document)),
