@@ -7,6 +7,7 @@
 export function curateFeaturedRecords<T extends {id:string;artists:string[]}>(
   records:readonly T[], hasPoster:(record:T)=>boolean, limit=5,
 ):T[]{
+  if(!Number.isFinite(limit)||limit<=0)return [];
   const chosen:T[]=[];
   const seenArtists=new Set<string>();
   for(const record of records){
