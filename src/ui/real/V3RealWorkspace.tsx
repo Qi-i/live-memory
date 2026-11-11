@@ -18,9 +18,13 @@ import { V3MigrationPanel } from "../system/V3MigrationPanel";
 import { ActionToolbar, MapSplitPane, WorkspaceShell } from "../system/WorkspaceShell";
 import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
+import { AdaptivePoster } from "./AdaptivePoster";
+import { dominantPosterRatio } from "./posterFraming";
+import { ArchivePage, type ArchiveLayout } from "../../archive";
 import "../system/preview.css";
 import "./realWorkspace.css";
 import "./v3ShareStudio.css";
+import "./adaptivePoster.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
 type Mode = "海报" | "时间线" | "列表";
@@ -43,19 +47,28 @@ function backToV2() {
   }
   window.location.assign(url.href);
 }
-function PosterCard({ record, onOpen }: { record: EventRecord; onOpen: (id: string) => void }) {
-  const asset = primaryMedia(record);
-  const src = useCachedMediaSrc(asset);
-  return (
-    <button className="v3-real-poster-card" type="button" onClick={() => onOpen(record.id)}
-      aria-label={"查看 " + record.title}>
-      <span className="v3-real-poster-image">
-        {src?<img src={src} loading="lazy" decoding="async" alt={record.title+"海报"}/>:<span>无海报</span>}
-      </span>
+function PosterCard({record,onOpen,onEdit,frameRatio,onNaturalRatio}:{
+  record:EventRecord;
+  onOpen:(id:string)=>void;
+  onEdit?: (record:EventRecord)=>void;
+  frameRatio:number;
+  onNaturalRatio:(id:string,ratio:number)=>void;
+}){
+  const src=useCachedMediaSrc(primaryMedia(record));
+  return <article className="v3-real-poster-card" data-record-id={record.id}>
+    <button className="v3-real-poster-open" type="button" onClick={()=>onOpen(record.id)}
+      aria-label={"查看 "+record.title}>
+      <AdaptivePoster className="v3-real-poster-image" src={src}
+        alt={record.title+"海报"} frameRatio={frameRatio}
+        onNaturalRatio={ratio=>onNaturalRatio(record.id,ratio)}/>
       <strong title={record.title}>{record.title}</strong>
-      <small>{record.date} · {record.city || "城市待补"}</small>
+      <small>{record.date} · {record.city||"城市待补"}</small>
     </button>
-  );
+    <div className="v3-real-card-actions">
+      {onEdit&&<button type="button" onClick={()=>onEdit(record)} aria-label={"编辑 "+record.title}>编辑</button>}
+      <button type="button" onClick={()=>onOpen(record.id)} aria-label={"更多详情 "+record.title}>详情</button>
+    </div>
+  </article>;
 }
 function RecordDetail({ record, onClose, onEdit, onDuplicate, onTrash }: {
   record: EventRecord; onClose: () => void; onEdit?: (record: EventRecord) => void;
@@ -106,16 +119,26 @@ function RecordDetail({ record, onClose, onEdit, onDuplicate, onTrash }: {
     </div>
   );
 }
-function RecordIndexCard({record,onOpen}:{record:EventRecord;onOpen:(id:string)=>void;}){
-  const cover=useCachedMediaSrc(primaryMedia(record));
-  return <button type="button" className="v3-real-index-row" onClick={()=>onOpen(record.id)}>
-    <span className="v3-real-index-thumb">{cover?<img src={cover} loading="lazy" alt=""/>:<span>LIVE</span>}</span>
-    <span className="v3-real-index-heading"><strong>{record.title}</strong>
-      <small>{record.artists.join(" · ")||"艺人待补"} · {record.venue||"场馆待补"}</small></span>
+function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
+  record:EventRecord;
+  onOpen:(id:string)=>void;
+  onEdit?: (record:EventRecord)=>void;
+  frameRatio:number;
+}){
+  const src=useCachedMediaSrc(primaryMedia(record));
+  return <article className="v3-real-index-row" data-record-id={record.id}>
+    <AdaptivePoster className="v3-real-index-thumb" src={src} alt="" frameRatio={frameRatio}/>
+    <button type="button" className="v3-real-index-heading" onClick={()=>onOpen(record.id)}>
+      <strong>{record.title}</strong>
+      <small>{record.artists.join(" · ")||"艺人待补"} · {record.venue||"场馆待补"}</small>
+    </button>
     <time>{record.date||"日期待补"}</time>
     <span className="v3-real-index-place">{record.city||"城市待补"}</span>
-    <span className="v3-real-index-status">{isWatchedRealRecord(record)?"已看":"未观演"}</span>
-  </button>;
+    <div className="v3-real-index-actions">
+      {onEdit&&<button type="button" onClick={()=>onEdit(record)}>编辑</button>}
+      <button type="button" onClick={()=>onOpen(record.id)}>查看</button>
+    </div>
+  </article>;
 }
 function RealStatistics({ records }: { records: EventRecord[] }) {
   const data = useMemo(() => describeRealArchive(records), [records]);
