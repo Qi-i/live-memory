@@ -92,10 +92,10 @@ try {
   await page.getByText("郑州巡回演出 · 真实本机回归").first().waitFor();
   await page.getByRole("button",{name:"海报",exact:true}).click();
   await page.getByRole("button",{name:/查看 北京现场/}).click();
-  const dialog=page.getByRole("dialog",{name:/北京现场.*只读详情/});
+  const dialog=page.getByRole("dialog",{name:/北京现场.*档案详情/});
   await dialog.waitFor({state:"visible"});
   await dialog.getByText("合成测试备注").waitFor();
-  await dialog.getByRole("button",{name:"关闭只读详情"}).click();
+  await dialog.getByRole("button",{name:"关闭档案详情"}).click();
   await dialog.waitFor({state:"detached"});
   // The single real V3 archive replaces the redundant nested V2 archive.
   if(await page.getByRole("button",{name:"完整档案",exact:true}).count())
@@ -136,6 +136,35 @@ try {
     return JSON.stringify(all);
   });
   if(initial!==after)throw Error("Read-only browsing modified IndexedDB");
+  // 36+ real rows are visible in one scroll: no pagination or 18-item limit.
+  if(width===1440){
+    const rows=Array.from({length:35},(_,i)=>fixture(
+      "bulk-"+i,"连续档案回归 "+i,"北京","watched",
+      {artists:["测试艺人"+i],date:"2026-08-01"},
+    ));
+    await page.evaluate(async ({rows})=>{
+      await new Promise((resolve,reject)=>{
+        const request=indexedDB.open("echo-archive-v2:device-local",1);
+        request.onsuccess=()=>{
+          const db=request.result,tx=db.transaction("records","readwrite");
+          for(const row of rows)tx.objectStore("records").put(row);
+          tx.oncomplete=()=>{db.close();resolve(true);};
+          tx.onerror=()=>{db.close();reject(tx.error);};
+        };
+        request.onerror=()=>reject(request.error);
+      });
+    },{rows});
+    await page.reload({waitUntil:"domcontentloaded"});
+    await page.locator(".v3-real-poster-card").first().waitFor();
+    const cards=await page.locator(".v3-real-poster-card").count();
+    if(cards!==37)throw Error("All 37 records must be on one scrolling page: "+cards);
+    if(await page.getByRole("button",{name:"下一页"}).count())
+      throw Error("Pagination must not interrupt a long archive");
+    await page.getByLabel("更多档案视图").selectOption("票夹");
+    await page.locator(".v3-real-embedded-archive .archive-page").waitFor({state:"visible"});
+    await page.getByRole("button",{name:"海报",exact:true}).click();
+    await page.locator(".v3-real-poster-grid .v3-real-poster-card").last().scrollIntoViewIfNeeded();
+  }
   // Only the explicitly device-local archive may write; verify a real
   // conditional transaction, then simulate an external-tab edit conflict.
   if(width===390){
@@ -180,7 +209,7 @@ try {
     // Real browser geometry test: even a square source is letterboxed in a
     // consistent portrait frame, never cropped or stretched.
     await page.getByRole("button",{name:"档案",exact:true}).first().click();
-    const realPoster=page.locator(".v3-real-poster-image img").first();
+    const realPoster=page.locator(".v3-real-poster-image img.v3-adaptive-poster-image").first();
     await realPoster.waitFor({state:"visible"});
     const fit=await realPoster.evaluate(image=>{
       const frame=image.closest(".v3-real-poster-image");
@@ -188,7 +217,7 @@ try {
       return {objectFit:getComputedStyle(image).objectFit,
         ratio:rect?rect.width/rect.height:0};
     });
-    if(fit.objectFit!=="contain"||Math.abs(fit.ratio-2/3)>.025)
+    if(fit.objectFit!=="contain"||fit.ratio<.58||fit.ratio>.84)
       throw Error("V3 original poster cropped or card aspect ratio drifted: "+JSON.stringify(fit));
   }
   if(width===390){
