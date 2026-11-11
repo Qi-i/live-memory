@@ -77,7 +77,7 @@ assert.match(component,/snapshot\.scope===actualScope/);
 assert.match(component,/useCachedMediaSrc\(asset\)/);
 assert.match(component,/resolveMediaSource\(asset,true\)/);
 assert.match(component,/MapSplitPane/);
-assert.match(component,/StageHero/);
+assert.match(component,/<V3FeaturedHero posters=\{posters\}/);
 assert.match(component,/read-only|只读/);
 assert.match(component,/canEditLocal=validScope && access\.mode==="device" && actualScope==="device-local"/,
   "No authenticated cloud account can use the early V3 local editor");
