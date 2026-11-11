@@ -18,12 +18,16 @@ import "./liquidStage.css";
 import "./ui/editorWorkflow.css";
 
 const root = ReactDOM.createRoot(document.getElementById("root") as HTMLElement);
+// Switching the public application shell is reversible. Account writes stay
+// fenced by the server-side V3 writer marker; classic V2 remains accessible.
+const v3Production = import.meta.env.VITE_V3_PRODUCTION === "1";
+const classicMode = v3Production && new URLSearchParams(window.location.search).has("v2-classic");
 const v3Preview = import.meta.env.VITE_V3_PREVIEW === "1"
   && new URLSearchParams(window.location.search).has("v3-preview");
-// An independent beta origin is an explicit opt-in to V3. The production
-// GitHub Pages route still requires its query flag and remains untouched.
+// The isolated V3 beta remains separate from the reversible production route.
 const v3Beta = import.meta.env.VITE_V3_BETA === "1";
 const v3RealWorkspace = v3Beta || (
+  (v3Production && !classicMode) ||
   import.meta.env.VITE_V3_REAL_WORKSPACE === "1"
   && new URLSearchParams(window.location.search).has("v3-real-workspace")
 );
@@ -35,7 +39,7 @@ if (v3Preview) {
     root.render(<React.StrictMode><V3Preview /></React.StrictMode>);
   });
 } else if (v3RealWorkspace) {
-  // Real-account V3 workspace remains an explicit opt-in preview route.
+  // V3 becomes the public home when enabled by the release workflow.
   // AccessGate establishes the actual scoped identity. Only an account with
   // a verified server-side V3 writer marker may edit and manually sync;
   // existing V2 owners stay read-only, and V2 AppRoot/timers never mount.
