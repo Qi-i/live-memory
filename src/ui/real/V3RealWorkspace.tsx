@@ -27,10 +27,14 @@ import "./v3ShareStudio.css";
 import "./adaptivePoster.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
-type Mode = "海报" | "时间线" | "列表";
-const PAGE_SIZE = 18;
+type Mode = "海报" | "时间线" | "列表" | "画报" | "票夹" | "票根" |
+  "日历" | "城市/场馆" | "票价" | "汇总";
 const navigation: Page[] = ["档案", "统计", "城市", "迁移"];
-const archiveModes: Mode[] = ["海报", "时间线", "列表"];
+const archiveModes: Mode[] = ["海报","时间线","列表"];
+const advancedLayouts: Record<string,ArchiveLayout> = {
+  "画报":"showcase","票夹":"wallet","票根":"ticket",
+  "日历":"calendar","城市/场馆":"venue","票价":"price","汇总":"summary",
+};
 
 function backToV2() {
   if(import.meta.env.VITE_V3_BETA==="1"){
@@ -238,7 +242,6 @@ export function V3RealWorkspace() {
   const [page,setPage]=useState<Page>("档案");
   const [mode,setMode]=useState<Mode>("海报");
   const [search,setSearch]=useState("");
-  const [pageIndex,setPageIndex]=useState(0);
   const [snapshot,setSnapshot]=useState<{scope:string;records:EventRecord[];error:string;busy:boolean}>({
     scope:"",records:[],error:"",busy:true,
   });
@@ -265,6 +268,7 @@ export function V3RealWorkspace() {
     scope:string;push:number;pull:number;
   }|null>(null);
   const [posters,setPosters]=useState<Array<{id:string;title:string;city:string;src?:string}>>([]);
+  const [posterRatios,setPosterRatios]=useState<Record<string,number>>({});
   const actualScope=currentStorageScope();
   const permitted=access.mode==="account" || access.mode==="device";
   const validScope=permitted && Boolean(actualScope) &&
@@ -323,6 +327,11 @@ export function V3RealWorkspace() {
   // accounts should clear the status notice from the previous identity.
   useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
+  const frameRatio=useMemo(()=>dominantPosterRatio(Object.values(posterRatios)),
+    [posterRatios]);
+  const measurePoster=(id:string,ratio:number)=>{
+    setPosterRatios(previous=>previous[id]===ratio?previous:{...previous,[id]:ratio});
+  };
   const model=useMemo(()=>describeRealArchive(records,search),[records,search]);
   const active=model.records;
   const firstPosters=useMemo(()=>curateFeaturedRecords(
@@ -560,17 +569,15 @@ export function V3RealWorkspace() {
         : "同步未完成：身份变化、网络故障或云端版本冲突。已保留本机记录，请重新检查。");
     }finally{setSyncBusy(false);}
   };
-  const paged=active.slice(PAGE_SIZE*pageIndex,PAGE_SIZE*(pageIndex+1));
-  const totalPages=Math.max(1,Math.ceil(active.length/PAGE_SIZE));
+  // One continuous scroll contains every matching record; images load lazily.
   const yearGroups=useMemo(()=>{
     const groups=new Map<string,EventRecord[]>();
-    for(const row of paged){
+    for(const row of active){
       const year=/^\d{4}/.test(row.date)?row.date.slice(0,4):"日期待补";
       groups.set(year,[...(groups.get(year)||[]),row]);
     }
     return [...groups.entries()];
-  },[paged]);
-  useEffect(()=>{setPageIndex(0);},[search,mode,page]);
+  },[active]);
   const navButtons=navigation.map(label=><button type="button" key={label}
     aria-current={page===label?"page":undefined} onClick={()=>setPage(label)}>{label}</button>);
   return <WorkspaceShell
@@ -581,12 +588,8 @@ export function V3RealWorkspace() {
     mobileNavigation={navButtons}
     appearance="liquid"
     demoStatus={false}
+    showStatusCenter={false}
     activity={{type:"idle"}}
-    account={<div className="v3-real-account">
-      <strong>{import.meta.env.VITE_V3_BETA==="1"?"V3 安全试用 · 独立站点":access.mode==="account"?"当前账号":"本机独立档案"}</strong>
-      <span>{canEditLocal?"本机可编辑 · 无云端写入"
-        : canEditAccount?"已激活 V3 · 手动安全同步":"账号只读 · V2 仍为写入端"}</span>
-      <button type="button" onClick={backToV2}>切换至经典版 V2（编辑与同步）</button></div>}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
         <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
@@ -609,8 +612,8 @@ export function V3RealWorkspace() {
         disabled={exportBusy||restoreBusy||snapshot.busy}>
         {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}
       </button>}
-      <button type="button" onClick={()=>setReload(n=>n+1)} disabled={snapshot.busy||syncBusy}>刷新本机快照</button>
-      <button type="button" onClick={backToV2}>经典版 V2</button>
+      <button type="button" onClick={()=>setReload(n=>n+1)}
+        disabled={snapshot.busy||syncBusy}>刷新</button>
     </div>}
     overlay={importOpen && canEdit
       ? <ImportDrawer
@@ -661,7 +664,8 @@ export function V3RealWorkspace() {
     </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
     <>
       {page==="档案" && <>
-        <V3FeaturedHero posters={posters} onBrowse={()=>
+        <V3FeaturedHero posters={posters} frameRatio={frameRatio}
+          onNaturalRatio={measurePoster} onBrowse={()=>
           document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>
         <div id="v3-real-archive-controls" className="v3-real-archive-controls">
           <ActionToolbar
@@ -669,14 +673,38 @@ export function V3RealWorkspace() {
               placeholder="搜索演出、艺人、城市、场馆…" onChange={event=>setSearch(event.target.value)}/>}
             modes={archiveModes.map(item=><button type="button" key={item}
               aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
-            actions={null}/>
+            actions={<select className="v3-real-extra-views" aria-label="更多档案视图"
+              value={advancedLayouts[mode]?mode:""}
+              onChange={event=>setMode(event.target.value as Mode)}>
+              <option value="">更多视图</option>
+              {Object.keys(advancedLayouts).map(label=>
+                <option key={label} value={label}>{label}</option>)}
+            </select>}/>
         </div>
-        {!paged.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
+        {!active.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
           <p>请调整搜索词；此页不会生成任何演示档案。</p></div>:
+        advancedLayouts[mode]?<div className="v3-real-embedded-archive">
+          <ArchivePage records={records.filter(row=>!row.deletedAt)}
+            settings={readSettings()}
+            layout={advancedLayouts[mode]} setLayout={layout=>{
+              const found=Object.entries(advancedLayouts).find(([,value])=>value===layout);
+              setMode(found?.[0] as Mode || "海报");
+            }}
+            shareMode={false} setShareMode={setSharing}
+            shareFormat={shareFormat} setShareFormat={setShareFormat}
+            onOpen={row=>setSelectedId(row.id)}
+            onEdit={row=>startEdit(row)}
+            onDuplicate={requestDuplicate}
+            onDelete={row=>canEdit?setDeleteCandidate(row):setNotice("账号当前不允许写入，未删除记录")}
+            onZoom={setZoomMedia}
+            onOpenMapSettings={()=>setNotice("地图密钥沿用原有设置。")}/>
+          </div>:
         mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
           <header><span>LIVE MEMORY · ARCHIVE</span><h2>全部演出 <small>({active.length})</small></h2></header>
           <div className="v3-real-poster-grid">
-            {paged.map(record=><PosterCard key={record.id} record={record} onOpen={setSelectedId}/>)}
+            {active.map(record=><PosterCard key={record.id} record={record}
+              onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
+              frameRatio={frameRatio} onNaturalRatio={measurePoster}/>)}
           </div></section>:
         mode==="时间线"?<section className="v3-real-panel v3-real-chronicle">
           <header><span>CHRONICLE · BY YEAR</span><h2>演出时间线</h2></header>
@@ -693,17 +721,17 @@ export function V3RealWorkspace() {
         <section className="v3-real-panel v3-real-index-panel">
           <header><span>ARCHIVE INDEX · ALL SHOWS</span><h2>演出索引</h2></header>
           <div className="v3-real-index-list">
-            {paged.map(record=><RecordIndexCard key={record.id} record={record} onOpen={setSelectedId}/>)}
+            {active.map(record=><RecordIndexCard key={record.id} record={record}
+              onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
+              frameRatio={frameRatio}/>)}
           </div>
         </section>}
-        {active.length>PAGE_SIZE&&<div className="v3-real-pagination">
-          <button type="button" disabled={pageIndex===0} onClick={()=>setPageIndex(n=>Math.max(0,n-1))}>上一页</button>
-          <span>第 {pageIndex+1} / {totalPages} 页 · 共 {active.length} 条</span>
-          <button type="button" disabled={pageIndex>=totalPages-1} onClick={()=>setPageIndex(n=>n+1)}>下一页</button>
-        </div>}
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="迁移" && <>
+        <button type="button" className="v3-real-classic-fallback" onClick={backToV2}>
+          进入经典 V2（兼容编辑与原有同步）
+        </button>
         <section className="v3-real-panel">
           <header><span>SAFE DATA MANAGEMENT</span><h2>备份与迁移</h2></header>
           <p>保护原图和现有档案；迁移必须经过真实账号授权与可恢复备份验收。</p>
