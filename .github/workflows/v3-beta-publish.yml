@@ -227,7 +227,7 @@ jobs:
           else
             body="V3 beta publishing NOT YET VERIFIED: SHA $BETA_SHA; jobs prepare=$PREPARE, deploy=$DEPLOY, verify=$VERIFY. Original V2 main is unchanged. Inspect: $GITHUB_SERVER_URL/$REPO/actions/runs/$GITHUB_RUN_ID"
           fi
-          # Use REST instead of gh issue comment (GraphQL addComment is denied for this token).
+          # Use REST because the GraphQL addComment endpoint was denied for this token.
           # Always preserve the result in the Actions summary when commenting is denied.
           printf '%s\n' "$body" >> "$GITHUB_STEP_SUMMARY"
           if ! gh api --method POST "repos/$REPO/issues/54/comments" -f body="$body"; then
