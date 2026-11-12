@@ -63,3 +63,28 @@
   .v3-real-rich-detail .v3-real-modal-art img {max-height:45dvh;}
   .v3-real-media-grid {grid-template-columns:repeat(3,minmax(0,1fr));}
 }
+
+
+/* Cross-view search, facets, collection and sorting have one owner: V3. */
+.v3-real-refine-bar{
+  display:flex;align-items:center;gap:9px;flex-wrap:wrap;
+  min-width:0;padding:11px 13px;border:1px solid rgba(143,154,194,.22);
+  border-radius:16px;background:rgba(254,254,255,.85);
+  box-shadow:0 8px 25px rgba(45,59,97,.05);
+}
+.v3-real-refine-bar label{display:flex;gap:6px;align-items:center;color:#78849d;font-size:11px;font-weight:750}
+.v3-real-refine-bar select,.v3-real-refine-bar button{
+  min-height:36px;border:1px solid #dce0ef;border-radius:9px;
+  background:#fff;color:#3f4a69;font:inherit;font-size:12px;padding:7px 11px;cursor:pointer;
+}
+.v3-real-refine-bar button.is-active{background:#e8defc;color:#6a4099;border-color:#b4a6dc}
+.v3-real-refine-bar button.v3-real-refine-clear{border-color:transparent;color:#7364bd;background:#f1effc}
+.v3-real-refine-bar>span{margin-left:auto;font-size:11px;color:#7b88a2;font-variant-numeric:tabular-nums}
+.v3-real-gallery-panel,.v3-real-chronicle,.v3-real-index-panel{min-width:0}
+.v3-real-extra-views {min-width:130px}
+@media(max-width:740px){
+  .v3-real-refine-bar{gap:7px;padding:9px}
+  .v3-real-refine-bar label{flex:1 1 135px;justify-content:space-between}
+  .v3-real-refine-bar select{flex:1;min-width:0}
+  .v3-real-refine-bar>span{margin-left:0}
+}
