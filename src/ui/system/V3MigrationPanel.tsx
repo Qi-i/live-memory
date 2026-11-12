@@ -72,7 +72,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     setError("");
     try {
       // Dynamic import keeps the authenticated V3 runtime out of the demo-only
-      // preview dependency graph. Nothing connects without a user click.
+      // preview dependency graph. Auto-inspection is read-only and account-scoped.
       const { createV3SyncRuntime } = await import("../../infrastructure/createV3SyncRuntime");
       const runtime = await createV3SyncRuntime(settings, provider);
       const baseline = bootstrap ? await runtime.bootstrapMatchingHistory() : undefined;
@@ -94,6 +94,22 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       if (scopeGeneration.current === requestGeneration && currentStorageScope() === requestScope) setPending(null);
     }
   }
+
+  // One signed-in identity, multiple historical storage sources. Automatically
+  // inspect both *read-only* on arrival; mutations still require the explicit
+  // authenticated staging/backup buttons and their existing safety gates.
+  useEffect(()=>{
+    const scope=currentStorageScope();
+    if(!scope)return;
+    let cancelled=false;
+    void (async()=>{
+      await inspect("account");
+      if(!cancelled && personalConnected && currentStorageScope()===scope){
+        await inspect("personal");
+      }
+    })();
+    return ()=>{cancelled=true;};
+  },[personalConnected,settings.supabase.url,settings.supabase.ownerKey]);
 
   /** Explicit read-only export; all media bytes must be verifiably portable. */
   async function exportVerifiedPortableBackup() {
@@ -385,17 +401,17 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     <section className="settings-module v3-migration-panel" aria-label="V3 数据迁移诊断">
       <header className="v3-migration-head">
         <div>
-          <span>V3 · 兼容迁移</span>
-          <h3>旧档案一致性检查</h3>
-          <p>检查现有 V2 数据与 V3 同步基线，不启用 V3 自动同步，不覆盖记录或图片。</p>
+          <span>当前登录账户 · 数据来源核对</span>
+          <h3>统一档案与原图</h3>
+          <p>这是同一个账户的历史数据来源，不是两个用户。进入页面后自动只读对账；原图与记录不覆盖、不删除。</p>
         </div>
-        <strong>仅测试通道</strong>
+        <strong>只读对账</strong>
       </header>
       <div className="v3-migration-grid">
         {(["account", "personal"] as Provider[]).map((provider) => {
           const enabled = provider === "account" || personalConnected;
           const state = states[provider];
-          const label = provider === "account" ? "账号文字备份" : "个人完整云端";
+          const label = provider === "account" ? "文字备份来源" : "个人云原图来源";
           return (
             <div className="v3-migration-provider" key={provider}>
               <div className="v3-migration-title">
@@ -439,7 +455,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
                     </p>
                   )}
                 </>
-              ) : <p>先查询本机与云端记录数量、版本差异及需要人工核对的历史记录。</p>}
+              ) : <p>正在核对同一账户的历史来源；可在此查看差异明细和原图暂存结果。</p>}
               <div className="v3-migration-actions">
                 <button type="button" className="button ghost"
                   disabled={!enabled || pending !== null}

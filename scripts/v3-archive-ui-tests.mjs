@@ -30,6 +30,7 @@ assert.equal(choose(rows,r=>r.poster,0).length,0);
 assert.equal(rows.length,9,"Curation is non-destructive");
 
 const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
+const collections=await readFile(new URL("../src/ui/real/V3ArchiveCollections.tsx",import.meta.url),"utf8");
 const hero=await readFile(new URL("../src/ui/real/V3FeaturedHero.tsx",import.meta.url),"utf8");
 const css=await readFile(new URL("../src/ui/real/realWorkspace.css",import.meta.url),"utf8");
 const adaptive=await readFile(new URL("../src/ui/real/adaptivePoster.css",import.meta.url),"utf8");
@@ -54,9 +55,14 @@ assert.doesNotMatch(workspace,/PAGE_SIZE|pageIndex|totalPages|上一页|下一�
 assert.match(workspace,/showStatusCenter=\{false\}/);
 assert.match(workspace,/canEditLegacyAccount/);
 assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
-assert.match(workspace,/<ArchivePage records=/);
+assert.match(workspace,/<V3ArchiveCollections mode=/);
+assert.doesNotMatch(workspace,/<ArchivePage records=/);
+assert.match(workspace,/facets\.cities\.map/);
+assert.match(workspace,/facets\.years\.map/);
+assert.match(workspace,/favoritesOnly/);
+assert.match(workspace,/sortMode===\"edited\"/);
 for(const label of ["画报","票夹","票根","日历","城市/场馆","票价","汇总"]){
-  assert.ok(workspace.includes('"' + label + '"'),"Missing historic archive view: "+label);
+  assert.ok(collections.includes('"' + label + '"'),"Missing native collection view: "+label);
 }
 assert.match(workspace,/describeRealArchive\(records\)\.records, record=>Boolean\(primaryMedia\(record\)\),5/);
 assert.match(hero,/posters\.slice\(0,5\)/);

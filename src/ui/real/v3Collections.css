@@ -1,0 +1,84 @@
+/* Native collection system. These are V3 views, not a themed copy of the V2 page. */
+.v3-collection{display:grid;gap:18px;min-width:0;padding:clamp(15px,2vw,25px);border:1px solid #e0e4f1;border-radius:22px;background:rgba(251,252,255,.89);box-shadow:0 11px 35px rgba(43,56,96,.07)}
+.v3-collection>header{display:grid;gap:5px;min-width:0}
+.v3-collection>header>span{font-size:10px;letter-spacing:.16em;font-weight:850;color:#7164c0}
+.v3-collection>header>h2{margin:0;font-size:clamp(19px,2.3vw,27px);letter-spacing:-.04em}
+.v3-collection>header>p{margin:0;font-size:12px;color:#72809b;line-height:1.6}
+.v3-collection-artwork{border-radius:11px}
+.v3-collection-meta{font-size:11px;color:#6a7895;line-height:1.5}
+.v3-collection-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.v3-collection-actions>button{border:1px solid #dce1f2;border-radius:9px;padding:7px 12px;background:rgba(255,255,255,.85);font:inherit;color:#575b90;font-size:11px;cursor:pointer}
+.v3-collection-actions>button:hover{background:#dedbf9;border-color:#c7bef1}
+.v3-collection-showcase-grid{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:13px;align-items:stretch}
+.v3-collection-showcase-grid>article{display:grid;align-content:start;min-width:0;gap:9px;padding:8px;border:1px solid #e1e5f1;border-radius:16px;background:#fff}
+.v3-collection-showcase-grid>article.is-featured{grid-column:span 2;grid-row:span 2;background:linear-gradient(145deg,#f4efff,#f6fbfd)}
+.v3-collection-showcase-image{display:block;min-width:0;border:0;padding:0;background:transparent;cursor:pointer}
+.v3-collection-showcase-image .v3-adaptive-poster{width:100%;border-radius:12px}
+.v3-collection-showcase-caption{display:grid;align-content:start;gap:6px;padding:1px 4px 5px;min-width:0}
+.v3-collection-showcase-caption>strong{font-size:12px;line-height:1.42;overflow-wrap:anywhere}
+.v3-collection-showcase-grid>.is-featured .v3-collection-showcase-caption>strong{font-size:18px}
+.v3-collection-wallet-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.v3-collection-wallet{display:grid;grid-template-columns:minmax(100px,34%) minmax(0,1fr);gap:12px;min-width:0;overflow:hidden;border:1px solid #dfe5f0;border-radius:19px;background:linear-gradient(124deg,color-mix(in srgb,var(--ticket-a,#7f89b4) 14%,white),#fff 62%);box-shadow:0 8px 24px rgba(44,55,85,.055);padding:10px}
+.v3-collection-wallet-cover{min-width:0}
+.v3-collection-wallet-info{display:grid;align-content:center;gap:7px;min-width:0}
+.v3-collection-wallet-info>span{font-size:10px;font-weight:800;color:#7565b0}
+.v3-collection-wallet-info>h3{margin:0;font-size:15px;line-height:1.38;overflow-wrap:anywhere}
+.v3-collection-wallet-info>p{font-size:11px;color:#70809a;margin:0}
+.v3-collection-wallet-info>div:not(.v3-collection-actions){display:flex;align-items:center;gap:6px;min-width:0;font-size:11px;color:#56637f}
+.v3-collection-wallet-info .v3-collection-actions{padding-top:5px}
+.v3-collection-stubs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.v3-collection-stub{display:grid;grid-template-columns:minmax(90px,34%) minmax(0,1fr) 23px;gap:0;min-width:0;min-height:205px;overflow:hidden;border-radius:18px;background:linear-gradient(135deg,color-mix(in srgb,var(--ticket-a,#637d92) 68%,#131e2d),color-mix(in srgb,var(--ticket-b,#d4bca0) 34%,#f9f8f7));box-shadow:0 11px 20px rgba(33,41,64,.12);color:#fff}
+.v3-collection-stub-cover{padding:10px 0 10px 10px;min-width:0}
+.v3-collection-stub-cover .v3-adaptive-poster{height:100%;aspect-ratio:auto;border-radius:9px 0 0 9px}
+.v3-collection-stub-main{display:grid;align-content:center;gap:8px;min-width:0;padding:18px 12px}
+.v3-collection-stub-main>span{font-size:9px;letter-spacing:.13em;font-weight:760;opacity:.76}
+.v3-collection-stub-main>h3{margin:0;font-size:16px;line-height:1.35;overflow-wrap:anywhere}
+.v3-collection-stub-main>p{margin:0;font-size:11px;opacity:.87}
+.v3-collection-stub-main>dl{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin:0}
+.v3-collection-stub-main>dl>div{min-width:0}
+.v3-collection-stub-main dt{font-size:9px;opacity:.7;letter-spacing:.09em}
+.v3-collection-stub-main dd{margin:2px 0 0;font-size:11px;overflow-wrap:anywhere}
+.v3-collection-stub-main .v3-collection-actions button{background:rgba(255,255,255,.17);border-color:rgba(255,255,255,.26);color:white}
+.v3-collection-stub-number{display:grid;place-items:center;border-left:1px dashed rgba(255,255,255,.58);writing-mode:vertical-rl;font-size:9px;letter-spacing:.15em;opacity:.76}
+.v3-collection-month-nav{display:flex;justify-content:center;align-items:center;gap:13px}
+.v3-collection-month-nav strong{font-variant-numeric:tabular-nums;min-width:130px;text-align:center}
+.v3-collection-month-nav button{border:1px solid #dfe3f0;border-radius:9px;min-width:34px;min-height:34px;background:#fff;cursor:pointer;color:#4c5782;font:inherit}
+.v3-collection-month-nav button:last-child{padding:0 12px;font-size:11px}
+.v3-collection-calendar-grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:6px}
+.v3-collection-calendar-weekday{text-align:center;font-size:11px;font-weight:750;color:#8d91ae;padding:6px}
+.v3-collection-calendar-grid [role=gridcell]{min-width:0;min-height:105px;display:grid;align-content:start;gap:5px;padding:8px;border:1px solid #e6eaf3;border-radius:11px;background:rgba(255,255,255,.75)}
+.v3-collection-calendar-grid [role=gridcell].has-events{background:linear-gradient(140deg,#ede9fd,#f2f8fd);border-color:#d4d0f5}
+.v3-collection-calendar-grid time{font-size:12px;color:#586681;font-weight:750;font-variant-numeric:tabular-nums}
+.v3-collection-calendar-grid [role=gridcell] button{display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;min-width:0;overflow:hidden;padding:6px;border:0;border-radius:6px;background:#dcd9f9;color:#373969;font:inherit;font-size:10px;text-align:left;cursor:pointer}
+.v3-collection-places-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,290px),1fr));gap:13px}
+.v3-collection-places-grid>article{display:grid;align-content:start;gap:9px;padding:16px;border:1px solid #e1e5f1;border-radius:18px;background:#fff}
+.v3-collection-places-grid>article>header{display:flex;align-items:center;gap:7px;color:#5f62a7}
+.v3-collection-places-grid h3{flex:1;min-width:0;margin:0;font-size:19px;color:#2c3854}
+.v3-collection-places-grid>article>header strong{font-size:12px;color:#736ab5}
+.v3-collection-places-grid p{margin:0;font-size:11px;color:#7a88a0}
+.v3-collection-places-grid>article>div{display:grid;gap:4px;max-height:330px;overflow:auto}
+.v3-collection-places-grid>article>div>button{display:flex;align-items:center;gap:7px;padding:9px 3px;border:0;border-bottom:1px solid #edf0f7;background:transparent;color:#394863;text-align:left;font:inherit;font-size:12px;cursor:pointer}
+.v3-collection-places-grid>article>div>button span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3-collection-places-grid>article>div>button time{color:#8591a6;font-size:10px;white-space:nowrap}
+.v3-collection-cost-totals{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+.v3-collection-cost-totals article{display:grid;gap:7px;padding:18px;border-radius:16px;background:linear-gradient(145deg,#e9e7f9,#eaf3f8)}
+.v3-collection-cost-totals small{font-size:11px;color:#77829b}
+.v3-collection-cost-totals strong{font-size:clamp(18px,2.9vw,30px);font-variant-numeric:tabular-nums}
+.v3-collection-cost-list{display:grid;gap:5px}
+.v3-collection-cost-list>button{display:grid;grid-template-columns:105px minmax(0,1fr) 110px;align-items:center;gap:10px;padding:12px;border:1px solid #e7ebf3;border-radius:11px;background:#fff;text-align:left;cursor:pointer;font:inherit}
+.v3-collection-cost-list>button time{font-size:11px;color:#7f8ca5}
+.v3-collection-cost-list>button strong{font-size:12px;color:#34415d;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3-collection-cost-list>button span{font-size:12px;text-align:right;color:#675caa;font-weight:780}
+.v3-collection-summary-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:13px}
+.v3-collection-summary-grid>article{display:grid;grid-template-columns:90px minmax(0,1fr);gap:13px;min-width:0;padding:12px;border:1px solid #e1e6f2;border-radius:16px;background:#fff}
+.v3-collection-summary-art{min-width:0}
+.v3-collection-summary-content{display:grid;align-content:start;gap:7px;min-width:0}
+.v3-collection-summary-content>span{display:flex;gap:6px;align-items:center;font-size:10px;letter-spacing:.07em;color:#7963bd;font-weight:800}
+.v3-collection-summary-content h3{font-size:18px;margin:0;overflow-wrap:anywhere}
+.v3-collection-summary-content>p{margin:0;font-size:11px;color:#7b89a0}
+.v3-collection-summary-content>div{display:grid;max-height:220px;overflow:auto}
+.v3-collection-summary-content>div>button{display:flex;align-items:center;gap:7px;text-align:left;padding:8px 0;border:0;border-bottom:1px solid #edf0f7;background:transparent;color:#48556f;font:inherit;font-size:11px;cursor:pointer}
+.v3-collection-summary-content>div>button span{min-width:0;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.v3-collection-summary-content>div>button small{color:#929cb0;white-space:nowrap}
+@media(max-width:950px){.v3-collection-showcase-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.v3-collection-showcase-grid>.is-featured{grid-column:span 2;grid-row:span 2}.v3-collection-wallet-grid,.v3-collection-stubs,.v3-collection-summary-grid{grid-template-columns:1fr}}
+@media(max-width:610px){.v3-collection-showcase-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.v3-collection-showcase-grid>.is-featured{grid-column:span 2;grid-row:auto}.v3-collection-showcase-grid>article{padding:6px}.v3-collection-showcase-caption{padding:3px}.v3-collection-stub{grid-template-columns:85px minmax(0,1fr) 17px}.v3-collection-stub-main{padding:11px 8px}.v3-collection-stub-main>h3{font-size:13px}.v3-collection-wallet{grid-template-columns:95px minmax(0,1fr)}.v3-collection-calendar-grid{gap:3px}.v3-collection-calendar-grid [role=gridcell]{min-height:78px;padding:4px}.v3-collection-calendar-grid [role=gridcell] button{font-size:9px;padding:3px}.v3-collection-cost-list>button{grid-template-columns:70px minmax(0,1fr) 72px;gap:5px;padding:9px}.v3-collection-cost-list>button time,.v3-collection-cost-list>button span{font-size:10px}.v3-collection-summary-grid>article{grid-template-columns:68px minmax(0,1fr);gap:8px}.v3-collection-cost-totals article{padding:12px}.v3-collection-cost-totals strong{font-size:16px}}

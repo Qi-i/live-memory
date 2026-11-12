@@ -25,7 +25,7 @@
 .share-studio-stage.is-v3 .share-v3-preset-intro {display:grid;gap:4px;}
 .share-studio-stage.is-v3 .share-v3-preset-intro strong {font-size:14px;}
 .share-studio-stage.is-v3 .share-v3-preset-intro small {font-size:11px;line-height:1.5;color:#687590;}
-.share-studio-stage.is-v3 .share-v3-preset-actions {display:grid;grid-template-columns:1.5fr 1fr;gap:9px;}
+.share-studio-stage.is-v3 .share-v3-preset-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
 .share-studio-stage.is-v3 .share-v3-preset-actions button {min-height:39px;padding:8px 12px;border:1px solid #d6d7ec;border-radius:11px;background:white;color:#40486f;font:inherit;font-size:12px;font-weight:750;cursor:pointer;}
 .share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured {border-color:#7769cf;background:#6c60c7;color:#fff;}
 .share-studio-stage.is-v3 .share-v3-preset-actions button:disabled {opacity:.5;cursor:not-allowed;}
@@ -42,4 +42,14 @@
 @media(max-width:800px) {
   .share-studio-stage.is-v3 {grid-template-columns:1fr;}
   .share-studio-stage.is-v3 .share-studio-panel {padding:14px;}
+}
+
+/* The five working V3 share recipes use the same print/export renderer. */
+.share-studio-stage.is-v3 .share-v3-preset-actions button {display:grid;align-content:center;gap:4px;min-height:59px;text-align:left;padding:10px 12px;border-radius:13px;}
+.share-studio-stage.is-v3 .share-v3-preset-actions button small {display:block;font-size:10px;font-weight:560;opacity:.7;}
+.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured {grid-column:span 2;min-height:52px;}
+.share-studio-stage.is-v3 .share-v3-preset-actions button:hover:not(:disabled) {box-shadow:0 6px 17px rgba(75,68,151,.17);transform:translateY(-1px);}
+.share-studio-stage.is-v3 .share-studio-summary {border-radius:14px;}
+@media(max-width:500px){
+  .share-studio-stage.is-v3 .share-v3-preset-actions button {padding:8px 9px;min-height:56px;}
 }

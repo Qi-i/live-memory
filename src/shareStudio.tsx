@@ -164,17 +164,17 @@ const palettes: Record<SharePalette, PaletteDefinition> = {
 export function ShareStudio({ records, experience, format, setFormat, mapSettings, onOpenMapSettings, onClose }: ShareStudioProps) {
   const eligibleRecords = useMemo(
     () => records
-      .slice()
+      .filter(record => !record.deletedAt)
       .sort((a, b) => b.date.localeCompare(a.date) || b.updatedAt.localeCompare(a.updatedAt)),
     [records],
   );
   const earliestDate = eligibleRecords.length ? eligibleRecords[eligibleRecords.length - 1].date : "";
   const latestDate = eligibleRecords.length ? eligibleRecords[0].date : "";
-  const [layout, setLayout] = useState<ShareLayout>(experience === "v3" ? "magazine" : "wall");
+  const [layout, setLayout] = useState<ShareLayout>("wall");
   const [palette, setPalette] = useState<SharePalette>(experience === "v3" ? "mist" : "jade");
   const [headline, setHeadline] = useState("我的现场档案");
   const [scope, setScope] = useState<ScopeMode>("all");
-  const [itemLimit, setItemLimit] = useState<ItemLimit>(experience === "v3" ? 12 : "all");
+  const [itemLimit, setItemLimit] = useState<ItemLimit>("all");
   const [sortMode, setSortMode] = useState<SortMode>("date-desc");
   const [categories, setCategories] = useState<Set<EventCategory>>(() => new Set<EventCategory>());
   const [startDate, setStartDate] = useState(earliestDate);
@@ -262,6 +262,33 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setItemLimit("all");
     setLayout("wall");
     setHeadline("我的现场档案");
+  }
+
+  function selectV3TicketAlbum() {
+    selectV3AllArchive();
+    setLayout("tickets");
+    setPalette("champagne");
+    setHeadline("我的现场纪念票根");
+    setFormat("adaptive-portrait");
+    setShowDetails(true);
+  }
+
+  function selectV3LongTimeline() {
+    selectV3AllArchive();
+    setLayout("timeline");
+    setPalette("graphite");
+    setHeadline("我的现场时间长卷");
+    setFormat("long");
+    setShowDetails(true);
+  }
+
+  function selectV3CityStory() {
+    selectV3AllArchive();
+    setLayout("cities");
+    setPalette("mist");
+    setHeadline("我去过的现场城市");
+    setFormat("adaptive-landscape");
+    setShowDetails(true);
   }
 
   const visibleSelectionRecords = useMemo(() => {
@@ -410,14 +437,25 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
         {experience === "v3" && <div className="share-v3-presets" aria-label="V3 快速分享方案">
           <div className="share-v3-preset-intro">
             <strong>一键编排</strong>
-            <small>自动从你的真实档案里挑选不同艺人；可继续微调布局和海报。</small>
+            <small>选择成图方案，再自由调整海报、时间范围、主题和画布比例。默认包含全部有效演出。</small>
           </div>
           <div className="share-v3-preset-actions">
             <button type="button" className="share-v3-preset-featured"
               onClick={selectV3EditorialPicks} disabled={!distinctArtistPicks.length}>
-              精选不同艺人 · {distinctArtistPicks.length} 场
+              精选画报 <small>{distinctArtistPicks.length} 位不同艺人</small>
             </button>
-            <button type="button" onClick={selectV3AllArchive}>全部演出</button>
+            <button type="button" onClick={selectV3AllArchive}>
+              海报墙 <small>全部 {eligibleRecords.length} 场</small>
+            </button>
+            <button type="button" onClick={selectV3TicketAlbum}>
+              纪念票根 <small>票根聚合</small>
+            </button>
+            <button type="button" onClick={selectV3LongTimeline}>
+              时间长卷 <small>按日期回顾</small>
+            </button>
+            <button type="button" onClick={selectV3CityStory}>
+              城市足迹 <small>高德地图</small>
+            </button>
           </div>
         </div>}
 

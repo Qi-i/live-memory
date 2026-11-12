@@ -86,6 +86,15 @@ try {
   }));
   if(layout.docWidth>width+2||layout.docHeight>height+2)throw Error("V3 real workspace escaped viewport: "+JSON.stringify(layout));
   await page.screenshot({path:`${output}/archive-${width}.png`,fullPage:true});
+  // Unified V3 facets are shared by every collection mode.
+  await page.getByLabel("按观演状态筛选").selectOption("watched");
+  if(await page.locator(".v3-real-poster-card").count()!==1)
+    throw Error("Watched status facet did not filter the same real records");
+  await page.getByLabel("按观演状态筛选").selectOption("all");
+  await page.getByLabel("按城市筛选").selectOption("北京");
+  if(await page.locator(".v3-real-poster-card").count()!==1)
+    throw Error("City facet did not filter archive");
+  await page.getByRole("button",{name:"清除筛选"}).click();
   await page.getByRole("button",{name:"列表",exact:true}).click();
   await page.locator(".v3-real-index-row").filter({hasText:"北京现场 · 真实本机回归"}).waitFor();
   await page.getByRole("button",{name:"时间线",exact:true}).click();
@@ -106,6 +115,11 @@ try {
   await page.getByRole("button",{name:"制作分享图",exact:true}).click();
   const share=page.getByRole("dialog",{name:"分享工作室"});
   await share.waitFor({state:"visible"});
+  await share.locator(".share-studio-summary strong").getByText("2",{exact:true}).waitFor();
+  await share.locator(".share-v3-preset-actions").getByRole("button",{name:/纪念票根/}).click();
+  await share.locator(".share-layout-canvas-tickets").waitFor({state:"visible"});
+  await share.locator(".share-v3-preset-actions").getByRole("button",{name:/时间长卷/}).click();
+  await share.locator(".share-timeline-band").first().waitFor({state:"visible"});
   await share.getByRole("button",{name:"退出分享制作"}).click();
   await share.waitFor({state:"detached"});
   // Device-only users can still restore their own portable backup without
@@ -160,8 +174,20 @@ try {
     if(cards!==37)throw Error("All 37 records must be on one scrolling page: "+cards);
     if(await page.getByRole("button",{name:"下一页"}).count())
       throw Error("Pagination must not interrupt a long archive");
-    await page.getByLabel("更多档案视图").selectOption("票夹");
-    await page.locator(".v3-real-embedded-archive .archive-page").waitFor({state:"visible"});
+    for(const [name,selector] of [
+      ["画报",".v3-collection-showcase"],
+      ["票夹",".v3-collection-wallet-grid"],
+      ["票根",".v3-collection-stubs"],
+      ["日历",".v3-collection-calendar-grid"],
+      ["城市/场馆",".v3-collection-places-grid"],
+      ["票价",".v3-collection-cost-list"],
+      ["汇总",".v3-collection-summary-grid"],
+    ]){
+      await page.getByLabel("更多档案视图").selectOption(name);
+      await page.locator(selector).waitFor({state:"visible"});
+      if(await page.locator(".v3-real-embedded-archive .archive-page").count())
+        throw Error("V2 embedded archive leaked into native "+name);
+    }
     await page.getByRole("button",{name:"海报",exact:true}).click();
     await page.locator(".v3-real-poster-grid .v3-real-poster-card").last().scrollIntoViewIfNeeded();
   }
