@@ -119,7 +119,7 @@ try {
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/纪念票根/}).click();
   await share.locator(".share-layout-canvas-tickets").waitFor({state:"visible"});
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/时间长卷/}).click();
-  await share.locator(".share-layout-canvas-timeline").waitFor({state:"visible"});
+  await share.locator(".share-timeline-band").first().waitFor({state:"visible"});
   await share.getByRole("button",{name:"退出分享制作"}).click();
   await share.waitFor({state:"detached"});
   // Device-only users can still restore their own portable backup without
