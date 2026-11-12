@@ -26,12 +26,16 @@ const blobs=new Map([
   [p2,new Blob([Buffer.from("fake png test bytes")],{type:"image/png"})],
 ]);
 let reads=0;
+const auditProgress=[];
 const fixture={
   ownerKey:owner,records,assetRows:rows,objectNames:[p1,p2],
   download:async(path)=>{reads++;return blobs.get(path)},
   assertScope:()=>{},
+  onProgress:(completed,total)=>auditProgress.push([completed,total]),
 };
 const result=await manifest.auditLegacyMediaMigration(fixture);
+assert.deepEqual(auditProgress,[[0,2],[1,2],[2,2]]);
+
 assert.equal(result.format,"live-memory-v3-legacy-media-preflight");
 assert.equal(result.version,1);
 assert.equal(result.objects,2);
