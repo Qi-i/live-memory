@@ -76,6 +76,6 @@ const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",impo
 assert.match(workspace,/restoreVerifiedPortableArchive\(/);
 assert.match(workspace,/verifyPortableBackupDocument\(parsed\)/);
 assert.match(workspace,/\(canEditLocal\|\|canEditAccount\) && <section className="v3-real-restore"/);
-assert.match(workspace,/ShareStudio experience="v3" records=\{shareRecord\?\[shareRecord\]:records\}/);
+assert.match(workspace,/ShareStudio experience="v3" records=\{shareRecord\?\[shareRecord\]:\(page==="档案"\?active:records\)\}/);
 assert.doesNotMatch(service.source,/replaceAllRecords|\.delete\(|\.remove\(|\.upsert\(/);
 console.log("V3 portable restoration: original bytes, additive transaction, duplicate preservation, tamper, conflict, scope fence and post-write readback passed.");
