@@ -84,7 +84,7 @@ export async function auditAuthenticatedLegacyMedia(
       .select("linked_supabase_url,linked_supabase_media_bucket")
       .eq("user_id",userId).single();
     verifyScope();
-    const endpoint=(value:string)=>value.trim().replace(/\\/+$/,"").toLowerCase();
+    const endpoint=(value:string)=>value.trim().replace(/\/+$/,"").toLowerCase();
     if (profileError || !profile ||
         endpoint(String(profile.linked_supabase_url||"")) !==
           endpoint(settings.supabase.url) ||
