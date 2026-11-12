@@ -1,9 +1,10 @@
 import {useMemo,useState,type CSSProperties} from "react";
-import {CalendarDays,Heart,MapPin,Music2,Ticket,ArrowUpRight} from "lucide-react";
+import {CalendarDays,MapPin,Music2,Ticket,ArrowUpRight} from "lucide-react";
 import type {EventRecord} from "../../domain";
 import {categoryLabels,primaryMedia,statusLabels} from "../../domain";
 import {useCachedMediaSrc} from "../../mediaCache";
 import {AdaptivePoster} from "./AdaptivePoster";
+import {groupByCity,groupByArtist,summarizeRecordedPrices,groupCalendarDays} from "./collectionMetrics";
 
 export type CollectionMode="画报"|"票夹"|"票根"|"日历"|"城市/场馆"|"票价"|"汇总";
 export const collectionModes:CollectionMode[]=["画报","票夹","票根","日历","城市/场馆","票价","汇总"];
@@ -105,15 +106,7 @@ function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
   const offset=(start.getDay()+6)%7;
   const days=new Date(year,month,0).getDate();
   const cells=Math.ceil((offset+days)/7)*7;
-  const grouped=useMemo(()=>{
-    const result=new Map<number,EventRecord[]>();
-    for(const record of records){
-      if(!record.date.startsWith(selectedMonth+"-"))continue;
-      const day=Number(record.date.slice(8,10));
-      if(day>=1&&day<=days)result.set(day,[...(result.get(day)||[]),record]);
-    }
-    return result;
-  },[records,selectedMonth,days]);
+  const grouped=useMemo(()=>groupCalendarDays(records,selectedMonth),[records,selectedMonth]);
   function move(delta:number){
     const next=new Date(year,month-1+delta,1);
     setSelectedMonth(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,"0")}`);
@@ -143,14 +136,7 @@ function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
   </section>;
 }
 function Places({records,onOpen}:Pick<Props,"records"|"onOpen">){
-  const groups=useMemo(()=>{
-    const grouped=new Map<string,EventRecord[]>();
-    for(const record of records){
-      const city=record.city.trim()||"城市待补";
-      grouped.set(city,[...(grouped.get(city)||[]),record]);
-    }
-    return [...grouped.entries()].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0],"zh"));
-  },[records]);
+  const groups=useMemo(()=>groupByCity(records),[records]);
   return <section className="v3-collection" aria-label="城市场馆视图">
     <header><span>WHERE IT HAPPENED</span><h2>城市与场馆</h2>
       <p>{groups.length} 座城市，按场次数量整理你的真实现场。</p></header>
@@ -165,16 +151,15 @@ function Places({records,onOpen}:Pick<Props,"records"|"onOpen">){
   </section>;
 }
 function Costs({records,onOpen}:Pick<Props,"records"|"onOpen">){
-  const valued=records.filter(row=>typeof row.price==="number"&&Number.isFinite(row.price));
-  const total=valued.reduce((sum,row)=>sum+(row.price||0),0);
+  const priceSummary=useMemo(()=>summarizeRecordedPrices(records),[records]);
   const format=(n:number)=>"¥"+n.toLocaleString("zh-CN",{maximumFractionDigits:2});
   return <section className="v3-collection" aria-label="票价视图">
     <header><span>YOUR SHOW BUDGET</span><h2>票价记录</h2>
       <p>仅汇总已填写的票价；不把票面价推定为实际支付额。</p></header>
     <div className="v3-collection-cost-totals">
-      <article><small>已记录票价合计</small><strong>{format(total)}</strong></article>
-      <article><small>有票价的场次</small><strong>{valued.length}</strong></article>
-      <article><small>未填写价格</small><strong>{records.length-valued.length}</strong></article>
+      <article><small>已记录票价合计</small><strong>{format(priceSummary.total)}</strong></article>
+      <article><small>有票价的场次</small><strong>{priceSummary.count}</strong></article>
+      <article><small>未填写价格</small><strong>{priceSummary.missing}</strong></article>
     </div>
     <div className="v3-collection-cost-list">
       {records.map(record=><button key={record.id} type="button" onClick={()=>onOpen(record.id)}>
@@ -185,15 +170,7 @@ function Costs({records,onOpen}:Pick<Props,"records"|"onOpen">){
   </section>;
 }
 function Summary({records,onOpen}:Pick<Props,"records"|"onOpen">){
-  const artists=useMemo(()=>{
-    const groups=new Map<string,EventRecord[]>();
-    for(const record of records){
-      for(const name of new Set(record.artists.map(x=>x.trim()).filter(Boolean))){
-        groups.set(name,[...(groups.get(name)||[]),record]);
-      }
-    }
-    return [...groups.entries()].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0],"zh"));
-  },[records]);
+  const artists=useMemo(()=>groupByArtist(records),[records]);
   return <section className="v3-collection" aria-label="艺人汇总视图">
     <header><span>ARTISTS YOU HAVE SEEN</span><h2>艺人与现场汇总</h2>
       <p>按实际演出记录聚合，不将同一场的重复阵容算作多场。</p></header>
