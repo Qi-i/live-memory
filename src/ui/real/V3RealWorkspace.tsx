@@ -30,7 +30,7 @@ import "./v3Collections.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
 type Mode = "海报"|"时间线"|"列表"|CollectionMode;
-const navigation:Page[]=["档案","统计","城市","迁移"];
+const navigation: Page[] = ["档案", "统计", "城市", "迁移"];
 const archiveModes:Mode[]=["海报","时间线","列表"];
 
 function backToV2() {
