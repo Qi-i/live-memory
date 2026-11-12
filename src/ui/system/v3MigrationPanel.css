@@ -34,3 +34,24 @@
 .v3-migration-portable > span { color: var(--text-muted, #64748b); font-size: 12px; line-height: 1.5; }
 .v3-migration-portable p { flex-basis: 100%; margin: 0; color: var(--text-muted, #64748b); font-size: 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .v3-migration-portable .button { min-height: 36px; font-size: 13px; white-space: normal; text-align: center; }
+
+
+/* Copy is the primary task; account reconciliation never steals its click. */
+.v3-migration-primary{display:grid;gap:11px;padding:clamp(14px,2vw,20px);
+  background:linear-gradient(128deg,#ebe9fd,#f5f8ff 75%,#eaf5fb);
+  border:1px solid #c9c6ec;border-radius:18px;
+  box-shadow:0 8px 28px rgba(54,60,113,.08)}
+.v3-migration-primary-heading{display:grid;gap:3px}
+.v3-migration-primary-heading strong{color:#30365a;font-size:16px;line-height:1.4}
+.v3-migration-primary-heading span{color:#657491;font-size:12px}
+.v3-migration-primary-actions{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.v3-migration-primary-actions>.button{min-height:42px;padding:9px 15px}
+.v3-migration-primary-actions>.v3-migration-upload{background:#645ac1;color:#fff;border:1px solid #645ac1;font-weight:770}
+.v3-migration-primary-actions>.v3-migration-upload:not(:disabled):hover{background:#5147b1}
+.v3-migration-primary p{margin:0;font-size:12px;line-height:1.65;color:#556285}
+.v3-migration-primary .v3-migration-live-status{
+  padding:11px 13px;border-left:3px solid #6b61c5;border-radius:9px;
+  background:rgba(255,255,255,.88);color:#303d5c;white-space:pre-wrap;overflow-wrap:anywhere;
+}
+@media(max-width:580px){.v3-migration-primary-actions{display:grid;grid-template-columns:1fr}
+.v3-migration-primary-actions>.button{width:100%}}
