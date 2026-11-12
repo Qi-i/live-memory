@@ -272,7 +272,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     }
   }
 
-  async function stageLegacyMedia() {
+  async function stageLegacyMedia(verifyOnly=false) {
     if(backupInFlight.current!==null||pending||!personalConnected)return;
     const job=++backupJobCounter.current;
     backupInFlight.current=job;
@@ -284,15 +284,32 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     setBackupBusy(true);
     setBackupStatus("");
     try{
-      const {stageAuthenticatedLegacyMedia}=await import(
-        "../../infrastructure/supabase/auditLegacyMediaSources");
+      const {
+        stageAuthenticatedLegacyMedia,
+        verifyAuthenticatedStagedLegacyMedia,
+      }=await import("../../infrastructure/supabase/auditLegacyMediaSources");
       check();
-      const result=await stageAuthenticatedLegacyMedia(settings,check);
+      const operation=verifyOnly
+        ?verifyAuthenticatedStagedLegacyMedia:stageAuthenticatedLegacyMedia;
+      const result=await operation(settings,check,progress=>{
+        if(currentStorageScope()!==scope||scopeGeneration.current!==generation)return;
+        if(progress.phase==="audit"){
+          setBackupStatus("正在检查历史原图："+
+            progress.originalsVerified+"/"+progress.originalTotal+
+            " 张；只读取源图，不会修改记录。");
+        }else{
+          setBackupStatus((verifyOnly?"只读复核":"复制并回读")+
+            "：已核验原图 "+progress.originalsVerified+"/"+progress.originalTotal+
+            " 张；私有副本 "+progress.copiesVerified+"/"+progress.copyTotal+
+            " 份。每份均核验原始 SHA-256。");
+        }
+      });
       check();
-      setBackupStatus("已复制并逐张回读核验：旧原图 "+
-        result.objectsVerified+" 个、私有暂存副本 "+result.copiesVerified+
-        " 个，原文件总量 "+(result.bytesVerified/(1024*1024)).toFixed(1)+
-        " MiB。原有 V2 图片、云记录和登录凭据全部保留；尚未进行正式切换。");
+      setBackupStatus((verifyOnly?"只读复核成功：":"复制并逐张回读核验成功：")+
+        result.objectsVerified+" 张旧原图、"+result.copiesVerified+
+        " 份独立私有副本，原文件共 "+
+        (result.bytesVerified/(1024*1024)).toFixed(1)+
+        " MiB，SHA-256 与源图一致。旧 V2 原件及记录未删除；尚未切换 V3 writer。");
     }catch(error){
       if(currentStorageScope()===scope&&scopeGeneration.current===generation){
         const reason=error instanceof Error?error.message:"";
@@ -301,14 +318,17 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           : reason.includes("V3_LEGACY_PROVENANCE_RECORD_COUNT_MISMATCH")||
             reason.includes("V3_LEGACY_PROVENANCE_CONTENT_MISMATCH")||
             reason.includes("V3_LEGACY_PROVENANCE_DELETION_MISMATCH")
-            ? "尚未复制：同一账户的旧云档案与账号备份存在差异。请先查看迁移页的对账结果；不会覆盖任何原件。"
+            ? "无法完成：同一账户的旧云档案与账号备份存在差异。不会覆盖任何原件。"
             : reason.includes("V3_LEGACY_PROVENANCE_CHANGED")||
               reason.includes("V3_LEGACY_MEDIA_INVENTORY_CHANGED")||
               reason.includes("V3_COMPLETE_BACKUP_CLOUD_CHANGED")
               ? "复制过程中源档案发生变化；已暂存的私有副本不会删除，可再次执行核验。"
-              : reason.includes("V3_STAGING_PRIVATE_UPLOAD_FAILED")
-                ? "私有副本上传被拒绝：当前登录会话或私有桶写入权限异常，请检查登录状态。原图仍完整保留。"
-                : "暂存未完成：媒体字节不可用、云端网络或权限校验失败；所有旧原图和账号记录保持不变。");
+              : reason.includes("V3_STAGING_PRIVATE_BYTES_MISMATCH")||
+                reason.includes("V3_STAGING_PRIVATE_DOWNLOAD_FAILED")
+                ? "私有副本缺失或 SHA 回读不一致；未通过验收，旧原图仍完整保留。可以重新执行安全复制。"
+                : reason.includes("V3_STAGING_PRIVATE_UPLOAD_FAILED")
+                  ? "私有副本上传被拒绝：当前登录会话或私有桶写入权限异常，请检查登录状态。原图仍完整保留。"
+                  : "操作未完成：媒体字节不可用、云端网络或权限校验失败；所有旧原图和账号记录保持不变。");
       }
     }finally{
       if(backupInFlight.current===job){
@@ -512,6 +532,11 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           disabled={backupBusy||pending!==null}
           onClick={()=>void stageLegacyMedia()}>
           {backupBusy?"正在核验或复制…":"开始原图私有复制（原件保留·逐张SHA核验）"}
+        </button>}
+        {personalConnected && <button className="button ghost" type="button"
+          disabled={backupBusy||pending!==null}
+          onClick={()=>void stageLegacyMedia(true)}>
+          只读复核私有原图（不重新上传）
         </button>}
         <span>备份与审计只读；私有暂存按钮仅新增独立加密访问的图片副本，不修改或删除旧 V2 数据。单张图片上限 32 MiB，总量 256 MiB。</span>
         {backupStatus && <p role="status">{backupStatus}</p>}
