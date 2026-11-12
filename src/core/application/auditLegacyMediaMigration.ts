@@ -33,6 +33,8 @@ export interface LegacyMigrationAuditIO {
   objectNames: readonly string[];
   download(path: string): Promise<Blob>;
   assertScope(): void;
+  /** Reporting contains counts only: never owner keys or media URLs. */
+  onProgress?(processed: number, total: number): void;
 }
 const SHA = /^[a-f0-9]{64}$/;
 const MIME: Record<string, string> = {
@@ -104,6 +106,7 @@ export async function auditLegacyMediaMigration(io: LegacyMigrationAuditIO):
   io.assertScope();
   const entries: VerifiedLegacyMediaObject[] = [];
   let totalBytes = 0;
+  io.onProgress?.(0, names.size);
   for (const path of [...grouped.keys()].sort()) {
     io.assertScope();
     const extension = checkPath(path, owner);
@@ -136,6 +139,8 @@ export async function auditLegacyMediaMigration(io: LegacyMigrationAuditIO):
       newStoragePaths: newStoragePaths.sort(),
     });
     totalBytes += blob.size;
+    io.assertScope();
+    io.onProgress?.(entries.length, names.size);
   }
   io.assertScope();
   const sorted = entries.sort((a,b) => a.sourcePathSha256.localeCompare(b.sourcePathSha256));

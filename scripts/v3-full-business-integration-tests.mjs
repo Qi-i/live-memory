@@ -48,7 +48,7 @@ for(const pattern of [
 ]) assert.match(workspace,pattern);
 
 for(const pattern of [
-  /stageAuthenticatedLegacyMedia\(settings,check\)/,
+  /const result=await operation\(settings,check,progress=>/,
   /completeBackupInventory\(original, remoteBefore\)/,
   /verifyPortableBackupDocument\(backup\)/,
   /importSecureArchiveMirror\(parsed\)/,

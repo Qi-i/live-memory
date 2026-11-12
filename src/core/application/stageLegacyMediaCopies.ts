@@ -9,6 +9,15 @@ export interface LegacyMediaStagingIO {
   uploadPrivate(path: string, blob: Blob, mimeType: string): Promise<"uploaded" | "exists">;
   downloadPrivate(path: string): Promise<Blob>;
   assertScope(): void;
+  /** Recheck existing private objects without performing any uploads. */
+  verifyOnly?: boolean;
+  /** Progress is counts only, never an ownerKey or object path. */
+  onProgress?(progress: {
+    originalsVerified: number;
+    originalTotal: number;
+    copiesVerified: number;
+    copyTotal: number;
+  }): void;
 }
 export interface LegacyMediaStagingResult {
   objectsVerified: number;
@@ -70,7 +79,17 @@ export async function stageLegacyMediaCopies(
   if(sourceByHash.size!==proof.objects) throw Error("V3_STAGING_SOURCE_INVENTORY_CHANGED");
   const seenTargets=new Set<string>();
   const provenSources=new Set<string>();
-  let verified=0,bytes=0;
+  let verified=0,bytes=0,originalsVerified=0;
+  const copyTotal=proof.entries.reduce((sum,entry)=>
+    sum+(Array.isArray(entry.newStoragePaths)?entry.newStoragePaths.length:0),0);
+  if(copyTotal<proof.objects || copyTotal>4000)
+    throw Error("V3_STAGING_INVALID_PROOF");
+  const progress=()=>io.onProgress?.({
+    originalsVerified,originalTotal:proof.objects,
+    copiesVerified:verified,copyTotal,
+  });
+  io.assertScope();
+  progress();
   for(const entry of proof.entries) {
     io.assertScope();
     if(!entry || !hex.test(entry.sourcePathSha256) || !hex.test(entry.contentSha256) ||
@@ -105,8 +124,10 @@ export async function stageLegacyMediaCopies(
       if(actualType!==entry.mimeType)throw Error("V3_STAGING_MIME_MISMATCH");
       // A 409 means immutable bytes MAY already exist. Always re-download and
       // verify the exact SHA before treating retry as success.
-      await io.uploadPrivate(path,blob,entry.mimeType);
-      io.assertScope();
+      if(!io.verifyOnly) {
+        await io.uploadPrivate(path,blob,entry.mimeType);
+        io.assertScope();
+      }
       const staged=await io.downloadPrivate(path);
       io.assertScope();
       if(!staged || staged.size!==entry.size ||
@@ -114,7 +135,12 @@ export async function stageLegacyMediaCopies(
         throw Error("V3_STAGING_PRIVATE_BYTES_MISMATCH");
       }
       verified+=1;
+      io.assertScope();
+      progress();
     }
+    originalsVerified+=1;
+    io.assertScope();
+    progress();
     bytes+=blob.size;
     io.assertScope();
   }

@@ -38,6 +38,11 @@ function fingerprintPaths(rows: readonly string[]): string {
  * opening account + device storage scope; on logout the manifest is discarded.
  * This is only a PRE-MIGRATION audit: backend must independently verify the
  * authenticated account owner on any later rekey/copy operation. */
+export type LegacyMediaTransferProgress =
+  | { phase:"audit"; originalsVerified:number; originalTotal:number }
+  | { phase:"copy"|"verify"; originalsVerified:number; originalTotal:number;
+      copiesVerified:number; copyTotal:number };
+
 interface VerifiedLegacyAuditContext {
   manifest: LegacyMediaMigrationManifest;
   /** Ephemeral private inputs; the downloaded report must not contain these. */
@@ -51,6 +56,7 @@ export async function auditAuthenticatedLegacyMedia(
   settings: AppSettings,
   onScopeCheck?: () => void,
   onVerified?: (context: VerifiedLegacyAuditContext) => Promise<void>,
+  onProgress?: (progress:LegacyMediaTransferProgress)=>void,
 ): Promise<LegacyMediaMigrationManifest> {
   const ownerKey = settings.supabase.ownerKey?.trim().toLowerCase() || "";
   if (!/^[a-f0-9]{64}$/.test(ownerKey) || settings.supabase.mediaBucket !== BUCKET) {
@@ -201,6 +207,9 @@ export async function auditAuthenticatedLegacyMedia(
       return data;
     },
     assertScope:verifyScope,
+    onProgress:(processed,total)=>onProgress?.({
+      phase:"audit",originalsVerified:processed,originalTotal:total,
+    }),
   });
   verifyScope();
 
@@ -257,6 +266,8 @@ export async function auditAuthenticatedLegacyMedia(
 export async function stageAuthenticatedLegacyMedia(
   settings: AppSettings,
   onScopeCheck?: () => void,
+  onProgress?: (progress:LegacyMediaTransferProgress)=>void,
+  verifyOnly = false,
 ): Promise<LegacyMediaStagingResult> {
   let result: LegacyMediaStagingResult | null = null;
   await auditAuthenticatedLegacyMedia(settings,onScopeCheck,async(ctx)=>{
@@ -265,6 +276,10 @@ export async function stageAuthenticatedLegacyMedia(
       accountUserId:ctx.userId,
       sourcePaths:ctx.objectNames,
       assertScope:ctx.assertScope,
+      verifyOnly,
+      onProgress:counts=>onProgress?.({
+        phase:verifyOnly?"verify":"copy",...counts,
+      }),
       downloadOriginal:async(path)=>{
         ctx.assertScope();
         const {data,error}=await ctx.personal.storage.from(BUCKET).download(path);
@@ -292,7 +307,16 @@ export async function stageAuthenticatedLegacyMedia(
         return data;
       },
     });
-  });
+  },onProgress);
   if(!result)throw Error("V3_STAGING_UNVERIFIED");
   return result;
+}
+
+/** Independent SHA readback, no uploads and no changes to old or V3 media. */
+export async function verifyAuthenticatedStagedLegacyMedia(
+  settings:AppSettings,
+  onScopeCheck?:()=>void,
+  onProgress?:(progress:LegacyMediaTransferProgress)=>void,
+):Promise<LegacyMediaStagingResult> {
+  return stageAuthenticatedLegacyMedia(settings,onScopeCheck,onProgress,true);
 }
