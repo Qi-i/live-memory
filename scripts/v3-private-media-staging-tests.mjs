@@ -112,6 +112,6 @@ assert.match(infra,/upsert:false/);
 assert.match(infra,/ctx\.account\.storage\.from\(staging\)\.download\(/);
 assert.match(infra,/runtime\.readPersonalCloudForPortableBackup\(\),loadRows\(\),listObjects\(\)/);
 assert.match(panel,/stageLegacyMedia\(\)/);
-assert.match(panel,/将旧原图无损复制到账号私有暂存区/);
+assert.match(panel,/开始原图私有复制（原件保留·逐张SHA核验）/);
 assert.doesNotMatch(infra,/\.remove\(|\.delete\(|live_memory_v3_activate_/);
 console.log("V3 private media staging passed: exact byte copy, immutable retry, corruption rejection, account scope and no V2 writes.");

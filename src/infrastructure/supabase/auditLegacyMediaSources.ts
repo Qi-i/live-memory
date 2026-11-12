@@ -9,6 +9,10 @@ import {
 } from "../../core/application/auditLegacyMediaMigration";
 import { createV3SyncRuntime } from "../createV3SyncRuntime";
 import {
+  verifyLegacyAccountProvenance,
+  type LegacyProvenanceRow,
+} from "../../core/application/verifyLegacyAccountProvenance";
+import {
   stageLegacyMediaCopies,
   type LegacyMediaStagingResult,
 } from "../../core/application/stageLegacyMediaCopies";
@@ -64,12 +68,69 @@ export async function auditAuthenticatedLegacyMedia(
   verifyScope();
   const expectedOwnerKey = await deriveAccountLinkedLegacyOwnerKey(settings, userId);
   verifyScope();
-  if (expectedOwnerKey !== ownerKey) {
-    // A password-derived or otherwise unbound old key cannot be securely
-    // claimed merely by presenting the leaked bearer credential.
-    throw new Error("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT");
-  }
   const personal = makeSupabaseClient(settings);
+
+  // Old password-era keys are NOT necessarily derived from the authenticated
+  // account UUID. The two credential types describe the same user's archive.
+  // Never claim a key merely because it works: require the JWT-bound account
+  // profile to link this exact personal project AND every original record to
+  // match an existing account-owned backup (all non-media fields, tombstones).
+  // This only permits a non-destructive private copy, never account rekey or
+  // V3 writer cutover. No service-role client is used.
+  let reverifyLegacyAccountProvenance: (() => Promise<void>) | null = null;
+  if (expectedOwnerKey !== ownerKey) {
+    const {data:profile,error:profileError}=await account
+      .from("echo_user_profiles")
+      .select("linked_supabase_url,linked_supabase_media_bucket")
+      .eq("user_id",userId).single();
+    verifyScope();
+    const endpoint=(value:string)=>value.trim().replace(/\/+$/,"").toLowerCase();
+    if (profileError || !profile ||
+        endpoint(String(profile.linked_supabase_url||"")) !==
+          endpoint(settings.supabase.url) ||
+        profile.linked_supabase_media_bucket !== BUCKET) {
+      throw Error("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT");
+    }
+    const PAGE_SIZE=500;
+    const readProvenance=async (
+      provider:"personal"|"account",
+    ):Promise<LegacyProvenanceRow[]>=>{
+      const rows:LegacyProvenanceRow[]=[];
+      const client=provider==="personal"?personal:account;
+      const table=provider==="personal"?"echo_passkey_records":"echo_text_backups";
+      for(let offset=0;offset<MAX_OBJECTS;offset+=PAGE_SIZE){
+        verifyScope();
+        let query=client.from(table)
+          .select("id,payload,deleted_at").order("id",{ascending:true})
+          .range(offset,offset+PAGE_SIZE-1);
+        query=provider==="personal"
+          ?query.eq("owner_key",ownerKey)
+          :query.eq("user_id",userId);
+        const {data,error}=await query;
+        verifyScope();
+        if(error || !data)throw Error("V3_LEGACY_PROVENANCE_READ_FAILED");
+        rows.push(...data as LegacyProvenanceRow[]);
+        if(data.length<PAGE_SIZE)return rows;
+      }
+      throw Error("V3_LEGACY_PROVENANCE_TOO_MANY_RECORDS");
+    };
+    const readAndVerify=async()=>{
+      const [personalRows,accountRows]=await Promise.all([
+        readProvenance("personal"),readProvenance("account"),
+      ]);
+      verifyScope();
+      return verifyLegacyAccountProvenance(personalRows,accountRows);
+    };
+    const proof=await readAndVerify();
+    verifyScope();
+    reverifyLegacyAccountProvenance=async()=>{
+      const fresh=await readAndVerify();
+      verifyScope();
+      if(proof.matchedRecords!==fresh.matchedRecords ||
+         proof.sourceDigest!==fresh.sourceDigest)
+        throw Error("V3_LEGACY_PROVENANCE_CHANGED");
+    };
+  }
   const runtime = await createV3SyncRuntime(settings, "personal");
 
   const loadRows = async (): Promise<LinkedMediaRow[]> => {
@@ -159,6 +220,7 @@ export async function auditAuthenticatedLegacyMedia(
   if(finalUser.error||finalUser.data.user?.id.toLowerCase()!==userId) {
     throw Error("V3_LEGACY_ACCOUNT_CHANGED");
   }
+  await reverifyLegacyAccountProvenance?.();
   if (onVerified) {
     // Copies to an additional private, auth-bound staging bucket are allowed
     // ONLY after a complete two-pass, account-bound read-only audit. They do
@@ -182,6 +244,9 @@ export async function auditAuthenticatedLegacyMedia(
     if(checkedUser.error || checkedUser.data.user?.id.toLowerCase()!==userId){
       throw Error("V3_LEGACY_ACCOUNT_CHANGED");
     }
+    // Account provenance may change during 40 original downloads. A changed
+    // source halts acceptance; immutable staged bytes remain safe to retry.
+    await reverifyLegacyAccountProvenance?.();
   }
   return audit;
 }
