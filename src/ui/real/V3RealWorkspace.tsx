@@ -20,22 +20,18 @@ import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
 import { AdaptivePoster } from "./AdaptivePoster";
 import { dominantPosterRatio } from "./posterFraming";
-import { ArchivePage, type ArchiveLayout } from "../../archive";
+import {V3ArchiveCollections,collectionModes,type CollectionMode} from "./V3ArchiveCollections";
 import "../system/preview.css";
 import "./realWorkspace.css";
 import "./v3ShareStudio.css";
 import "./adaptivePoster.css";
 import "./v3ArchiveRefinements.css";
+import "./v3Collections.css";
 
 type Page = "档案" | "统计" | "城市" | "迁移";
-type Mode = "海报" | "时间线" | "列表" | "画报" | "票夹" | "票根" |
-  "日历" | "城市/场馆" | "票价" | "汇总";
-const navigation: Page[] = ["档案", "统计", "城市", "迁移"];
-const archiveModes: Mode[] = ["海报","时间线","列表"];
-const advancedLayouts: Record<string,ArchiveLayout> = {
-  "画报":"showcase","票夹":"wallet","票根":"ticket",
-  "日历":"calendar","城市/场馆":"venue","票价":"price","汇总":"summary",
-};
+type Mode = "海报"|"时间线"|"列表"|CollectionMode;
+const navigation:Page[]=["档案","统计","城市","迁移"];
+const archiveModes:Mode[]=["海报","时间线","列表"];
 
 function backToV2() {
   if(import.meta.env.VITE_V3_BETA==="1"){
@@ -258,10 +254,9 @@ function RealCityView({ records, onOpen }: { records: EventRecord[]; onOpen: (id
     detail={city && <div className="v3-real-map-details">
       <header><strong>{city} · {selected.length} 场</strong>
         <button type="button" onClick={()=>setCity(null)} aria-label="关闭城市记录">×</button></header>
-      {selected.slice(0,25).map(row=><button type="button" key={row.id} onClick={()=>onOpen(row.id)}>
+      {selected.map(row=><button type="button" key={row.id} onClick={()=>onOpen(row.id)}>
         <strong>{row.title}</strong><small>{row.date} · {row.venue}</small>
       </button>)}
-      {selected.length>25&&<p>已展示前 25 场，可在档案中进一步检索。</p>}
     </div>}
   />;
 }
@@ -270,6 +265,11 @@ export function V3RealWorkspace() {
   const [page,setPage]=useState<Page>("档案");
   const [mode,setMode]=useState<Mode>("海报");
   const [search,setSearch]=useState("");
+  const [filterStatus,setFilterStatus]=useState<"all"|"watched"|"planned"|"wish">("all");
+  const [filterCity,setFilterCity]=useState("");
+  const [filterYear,setFilterYear]=useState("");
+  const [favoritesOnly,setFavoritesOnly]=useState(false);
+  const [sortMode,setSortMode]=useState<"newest"|"oldest"|"edited">("newest");
   const [snapshot,setSnapshot]=useState<{scope:string;records:EventRecord[];error:string;busy:boolean}>({
     scope:"",records:[],error:"",busy:true,
   });
@@ -362,7 +362,29 @@ export function V3RealWorkspace() {
     setPosterRatios(previous=>previous[id]===ratio?previous:{...previous,[id]:ratio});
   };
   const model=useMemo(()=>describeRealArchive(records,search),[records,search]);
-  const active=model.records;
+  const facets=useMemo(()=>{
+    const all=describeRealArchive(records).records;
+    return {
+      cities:[...new Set(all.map(row=>row.city.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
+      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\\d{4}$/.test(y)))].sort().reverse(),
+    };
+  },[records]);
+  const active=useMemo(()=>model.records.filter(row=>
+    (filterStatus==="all"||(filterStatus==="watched"
+      ?isWatchedRealRecord(row):row.status===filterStatus))&&
+    (!filterCity||row.city===filterCity)&&
+    (!filterYear||row.date.startsWith(filterYear))&&
+    (!favoritesOnly||row.favorite)
+  ).sort((a,b)=>{
+    if(sortMode==="edited")return b.updatedAt.localeCompare(a.updatedAt)||b.date.localeCompare(a.date);
+    return sortMode==="newest"?b.date.localeCompare(a.date):a.date.localeCompare(b.date);
+  }),[model.records,filterStatus,filterCity,filterYear,favoritesOnly,sortMode]);
+  const filterApplied=filterStatus!=="all"||Boolean(filterCity||filterYear||favoritesOnly||search.trim());
+  const clearArchiveFilters=()=>{
+    setSearch("");setFilterStatus("all");setFilterCity("");setFilterYear("");
+    setFavoritesOnly(false);setSortMode("newest");
+  };
+  const visibleModel=useMemo(()=>describeRealArchive(active),[active]);
   const firstPosters=useMemo(()=>curateFeaturedRecords(
     describeRealArchive(records).records, record=>Boolean(primaryMedia(record)),5,
   ),[records]);
@@ -605,7 +627,7 @@ export function V3RealWorkspace() {
         : "同步未完成：身份变化、网络故障或云端版本冲突。已保留本机记录，请重新检查。");
     }finally{setSyncBusy(false);}
   };
-  // One continuous scroll contains every matching record; images load lazily.
+  // One continuous scroll contains every filtered record; images load lazily.
   const yearGroups=useMemo(()=>{
     const groups=new Map<string,EventRecord[]>();
     for(const row of active){
@@ -629,13 +651,13 @@ export function V3RealWorkspace() {
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
         <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
-        <small>{canEditLocal?"本机编辑"
-          : canEditAccount?"账号已启用 V3 安全同步"
-          : canEditLegacyAccount?"账号本机可编辑 · 云端仍由 V2 管理"
-          : "正在验证账号写入权限"}</small></div>
+        <small>{canEditLocal?"本机档案可编辑"
+          : canEditAccount?"当前账户 · 云端同步可用"
+          : canEditLegacyAccount?"当前账户 · 本机修改待同步"
+          : "正在连接你的档案"}</small></div>
       <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
-        <b>{model.watchedCount}<small>已看</small></b>
-        <b>{model.cities.length}<small>城市</small></b></div>
+        <b>{visibleModel.watchedCount}<small>已看</small></b>
+        <b>{visibleModel.cities.length}<small>城市</small></b></div>
       {canEdit && <button type="button" onClick={()=>startEdit(null)}>
         {canEditLocal?"新增本机演出":"新增演出"}</button>}
       {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
@@ -670,7 +692,7 @@ export function V3RealWorkspace() {
       : zoomMedia
         ? <ImageZoom media={zoomMedia} onClose={()=>setZoomMedia(null)}/>
       : sharing
-      ? <ShareStudio experience="v3" records={shareRecord?[shareRecord]:records} format={shareFormat} setFormat={setShareFormat}
+      ? <ShareStudio experience="v3" records={shareRecord?[shareRecord]:(page==="档案"?active:records)} format={shareFormat} setFormat={setShareFormat}
           mapSettings={readSettings().map}
           onOpenMapSettings={()=>{
             setSharing(false);
@@ -714,32 +736,49 @@ export function V3RealWorkspace() {
             modes={archiveModes.map(item=><button type="button" key={item}
               aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
             actions={<select className="v3-real-extra-views" aria-label="更多档案视图"
-              value={advancedLayouts[mode]?mode:""}
+              value={collectionModes.includes(mode as CollectionMode)?mode:""}
               onChange={event=>setMode(event.target.value as Mode)}>
               <option value="">更多视图</option>
-              {Object.keys(advancedLayouts).map(label=>
+              {collectionModes.map(label=>
                 <option key={label} value={label}>{label}</option>)}
             </select>}/>
         </div>
+        <div className="v3-real-refine-bar" aria-label="档案筛选和排序">
+          <label>状态<select aria-label="按观演状态筛选" value={filterStatus}
+            onChange={e=>setFilterStatus(e.target.value as typeof filterStatus)}>
+            <option value="all">全部状态</option><option value="watched">已看</option>
+            <option value="planned">待看</option><option value="wish">想看</option>
+          </select></label>
+          <label>年份<select aria-label="按年份筛选" value={filterYear}
+            onChange={e=>setFilterYear(e.target.value)}>
+            <option value="">全部年份</option>
+            {facets.years.map(year=><option key={year} value={year}>{year}</option>)}
+          </select></label>
+          <label>城市<select aria-label="按城市筛选" value={filterCity}
+            onChange={e=>setFilterCity(e.target.value)}>
+            <option value="">全部城市</option>
+            {facets.cities.map(city=><option key={city} value={city}>{city}</option>)}
+          </select></label>
+          <label>排序<select aria-label="档案排序" value={sortMode}
+            onChange={e=>setSortMode(e.target.value as typeof sortMode)}>
+            <option value="newest">时间最新</option><option value="oldest">时间最早</option>
+            <option value="edited">最近编辑</option>
+          </select></label>
+          <button type="button" className={favoritesOnly?"is-active":""}
+            aria-pressed={favoritesOnly} onClick={()=>setFavoritesOnly(v=>!v)}>
+            {favoritesOnly?"♥ 已收藏":"♡ 仅收藏"}</button>
+          {filterApplied&&<button type="button" className="v3-real-refine-clear"
+            onClick={clearArchiveFilters}>清除筛选</button>}
+          <span>{active.length} / {describeRealArchive(records).records.length} 场</span>
+        </div>
         {!active.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
-          <p>请调整搜索词；此页不会生成任何演示档案。</p></div>:
-        advancedLayouts[mode]?<div className="v3-real-embedded-archive">
-          <ArchivePage records={records.filter(row=>!row.deletedAt)}
-            settings={readSettings()}
-            layout={advancedLayouts[mode]} setLayout={layout=>{
-              const found=Object.entries(advancedLayouts).find(([,value])=>value===layout);
-              setMode(found?.[0] as Mode || "海报");
-            }}
-            shareMode={false} setShareMode={setSharing}
-            shareFormat={shareFormat} setShareFormat={setShareFormat}
-            onOpen={row=>setSelectedId(row.id)}
-            onEdit={row=>startEdit(row)}
-            onDuplicate={requestDuplicate}
-            onDelete={row=>canEdit?setDeleteCandidate(row):setNotice("账号当前不允许写入，未删除记录")}
-            onZoom={setZoomMedia}
-            onOpenMapSettings={()=>setNotice("地图密钥沿用原有设置。")}/>
-          </div>:
-        mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
+          <p>当前筛选下没有演出。</p><button type="button" onClick={clearArchiveFilters}>显示全部档案</button></div>:
+        collectionModes.includes(mode as CollectionMode)?
+          <V3ArchiveCollections mode={mode as CollectionMode} records={active}
+            onOpen={setSelectedId}
+            onEdit={canEdit?startEdit:undefined}
+            onShare={record=>{setShareRecord(record);setSelectedId(null);setSharing(true);}}/>:
+                mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
           <header><span>LIVE MEMORY · ARCHIVE</span><h2>全部演出 <small>({active.length})</small></h2></header>
           <div className="v3-real-poster-grid">
             {active.map(record=><PosterCard key={record.id} record={record}
