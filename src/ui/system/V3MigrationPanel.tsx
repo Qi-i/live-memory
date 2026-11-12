@@ -297,11 +297,18 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
       if(currentStorageScope()===scope&&scopeGeneration.current===generation){
         const reason=error instanceof Error?error.message:"";
         setBackupStatus(reason.includes("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT")
-          ? "未复制：当前登录账号未能证明旧个人云归属，禁止借助泄露的旧媒体路径冒领。"
-          : reason.includes("V3_LEGACY_MEDIA_INVENTORY_CHANGED")||
-            reason.includes("V3_COMPLETE_BACKUP_CLOUD_CHANGED")
-            ? "暂存未获完整验收：旧云数据在复制期间发生变化。已有的私有暂存副本不会删除；可重新校验。"
-            : "暂存未完成：网络、权限或图片字节校验失败。旧 V2 原图和档案完全保留；安全重试不会覆盖已有副本。");
+          ? "未复制：当前登录账户的个人云关联配置与旧媒体来源不符。请在现有账户内检查个人云连接。"
+          : reason.includes("V3_LEGACY_PROVENANCE_RECORD_COUNT_MISMATCH")||
+            reason.includes("V3_LEGACY_PROVENANCE_CONTENT_MISMATCH")||
+            reason.includes("V3_LEGACY_PROVENANCE_DELETION_MISMATCH")
+            ? "尚未复制：同一账户的旧云档案与账号备份存在差异。请先查看迁移页的对账结果；不会覆盖任何原件。"
+            : reason.includes("V3_LEGACY_PROVENANCE_CHANGED")||
+              reason.includes("V3_LEGACY_MEDIA_INVENTORY_CHANGED")||
+              reason.includes("V3_COMPLETE_BACKUP_CLOUD_CHANGED")
+              ? "复制过程中源档案发生变化；已暂存的私有副本不会删除，可再次执行核验。"
+              : reason.includes("V3_STAGING_PRIVATE_UPLOAD_FAILED")
+                ? "私有副本上传被拒绝：当前登录会话或私有桶写入权限异常，请检查登录状态。原图仍完整保留。"
+                : "暂存未完成：媒体字节不可用、云端网络或权限校验失败；所有旧原图和账号记录保持不变。");
       }
     }finally{
       if(backupInFlight.current===job){
@@ -504,7 +511,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         {personalConnected && <button className="button ghost" type="button"
           disabled={backupBusy||pending!==null}
           onClick={()=>void stageLegacyMedia()}>
-          {backupBusy?"正在核验或复制…":"将旧原图无损复制到账号私有暂存区"}
+          {backupBusy?"正在核验或复制…":"开始原图私有复制（原件保留·逐张SHA核验）"}
         </button>}
         <span>备份与审计只读；私有暂存按钮仅新增独立加密访问的图片副本，不修改或删除旧 V2 数据。单张图片上限 32 MiB，总量 256 MiB。</span>
         {backupStatus && <p role="status">{backupStatus}</p>}
