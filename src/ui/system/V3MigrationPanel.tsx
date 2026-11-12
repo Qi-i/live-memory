@@ -435,6 +435,26 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         </div>
         <strong>原图私有迁移</strong>
       </header>
+      <div className="v3-migration-primary" role="region" aria-label="原图私有复制">
+        <div className="v3-migration-primary-heading">
+          <strong>原图私有复制与SHA-256验收</strong>
+          <span>原图保留 · 中断可安全重试 · 不启动V3云端写入</span>
+        </div>
+        <div className="v3-migration-primary-actions">
+          <button type="button" className="button v3-migration-upload"
+            disabled={backupBusy} onClick={()=>void stageLegacyMedia()}>
+            {backupBusy?"正在执行，请查看下方进度…":"开始原图私有复制"}
+          </button>
+          <button type="button" className="button ghost"
+            disabled={backupBusy} onClick={()=>void stageLegacyMedia(true)}>
+            只读复核已复制原图
+          </button>
+        </div>
+        {!personalConnected && <p role="note">此设备尚未连接原个人云；点击复制可查看具体缺少的配置，不会修改原图。</p>}
+        {pending && <p role="note">正在执行{pending==="account"?"账号文字备份":"个人云"}对账；请先完成该检查。</p>}
+        {backupStatus && <p className="v3-migration-live-status" role="status"
+          aria-live="polite">{backupStatus}</p>}
+      </div>
       <div className="v3-migration-grid">
         {(["account", "personal"] as Provider[]).map((provider) => {
           const enabled = provider === "account" || personalConnected;
@@ -516,7 +536,7 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           <p>当前记录未发现仅有图片引用的资源，但仍须验证导出文件可读及图片字节完整后才能签发迁移备份证明。</p>
         )}
       </div>
-      <div className="v3-migration-portable">
+      <div className="v3-migration-portable" role="region" aria-label="其他备份工具">
         <button className="button ghost" type="button"
           disabled={backupBusy || pending !== null || (!personalConnected && backupAudit.records === 0)}
           onClick={() => void exportVerifiedPortableBackup()}>
@@ -529,18 +549,6 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
           onClick={()=>void exportLegacyMediaAudit()}>
           {backupBusy?"正在检查云端原图…":"生成旧公开媒体逐对象迁移校验清单"}
         </button>}
-        {personalConnected && <button className="button ghost" type="button"
-          disabled={backupBusy||pending!==null}
-          onClick={()=>void stageLegacyMedia()}>
-          {backupBusy?"正在核验或复制…":"开始原图私有复制（原件保留·逐张SHA核验）"}
-        </button>}
-        {personalConnected && <button className="button ghost" type="button"
-          disabled={backupBusy||pending!==null}
-          onClick={()=>void stageLegacyMedia(true)}>
-          只读复核私有原图（不重新上传）
-        </button>}
-        <span>备份与审计只读；私有暂存按钮仅新增独立加密访问的图片副本，不修改或删除旧 V2 数据。单张图片上限 32 MiB，总量 256 MiB。</span>
-        {backupStatus && <p role="status">{backupStatus}</p>}
       </div>
       <div className="v3-migration-portable" role="region" aria-label="账号私有完整档案镜像导入">
         <strong>私有完整档案镜像 · 迁移预演</strong>
