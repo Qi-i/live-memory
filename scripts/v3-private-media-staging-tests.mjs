@@ -98,6 +98,65 @@ await assert.rejects(stage.stageLegacyMediaCopies(manifest,{
   },
   assertScope:()=>{if(switched)throw Error("V3_LEGACY_ACCOUNT_CHANGED")},
 }),/V3_LEGACY_ACCOUNT_CHANGED/);
+
+const events=[];
+let readOnlyUploadCalls=0;
+const verifiedAgain=await stage.stageLegacyMediaCopies(manifest,{
+  ...adapter,
+  verifyOnly:true,
+  onProgress:progress=>events.push(progress),
+  uploadPrivate:async()=>{readOnlyUploadCalls++;throw Error("unexpected private upload");},
+});
+assert.equal(readOnlyUploadCalls,0,"Read-only revalidation cannot create private objects");
+assert.equal(verifiedAgain.objectsVerified,1);
+assert.equal(verifiedAgain.copiesVerified,1);
+assert.deepEqual(events[0],{
+  originalsVerified:0,originalTotal:1,copiesVerified:0,copyTotal:1,
+});
+assert.deepEqual(events.at(-1),{
+  originalsVerified:1,originalTotal:1,copiesVerified:1,copyTotal:1,
+});
+assert.ok(!JSON.stringify(events).includes(oldOwner));
+await assert.rejects(stage.stageLegacyMediaCopies(manifest,{
+  ...adapter,verifyOnly:true,downloadPrivate:async()=>null,
+  uploadPrivate:async()=>{throw Error("must not upload on missing private copy");},
+}),/V3_STAGING_PRIVATE_BYTES_MISMATCH/);
+
+// A shared legacy source can represent more than one record-scoped private
+// target: original count and private-copy count must NEVER be conflated.
+const sharedRecords=[
+  {id:"show-A",media:[{id:"poster-A",recordId:"show-A",storagePath:source}]},
+  {id:"show-B",media:[{id:"poster-B",recordId:"show-B",storagePath:source}]},
+];
+const sharedManifest=await audit.auditLegacyMediaMigration({
+  ownerKey:oldOwner,records:sharedRecords,assetRows:[],
+  objectNames:[source],download:async()=>original,assertScope:()=>{},
+});
+assert.equal(sharedManifest.objects,1);
+assert.equal(sharedManifest.references,2);
+assert.equal(sharedManifest.entries[0].newStoragePaths.length,2);
+const sharedPrivate=new Map(),sharedProgress=[];
+const sharedResult=await stage.stageLegacyMediaCopies(sharedManifest,{
+  ...adapter,sourcePaths:[source],
+  onProgress:progress=>sharedProgress.push(progress),
+  uploadPrivate:async(path,blob)=>{sharedPrivate.set(path,blob);return "uploaded";},
+  downloadPrivate:async(path)=>sharedPrivate.get(path)||null,
+});
+assert.equal(sharedResult.objectsVerified,1);
+assert.equal(sharedResult.copiesVerified,2);
+assert.equal(sharedPrivate.size,2);
+assert.deepEqual(sharedProgress.at(-1),{
+  originalsVerified:1,originalTotal:1,copiesVerified:2,copyTotal:2,
+});
+const sharedUploadCount=sharedPrivate.size;
+const sharedReadBack=await stage.stageLegacyMediaCopies(sharedManifest,{
+  ...adapter,sourcePaths:[source],verifyOnly:true,
+  uploadPrivate:async()=>{throw Error("readback must never upload");},
+  downloadPrivate:async(path)=>sharedPrivate.get(path)||null,
+});
+assert.equal(sharedReadBack.copiesVerified,2);
+assert.equal(sharedPrivate.size,sharedUploadCount);
+
 scope="account B";
 await assert.rejects(stage.stageLegacyMediaCopies(manifest,adapter),
   /V3_LEGACY_ACCOUNT_CHANGED/);
@@ -113,5 +172,11 @@ assert.match(infra,/ctx\.account\.storage\.from\(staging\)\.download\(/);
 assert.match(infra,/runtime\.readPersonalCloudForPortableBackup\(\),loadRows\(\),listObjects\(\)/);
 assert.match(panel,/stageLegacyMedia\(\)/);
 assert.match(panel,/开始原图私有复制（原件保留·逐张SHA核验）/);
+assert.match(panel,/只读复核私有原图（不重新上传）/);
+assert.match(panel,/progress\.copiesVerified/);
+assert.match(infra,/verifyAuthenticatedStagedLegacyMedia/);
+assert.match(infra,/verifyOnly/);
+assert.match(infra,/onProgress:/);
+
 assert.doesNotMatch(infra,/\.remove\(|\.delete\(|live_memory_v3_activate_/);
 console.log("V3 private media staging passed: exact byte copy, immutable retry, corruption rejection, account scope and no V2 writes.");
