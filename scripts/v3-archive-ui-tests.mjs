@@ -54,7 +54,12 @@ assert.doesNotMatch(workspace,/PAGE_SIZE|pageIndex|totalPages|上一页|下一�
 assert.match(workspace,/showStatusCenter=\{false\}/);
 assert.match(workspace,/canEditLegacyAccount/);
 assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
-assert.match(workspace,/<ArchivePage records=/);
+assert.match(workspace,/<V3ArchiveCollections mode=/);
+assert.doesNotMatch(workspace,/<ArchivePage records=/);
+assert.match(workspace,/facets\.cities\.map/);
+assert.match(workspace,/facets\.years\.map/);
+assert.match(workspace,/favoritesOnly/);
+assert.match(workspace,/sortMode===\"edited\"/);
 for(const label of ["画报","票夹","票根","日历","城市/场馆","票价","汇总"]){
   assert.ok(workspace.includes('"' + label + '"'),"Missing historic archive view: "+label);
 }
