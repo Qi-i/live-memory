@@ -18,7 +18,7 @@ export interface LegacyProvenanceResult {
   sourceDigest: string;
 }
 function canonical(value: unknown): string {
-  if (value === null || typeof value !== "object") return JSON.stringify(value);
+  if (value === null || typeof value !== "object") return JSON.stringify(value) ?? "undefined";
   if (Array.isArray(value)) return "[" + value.map(canonical).join(",") + "]";
   const object = value as Record<string, unknown>;
   return "{" + Object.keys(object).sort().map(k=>
@@ -34,10 +34,10 @@ function comparablePayload(input: unknown): Record<string, unknown> {
   void _syncedAt;
   return safe;
 }
-export function verifyLegacyAccountProvenance(
+export async function verifyLegacyAccountProvenance(
   personalRows: readonly LegacyProvenanceRow[],
   accountRows: readonly LegacyProvenanceRow[],
-): LegacyProvenanceResult {
+): Promise<LegacyProvenanceResult> {
   if (!personalRows.length || !accountRows.length || 
       personalRows.length !== accountRows.length || personalRows.length>2000) {
     throw Error("V3_LEGACY_PROVENANCE_RECORD_COUNT_MISMATCH");
@@ -66,9 +66,11 @@ export function verifyLegacyAccountProvenance(
     const backupContent=comparablePayload(backed.payload);
     if (canonical(oldContent)!==canonical(backupContent))
       throw Error("V3_LEGACY_PROVENANCE_CONTENT_MISMATCH");
-    fingerprints.push(row.id+"|"+canonical(oldContent)+"|"+Boolean(row.deleted_at));
+    fingerprints.push(canonical([row.id,oldContent,Boolean(row.deleted_at)]));
   }
-  // Internal-only stability marker; contains no bearer owner key and never
-  // leaves memory or appears in the downloaded migration manifest.
-  return {matchedRecords:seen.size,sourceDigest:canonical(fingerprints.sort())};
+  // Cryptographic source fingerprint; never expose raw payloads or a bearer key.
+  const digest=await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode(canonical(fingerprints.sort())));
+  return {matchedRecords:seen.size,sourceDigest:Array.from(
+    new Uint8Array(digest),b=>b.toString(16).padStart(2,"0")).join("")};
 }
