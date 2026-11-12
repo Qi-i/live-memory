@@ -171,7 +171,7 @@ assert.match(infra,/upsert:false/);
 assert.match(infra,/ctx\.account\.storage\.from\(staging\)\.download\(/);
 assert.match(infra,/runtime\.readPersonalCloudForPortableBackup\(\),loadRows\(\),listObjects\(\)/);
 assert.match(panel,/stageLegacyMedia\(\)/);
-assert.match(panel,/>开始原图私有复制</);
+assert.match(panel,/开始原图私有复制/);
 assert.match(panel,/v3-migration-live-status/);
 assert.match(panel,/已开始原图私有复制：正在验证登录身份/);
 assert.match(panel,/if\(!personalConnected\)\{/);
