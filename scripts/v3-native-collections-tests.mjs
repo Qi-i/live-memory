@@ -60,6 +60,8 @@ assert.match(share,/useState<ItemLimit>\("all"\)/);
 for(const name of ["selectV3TicketAlbum","selectV3LongTimeline","selectV3CityStory","selectV3EditorialPicks"]){
   assert.match(share,new RegExp(name));
 }
-assert.match(migration,/useEffect\(\(\)=>\{[\s\S]*await inspect\("account"\)/);
-assert.match(migration,/if\(!cancelled && personalConnected/);
+assert.doesNotMatch(migration,/await inspect\("account"\)/);
+assert.match(migration,/onClick=\{\(\)=>void stageLegacyMedia\(\)\}/);
+assert.match(migration,/role="status"\s*aria-live="polite"/);
+assert.match(migration,/已开始原图私有复制/);
 console.log("V3 native views, city/artist/cost aggregation, share safety, one-account read-only auto-audit passed.");
