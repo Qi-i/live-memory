@@ -321,6 +321,34 @@ export function V3RealWorkspace() {
         if(!alive||currentStorageScope()!==scope)return;
         accountRuntime.current={scope,runtime};
         setCloudMode({scope,mode,error:""});
+        if(mode==="v3"){
+          // A freshly installed browser has no V2 IndexedDB. Recover the
+          // already-owned cloud archive automatically; do not require JSON
+          // export/import or a second manual "approve initial download" click.
+          // Never auto-merge when any local history or conflict exists.
+          try{
+            const local=await listRecords();
+            if(!alive||currentStorageScope()!==scope)return;
+            if(local.length===0){
+              const review=await runtime.audit();
+              if(!alive||currentStorageScope()!==scope)return;
+              if(!review.requiresMigrationReview &&
+                 review.actions["push-new"]===0 &&
+                 review.actions["pull-new"]>0){
+                await runtime.synchronize({
+                  v2AutoSyncDisabled:true,initialTransferApproved:true,
+                });
+                if(alive&&currentStorageScope()===scope){
+                  setReload(n=>n+1);
+                  setNotice("已从当前账号的 V3 云端自动恢复档案及原图引用。");
+                }
+              }
+            }
+          }catch{
+            if(alive&&currentStorageScope()===scope)
+              setNotice("自动恢复未完成，已保留原有档案；可通过安全同步重试。");
+          }
+        }
       })().catch(()=>{
         if(alive&&currentStorageScope()===scope)
           setCloudMode({scope,mode:"v2",error:"账号写入状态无法验证，已保持只读。"});
