@@ -205,6 +205,12 @@ try {
   // Device-only users can still restore their own portable backup without
   // receiving any authenticated ownerKey/Cloud migration operation.
   await page.locator(".v3-real-more-tools > summary").click();
+  const menuHit=await page.getByRole("button",{name:"数据与备份",exact:true}).evaluate(button=>{
+    const rect=button.getBoundingClientRect();
+    const top=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
+    return top===button||button.contains(top);
+  });
+  if(!menuHit)throw Error("V3 featured hero intercepts the secondary data menu");
   await page.getByRole("button",{name:"数据与备份",exact:true}).click();
   await page.getByRole("heading",{name:"数据与备份"}).waitFor();
   if(await page.locator(".v3-migration-panel").count())
