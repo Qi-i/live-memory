@@ -17,6 +17,7 @@ import { hasPersonalCloudConnection } from "../../supabase";
 import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
 import { ActionToolbar, MapSplitPane, WorkspaceShell } from "../system/WorkspaceShell";
+import { useDialogBehavior } from "../useDialogBehavior";
 import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
 import { AdaptivePoster } from "./AdaptivePoster";
@@ -89,16 +90,12 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
   onZoom:(media:MediaAsset)=>void;
 }){
   const src=useCachedMediaSrc(primaryMedia(record));
-  const closeRef=useRef<HTMLButtonElement>(null);
-  useEffect(()=>{
-    closeRef.current?.focus();
-    const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
-    document.addEventListener("keydown",onKey);
-    return()=>document.removeEventListener("keydown",onKey);
-  },[onClose]);
+  const detailRef=useDialogBehavior<HTMLElement>({
+    onClose, focusSelector:'button[aria-label="关闭档案详情"]',
+  });
   return <div className="v3-real-modal-backdrop" role="presentation"
     onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
-    <section className="v3-real-modal v3-real-rich-detail" role="dialog"
+    <section ref={detailRef} className="v3-real-modal v3-real-rich-detail" role="dialog"
       aria-modal="true" aria-label={record.title+"（档案详情）"}>
       <header>
         <div><small>LIVE MEMORY · EVENT ARCHIVE</small><h2>{record.title}</h2>
@@ -106,13 +103,14 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
         <div className="v3-real-detail-header-actions">
           {onEdit&&<button type="button" aria-label="编辑本机演出"
             onClick={()=>onEdit(record)}>编辑</button>}
-          <button type="button" aria-label="关闭档案详情" ref={closeRef} onClick={onClose}>×</button>
+          <button type="button" aria-label="关闭档案详情" onClick={onClose}>×</button>
         </div>
       </header>
       <div className="v3-real-modal-body">
         <button className="v3-real-modal-art" type="button"
+          disabled={!primaryMedia(record)}
           onClick={()=>{const art=primaryMedia(record);if(art)onZoom(art);}}
-          aria-label="放大主海报">
+          aria-label={primaryMedia(record)?"放大主海报":"此记录没有可放大的主海报"}>
           {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
         </button>
         <dl>
@@ -141,7 +139,7 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
         <div className="v3-real-detail-actions">
           <button type="button" onClick={()=>onShare(record)}>分享本场</button>
           {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
-          {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
+          {onTrash&&<button className="v3-real-detail-danger" type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
           <button type="button" onClick={onClose}>返回档案</button>
         </div>
       </footer>

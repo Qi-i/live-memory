@@ -1,55 +1,186 @@
-/* Production V3's story-studio experience. Classic V2 ShareStudio is untouched. */
+/* V3 presentation layer only. V2 ShareStudio and exported artwork are untouched. */
 .share-studio-stage.is-v3 {
-  grid-template-columns:minmax(355px,440px) minmax(0,1fr);
-  color:#232e49;
-  background:radial-gradient(circle at 80% 8%,rgba(180,180,246,.32),transparent 42%),
-    linear-gradient(135deg,#e6eafb,#eff5fa 63%,#e9e9f6);
+  --share-ui-ink: var(--v3-ink, #182542);
+  --share-ui-muted: var(--v3-muted, #65718a);
+  --share-ui-accent: var(--v3-accent, #675bb6);
+  --share-ui-border: var(--v3-card-border, rgba(141,156,200,.26));
+  --share-ui-control: var(--v3-control-bg, #fff);
+  --share-ui-soft: var(--v3-accent-tint, #ece9fb);
+  grid-template-columns: minmax(355px,430px) minmax(0,1fr);
+  color: var(--share-ui-ink);
+  background:
+    radial-gradient(circle at 80% 8%, rgba(180,180,246,.24),transparent 44%),
+    linear-gradient(135deg,#e9edfa,#f3f7fb 63%,#ececf7);
 }
 .share-studio-stage.is-v3 .share-studio-panel {
-  gap:13px;
-  padding:20px 21px 24px;
-  background:rgba(252,252,255,.97);
-  border-right:1px solid rgba(120,130,180,.18);
-  box-shadow:15px 0 50px rgba(54,60,110,.12);
+  gap:12px;
+  padding:17px 19px 21px;
+  color:var(--share-ui-ink);
+  background:rgba(253,253,255,.97);
+  border-right:1px solid var(--share-ui-border);
+  box-shadow:12px 0 40px rgba(54,60,110,.11);
 }
-.share-studio-stage.is-v3 .share-intro-copy {gap:6px;}
-.share-studio-stage.is-v3 .share-intro-copy>span {color:#7060b8;letter-spacing:.15em;}
-.share-studio-stage.is-v3 .share-intro-copy h2 {font-size:clamp(21px,1.8vw,26px);line-height:1.25;}
-.share-studio-stage.is-v3 .share-intro-copy p {display:block;color:#6b7892;line-height:1.55;font-size:12px;font-weight:500;}
+.share-studio-stage.is-v3 .share-studio-heading > button {
+  width:40px;
+  height:40px;
+  border-color:var(--share-ui-border);
+  border-radius:11px;
+  background:var(--share-ui-control);
+}
+.share-studio-stage.is-v3 .share-intro-copy {gap:5px;}
+.share-studio-stage.is-v3 .share-intro-copy > span {
+  color:var(--share-ui-accent);
+  font-size:11px;
+  letter-spacing:.11em;
+}
+.share-studio-stage.is-v3 .share-intro-copy h2 {
+  font-size:clamp(21px,1.8vw,26px);
+  line-height:1.25;
+}
+.share-studio-stage.is-v3 .share-intro-copy p {
+  display:block;
+  color:var(--share-ui-muted);
+  font-size:13px;
+  font-weight:500;
+  line-height:1.55;
+}
 .share-studio-stage.is-v3 .share-studio-summary {
-  padding:13px 15px; border-color:#dadbf1;
-  background:linear-gradient(122deg,#f0edff,#e8f2f8);
+  padding:12px 14px;
+  border:1px solid var(--share-ui-border);
+  border-radius:14px;
+  background:linear-gradient(120deg,var(--share-ui-soft),#ecf5f8);
 }
-.share-studio-stage.is-v3 .share-studio-summary strong {color:#665abb;}
-.share-studio-stage.is-v3 .share-v3-presets {display:grid;gap:12px;padding:15px;border:1px solid #dcdaf2;border-radius:18px;background:linear-gradient(145deg,#eeecff,#f5f7ff 70%,#eaf3fb);}
+.share-studio-stage.is-v3 .share-studio-summary strong {color:var(--share-ui-accent);}
+.share-studio-stage.is-v3 .share-v3-presets {
+  display:grid;
+  gap:11px;
+  padding:14px;
+  border:1px solid var(--share-ui-border);
+  border-radius:17px;
+  background:linear-gradient(145deg,var(--share-ui-soft),#f6f8fd 75%,#edf5fa);
+}
 .share-studio-stage.is-v3 .share-v3-preset-intro {display:grid;gap:4px;}
 .share-studio-stage.is-v3 .share-v3-preset-intro strong {font-size:14px;}
-.share-studio-stage.is-v3 .share-v3-preset-intro small {font-size:11px;line-height:1.5;color:#687590;}
-.share-studio-stage.is-v3 .share-v3-preset-actions {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;}
-.share-studio-stage.is-v3 .share-v3-preset-actions button {min-height:39px;padding:8px 12px;border:1px solid #d6d7ec;border-radius:11px;background:white;color:#40486f;font:inherit;font-size:12px;font-weight:750;cursor:pointer;}
-.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured {border-color:#7769cf;background:#6c60c7;color:#fff;}
-.share-studio-stage.is-v3 .share-v3-preset-actions button:disabled {opacity:.5;cursor:not-allowed;}
+.share-studio-stage.is-v3 .share-v3-preset-intro small {
+  color:var(--share-ui-muted);
+  font-size:12px;
+  line-height:1.5;
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions {
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions button {
+  display:grid;
+  align-content:center;
+  gap:4px;
+  min-height:58px;
+  padding:9px 12px;
+  border:1px solid var(--share-ui-border);
+  border-radius:12px;
+  color:var(--share-ui-ink);
+  background:var(--share-ui-control);
+  font:inherit;
+  font-size:13px;
+  font-weight:720;
+  line-height:1.35;
+  text-align:left;
+  cursor:pointer;
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions button small {
+  display:block;
+  color:var(--share-ui-muted);
+  font-size:11px;
+  font-weight:550;
+  line-height:1.35;
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured {
+  grid-column:span 2;
+  min-height:52px;
+  border-color:var(--share-ui-accent);
+  background:var(--share-ui-accent);
+  color:#fff;
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured small {
+  color:rgba(255,255,255,.84);
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions button:disabled {
+  opacity:.52;
+  cursor:not-allowed;
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions button:hover:not(:disabled) {
+  border-color:var(--share-ui-accent);
+  box-shadow:0 5px 16px rgba(75,68,151,.13);
+}
 .share-studio-stage.is-v3 .share-category-control,
 .share-studio-stage.is-v3 .share-format-control,
 .share-studio-stage.is-v3 .share-scope-control,
-.share-studio-stage.is-v3 .share-count-control {background:#edf0f9;border-color:#dce2f1;}
+.share-studio-stage.is-v3 .share-count-control {
+  border-color:var(--share-ui-border);
+  background:rgba(239,242,250,.9);
+}
+.share-studio-stage.is-v3 :is(.share-category-control,.share-format-control,.share-scope-control,.share-count-control) button {
+  min-height:38px;
+  font-size:12px;
+}
 .share-studio-stage.is-v3 .share-category-control button.is-active,
 .share-studio-stage.is-v3 .share-format-control button.is-active,
 .share-studio-stage.is-v3 .share-scope-control button.is-active,
-.share-studio-stage.is-v3 .share-count-control button.is-active {background:#d8d4f9;color:#353168;box-shadow:0 3px 10px rgba(67,61,145,.12);}
-.share-studio-stage.is-v3 .share-export-button {background:#6259ba;border-color:#6259ba;color:#fff;}
-.share-studio-stage.is-v3 .share-preview-area {background:transparent;}
-@media(max-width:800px) {
-  .share-studio-stage.is-v3 {grid-template-columns:1fr;}
-  .share-studio-stage.is-v3 .share-studio-panel {padding:14px;}
+.share-studio-stage.is-v3 .share-count-control button.is-active {
+  background:var(--share-ui-soft);
+  color:var(--share-ui-accent);
+  box-shadow:0 3px 10px rgba(67,61,145,.09);
 }
-
-/* The five working V3 share recipes use the same print/export renderer. */
-.share-studio-stage.is-v3 .share-v3-preset-actions button {display:grid;align-content:center;gap:4px;min-height:59px;text-align:left;padding:10px 12px;border-radius:13px;}
-.share-studio-stage.is-v3 .share-v3-preset-actions button small {display:block;font-size:10px;font-weight:560;opacity:.7;}
-.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured {grid-column:span 2;min-height:52px;}
-.share-studio-stage.is-v3 .share-v3-preset-actions button:hover:not(:disabled) {box-shadow:0 6px 17px rgba(75,68,151,.17);transform:translateY(-1px);}
-.share-studio-stage.is-v3 .share-studio-summary {border-radius:14px;}
-@media(max-width:500px){
-  .share-studio-stage.is-v3 .share-v3-preset-actions button {padding:8px 9px;min-height:56px;}
+.share-studio-stage.is-v3 .share-export-button {
+  min-height:44px;
+  border-color:var(--share-ui-accent);
+  background:var(--share-ui-accent);
+  color:#fff;
+  font-size:14px;
+}
+.share-studio-stage.is-v3 .share-preview-area {background:transparent;}
+.share-studio-stage.is-v3 .share-preview-toolbar {
+  border-color:var(--share-ui-border);
+  background:rgba(253,253,255,.95);
+}
+.share-studio-stage.is-v3 .share-preview-toolbar button {
+  min-height:36px;
+  font-size:12px;
+}
+.share-studio-stage.is-v3 .share-preview-toolbar button.is-active {
+  color:var(--share-ui-accent);
+  background:var(--share-ui-soft);
+}
+.share-studio-stage.is-v3 button:focus-visible {
+  outline:3px solid rgba(103,91,182,.45);
+  outline-offset:2px;
+}
+@media (max-width:860px) {
+  .share-studio-stage.is-v3 {display:block;overflow-y:auto;}
+  .share-studio-stage.is-v3 .share-studio-panel {
+    position:sticky;
+    top:0;
+    max-height:48dvh;
+    padding:13px 14px;
+    border-right:0;
+    border-bottom:1px solid var(--share-ui-border);
+  }
+  .share-studio-stage.is-v3 .share-preview-area {
+    min-height:52dvh;
+  }
+  .share-studio-stage.is-v3 .share-preview-area.is-fixed {
+    height:52dvh;
+  }
+}
+@media (max-width:500px) {
+  .share-studio-stage.is-v3 .share-v3-presets {padding:11px;}
+  .share-studio-stage.is-v3 .share-v3-preset-actions button {
+    min-height:54px;
+    padding:8px 9px;
+    font-size:12px;
+  }
+}
+@media (prefers-reduced-motion:reduce) {
+  .share-studio-stage.is-v3 .share-v3-preset-actions button {transition:none;}
 }
