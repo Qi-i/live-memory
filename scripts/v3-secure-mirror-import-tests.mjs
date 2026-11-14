@@ -204,6 +204,12 @@ assert.match(infra,/download\(expectedPath\)/);
 assert.doesNotMatch(infra,/echo_text_backups|echo_passkey_records|\.remove\(|\.delete\(/);
 assert.match(ui,/runMirrorImport\("inspect"\)/);
 assert.match(ui,/runMirrorImport\("copy"\)/);
+assert.match(ui,/const serializedBackup=JSON\.stringify\(backup\)/);
+assert.match(ui,/if\(cloudRuntime\)\{[\s\S]*?setMirrorFile\(new File\(\[serializedBackup\]/);
+assert.match(ui,/setMirrorPreview\(null\)/);
+assert.match(ui,/已从完整备份自动载入私有镜像预演/);
+assert.doesNotMatch(ui,/importSecureArchiveMirror\(backup\)/,
+  "A verified export must never auto-upload without separate approval");
 assert.match(ui,/确认复制到账号私有镜像（不替换 V2）/);
 assert.match(ui,/mirrorApprovalFingerprint\(fileSha256,review\)/);
 assert.match(ui,/mirrorApprovalFingerprint\(fileSha256,currentPlan\)/);
