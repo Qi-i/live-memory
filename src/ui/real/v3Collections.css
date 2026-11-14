@@ -86,3 +86,45 @@
 .v3-collection-summary-content>div>button small{color:#929cb0;white-space:nowrap}
 @container(max-width:880px){.v3-collection-showcase-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.v3-collection-showcase-grid>.is-featured{grid-column:span 2;grid-row:span 2}.v3-collection-wallet-grid,.v3-collection-stubs,.v3-collection-summary-grid{grid-template-columns:1fr}}
 @container(max-width:570px){.v3-collection-showcase-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.v3-collection-showcase-grid>.is-featured{grid-column:span 2;grid-row:auto}.v3-collection-showcase-grid>article{padding:6px}.v3-collection-showcase-caption{padding:3px}.v3-collection-stub{grid-template-columns:85px minmax(0,1fr) 17px}.v3-collection-stub-main{padding:11px 8px}.v3-collection-stub-main>h3{font-size:13px}.v3-collection-wallet{grid-template-columns:95px minmax(0,1fr)}.v3-collection-calendar-grid{gap:3px}.v3-collection-calendar-grid [role=gridcell]{min-height:78px;padding:4px}.v3-collection-calendar-grid [role=gridcell] button{font-size:10px;padding:4px}.v3-collection-cost-list>button{grid-template-columns:70px minmax(0,1fr) 72px;gap:5px;padding:9px}.v3-collection-cost-list>button time,.v3-collection-cost-list>button span{font-size:10px}.v3-collection-summary-grid>article{grid-template-columns:68px minmax(0,1fr);gap:8px}.v3-collection-cost-totals article{padding:12px}.v3-collection-cost-totals strong{font-size:16px}}
+
+
+/* Readable information density across the seven native archive views:
+ * reduce decorative whitespace rather than shrinking content on small screens. */
+.v3-collection{gap:14px;padding:clamp(13px,1.6vw,20px)}
+.v3-collection>header{gap:4px}
+.v3-collection>header>p{font-size:13px;line-height:1.48}
+.v3-collection-meta{font-size:12.5px;line-height:1.45}
+.v3-collection-showcase-caption>strong{font-size:14px;line-height:1.42}
+.v3-collection-showcase-grid>article{gap:7px}
+.v3-collection-wallet-info{gap:7px}
+.v3-collection-wallet-info>span,.v3-collection-wallet-info>p,
+.v3-collection-wallet-info>div:not(.v3-collection-actions){font-size:12.5px;line-height:1.45}
+.v3-collection-wallet-info>h3{font-size:16px}
+.v3-collection-stub-main>p,.v3-collection-stub-main dt,
+.v3-collection-stub-main dd{font-size:12.5px}
+.v3-collection-places-grid p,.v3-collection-summary-content>p{font-size:12.5px}
+.v3-collection-places-grid>article>div>button,
+.v3-collection-summary-content>div>button{font-size:13px}
+.v3-collection-places-grid>article>div>button time{font-size:12px}
+.v3-collection-cost-list>button time{font-size:12px}
+.v3-collection-cost-list>button strong,.v3-collection-cost-list>button span{font-size:13px}
+.v3-collection-calendar-grid [role=gridcell] button{font-size:12px;line-height:1.4}
+.v3-collection-month-nav button:last-child{font-size:12px}
+/* Seven columns remain legible; mobile calendars scroll rather than squeeze
+ * the actual event titles into 10px text. */
+.v3-collection-calendar{overflow-x:auto}
+@container(max-width:570px){
+  .v3-collection-calendar-grid{min-width:660px;gap:5px}
+  .v3-collection-calendar-grid [role=gridcell]{min-height:96px;padding:7px}
+  .v3-collection-calendar-grid [role=gridcell] button{font-size:12px;padding:6px}
+  .v3-collection-cost-list>button{grid-template-columns:minmax(0,1fr) auto;gap:5px 10px;padding:11px}
+  .v3-collection-cost-list>button strong{grid-column:1;grid-row:1;font-size:13px;white-space:normal}
+  .v3-collection-cost-list>button time{grid-column:1;grid-row:2;font-size:12px}
+  .v3-collection-cost-list>button span{grid-column:2;grid-row:1/span 2;align-self:center;font-size:13px;white-space:nowrap}
+  .v3-collection-stub-main>h3{font-size:14px}
+  .v3-collection-wallet-info>h3{font-size:15px}
+  .v3-collection-summary-grid>article{grid-template-columns:76px minmax(0,1fr);gap:10px}
+  .v3-collection-cost-totals{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .v3-collection-cost-totals article:first-child{grid-column:1/-1}
+  .v3-collection-cost-totals strong{font-size:clamp(19px,5.5vw,26px)}
+}
