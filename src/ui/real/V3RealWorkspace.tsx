@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Pencil } from "lucide-react";
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
@@ -30,9 +31,9 @@ import "./adaptivePoster.css";
 import "./v3ArchiveRefinements.css";
 import "./v3Collections.css";
 
-type Page = "档案" | "统计" | "城市" | "迁移";
+type Page = "档案" | "统计" | "城市" | "数据";
 type Mode = "海报"|"时间线"|"列表"|CollectionMode;
-const navigation: Page[] = ["档案", "统计", "城市", "迁移"];
+const navigation: Array<Exclude<Page,"数据">> = ["档案", "统计", "城市"];
 const archiveModes:Mode[]=["海报","时间线","列表"];
 
 function backToV2() {
@@ -64,13 +65,14 @@ function PosterCard({record,onOpen,onEdit,frameRatio,onNaturalRatio}:{
       <AdaptivePoster className="v3-real-poster-image" src={src}
         alt={record.title+"海报"} frameRatio={frameRatio}
         onNaturalRatio={ratio=>onNaturalRatio(record.id,ratio)}/>
-      <strong title={record.title}>{record.title}</strong>
-      <small>{record.date} · {record.city||"城市待补"}</small>
+      <span className="v3-real-poster-meta">
+        <strong title={record.title}>{record.title}</strong>
+        <small>{record.date} · {record.city||"城市待补"}</small>
+      </span>
     </button>
-    <div className="v3-real-card-actions">
-      {onEdit&&<button type="button" onClick={()=>onEdit(record)} aria-label={"编辑 "+record.title}>编辑</button>}
-      <button type="button" onClick={()=>onOpen(record.id)} aria-label={"更多详情 "+record.title}>详情</button>
-    </div>
+    {onEdit&&<button className="v3-real-poster-edit" type="button"
+      onClick={()=>onEdit(record)} aria-label={"编辑 "+record.title}
+      title={"编辑 "+record.title}><Pencil size={16} aria-hidden="true"/></button>}
   </article>;
 }
 function RecordMediaPreview({media,onOpen}:{
@@ -649,7 +651,7 @@ export function V3RealWorkspace() {
     activity={{type:"idle"}}
     toolbar={<div className="v3-real-topbar">
       <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
-        <strong>{page==="档案"?"演出档案":page==="迁移"?"备份与迁移":page}</strong>
+        <strong>{page==="档案"?"演出档案":page==="数据"?"数据与备份":page}</strong>
         <small>{canEditLocal?"本机档案可编辑"
           : canEditAccount?"当前账户 · 云端同步可用"
           : canEditLegacyAccount?"当前账户 · 本机修改待同步"
@@ -671,6 +673,15 @@ export function V3RealWorkspace() {
           {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}</button>}
         <button type="button" onClick={()=>setReload(n=>n+1)}
           disabled={snapshot.busy||syncBusy}>刷新</button>
+        <details className="v3-real-more-tools">
+          <summary aria-label="更多工具">更多</summary>
+          <div className="v3-real-more-menu">
+            <button type="button" onClick={event=>{
+              event.currentTarget.closest("details")?.removeAttribute("open");
+              setPage("数据");
+            }}>数据与备份</button>
+          </div>
+        </details>
       </div>
     </div>}
     overlay={importOpen && canEdit
@@ -805,13 +816,10 @@ export function V3RealWorkspace() {
         </section>}
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
-      {page==="迁移" && <>
-        <button type="button" className="v3-real-classic-fallback" onClick={backToV2}>
-          进入经典 V2（兼容编辑与原有同步）
-        </button>
-        <section className="v3-real-panel">
-          <header><span>SAFE DATA MANAGEMENT</span><h2>备份与迁移</h2></header>
-          <p>保护原图和现有档案；迁移必须经过真实账号授权与可恢复备份验收。</p>
+      {page==="数据" && <>
+        <section className="v3-real-panel v3-real-data-heading">
+          <header><span>DATA & BACKUP</span><h2>数据与备份</h2></header>
+          <p>原始档案与图片始终保留。备份、恢复等操作仅在手动确认后执行。</p>
         </section>
         {(canEditLocal||canEditAccount) && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
@@ -827,9 +835,16 @@ export function V3RealWorkspace() {
           <button type="button" disabled={restoreBusy} onClick={()=>setRestorePreview(null)}>取消</button>
         </div>}
     </section>}
-        {access.mode==="account" && validScope &&
-          <V3MigrationPanel settings={readSettings()} records={records}
-            personalConnected={hasPersonalCloudConnection(readSettings())}/>}
+        <details className="v3-real-advanced-data">
+          <summary>旧版兼容与同步诊断（高级）</summary>
+          <p>仅在需要核查旧版数据或同步问题时使用；不会自动迁移或改写记录。</p>
+          <button type="button" className="v3-real-classic-fallback" onClick={backToV2}>
+            打开经典版 V2
+          </button>
+          {access.mode==="account" && validScope &&
+            <V3MigrationPanel settings={readSettings()} records={records}
+              personalConnected={hasPersonalCloudConnection(readSettings())}/>}
+        </details>
       </>}
 
       {page==="城市" && <RealCityView records={records} onOpen={setSelectedId}/>}
