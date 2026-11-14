@@ -48,8 +48,11 @@ export async function importPortableBackupToSecureMirror(
      pending.alreadyPresent!==plan.alreadyPresent){
     throw Error("V3_MIRROR_REMOTE_CHANGED");
   }
-  let created=0,mediaVerified=0,alreadyPresent=plan.alreadyPresent;
-  for(const record of plan.toCreate){
+  // Existing rows may be content-identical while their Storage objects are
+  // missing or corrupted. Every referenced image must be read back and
+  // authenticated, including retries of previously accepted rows.
+  let created=0,mediaVerified=0,alreadyPresent=0;
+  for(const record of plan.allRecords){
     await io.assertAccount();
     const original=document.records.find(row=>row.id===record.id);
     if(!original)throw Error("V3_MIRROR_BACKUP_CHANGED");
@@ -95,6 +98,20 @@ export async function importPortableBackupToSecureMirror(
     created++;
   }
   await io.assertAccount();
+  if(mediaVerified!==plan.assets || created+alreadyPresent!==plan.records){
+    throw Error("V3_MIRROR_INCOMPLETE_COPY");
+  }
+  // A valid CAS acknowledgement is not a proof that all records survived.
+  // Verify the whole private mirror after the last upload/create operation.
+  const final=await io.list();
+  await io.assertAccount();
+  const accepted=new Map(final.map(row=>[row.record.id,row.record]));
+  for(const expected of plan.allRecords){
+    const actual=accepted.get(expected.id);
+    if(!actual || !recordContentEqual(actual,expected,true)){
+      throw Error("V3_MIRROR_POST_WRITE_MISMATCH");
+    }
+  }
   // No live-mode promotion, account writer activation or V2 data mutation.
   return {total:plan.records,mediaVerified,created,alreadyPresent};
 }

@@ -111,9 +111,33 @@ assert.equal(remote.get("first").record.media[0].storagePath,
   purePlan.toCreate[0].media[0].storagePath);
 assert.deepEqual(doc,original,"Importer must not mutate a portable backup");
 const repeated=await importer.importPortableBackupToSecureMirror(doc,io);
-assert.deepEqual(repeated,{total:2,mediaVerified:0,created:0,alreadyPresent:2});
+assert.deepEqual(repeated,{total:2,mediaVerified:1,created:0,alreadyPresent:2});
 assert.equal(writeCalls,2,"Retry must never overwrite identical cloud records");
-assert.equal(stageCalls,1,"Retry must not reupload images for accepted rows");
+assert.equal(stageCalls,2,"Retry must verify images even for accepted cloud rows");
+
+// A record may exist while the linked private image has been deleted.
+// Never report that record as complete without independent Storage readback.
+let missingCopiesChecked=0;
+await assert.rejects(importer.importPortableBackupToSecureMirror(doc,{
+  ...io,
+  list:read,
+  stageImage:async()=>{missingCopiesChecked++;throw Error("MIRROR_IMAGE_MISSING");},
+  create:async()=>{throw Error("MUST_NOT_OVERWRITE_EXISTING_RECORD");},
+}),/MIRROR_IMAGE_MISSING/);
+assert.equal(missingCopiesChecked,1);
+
+// A CAS-acknowledged record can disappear or diverge before the final scan.
+// Never report a successful migration with missing remote business records.
+let disappearing=false;
+await assert.rejects(importer.importPortableBackupToSecureMirror(doc,{
+  ...io,
+  list:async()=>disappearing?[]:[],
+  stageImage:async()=>{},
+  create:async row=>{
+    disappearing=true;
+    return {record:structuredClone(row),serverRevision:"1"};
+  },
+}),/V3_MIRROR_POST_WRITE_MISMATCH/);
 
 const bad=structuredClone(doc);
 bad.records[0].media[0].src="data:image/png;base64,"+Buffer.from("FAKE").toString("base64");
