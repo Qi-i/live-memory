@@ -112,8 +112,10 @@ try {
   });
   if(chrome.falseStatus||chrome.actionOverflow||chrome.overlap)
     throw Error("V3 responsive action/nav inconsistency: "+JSON.stringify({width,chrome}));
-  if(width<=800 && (!chrome.bottomVisible||chrome.bottomButtons!==4))
-    throw Error("Real mobile navigation must expose exactly four equal tabs: "+JSON.stringify(chrome));
+  if(width<=800 && (!chrome.bottomVisible||chrome.bottomButtons!==3))
+    throw Error("Real mobile navigation must expose exactly three core tabs: "+JSON.stringify(chrome));
+  if(await page.getByRole("navigation",{name:"手机主导航"}).getByRole("button",{name:"迁移",exact:true}).count())
+    throw Error("Migration is not a regular destination after V3 release");
   await page.getByLabel("更多档案视图").selectOption("画报");
   const columns=await page.locator(".v3-collection-showcase-grid").evaluate(element=>
     getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
@@ -121,6 +123,22 @@ try {
   if(columns!==expectedColumns)throw Error("V3 collection columns ignore content width: "+
     JSON.stringify({width,columns,expectedColumns}));
   await page.getByRole("button",{name:"海报",exact:true}).click();
+  const posterGeometry=await page.locator(".v3-real-poster-card").first().evaluate(card=>{
+    const media=card.querySelector(".v3-real-poster-image");
+    const edit=card.querySelector(".v3-real-poster-edit");
+    if(!media||!edit)throw Error("Poster is missing full-bleed image or contextual edit");
+    const outer=card.getBoundingClientRect(),art=media.getBoundingClientRect(),pencil=edit.getBoundingClientRect();
+    return {edgeX:Math.abs(outer.left-art.left),edgeY:Math.abs(outer.top-art.top),
+      widthDelta:Math.abs(outer.width-art.width),padding:getComputedStyle(card).padding,
+      editInside:pencil.left>=art.left&&pencil.right<=art.right&&pencil.bottom<=art.bottom,
+      actionRow:card.querySelectorAll(".v3-real-card-actions").length,
+      viewActions:card.querySelectorAll(".v3-real-poster-open").length,
+      editActions:card.querySelectorAll(".v3-real-poster-edit").length};
+  });
+  if(posterGeometry.edgeX>2||posterGeometry.edgeY>2||posterGeometry.widthDelta>2||
+    posterGeometry.padding!=="0px"||!posterGeometry.editInside||
+    posterGeometry.actionRow!==0||posterGeometry.viewActions!==1||posterGeometry.editActions!==1)
+    throw Error("Poster wall still wastes artwork width or duplicates actions: "+JSON.stringify({width,posterGeometry}));
   await page.screenshot({path:`${output}/archive-${width}.png`,fullPage:true});
   // Unified V3 facets are shared by every collection mode.
   const facetHeight=await page.getByLabel("按观演状态筛选").evaluate(node=>node.getBoundingClientRect().height);
@@ -186,8 +204,17 @@ try {
   await share.waitFor({state:"detached"});
   // Device-only users can still restore their own portable backup without
   // receiving any authenticated ownerKey/Cloud migration operation.
-  await page.getByRole("button",{name:"迁移",exact:true}).first().click();
-  await page.getByRole("heading",{name:"备份与迁移"}).waitFor();
+  await page.locator(".v3-real-more-tools > summary").click();
+  const menuHit=await page.getByRole("button",{name:"数据与备份",exact:true}).evaluate(button=>{
+    const rect=button.getBoundingClientRect();
+    const top=document.elementFromPoint(rect.x+rect.width/2,rect.y+rect.height/2);
+    return top===button||button.contains(top);
+  });
+  if(!menuHit)throw Error("V3 featured hero intercepts the secondary data menu");
+  await page.getByRole("button",{name:"数据与备份",exact:true}).click();
+  await page.getByRole("heading",{name:"数据与备份"}).waitFor();
+  if(await page.locator(".v3-migration-panel").count())
+    throw Error("Legacy cloud diagnostics mounted before the explicit advanced toggle");
   const restoreSection=page.locator(".v3-real-restore");
   if(await restoreSection.count()){
     const restoreBorder=await restoreSection.evaluate(node=>getComputedStyle(node).borderStyle);
@@ -344,9 +371,9 @@ try {
           bytes:sourceBytes.length,mimeType:"image/png",
           sha256:createHash("sha256").update(sourceBytes).digest("hex")}]},
     };
-    // Portable restore now lives under the dedicated migration page, not
-    // above every archive view.
-    await page.getByRole("button",{name:"迁移",exact:true}).first().click();
+    // Portable restore is reachable only through the secondary data utility.
+    await page.locator(".v3-real-more-tools > summary").click();
+    await page.getByRole("button",{name:"数据与备份",exact:true}).click();
     await page.locator('input[aria-label="选择 V3 原图完整备份"]').setInputFiles({
       name:"verified-restore.json",mimeType:"application/json",
       buffer:Buffer.from(JSON.stringify(document)),

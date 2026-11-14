@@ -150,6 +150,7 @@
 .v3-status-history time { color:var(--v3-muted); }
 .v3-workspace-column { display:flex; flex-direction:column; min-width:0; min-height:0; gap:var(--v3-gap); }
 .v3-global-toolbar {
+  position:relative; z-index:30;
   display:flex; align-items:center; flex:0 0 auto; min-height:74px;
   gap:13px; padding:12px 22px; border-radius:23px;
 }
