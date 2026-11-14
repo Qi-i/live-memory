@@ -123,6 +123,8 @@ try {
   await page.getByRole("button",{name:"海报",exact:true}).click();
   await page.screenshot({path:`${output}/archive-${width}.png`,fullPage:true});
   // Unified V3 facets are shared by every collection mode.
+  const facetHeight=await page.getByLabel("按观演状态筛选").evaluate(node=>node.getBoundingClientRect().height);
+  if(facetHeight<39)throw Error("V3 filter control remains too small: "+facetHeight);
   await page.getByLabel("按观演状态筛选").selectOption("watched");
   if(await page.locator(".v3-real-poster-card").count()!==1)
     throw Error("Watched status facet did not filter the same real records");
@@ -186,11 +188,19 @@ try {
   // receiving any authenticated ownerKey/Cloud migration operation.
   await page.getByRole("button",{name:"迁移",exact:true}).first().click();
   await page.getByRole("heading",{name:"备份与迁移"}).waitFor();
+  const restoreSection=page.locator(".v3-real-restore");
+  if(await restoreSection.count()){
+    const restoreBorder=await restoreSection.evaluate(node=>getComputedStyle(node).borderStyle);
+    if(restoreBorder==="none")throw Error("Backup restore entry lost the unified card boundary");
+  }
   if(await page.locator(".v3-migration-panel").count())
     throw Error("Account migration panel must not appear in device-only mode");
   await page.getByRole("button",{name:"档案",exact:true}).first().click();
   await page.getByRole("button",{name:"统计",exact:true}).click();
   await page.getByRole("heading",{name:"观演统计"}).waitFor();
+  const metricCard=page.locator(".v3-real-metrics article").first();
+  const metricBorder=await metricCard.evaluate(node=>getComputedStyle(node).borderTopStyle);
+  if(metricBorder!=="solid")throw Error("V3 metrics drifted from common card system");
   await page.screenshot({path:`${output}/stats-${width}.png`,fullPage:true});
   await page.getByRole("button",{name:"城市",exact:true}).click();
   await page.getByRole("heading",{name:"城市与场馆"}).waitFor();
