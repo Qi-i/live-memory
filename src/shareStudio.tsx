@@ -184,6 +184,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   const [showDetails, setShowDetails] = useState(experience === "v3");
   const [showBrand, setShowBrand] = useState(true);
   const [showStats, setShowStats] = useState(true);
+  const [allowMissingPosters, setAllowMissingPosters] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [preparing, setPreparing] = useState(true);
@@ -382,6 +383,23 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setSaved(false);
     setError("");
     try {
+      if(experience==="v3" && !allowMissingPosters){
+        // Checking the shared decoded-media cache is essential: a browser
+        // can show a remote <img> yet be unable to draw it into a PNG due to
+        // CDN CORS. Never silently substitute colored placeholders in V3.
+        let unavailable=0;
+        const inspected=await Promise.all(selectedRecords.map(async record=>{
+          const asset=primaryMedia(record);
+          if(!asset)return false;
+          try{return Boolean(await loadMediaImage(asset));}
+          catch{return false;}
+        }));
+        for(const valid of inspected)if(!valid)unavailable++;
+        if(unavailable){
+          setError(`有 ${unavailable} 张海报无法取得可导出的原图，已停止生成，避免出现缺图分享图。可在原图恢复后重试，或主动启用下方的占位色块选项。`);
+          return;
+        }
+      }
       const mapSnapshot = layout === "cities" ? captureShareAmapSurface() : null;
       await exportSharePng({
         records: selectedRecords,
@@ -573,6 +591,9 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
         </section>
 
         <section className="share-switches">
+          {experience==="v3" && <label className="share-v3-allow-missing"><input type="checkbox"
+            checked={allowMissingPosters} onChange={event=>setAllowMissingPosters(event.target.checked)}/>
+            <span><b>允许海报占位色块</b><small>仅在你接受缺失海报时启用；默认拒绝不完整的 PNG。</small></span></label>}
           <label><input type="checkbox" checked={showDetails} onChange={(event) => setShowDetails(event.target.checked)} /><span><b>海报信息</b><small>在海报底部叠加日期和标题。</small></span></label>
           <label><input type="checkbox" checked={showBrand} onChange={(event) => setShowBrand(event.target.checked)} /><span><b>品牌标识</b><small>显示 Live Memory Logo 与 GitHub 项目。</small></span></label>
           <label><input type="checkbox" checked={showStats} onChange={(event) => setShowStats(event.target.checked)} /><span><b>档案统计</b><small>显示城市数和已看场次。</small></span></label>
