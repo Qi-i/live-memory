@@ -98,8 +98,8 @@ assert.match(component,/v2AutoSyncDisabled:true/);
 assert.match(component,/initialTransferApproved:push\+pull>0/);
 assert.match(component,/V3_SYNC_MIGRATION_REVIEW_REQUIRED/);
 assert.match(component,/setTransferApproval\(\{scope:scoped\.scope,push,pull\}\)/);
-assert.equal((component.match(/\.synchronize\(/g)||[]).length,2,
-  "Only the two guarded V3 paths may synchronize: first-device pull or manual");
+assert.equal((component.match(/\.synchronize\(/g)||[]).length,3,
+  "Only three gated V3 paths may synchronize: first-device pull, manual, or authenticated CDN recovery");
 assert.match(component,/if\(local\.length===0\)/,
   "Automatic first-device restore must never overwrite pre-existing local history");
 assert.match(component,/review\.actions\["push-new"\]===0/,
