@@ -6,9 +6,14 @@
   --v3-border: rgba(141,156,200,.23);
   --v3-panel: rgba(250,252,255,.75);
   --v3-strong-panel: rgba(249,251,255,.92);
-  --v3-accent: #7061c7;
-  --v3-radius: 23px;
-  --v3-gap: 16px;
+  --v3-accent: #675bb6;
+  --v3-accent-tint: #ece9fb;
+  --v3-card-border: rgba(141,156,200,.26);
+  --v3-card-bg: rgba(252,253,255,.88);
+  --v3-control-bg: rgba(255,255,255,.92);
+  --v3-radius: 20px;
+  --v3-control-radius: 11px;
+  --v3-gap: 14px;
   box-sizing: border-box;
   display: grid;
   grid-template-columns: clamp(200px, 14.5vw, 246px) minmax(0,1fr);
@@ -26,6 +31,57 @@
   font-family: Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
 }
 .v3-workspace-shell *, .v3-workspace-shell *::before, .v3-workspace-shell *::after { box-sizing: border-box; }
+/* One control system across archive, collections, migration and dialogs.
+   Ticket art remains intentionally expressive, while actions stay consistent. */
+.v3-workspace-shell :is(button,input,select,textarea):focus-visible {
+  outline:3px solid rgba(103,91,182,.45);
+  outline-offset:2px;
+}
+.v3-workspace-shell .button {
+  min-height:40px;
+  border-color:var(--v3-card-border);
+  border-radius:var(--v3-control-radius);
+  color:var(--v3-ink);
+  background:var(--v3-control-bg);
+  box-shadow:none;
+  font-size:13px;
+  font-weight:720;
+}
+.v3-workspace-shell .button.primary {
+  border-color:var(--v3-accent);
+  color:#fff;
+  background:var(--v3-accent);
+  box-shadow:none;
+}
+.v3-workspace-shell .button.ghost {
+  background:var(--v3-control-bg);
+}
+.v3-workspace-shell .button.danger {
+  border-color:#a52e4a;
+  background:#a52e4a;
+  color:#fff;
+}
+.v3-workspace-shell :is(.v3-real-panel,.v3-collection,.v3-migration-provider) {
+  border-color:var(--v3-card-border);
+  background:var(--v3-card-bg);
+}
+.v3-workspace-shell :is(.v3-real-panel,.v3-collection) {
+  border-radius:var(--v3-radius);
+  box-shadow:0 10px 30px rgba(48,67,119,.075);
+}
+.v3-workspace-shell :is(.v3-real-panel,.v3-collection) > header > span {
+  color:var(--v3-accent);
+  font-size:11px;
+}
+.v3-workspace-shell :is(.v3-real-panel,.v3-collection) > header > :is(h1,h2) {
+  color:var(--v3-ink);
+  letter-spacing:-.025em;
+}
+.v3-workspace-shell :is(.v3-real-panel,.v3-collection) > header > p {
+  color:var(--v3-muted);
+  font-size:13px;
+}
+
 .v3-workspace-shell[data-v3-surface="editorial"] {
   --v3-panel: #fffefa;
   --v3-strong-panel: #fffefa;
@@ -62,7 +118,7 @@
 .v3-sidebar-navigation button, .v3-mobile-navigation button {
   border: 0; border-radius: 13px; background: transparent;
   color: var(--v3-ink); padding: 11px 14px; min-height: 43px;
-  font:inherit; font-weight: 730; text-align: left; cursor: pointer;
+  font:inherit; font-size:13px; font-weight:730; text-align:left; cursor:pointer;
 }
 .v3-sidebar-navigation button[aria-current="page"],
 .v3-mobile-navigation button[aria-current="page"] {
@@ -188,9 +244,9 @@
 @media (max-width: 800px) {
   .v3-workspace-shell { grid-template-columns:minmax(0,1fr); padding:10px; padding-bottom: max(76px,env(safe-area-inset-bottom)); }
   .v3-sidebar { display:none; }
-  .v3-global-toolbar { min-height:61px; padding:10px 15px; }
-  .v3-mobile-navigation { display:flex; position:fixed; left:10px; right:10px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:15; justify-content:space-around; padding:7px; border:1px solid rgba(255,255,255,.89); border-radius:20px; background:rgba(251,253,255,.87); backdrop-filter:blur(22px); box-shadow:0 12px 35px rgba(40,48,91,.2); }
-  .v3-mobile-navigation button { text-align:center; font-size:12px; min-height:44px; }
+  .v3-global-toolbar { min-height:61px; padding:10px 14px; }
+  .v3-mobile-navigation { display:flex; position:fixed; left:10px; right:10px; bottom:max(8px,env(safe-area-inset-bottom)); z-index:15; justify-content:space-around; gap:4px; padding:7px; border:1px solid var(--v3-card-border); border-radius:18px; background:rgba(251,253,255,.96); backdrop-filter:blur(22px); box-shadow:0 12px 35px rgba(40,48,91,.16); }
+  .v3-mobile-navigation button { flex:1 1 0; min-width:0; text-align:center; font-size:13px; min-height:44px; padding:8px 5px; white-space:nowrap; }
   .v3-mobile-status { display:block; position:relative; flex:0 0 44px; align-self:center; }
   .v3-mobile-status .v3-status-center { border-radius:13px; overflow:visible; background:rgba(255,255,255,.8); }
   .v3-mobile-status .v3-status-trigger { display:grid; place-items:center; width:44px; height:44px; padding:0; border-radius:13px; }

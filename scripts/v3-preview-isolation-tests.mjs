@@ -54,6 +54,8 @@ async function visit(file) {
 // The helper below verifies that each import is an existing reviewed source.
 const allowed = [
   "src/v3Standalone.tsx",
+  // Reuse only the reviewed static SVG brand component; no storage/client imports.
+  "src/brand.tsx",
   "src/ui/system/V3Preview.tsx",
   "src/ui/system/WorkspaceShell.tsx",
   "src/ui/system/DemoViews.tsx",

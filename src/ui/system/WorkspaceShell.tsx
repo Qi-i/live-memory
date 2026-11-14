@@ -114,7 +114,7 @@ export function WorkspaceShell({
       {mobileNavigation && (
         <nav className="v3-mobile-navigation" aria-label="手机主导航">
           {mobileNavigation}
-          <div className="v3-mobile-status"><StatusCenter current={activity} history={activityHistory} demo={demoStatus} /></div>
+          {showStatusCenter && <div className="v3-mobile-status"><StatusCenter current={activity} history={activityHistory} demo={demoStatus} /></div>}
         </nav>
       )}
       {overlay && <div className="v3-overlay-host">{overlay}</div>}

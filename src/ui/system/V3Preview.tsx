@@ -1,8 +1,10 @@
 import { useMemo, useState } from "react";
+import { BrandMark } from "../../brand";
 import { ActionToolbar, MapSplitPane, StageHero, WorkspaceShell, type StatusHistoryItem } from "./WorkspaceShell";
 import { DemoArchiveView, DemoDetail, DemoEditor, DemoInfo, DemoStatistics } from "./DemoViews";
 import { demoShows, type DemoShow } from "./demoData";
 import type { SyncActivity } from "../../core/sync/policy";
+import "../../brand.css";
 import "./preview.css";
 
 const navigation = ["档案", "统计", "地图", "设置", "管理"] as const;
@@ -144,7 +146,7 @@ export function V3Preview() {
     <WorkspaceShell
       appearance={material}
       demoStatus
-      brand={<><span className="v3-preview-brand">◈</span><strong className="v3-preview-brand-name">Live Memory</strong><small>V3 · 独立演示</small></>}
+      brand={<><span className="v3-preview-brand"><BrandMark size={36} title="Live Memory 标识" /></span><strong className="v3-preview-brand-name">Live Memory</strong><small>V3 · 独立演示</small></>}
       navigation={navigation.map((item) =>
         <button key={item} type="button" aria-current={item === page ? "page" : undefined}
           onClick={() => selectPage(item)}>{item}</button>)}

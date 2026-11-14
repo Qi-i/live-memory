@@ -85,6 +85,42 @@ try {
     docHeight:document.documentElement.scrollHeight,
   }));
   if(layout.docWidth>width+2||layout.docHeight>height+2)throw Error("V3 real workspace escaped viewport: "+JSON.stringify(layout));
+  const chrome=await page.evaluate(()=>{
+    const toolbar=document.querySelector(".v3-global-toolbar");
+    const actions=document.querySelector(".v3-real-topbar-actions");
+    const bottom=document.querySelector(".v3-mobile-navigation");
+    if(!toolbar||!actions||!bottom)throw Error("Missing V3 navigation or action group");
+    const toolbarBox=toolbar.getBoundingClientRect();
+    const actionBox=actions.getBoundingClientRect();
+    const buttons=[...actions.querySelectorAll("button")].map(element=>{
+      const box=element.getBoundingClientRect();
+      return {left:box.left,right:box.right,top:box.top,bottom:box.bottom,
+        height:box.height,width:box.width};
+    });
+    return {
+      bottomVisible:getComputedStyle(bottom).display!=="none",
+      bottomButtons:bottom.querySelectorAll("button").length,
+      falseStatus:bottom.querySelectorAll(".v3-mobile-status").length,
+      actionOverflow:actionBox.left<toolbarBox.left-2||
+        actionBox.right>toolbarBox.right+2||
+        buttons.some(button=>button.left<toolbarBox.left-2||
+          button.right>toolbarBox.right+2||button.height<32),
+      overlap:buttons.some((a,i)=>buttons.slice(i+1).some(b=>
+        Math.min(a.right,b.right)-Math.max(a.left,b.left)>3 &&
+        Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>3)),
+    };
+  });
+  if(chrome.falseStatus||chrome.actionOverflow||chrome.overlap)
+    throw Error("V3 responsive action/nav inconsistency: "+JSON.stringify({width,chrome}));
+  if(width<=800 && (!chrome.bottomVisible||chrome.bottomButtons!==4))
+    throw Error("Real mobile navigation must expose exactly four equal tabs: "+JSON.stringify(chrome));
+  await page.getByLabel("更多档案视图").selectOption("画报");
+  const columns=await page.locator(".v3-collection-showcase-grid").evaluate(element=>
+    getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
+  const expectedColumns=width>1180?5:width>610?3:2;
+  if(columns!==expectedColumns)throw Error("V3 collection columns ignore content width: "+
+    JSON.stringify({width,columns,expectedColumns}));
+  await page.getByRole("button",{name:"海报",exact:true}).click();
   await page.screenshot({path:`${output}/archive-${width}.png`,fullPage:true});
   // Unified V3 facets are shared by every collection mode.
   await page.getByLabel("按观演状态筛选").selectOption("watched");

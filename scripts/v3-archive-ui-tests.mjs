@@ -33,6 +33,11 @@ const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",impo
 const collections=await readFile(new URL("../src/ui/real/V3ArchiveCollections.tsx",import.meta.url),"utf8");
 const hero=await readFile(new URL("../src/ui/real/V3FeaturedHero.tsx",import.meta.url),"utf8");
 const css=await readFile(new URL("../src/ui/real/realWorkspace.css",import.meta.url),"utf8");
+const shell=await readFile(new URL("../src/ui/system/WorkspaceShell.tsx",import.meta.url),"utf8");
+const shellCss=await readFile(new URL("../src/ui/system/workspace.css",import.meta.url),"utf8");
+const collectionCss=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
+const migrationCss=await readFile(new URL("../src/ui/system/v3MigrationPanel.css",import.meta.url),"utf8");
+const demoPreview=await readFile(new URL("../src/ui/system/V3Preview.tsx",import.meta.url),"utf8");
 const adaptive=await readFile(new URL("../src/ui/real/adaptivePoster.css",import.meta.url),"utf8");
 const ratioSource=await readFile(new URL("../src/ui/real/posterFraming.ts",import.meta.url),"utf8");
 const ratioJs=ts.transpileModule(ratioSource,{compilerOptions:{
@@ -53,6 +58,28 @@ assert.match(workspace,/Object\.values\(posterRatios\)/);
 assert.match(workspace,/active\.map\(record=><PosterCard/);
 assert.doesNotMatch(workspace,/PAGE_SIZE|pageIndex|totalPages|上一页|下一页/);
 assert.match(workspace,/showStatusCenter=\{false\}/);
+assert.match(shell,/showStatusCenter && <div className="v3-mobile-status">/,
+  "V3 real mode cannot show an idle/false mobile sync indicator");
+assert.match(workspace,/<BrandMark size=\{36\}/);
+assert.match(demoPreview,/<BrandMark size=\{36\}/);
+assert.doesNotMatch(workspace,/>◈</);
+assert.doesNotMatch(demoPreview,/>◈</);
+assert.match(workspace,/className="v3-real-topbar-actions"/,
+  "Real archive actions need a stable layout group across account modes");
+assert.match(css,/\.v3-real-topbar-actions \{/);
+assert.doesNotMatch(css,/nth-last-child/,
+  "Account-dependent button order must not determine mobile geometry");
+assert.match(css,/grid-template-columns:repeat\(auto-fit,minmax\(min\(100%,104px\),1fr\)\)/);
+assert.match(shellCss,/--v3-card-border:/);
+assert.match(shellCss,/--v3-control-bg:/);
+assert.match(shellCss,/\.v3-workspace-shell :is\(\.v3-real-panel,\.v3-collection,\.v3-migration-provider\)/);
+assert.match(collectionCss,/container-type:inline-size/);
+assert.match(collectionCss,/@container\(max-width:880px\)/);
+assert.match(collectionCss,/@container\(max-width:570px\)/);
+assert.match(migrationCss,/--v3-migration-accent:var\(--v3-accent/);
+assert.doesNotMatch(migrationCss,/var\(--accent, #2563eb\)/,
+  "V2 default blue must not replace the V3 design language");
+
 assert.match(workspace,/canEditLegacyAccount/);
 assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
 assert.match(workspace,/<V3ArchiveCollections mode=/);
