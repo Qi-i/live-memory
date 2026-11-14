@@ -202,6 +202,19 @@ try {
        shareGeometry.scrollHeight<=shareGeometry.clientHeight))
     throw Error("V3 share workspace hides preview or overflows: "+JSON.stringify({width,shareGeometry}));
 
+  if(width<=800){
+    const closeGeometry=await share.getByRole("button",{name:"退出分享制作"}).evaluate(node=>{
+      const rect=node.getBoundingClientRect();
+      return {top:rect.top,right:rect.right,width:rect.width,
+        viewportWidth:innerWidth,viewportHeight:innerHeight};
+    });
+    if(closeGeometry.top<0||closeGeometry.top>74||
+       closeGeometry.right>closeGeometry.viewportWidth||
+       closeGeometry.width<38){
+      throw Error("V3 mobile preview-first sharing obscures the exit button: "+
+        JSON.stringify(closeGeometry));
+    }
+  }
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/纪念票根/}).click();
   await share.locator(".share-layout-canvas-tickets").waitFor({state:"visible"});
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/时间长卷/}).click();
