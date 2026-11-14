@@ -11,8 +11,8 @@ assert.equal((result.diagnostics||[]).filter(x=>x.category===ts.DiagnosticCatego
 
 // One real archive owns its poster, timeline and index views. The old nested
 // V2 ArchivePage no longer creates a second visually inconsistent archive.
-assert.match(workspace,/type Page = "档案" \| "统计" \| "城市" \| "迁移"/);
-assert.match(workspace,/navigation: Page\[\] = \["档案", "统计", "城市", "迁移"\]/);
+assert.match(workspace,/type Page = "档案" \| "统计" \| "城市" \| "数据"/);
+assert.match(workspace,/navigation: Array<Exclude<Page,"数据">> = \["档案", "统计", "城市"\]/);
 assert.doesNotMatch(workspace,/page==="完整档案"|fullLayout/);
 assert.match(workspace,/<V3ArchiveCollections mode=/);
 assert.doesNotMatch(workspace,/<ArchivePage records=/);
@@ -28,7 +28,10 @@ for(const pattern of [
   /onDuplicate=\{canEdit\?requestDuplicate:undefined\}/,
   /onTrash=\{canEdit\?setDeleteCandidate:undefined\}/,
   /duplicateRecordForNextShow\(record\)/,
-  /page==="迁移" && <>/,
+  /page==="数据" && <>/,
+  /className="v3-real-more-tools"/,
+  /showLegacyDiagnostics&&<>/,
+  /className="v3-real-poster-edit"/,
   /access.mode==="account" && validScope &&/,
   /personalConnected=\{hasPersonalCloudConnection\(readSettings\(\)\)\}/,
   /writerMode\(\)!=="v3"/,
