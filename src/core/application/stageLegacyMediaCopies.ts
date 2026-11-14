@@ -62,6 +62,10 @@ export async function stageLegacyMediaCopies(
     proof.privateBucket!=="echo-private-media-v3") {
     throw Error("V3_STAGING_INVALID_PROOF");
   }
+  // A zero-object audit is valid for a genuinely empty archive, but it is
+  // never evidence that historical photographs were actually copied.
+  // Stop before any upload so the UI cannot certify a no-op as a migration.
+  if(proof.objects===0)throw Error("V3_STAGING_NO_ORIGINAL_MEDIA");
   const canonical = {
     entries:[...proof.entries].sort((a,b)=>a.sourcePathSha256.localeCompare(b.sourcePathSha256)),
     objects:proof.objects,references:proof.references,totalBytes:proof.totalBytes,
