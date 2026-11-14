@@ -658,22 +658,21 @@ export function V3RealWorkspace() {
       <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
         <b>{visibleModel.watchedCount}<small>已看</small></b>
         <b>{visibleModel.cities.length}<small>城市</small></b></div>
-      {canEdit && <button type="button" onClick={()=>startEdit(null)}>
-        {canEditLocal?"新增本机演出":"新增演出"}</button>}
-      {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
-        {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
-      <button type="button" onClick={()=>{setShareRecord(null);setSharing(true);}}
-        disabled={!records.length}>制作分享图</button>
-      {canEdit && <button type="button" onClick={()=>setImportOpen(true)}
-        disabled={snapshot.busy||syncBusy||restoreBusy}>
-        批量导入
-      </button>}
-      {canEditLocal && <button type="button" onClick={()=>void exportVerifiedLocalBackup()}
-        disabled={exportBusy||restoreBusy||snapshot.busy}>
-        {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}
-      </button>}
-      <button type="button" onClick={()=>setReload(n=>n+1)}
-        disabled={snapshot.busy||syncBusy}>刷新</button>
+      <div className="v3-real-topbar-actions" aria-label="档案操作">
+        {canEdit && <button className="v3-real-action-primary" type="button" onClick={()=>startEdit(null)}>
+          {canEditLocal?"新增本机演出":"新增演出"}</button>}
+        {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
+          {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
+        <button type="button" onClick={()=>{setShareRecord(null);setSharing(true);}}
+          disabled={!records.length}>制作分享图</button>
+        {canEdit && <button type="button" onClick={()=>setImportOpen(true)}
+          disabled={snapshot.busy||syncBusy||restoreBusy}>批量导入</button>}
+        {canEditLocal && <button type="button" onClick={()=>void exportVerifiedLocalBackup()}
+          disabled={exportBusy||restoreBusy||snapshot.busy}>
+          {exportBusy?"完整原图备份中…":"导出可恢复本机备份"}</button>}
+        <button type="button" onClick={()=>setReload(n=>n+1)}
+          disabled={snapshot.busy||syncBusy}>刷新</button>
+      </div>
     </div>}
     overlay={importOpen && canEdit
       ? <ImportDrawer
