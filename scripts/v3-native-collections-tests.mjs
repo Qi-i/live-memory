@@ -38,6 +38,8 @@ const ui=await readFile(new URL("../src/ui/real/V3ArchiveCollections.tsx",import
 const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
 const share=await readFile(new URL("../src/shareStudio.tsx",import.meta.url),"utf8");
 const migration=await readFile(new URL("../src/ui/system/V3MigrationPanel.tsx",import.meta.url),"utf8");
+const viewCSS=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
+const shareCSS=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
 for(const mode of ["画报","票夹","票根","日历","城市/场馆","票价","汇总"]){
   assert.match(ui,new RegExp('mode==="'+mode.replace("/","\\/")+'"'));
 }
@@ -64,4 +66,14 @@ assert.doesNotMatch(migration,/await inspect\("account"\)/);
 assert.match(migration,/onClick=\{\(\)=>void stageLegacyMedia\(\)\}/);
 assert.match(migration,/role="status"\s*aria-live="polite"/);
 assert.match(migration,/已开始原图私有复制/);
-console.log("V3 native views, city/artist/cost aggregation, share safety, one-account read-only auto-audit passed.");
+assert.match(workspace,/savedArchiveMode/);
+assert.match(workspace,/localStorage.setItem\(viewPreferenceKey,mode\)/);
+assert.match(viewCSS,/\.v3-collection-calendar\{overflow-x:auto\}/,
+  "Mobile calendar must scroll instead of collapsing labels");
+assert.match(viewCSS,/\.v3-collection-cost-list>button strong\{grid-column:1;grid-row:1;/,
+  "Mobile cost records keep titles and values readable");
+assert.match(shareCSS,/\.share-studio-stage.is-v3 \.share-preview-area\{[\s\S]*?order:0;/,
+  "Mobile sharing must present the live artwork before the long control panel");
+assert.match(share,/setFormat\("adaptive-portrait"\)/,
+  "Poster wall presets must offer a portrait-oriented, readable default");
+console.log("V3 native views, persisted display choice, readable mobile collections and preview-first sharing passed.");

@@ -188,12 +188,18 @@ try {
     const rect=panel.getBoundingClientRect();
     const area=preview.getBoundingClientRect();
     const bg=getComputedStyle(panel).backgroundColor;
+    const stageRect=stage.getBoundingClientRect();
     return {panelHeight:rect.height,previewHeight:area.height,
-      viewport:innerHeight,background:bg,stageWidth:stage.getBoundingClientRect().width};
+      panelTop:rect.top,previewTop:area.top,
+      viewport:innerHeight,background:bg,stageWidth:stageRect.width,
+      scrollHeight:stage.scrollHeight,clientHeight:stage.clientHeight};
   });
   if(shareGeometry.panelHeight<100||shareGeometry.previewHeight<140||
      shareGeometry.stageWidth>width+2||
-     width<=800&&shareGeometry.panelHeight>shareGeometry.viewport*.53)
+     width<=800&&(
+       shareGeometry.previewTop>=shareGeometry.panelTop||
+       shareGeometry.previewHeight<shareGeometry.viewport*.45||
+       shareGeometry.scrollHeight<=shareGeometry.clientHeight))
     throw Error("V3 share workspace hides preview or overflows: "+JSON.stringify({width,shareGeometry}));
 
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/纪念票根/}).click();

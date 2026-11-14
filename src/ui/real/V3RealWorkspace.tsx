@@ -35,6 +35,13 @@ type Page = "档案" | "统计" | "城市" | "数据";
 type Mode = "海报"|"时间线"|"列表"|CollectionMode;
 const navigation: Array<Exclude<Page,"数据">> = ["档案", "统计", "城市"];
 const archiveModes:Mode[]=["海报","时间线","列表"];
+const viewPreferenceKey="live-memory-v3-archive-view";
+function savedArchiveMode():Mode{
+  try{
+    const stored=window.localStorage.getItem(viewPreferenceKey) as Mode|null;
+    return stored && [...archiveModes,...collectionModes].includes(stored) ? stored : "海报";
+  }catch{return "海报";}
+}
 
 function backToV2() {
   if(import.meta.env.VITE_V3_BETA==="1"){
@@ -265,7 +272,10 @@ export function V3RealWorkspace() {
   const access=useAccess();
   const [page,setPage]=useState<Page>("档案");
   const [showLegacyDiagnostics,setShowLegacyDiagnostics]=useState(false);
-  const [mode,setMode]=useState<Mode>("海报");
+  const [mode,setMode]=useState<Mode>(savedArchiveMode);
+  useEffect(()=>{
+    try{window.localStorage.setItem(viewPreferenceKey,mode);}catch{ /* private browsing */ }
+  },[mode]);
   const [search,setSearch]=useState("");
   const [filterStatus,setFilterStatus]=useState<"all"|"watched"|"planned"|"wish">("all");
   const [filterCity,setFilterCity]=useState("");
@@ -282,7 +292,7 @@ export function V3RealWorkspace() {
   const [zoomMedia,setZoomMedia]=useState<MediaAsset|null>(null);
   const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
   const [importOpen,setImportOpen]=useState(false);
-  const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-landscape");
+  const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-portrait");
   const [restoreBusy,setRestoreBusy]=useState(false);
   const [exportBusy,setExportBusy]=useState(false);
   const [restorePreview,setRestorePreview]=useState<{

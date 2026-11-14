@@ -184,3 +184,70 @@
 @media (prefers-reduced-motion:reduce) {
   .share-studio-stage.is-v3 .share-v3-preset-actions button {transition:none;}
 }
+
+
+/* V3 editor: give the rendered artwork the majority of the desktop viewport;
+ * distinguish presets and controls with clean surfaces instead of gray haze. */
+.share-studio-stage.is-v3{
+  grid-template-columns:clamp(340px,28vw,396px) minmax(0,1fr);
+  background:linear-gradient(135deg,#ecf6f2 0%,#f6faf8 52%,#f2f5fb 100%);
+}
+.share-studio-stage.is-v3 .share-studio-panel{
+  gap:10px;
+  padding:15px 17px 18px;
+  background:#fff;
+  box-shadow:8px 0 24px rgba(25,58,58,.065);
+}
+.share-studio-stage.is-v3 .share-v3-presets{
+  gap:9px;padding:11px 12px;
+  background:linear-gradient(150deg,#e9f5ef,#f5f9ff);
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions{gap:7px}
+.share-studio-stage.is-v3 .share-v3-preset-actions button{
+  min-height:49px;padding:8px 11px;font-size:13px
+}
+.share-studio-stage.is-v3 .share-v3-preset-actions button small{font-size:12px}
+.share-studio-stage.is-v3 .share-studio-summary{
+  padding:9px 12px;background:#f5faf7
+}
+.share-studio-stage.is-v3 .share-intro-copy p{line-height:1.4}
+.share-studio-stage.is-v3 .share-preview-area{
+  min-width:0;
+  background:radial-gradient(circle at 50% 24%,rgba(138,201,186,.18),transparent 58%);
+}
+.share-studio-stage.is-v3 .share-preview-toolbar button{font-size:13px}
+@media(max-width:860px){
+  .share-studio-stage.is-v3{
+    display:flex;flex-direction:column;
+    overflow-y:auto;
+  }
+  .share-studio-stage.is-v3 .share-preview-area{
+    order:0;
+    flex:none;
+    min-height:65dvh;
+    height:65dvh;
+  }
+  .share-studio-stage.is-v3 .share-preview-area.is-fixed{
+    height:65dvh;
+  }
+  .share-studio-stage.is-v3 .share-studio-panel{
+    order:1;
+    position:static;
+    max-height:none;
+    height:auto;
+    overflow:visible;
+    padding:15px 16px 24px;
+    border-right:0;
+    border-top:1px solid var(--share-ui-border);
+  }
+}
+@media(max-width:500px){
+  .share-studio-stage.is-v3 .share-preview-area,
+  .share-studio-stage.is-v3 .share-preview-area.is-fixed{
+    height:58dvh;min-height:58dvh;
+  }
+  .share-studio-stage.is-v3 .share-v3-preset-actions button{
+    min-height:47px;font-size:13px
+  }
+  .share-studio-stage.is-v3 .share-v3-preset-actions button small{font-size:12px}
+}

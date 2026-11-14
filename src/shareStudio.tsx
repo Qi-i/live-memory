@@ -171,7 +171,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   const earliestDate = eligibleRecords.length ? eligibleRecords[eligibleRecords.length - 1].date : "";
   const latestDate = eligibleRecords.length ? eligibleRecords[0].date : "";
   const [layout, setLayout] = useState<ShareLayout>("wall");
-  const [palette, setPalette] = useState<SharePalette>(experience === "v3" ? "mist" : "jade");
+  const [palette, setPalette] = useState<SharePalette>("jade");
   const [headline, setHeadline] = useState("我的现场档案");
   const [scope, setScope] = useState<ScopeMode>("all");
   const [itemLimit, setItemLimit] = useState<ItemLimit>("all");
@@ -249,7 +249,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setSelectedIds(new Set(distinctArtistPicks.map(record => record.id)));
     setItemLimit("all");
     setLayout("magazine");
-    setPalette("mist");
+    setPalette("jade");
     setHeadline("我的精选现场");
     setShowDetails(true);
     setFormat("adaptive-landscape");
@@ -261,6 +261,9 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setSelectedIds(new Set(eligibleRecords.map(record => record.id)));
     setItemLimit("all");
     setLayout("wall");
+    // Portrait collage protects poster readability with large live archives.
+    setFormat("adaptive-portrait");
+    setPalette("jade");
     setHeadline("我的现场档案");
   }
 
@@ -285,7 +288,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   function selectV3CityStory() {
     selectV3AllArchive();
     setLayout("cities");
-    setPalette("mist");
+    setPalette("paper");
     setHeadline("我去过的现场城市");
     setFormat("adaptive-landscape");
     setShowDetails(true);
