@@ -37,6 +37,7 @@ const shell=await readFile(new URL("../src/ui/system/WorkspaceShell.tsx",import.
 const shellCss=await readFile(new URL("../src/ui/system/workspace.css",import.meta.url),"utf8");
 const collectionCss=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
 const migrationCss=await readFile(new URL("../src/ui/system/v3MigrationPanel.css",import.meta.url),"utf8");
+const demoPreview=await readFile(new URL("../src/ui/system/V3Preview.tsx",import.meta.url),"utf8");
 const adaptive=await readFile(new URL("../src/ui/real/adaptivePoster.css",import.meta.url),"utf8");
 const ratioSource=await readFile(new URL("../src/ui/real/posterFraming.ts",import.meta.url),"utf8");
 const ratioJs=ts.transpileModule(ratioSource,{compilerOptions:{
@@ -59,6 +60,10 @@ assert.doesNotMatch(workspace,/PAGE_SIZE|pageIndex|totalPages|上一页|下一�
 assert.match(workspace,/showStatusCenter=\{false\}/);
 assert.match(shell,/showStatusCenter && <div className="v3-mobile-status">/,
   "V3 real mode cannot show an idle/false mobile sync indicator");
+assert.match(workspace,/<BrandMark size=\{36\}/);
+assert.match(demoPreview,/<BrandMark size=\{36\}/);
+assert.doesNotMatch(workspace,/>◈</);
+assert.doesNotMatch(demoPreview,/>◈</);
 assert.match(workspace,/className="v3-real-topbar-actions"/,
   "Real archive actions need a stable layout group across account modes");
 assert.match(css,/\.v3-real-topbar-actions \{/);
