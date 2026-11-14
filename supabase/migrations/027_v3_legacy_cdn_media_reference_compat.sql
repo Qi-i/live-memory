@@ -53,7 +53,7 @@ begin
              pg_catalog.encode(pg_catalog.sha256(pg_catalog.convert_to(p_id,'UTF8')),'hex')||
              '/'||pg_catalog.encode(pg_catalog.sha256(
                pg_catalog.convert_to(coalesce(item.value->>'id',''),'UTF8')),'hex')||
-             '/[a-f0-9]{64}\\.(jpg|png|webp|gif|avif)$'
+             '/[a-f0-9]{64}[.](jpg|png|webp|gif|avif)$'
            )
            and exists (
              select 1 from storage.objects as object
