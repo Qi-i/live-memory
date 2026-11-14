@@ -17,6 +17,17 @@ async function sha256(data:ArrayBuffer|Uint8Array|string):Promise<string>{
   return Array.from(digest,x=>x.toString(16).padStart(2,"0")).join("");
 }
 function sourceIsInline(src:string){return /^(?:data:|blob:)/i.test(src);}
+/** Historical Damai posters/seat maps are external references, not media bytes
+ * available in the old Storage bucket. Keep them renderable when CORS blocks
+ * byte copying; never mistake the URL for a completed private-image backup. */
+export function isLegacyExternalMedia(asset:Pick<MediaAsset,"src"|"storagePath">):boolean{
+  if(asset.storagePath||!asset.src||asset.src.length>4096)return false;
+  try{
+    const url=new URL(asset.src);
+    return url.protocol==="https:" && url.hostname==="img.alicdn.com" &&
+      /^https:\/\/img\.alicdn\.com\/[^\s<>"']+$/.test(asset.src);
+  }catch{return false;}
+}
 function duplicate(error:{statusCode?:string|number;code?:string;name?:string;message:string}){
   return String(error.statusCode)==="409"||error.code==="AssetAlreadyExists"||
     error.name==="AssetAlreadyExists"||/already exists|duplicate/i.test(error.message);
@@ -92,7 +103,11 @@ export class SupabaseV3AccountMediaTransport implements V3MediaTransport {
       if(!response.ok||response.type==="opaque")
         throw Error("V3_ACCOUNT_MEDIA_BYTES_UNAVAILABLE");
       blob=await response.blob();
-    }catch{throw Error("V3_ACCOUNT_MEDIA_BYTES_UNAVAILABLE");}
+     }catch{
+      // Preserve the old external reference without claiming its bytes were copied.
+      if(isLegacyExternalMedia(asset)){this.assertScope();return {...asset};}
+      throw Error("V3_ACCOUNT_MEDIA_BYTES_UNAVAILABLE");
+    }
     this.assertScope();
     const mime=blob.type&&blob.type!=="application/octet-stream"
       ?blob.type.toLowerCase():(asset.mimeType||"").toLowerCase();
@@ -126,6 +141,7 @@ export class SupabaseV3AccountMediaTransport implements V3MediaTransport {
     this.assertScope();
     const media:MediaAsset[]=[];
     for(const asset of record.media||[]){
+      if(isLegacyExternalMedia(asset)){media.push(asset);continue;}
       await this.verifyPath(asset);
       this.assertScope();
       const response=await this.client.storage.from(V3_ACCOUNT_MEDIA_BUCKET)
@@ -142,6 +158,7 @@ export class SupabaseV3AccountMediaTransport implements V3MediaTransport {
     if(!this.cacheForOffline||!Array.isArray(record.media))
       throw Error("V3_ACCOUNT_MEDIA_CACHE_REQUIRED");
     for(const asset of record.media){
+      if(isLegacyExternalMedia(asset))continue; // External reference, not offline-original proof.
       const expected=await this.verifyPath(asset);
       this.assertScope();
       if(this.hasOfflineCopy&&await this.hasOfflineCopy(asset)){
