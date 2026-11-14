@@ -181,7 +181,8 @@ assert.match(adapterSource,/live_memory_v3_cas_secure_account/);
 assert.doesNotMatch(workspace,/createV3SyncRuntime\(readSettings\(\),"account"\)/);
 console.log("V3 authenticated media sync passed: full poster CAS, SHA staging, signed recovery, cache, legacy migration and cross-account fences.");
 
-\n// V2 contained 18 historical Damai poster/seat-map URL references, not blobs.
+
+// V2 contained 18 historical Damai poster/seat-map URL references, not blobs.
  // A CORS failure must retain those exact references without silently deleting
  // them, while any unrelated external domain must still fail closed.
 const external="https://img.alicdn.com/imgextra/i2/999999/test.jpg";
