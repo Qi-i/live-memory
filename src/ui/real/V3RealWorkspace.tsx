@@ -17,6 +17,7 @@ import { hasPersonalCloudConnection } from "../../supabase";
 import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
 import { ActionToolbar, MapSplitPane, WorkspaceShell } from "../system/WorkspaceShell";
+import { useDialogBehavior } from "../useDialogBehavior";
 import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
 import { AdaptivePoster } from "./AdaptivePoster";
@@ -89,16 +90,12 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
   onZoom:(media:MediaAsset)=>void;
 }){
   const src=useCachedMediaSrc(primaryMedia(record));
-  const closeRef=useRef<HTMLButtonElement>(null);
-  useEffect(()=>{
-    closeRef.current?.focus();
-    const onKey=(event:KeyboardEvent)=>{if(event.key==="Escape")onClose();};
-    document.addEventListener("keydown",onKey);
-    return()=>document.removeEventListener("keydown",onKey);
-  },[onClose]);
+  const detailRef=useDialogBehavior<HTMLElement>({
+    onClose, focusSelector:'button[aria-label="关闭档案详情"]',
+  });
   return <div className="v3-real-modal-backdrop" role="presentation"
     onMouseDown={event=>{if(event.target===event.currentTarget)onClose();}}>
-    <section className="v3-real-modal v3-real-rich-detail" role="dialog"
+    <section ref={detailRef} className="v3-real-modal v3-real-rich-detail" role="dialog"
       aria-modal="true" aria-label={record.title+"（档案详情）"}>
       <header>
         <div><small>LIVE MEMORY · EVENT ARCHIVE</small><h2>{record.title}</h2>
@@ -106,7 +103,7 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
         <div className="v3-real-detail-header-actions">
           {onEdit&&<button type="button" aria-label="编辑本机演出"
             onClick={()=>onEdit(record)}>编辑</button>}
-          <button type="button" aria-label="关闭档案详情" ref={closeRef} onClick={onClose}>×</button>
+          <button type="button" aria-label="关闭档案详情" onClick={onClose}>×</button>
         </div>
       </header>
       <div className="v3-real-modal-body">
