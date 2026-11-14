@@ -105,10 +105,17 @@ Deno.serve(async(req:Request)=>{
   const {data:mode,error:modeError}=await sb.rpc("live_memory_v3_mode_account",{});
   if(modeError||mode!=="v3")return reply({error:"V3_CUTOVER_NOT_ACTIVE"},409,origin);
   let limit=2;
+  let offset=0;
   try{
     const value=await req.json();
     if(value && typeof value==="object" && value.limit!==undefined)
       limit=Math.max(1,Math.min(MAX_ITEMS,Number(value.limit)||1));
+    if(value && typeof value==="object" && value.offset!==undefined){
+      const parsed=Number(value.offset);
+      if(!Number.isSafeInteger(parsed)||parsed<0||parsed>500)
+        return reply({error:"INVALID_OFFSET"},400,origin);
+      offset=parsed;
+    }
   }catch{return reply({error:"INVALID_REQUEST"},400,origin);}
   const {data:rows,error:rowsError}=await sb.from(TABLE)
     .select("id,payload,v3_revision").eq("user_id",uid)
@@ -117,9 +124,9 @@ Deno.serve(async(req:Request)=>{
   const pending=(rows as Archive[]).flatMap(row=>
     Array.isArray(row.payload?.media)?row.payload.media.filter(a=>candidate(a,row.id))
       .map(a=>({row,asset:a})):[]);
-  if(!pending.length)return reply({remaining:0,recovered:0,failed:0,attempted:0},200,origin);
+  if(!pending.length||offset>=pending.length)return reply({remaining:pending.length,recovered:0,failed:0,attempted:0,nextOffset:0},200,origin);
   let recovered=0,failed=0;
-  for(const {row,asset} of pending.slice(0,limit)){
+  for(const {row,asset} of pending.slice(offset,offset+limit)){
     try{
       const original=await downloadOriginal(asset.src);
       const hash=await digest(original.bytes);
@@ -157,5 +164,6 @@ Deno.serve(async(req:Request)=>{
     }
   }
   return reply({remaining:pending.length-recovered,recovered,failed,
-    attempted:Math.min(limit,pending.length)},200,origin);
+    attempted:Math.min(limit,pending.length-offset),
+    nextOffset:offset+failed},200,origin);
 });
