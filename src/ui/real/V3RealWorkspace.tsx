@@ -292,7 +292,7 @@ export function V3RealWorkspace() {
   const [zoomMedia,setZoomMedia]=useState<MediaAsset|null>(null);
   const [deleteCandidate,setDeleteCandidate]=useState<EventRecord|null>(null);
   const [importOpen,setImportOpen]=useState(false);
-  const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-landscape");
+  const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-portrait");
   const [restoreBusy,setRestoreBusy]=useState(false);
   const [exportBusy,setExportBusy]=useState(false);
   const [restorePreview,setRestorePreview]=useState<{
