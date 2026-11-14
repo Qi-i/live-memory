@@ -185,9 +185,20 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         throw new Error("V3_BACKUP_LOCAL_CHANGED");
       }
       assertScope();
-      downloadBlob(JSON.stringify(backup),
-        `live-memory-v3-${cloudRuntime ? "complete" : "local-only"}-${new Date().toISOString().slice(0, 10)}.json`,
-        "application/json");
+      const serializedBackup=JSON.stringify(backup);
+      const archiveName=`live-memory-v3-${cloudRuntime ? "complete" : "local-only"}-${new Date().toISOString().slice(0, 10)}.json`;
+      downloadBlob(serializedBackup, archiveName, "application/json");
+      // Only the FULL account-verified source can be queued for a private
+      // mirror review. Local-only exports are not comprehensive.
+      // Nothing is uploaded until the separate inspect + confirmation flow.
+      if(cloudRuntime){
+        assertScope();
+        setMirrorFile(new File([serializedBackup],archiveName,{
+          type:"application/json",
+        }));
+        setMirrorPreview(null);
+        setMirrorStatus("已从完整备份自动载入私有镜像预演。请先检查图片与云端差异，随后再手动确认复制；当前未向 V3 写入。");
+      }
       setBackupStatus(cloudRuntime
         ? `已提交完整备份下载：${checked.records} 条记录、${checked.assets} 个媒体文件；
           本机独有 ${inventory.counts.localOnly} 条、云端独有 ${inventory.counts.remoteOnly} 条。
@@ -554,6 +565,10 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
         <strong>私有完整档案镜像 · 迁移预演</strong>
         <p>选择之前导出的、包含全部原图的可验证备份。先检查图片哈希及账号云端冲突，再手动确认复制。
         数据只写入新建的账号私有镜像表和私有图片空间，不修改旧版档案或启动新同步。</p>
+        {mirrorFile && <p role="note">
+          已准备待核对的完整备份：{mirrorFile.name}。
+          先检查全部图片原始字节和镜像冲突，再由你单独确认写入。
+        </p>}
         <input type="file" accept=".json,application/json"
           aria-label="选择已验证的完整档案备份"
           disabled={mirrorBusy||backupBusy||pending!==null}
