@@ -116,7 +116,7 @@ try {
     throw Error("Real mobile navigation must expose exactly four equal tabs: "+JSON.stringify(chrome));
   await page.getByLabel("更多档案视图").selectOption("画报");
   const columns=await page.locator(".v3-collection-showcase-grid").evaluate(element=>
-    getComputedStyle(element).gridTemplateColumns.split(/\\s+/).filter(Boolean).length);
+    getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
   const expectedColumns=width>1180?5:width>610?3:2;
   if(columns!==expectedColumns)throw Error("V3 collection columns ignore content width: "+
     JSON.stringify({width,columns,expectedColumns}));
