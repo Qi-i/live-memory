@@ -36,6 +36,7 @@ const css=await readFile(new URL("../src/ui/real/realWorkspace.css",import.meta.
 const shell=await readFile(new URL("../src/ui/system/WorkspaceShell.tsx",import.meta.url),"utf8");
 const shellCss=await readFile(new URL("../src/ui/system/workspace.css",import.meta.url),"utf8");
 const collectionCss=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
+const refineCss=await readFile(new URL("../src/ui/real/v3ArchiveRefinements.css",import.meta.url),"utf8");
 const migrationCss=await readFile(new URL("../src/ui/system/v3MigrationPanel.css",import.meta.url),"utf8");
 const demoPreview=await readFile(new URL("../src/ui/system/V3Preview.tsx",import.meta.url),"utf8");
 const shareUi=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
@@ -97,6 +98,12 @@ assert.match(shareUi,/max-height:48dvh/);
 assert.match(shareUi,/min-height:52dvh/);
 assert.doesNotMatch(shareUi,/\.share-ticket-card\b/,
   "V3 overlay polish must not rewrite poster/ticket export artwork");
+assert.match(refineCss,/\.v3-real-refine-bar label\{[^}]*font-size:12px/);
+assert.match(refineCss,/\.v3-real-refine-bar select,\.v3-real-refine-bar button\{[^}]*min-height:40px/);
+assert.match(refineCss,/\.v3-real-refine-bar button\.is-active\{[^}]*var\(--v3-accent-tint\)/);
+assert.match(css,/\.v3-real-restore \{[^}]*var\(--v3-card-border\)/);
+assert.match(css,/\.v3-real-restore-review button:first-of-type \{[^}]*var\(--v3-accent\)/);
+assert.match(css,/\.v3-real-metrics article \{[^}]*var\(--v3-card-border\)/);
 assert.match(workspace,/canEditLegacyAccount/);
 assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
 assert.match(workspace,/<V3ArchiveCollections mode=/);
