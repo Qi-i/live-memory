@@ -14,6 +14,8 @@ export interface PrivateMirrorImportPlan {
   bytes: number;
   alreadyPresent: number;
   toCreate: EventRecord[];
+  /** Every source record, including those already in the mirror, must have its images re-verified. */
+  allRecords: EventRecord[];
   mediaByKey: Map<string, PortableMediaEntry>;
 }
 const ACCOUNT=/^[a-f0-9]{8}-(?:[a-f0-9]{4}-){3}[a-f0-9]{12}$/;
@@ -56,6 +58,7 @@ export async function planPrivateMirrorImport(
     existing.set(row.record.id,row.record);
   }
   const wanted:EventRecord[]=[];
+  const allRecords:EventRecord[]=[];
   let alreadyPresent=0;
   for(const record of doc.records) {
     const recordHash=await hash(record.id);
@@ -74,6 +77,7 @@ export async function planPrivateMirrorImport(
       });
     }
     const desired:EventRecord={...record,media};
+    allRecords.push(desired);
     const old=existing.get(record.id);
     if(old){
       if(!recordContentEqual(old,desired,true)){
@@ -87,6 +91,6 @@ export async function planPrivateMirrorImport(
   return {
     userId, records:verified.records, assets:verified.assets,
     bytes:verified.totalBytes, alreadyPresent,
-    toCreate:wanted, mediaByKey:manifest,
+    toCreate:wanted, allRecords, mediaByKey:manifest,
   };
 }
