@@ -84,23 +84,27 @@
 .v3-real-map-details > button strong { display:block; font-size:12px; overflow-wrap:anywhere; }
 .v3-real-map-details > button small { font-size:11px; color:#68758c; }
 .v3-real-modal-backdrop { position:fixed; inset:0; display:grid; place-items:center; padding:14px; background:rgba(16,24,47,.52); backdrop-filter:blur(7px); }
-.v3-real-modal { display:grid; gap:14px; width:min(750px,calc(100vw - 28px)); max-height:calc(100dvh - 28px); overflow:auto; padding:20px; background:#f8faff; border-radius:20px; border:1px solid white; box-shadow:0 24px 55px rgba(22,26,67,.25); }
+.v3-real-modal { display:grid; gap:14px; width:min(750px,calc(100vw - 28px)); max-height:calc(100dvh - 28px); overflow:auto; overscroll-behavior:contain; scrollbar-width:thin; padding:20px; background:var(--v3-card-bg,#f8faff); border-radius:var(--v3-radius,20px); border:1px solid var(--v3-card-border,#dbe1ed); box-shadow:0 24px 55px rgba(22,26,67,.23); }
 .v3-real-modal header { display:flex; align-items:flex-start; justify-content:space-between; gap:15px; }
 .v3-real-modal header > div { display:grid; gap:6px; min-width:0; }
-.v3-real-modal header small { color:#6d60ac; font-size:10px; font-weight:800; }
+.v3-real-modal header small { color:var(--v3-accent,#675bb6); font-size:11px; font-weight:800; }
 .v3-real-modal header h2 { margin:0; font-size:24px; line-height:1.2; overflow-wrap:anywhere; }
-.v3-real-modal header span { font-size:12px; color:#77829a; }
-.v3-real-modal header button { flex:0 0 auto; min-width:36px; min-height:36px; font-size:22px; border:1px solid #d5d9e6; border-radius:9px; background:white; cursor:pointer; }
+.v3-real-modal header span { font-size:13px; color:var(--v3-muted,#65718a); }
+.v3-real-modal header button { flex:0 0 auto; min-width:40px; min-height:40px; font-size:20px; border:1px solid var(--v3-card-border,#dbe1ed); border-radius:11px; background:var(--v3-control-bg,#fff); color:var(--v3-ink,#182542); cursor:pointer; }
 .v3-real-modal-body { display:grid; grid-template-columns:minmax(0,.8fr) minmax(0,1fr); gap:17px; }
-.v3-real-modal-art { display:grid; place-items:center; min-height:170px; border-radius:12px; background:#e9eaf8; overflow:hidden; font-size:12px; color:#77829a; }
+.v3-real-modal-art { display:grid; place-items:center; min-height:170px; border-radius:12px; background:var(--v3-accent-tint,#ece9fb); overflow:hidden; font-size:12px; color:var(--v3-muted,#65718a); }
 .v3-real-modal-art img { display:block; width:100%; height:auto; max-height:min(63dvh,540px); object-fit:contain; }
 .v3-real-modal dl { display:grid; align-content:start; grid-template-columns:66px minmax(0,1fr); gap:11px 9px; font-size:13px; }
-.v3-real-modal dt { color:#7a8496; }
+.v3-real-modal dt { color:var(--v3-muted,#65718a); }
 .v3-real-modal dd { margin:0; overflow-wrap:anywhere; }
 .v3-real-modal .v3-real-detail-note { white-space:pre-wrap; }
-.v3-real-modal footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid #dee3ec; padding-top:12px; }
-.v3-real-modal footer span { font-size:11px; color:#75819a; }
-.v3-real-modal footer button { min-height:36px; padding-inline:14px; border:1px solid #cbd4e9; border-radius:9px; background:white; font:inherit; cursor:pointer; }
+.v3-real-modal footer { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; border-top:1px solid var(--v3-card-border,#dbe1ed); padding-top:12px; }
+.v3-real-modal footer span { font-size:12px; color:var(--v3-muted,#65718a); }
+.v3-real-rich-detail .v3-real-modal-art:disabled { cursor:default;opacity:.75; }
+.v3-real-modal footer button.v3-real-detail-danger {border-color:rgba(165,46,74,.3);background:rgba(165,46,74,.075);color:#992f49;}
+.v3-real-modal footer button.v3-real-detail-danger:not(:disabled):hover {background:rgba(165,46,74,.14);}
+.v3-real-modal button:focus-visible {outline:3px solid rgba(103,91,182,.45);outline-offset:2px;}
+.v3-real-modal footer button { min-height:40px; padding-inline:14px; border:1px solid var(--v3-card-border,#dbe1ed); border-radius:11px; background:var(--v3-control-bg,#fff); color:var(--v3-ink,#182542); font:inherit; font-size:13px; cursor:pointer; }
 @media(max-width:800px) {
  .v3-real-topbar-stats b { min-width:44px; }
  .v3-real-topbar-actions { justify-content:stretch; }
