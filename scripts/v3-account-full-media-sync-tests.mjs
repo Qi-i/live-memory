@@ -180,3 +180,29 @@ assert.match(adapterSource,/live_memory_v3_secure_records/);
 assert.match(adapterSource,/live_memory_v3_cas_secure_account/);
 assert.doesNotMatch(workspace,/createV3SyncRuntime\(readSettings\(\),"account"\)/);
 console.log("V3 authenticated media sync passed: full poster CAS, SHA staging, signed recovery, cache, legacy migration and cross-account fences.");
+
+\n// V2 contained 18 historical Damai poster/seat-map URL references, not blobs.
+ // A CORS failure must retain those exact references without silently deleting
+ // them, while any unrelated external domain must still fail closed.
+const external="https://img.alicdn.com/imgextra/i2/999999/test.jpg";
+const originalFetch=globalThis.fetch;
+globalThis.fetch=async()=>{throw Error("CORS blocked")};
+try{
+  const legacy={...record,id:"concert-external",media:[{
+    id:"seatmap-external",recordId:"concert-external",src:external,
+    kind:"seatMap",source:"url",mimeType:"image/jpeg",
+  }]};
+  const before=uploads.length;
+  const migrated=await account.compareAndSwap(legacy,null);
+  assert.equal(uploads.length,before,"External URL must not be reported as uploaded bytes");
+  assert.equal(fake.rows.get(legacy.id).payload.media[0].src,external);
+  assert.equal(fake.rows.get(legacy.id).payload.media[0].storagePath,undefined);
+  const fromCloud=await account.list();
+  const restored=fromCloud.find(row=>row.record.id===legacy.id);
+  assert.equal(restored?.record.media[0].src,external);
+  await account.prepareIncoming(restored.record);
+  await assert.rejects(account.compareAndSwap({
+    ...legacy,id:"concert-other-host",media:[{...legacy.media[0],
+      recordId:"concert-other-host",src:"https://evil.example/image.jpg"}],
+  },null),/V3_ACCOUNT_MEDIA_BYTES_UNAVAILABLE/);
+}finally{globalThis.fetch=originalFetch;}
