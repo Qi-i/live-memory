@@ -324,7 +324,9 @@ export function V3MigrationPanel({ settings, records, personalConnected }: Props
     }catch(error){
       if(currentStorageScope()===scope&&scopeGeneration.current===generation){
         const reason=error instanceof Error?error.message:"";
-        setBackupStatus(reason.includes("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT")
+        setBackupStatus(reason.includes("V3_STAGING_NO_ORIGINAL_MEDIA")
+          ? "未完成原图迁移：旧个人云当前检索到 0 张原始图片，不能作为复制成功的证据。请核对旧云连接与历史媒体记录。没有上传或删除图片。"
+          : reason.includes("V3_LEGACY_OWNER_NOT_BOUND_TO_ACCOUNT")
           ? "未复制：当前登录账户的个人云关联配置与旧媒体来源不符。请在现有账户内检查个人云连接。"
           : reason.includes("V3_LEGACY_PROVENANCE_RECORD_COUNT_MISMATCH")||
             reason.includes("V3_LEGACY_PROVENANCE_CONTENT_MISMATCH")||
