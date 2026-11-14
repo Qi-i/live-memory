@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
 import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
@@ -639,7 +640,7 @@ export function V3RealWorkspace() {
   const navButtons=navigation.map(label=><button type="button" key={label}
     aria-current={page===label?"page":undefined} onClick={()=>setPage(label)}>{label}</button>);
   return <WorkspaceShell
-    brand={<><span className="v3-preview-brand">◈</span>
+    brand={<><span className="v3-preview-brand"><BrandMark size={36} title="Live Memory 标识" /></span>
       <strong className="v3-preview-brand-name">Live Memory</strong>
       <small>V3 · 现场记忆</small></>}
     navigation={navButtons}
