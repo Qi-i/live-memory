@@ -264,6 +264,7 @@ function RealCityView({ records, onOpen }: { records: EventRecord[]; onOpen: (id
 export function V3RealWorkspace() {
   const access=useAccess();
   const [page,setPage]=useState<Page>("档案");
+  const [showLegacyDiagnostics,setShowLegacyDiagnostics]=useState(false);
   const [mode,setMode]=useState<Mode>("海报");
   const [search,setSearch]=useState("");
   const [filterStatus,setFilterStatus]=useState<"all"|"watched"|"planned"|"wish">("all");
@@ -835,16 +836,21 @@ export function V3RealWorkspace() {
           <button type="button" disabled={restoreBusy} onClick={()=>setRestorePreview(null)}>取消</button>
         </div>}
     </section>}
-        <details className="v3-real-advanced-data">
-          <summary>旧版兼容与同步诊断（高级）</summary>
-          <p>仅在需要核查旧版数据或同步问题时使用；不会自动迁移或改写记录。</p>
-          <button type="button" className="v3-real-classic-fallback" onClick={backToV2}>
-            打开经典版 V2
+        <section className="v3-real-advanced-data">
+          <button type="button" aria-expanded={showLegacyDiagnostics}
+            onClick={()=>setShowLegacyDiagnostics(open=>!open)}>
+            旧版兼容与同步诊断（高级）{showLegacyDiagnostics?" · 收起":" · 展开"}
           </button>
-          {access.mode==="account" && validScope &&
-            <V3MigrationPanel settings={readSettings()} records={records}
-              personalConnected={hasPersonalCloudConnection(readSettings())}/>}
-        </details>
+          {showLegacyDiagnostics&&<>
+            <p>仅在需要核查旧版数据或同步问题时使用；不会自动迁移或改写记录。</p>
+            <button type="button" className="v3-real-classic-fallback" onClick={backToV2}>
+              打开经典版 V2
+            </button>
+            {access.mode==="account" && validScope &&
+              <V3MigrationPanel settings={readSettings()} records={records}
+                personalConnected={hasPersonalCloudConnection(readSettings())}/>}
+          </>}
+        </section>
       </>}
 
       {page==="城市" && <RealCityView records={records} onOpen={setSelectedId}/>}
