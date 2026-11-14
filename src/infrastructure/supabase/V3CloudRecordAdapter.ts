@@ -195,8 +195,11 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
       prepared = { ...record, media: assets };
     }
     if (this.includeMedia && (!Array.isArray(prepared.media) ||
-        prepared.media.some((asset) => !asset.storagePath))) {
-      throw new Error("V3_MEDIA_UPLOAD_REQUIRED: Every media item must have a durable private Storage path before CAS");
+        prepared.media.some((asset) => !asset.storagePath &&
+          !(this.provider === "secure-account" &&
+            asset.src.length <= 4096 &&
+            /^https:\/\/img\.alicdn\.com\/[^\s<>"']+$/.test(asset.src))))) {
+      throw new Error("V3_MEDIA_UPLOAD_REQUIRED: Only verified private paths or preserved historical Damai CDN links may be written");
     }
 
     // Server JSON contains only private Storage paths, never raw image bytes

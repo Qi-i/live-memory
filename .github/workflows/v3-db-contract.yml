@@ -18,6 +18,7 @@ on:
       - "supabase/migrations/024_v3_authenticated_media_staging.sql"
       - "supabase/migrations/025_v3_authenticated_full_media_archive.sql"
       - "supabase/migrations/026_v3_verified_account_cutover_approval.sql"
+      - "supabase/migrations/027_v3_legacy_cdn_media_reference_compat.sql"
       - "src/core/**"
       - "src/infrastructure/supabase/**"
       - ".github/workflows/v3-db-contract.yml"
@@ -91,6 +92,10 @@ jobs:
         run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/026_v3_verified_account_cutover_approval.sql
       - name: Reject direct mode changes, stale approvals and cross-account activation
         run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_verified_account_cutover_approval_checks.sql
+      - name: Allow only archived Damai CDN references in secure V3 CAS
+        run: psql -X -v ON_ERROR_STOP=1 -f supabase/migrations/027_v3_legacy_cdn_media_reference_compat.sql
+      - name: Reject unrelated external images and retain exact archived URLs
+        run: psql -X -v ON_ERROR_STOP=1 -f tests/db/v3_legacy_cdn_reference_compat_checks.sql
       - name: Verify no real remote database was configured
         run: |
           test "$PGHOST" = "127.0.0.1"
