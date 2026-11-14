@@ -136,12 +136,20 @@ try {
   await page.getByRole("button",{name:"时间线",exact:true}).click();
   await page.getByText("郑州巡回演出 · 真实本机回归").first().waitFor();
   await page.getByRole("button",{name:"海报",exact:true}).click();
-  await page.getByRole("button",{name:/查看 北京现场/}).click();
+  const detailOpener=page.getByRole("button",{name:/查看 北京现场/});
+  await detailOpener.click();
   const dialog=page.getByRole("dialog",{name:/北京现场.*档案详情/});
   await dialog.waitFor({state:"visible"});
   await dialog.getByText("合成测试备注").waitFor();
-  await dialog.getByRole("button",{name:"关闭档案详情"}).click();
+  await dialog.locator("footer button").last().focus();
+  await page.keyboard.press("Tab");
+  const stayedInDetail=await dialog.evaluate(node=>node.contains(document.activeElement));
+  if(!stayedInDetail)throw Error("V3 detail Tab escaped the active modal");
+  await page.keyboard.press("Escape");
   await dialog.waitFor({state:"detached"});
+  const returnedFocus=await detailOpener.evaluate(node=>document.activeElement===node);
+  if(!returnedFocus)throw Error("V3 detail Escape did not restore the opener focus");
+
   // The single real V3 archive replaces the redundant nested V2 archive.
   if(await page.getByRole("button",{name:"完整档案",exact:true}).count())
     throw Error("Redundant complete archive tab remains in V3");
@@ -152,6 +160,22 @@ try {
   const share=page.getByRole("dialog",{name:"分享工作室"});
   await share.waitFor({state:"visible"});
   await share.locator(".share-studio-summary strong").getByText("2",{exact:true}).waitFor();
+  const shareGeometry=await share.evaluate(node=>{
+    const stage=node.closest(".share-studio-stage");
+    const panel=stage?.querySelector(".share-studio-panel");
+    const preview=stage?.querySelector(".share-preview-area");
+    if(!stage||!panel||!preview)throw Error("Missing V3 share surfaces");
+    const rect=panel.getBoundingClientRect();
+    const area=preview.getBoundingClientRect();
+    const bg=getComputedStyle(panel).backgroundColor;
+    return {panelHeight:rect.height,previewHeight:area.height,
+      viewport:innerHeight,background:bg,stageWidth:stage.getBoundingClientRect().width};
+  });
+  if(shareGeometry.panelHeight<100||shareGeometry.previewHeight<140||
+     shareGeometry.stageWidth>width+2||
+     width<=800&&shareGeometry.panelHeight>shareGeometry.viewport*.53)
+    throw Error("V3 share workspace hides preview or overflows: "+JSON.stringify({width,shareGeometry}));
+
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/纪念票根/}).click();
   await share.locator(".share-layout-canvas-tickets").waitFor({state:"visible"});
   await share.locator(".share-v3-preset-actions").getByRole("button",{name:/时间长卷/}).click();
