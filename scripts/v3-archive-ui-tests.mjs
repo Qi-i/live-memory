@@ -38,6 +38,7 @@ const shellCss=await readFile(new URL("../src/ui/system/workspace.css",import.me
 const collectionCss=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
 const migrationCss=await readFile(new URL("../src/ui/system/v3MigrationPanel.css",import.meta.url),"utf8");
 const demoPreview=await readFile(new URL("../src/ui/system/V3Preview.tsx",import.meta.url),"utf8");
+const shareUi=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
 const adaptive=await readFile(new URL("../src/ui/real/adaptivePoster.css",import.meta.url),"utf8");
 const ratioSource=await readFile(new URL("../src/ui/real/posterFraming.ts",import.meta.url),"utf8");
 const ratioJs=ts.transpileModule(ratioSource,{compilerOptions:{
@@ -80,6 +81,22 @@ assert.match(migrationCss,/--v3-migration-accent:var\(--v3-accent/);
 assert.doesNotMatch(migrationCss,/var\(--accent, #2563eb\)/,
   "V2 default blue must not replace the V3 design language");
 
+assert.match(workspace,/useDialogBehavior<HTMLElement>\(/,
+  "Real event detail must use shared modal Escape and focus trap");
+assert.match(workspace,/ref=\{detailRef\} className="v3-real-modal/);
+assert.doesNotMatch(workspace,/document\.addEventListener\("keydown",onKey\)/,
+  "V3 event detail should not attach another uncoordinated Escape listener");
+assert.match(workspace,/disabled=\{!primaryMedia\(record\)\}/,
+  "Poster zoom cannot stay actionable without a real poster");
+assert.match(workspace,/className="v3-real-detail-danger"/);
+assert.match(css,/\.v3-real-modal footer button\.v3-real-detail-danger/);
+assert.match(css,/\.v3-real-rich-detail \.v3-real-modal-art:disabled/);
+assert.match(shareUi,/--share-ui-accent: var\(--v3-accent/);
+assert.match(shareUi,/--share-ui-border: var\(--v3-card-border/);
+assert.match(shareUi,/max-height:48dvh/);
+assert.match(shareUi,/min-height:52dvh/);
+assert.doesNotMatch(shareUi,/\.share-ticket-card\b/,
+  "V3 overlay polish must not rewrite poster/ticket export artwork");
 assert.match(workspace,/canEditLegacyAccount/);
 assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
 assert.match(workspace,/<V3ArchiveCollections mode=/);
