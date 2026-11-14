@@ -330,7 +330,6 @@ export function V3RealWorkspace() {
         const mode=await runtime.writerMode();
         if(!alive||currentStorageScope()!==scope)return;
         accountRuntime.current={scope,runtime};
-        setCloudMode({scope,mode,error:""});
         if(mode==="v3"){
           // A freshly installed browser has no V2 IndexedDB. Recover the
           // already-owned cloud archive automatically; do not require JSON
@@ -353,12 +352,20 @@ export function V3RealWorkspace() {
                   setNotice("已从当前账号的 V3 云端自动恢复档案及原图引用。");
                 }
               }
+            }else{
+              const changed=await runtime.adoptMatchingLegacyBrowserHistory();
+              if(alive&&currentStorageScope()===scope&&changed>0){
+                setReload(n=>n+1);
+                setNotice(`已核对并自动接管 ${changed} 条旧版档案的媒体路径；原始数据仍完整保留。`);
+              }
             }
           }catch{
             if(alive&&currentStorageScope()===scope)
-              setNotice("自动恢复未完成，已保留原有档案；可通过安全同步重试。");
+              setNotice("已保留本机旧版档案：云端和本机存在未同步差异，或原图暂不可用。没有自动覆盖任何内容。");
           }
         }
+        if(alive&&currentStorageScope()===scope)
+          setCloudMode({scope,mode,error:""});
       })().catch(()=>{
         if(alive&&currentStorageScope()===scope)
           setCloudMode({scope,mode:"v2",error:"账号写入状态无法验证，已保持只读。"});
