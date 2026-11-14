@@ -15,6 +15,43 @@
 .v3-real-topbar-actions button.v3-real-action-primary:not(:disabled):hover { background:#52479e; color:white; }
 .v3-real-account { display:grid; gap:7px; font-size:12px; }
 .v3-real-account span { font-weight:500; font-size:11px; color:#65718a; }
+/* One unobtrusive utility access instead of a permanent migration tab. */
+.v3-real-more-tools { position:relative; flex:0 0 auto; z-index:12; }
+.v3-real-more-tools > summary {
+  display:flex;align-items:center;justify-content:center;
+  min-height:38px;padding:7px 12px;list-style:none;
+  border:1px solid var(--v3-card-border);
+  border-radius:var(--v3-control-radius);
+  background:var(--v3-control-bg);color:var(--v3-ink);
+  font-size:13px;font-weight:720;cursor:pointer;
+}
+.v3-real-more-tools > summary::-webkit-details-marker { display:none; }
+.v3-real-more-tools[open] > summary { background:var(--v3-accent-tint);border-color:var(--v3-accent); }
+.v3-real-more-menu {
+  position:absolute;right:0;top:calc(100% + 7px);
+  z-index:15;display:grid;min-width:158px;padding:6px;
+  border:1px solid var(--v3-card-border);border-radius:13px;
+  background:#fff;box-shadow:0 12px 34px rgba(32,42,78,.17);
+}
+.v3-real-more-menu button { width:100%;text-align:left;white-space:nowrap; }
+.v3-real-data-heading { gap:8px;padding:clamp(14px,1.6vw,20px); }
+.v3-real-advanced-data {
+  display:grid;gap:12px;align-content:start;min-width:0;padding:14px;
+  border:1px solid var(--v3-card-border);border-radius:var(--v3-radius);
+  background:var(--v3-card-bg);
+}
+.v3-real-advanced-data > button:first-child {
+  width:100%;min-height:42px;padding:9px 12px;
+  border:1px solid var(--v3-card-border);border-radius:11px;
+  background:var(--v3-control-bg);color:var(--v3-ink);
+  text-align:left;font:inherit;font-size:13px;font-weight:730;cursor:pointer;
+}
+.v3-real-advanced-data > p { margin:0;color:var(--v3-muted);font-size:13px;line-height:1.55; }
+.v3-real-more-tools > summary:focus-visible,
+.v3-real-advanced-data > button:focus-visible {
+  outline:3px solid rgba(103,91,182,.45);outline-offset:2px;
+}
+
 .v3-real-panel { display:grid; align-content:start; gap:16px; min-width:0; flex:0 0 auto; padding:clamp(15px,2vw,25px); border:1px solid rgba(255,255,255,.88); border-radius:22px; background:rgba(252,253,255,.8); box-shadow:0 12px 35px rgba(49,70,118,.08); }
 .v3-real-panel > header { display:grid; gap:5px; }
 .v3-real-panel > header > span { color:#6259ac; font-size:10px; font-weight:850; letter-spacing:.12em; }
@@ -22,16 +59,10 @@
 .v3-real-panel h1 { font-size:clamp(22px,2.4vw,32px); }
 .v3-real-panel h2 { font-size:20px; }
 .v3-real-panel p { margin:0; line-height:1.55; color:#68758a; font-size:13px; }
-.v3-real-poster-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(min(100%,174px),1fr)); gap:14px; min-width:0; align-items:stretch; }
-.v3-real-poster-card { display:grid; grid-template-rows:auto minmax(2.8em,auto) auto; align-content:start; gap:8px; min-width:0; padding:8px; border:1px solid rgba(134,148,188,.18); border-radius:16px; background:rgba(255,255,255,.82); box-shadow:0 7px 19px rgba(40,52,89,.055); font:inherit; color:#202d48; text-align:left; cursor:pointer; transition:transform .18s ease, box-shadow .18s ease; }
-.v3-real-poster-card:hover { transform:translateY(-3px); box-shadow:0 15px 30px rgba(40,52,89,.13); }
-.v3-real-poster-card:focus-visible { outline:3px solid #7961bd; outline-offset:2px; }
-.v3-real-poster-image { display:grid; place-items:center; width:100%; aspect-ratio:2/3; border-radius:10px; background:linear-gradient(140deg,#f2eff9,#e5edf4); overflow:hidden; color:#6a7296; font-size:12px; }
-.v3-real-gallery-panel { gap:17px; padding:clamp(14px,1.8vw,24px); }
-.v3-real-gallery-panel h2 small { font-size:13px; color:#7683a1; }
-.v3-real-poster-image img { display:block; width:100%; height:100%; object-fit:contain; object-position:center; }
-.v3-real-poster-card strong { display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:2; overflow:hidden; overflow-wrap:anywhere; min-height:2.8em; font-size:13px; line-height:1.4; }
-.v3-real-poster-card small { color:#6c7991; font-size:11px; }
+/* The poster wall is composed by v3ArchiveRefinements.css; it owns its
+   own full-bleed card geometry, not the generic V3 panel/card padding. */
+.v3-real-gallery-panel { gap:12px; padding:clamp(11px,1.3vw,18px); }
+.v3-real-gallery-panel h2 small { font-size:13px; color:var(--v3-muted); }
 .v3-real-pagination { display:flex; align-items:center; justify-content:center; flex-wrap:wrap; gap:12px; padding:12px; flex:0 0 auto; border-radius:13px; background:rgba(255,255,255,.8); font-size:12px; }
 .v3-real-pagination button { min-height:36px; padding-inline:14px; border:1px solid #cfd4e8; border-radius:10px; background:white; color:#36456a; cursor:pointer; }
 .v3-real-pagination button:disabled { opacity:.45; cursor:default; }
