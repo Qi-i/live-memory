@@ -108,8 +108,9 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
       </header>
       <div className="v3-real-modal-body">
         <button className="v3-real-modal-art" type="button"
+          disabled={!primaryMedia(record)}
           onClick={()=>{const art=primaryMedia(record);if(art)onZoom(art);}}
-          aria-label="放大主海报">
+          aria-label={primaryMedia(record)?"放大主海报":"此记录没有可放大的主海报"}>
           {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
         </button>
         <dl>
@@ -138,7 +139,7 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
         <div className="v3-real-detail-actions">
           <button type="button" onClick={()=>onShare(record)}>分享本场</button>
           {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
-          {onTrash&&<button type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
+          {onTrash&&<button className="v3-real-detail-danger" type="button" onClick={()=>onTrash(record)}>移入回收站</button>}
           <button type="button" onClick={onClose}>返回档案</button>
         </div>
       </footer>
