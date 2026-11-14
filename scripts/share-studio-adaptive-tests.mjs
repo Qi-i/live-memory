@@ -66,4 +66,12 @@ assert.match(settings, /全国城市分享图会直接复用个人账号中已�
 assert.match(settings, /lbs\.amap\.com/);
 assert.match(settings, /地图 API 获取说明|获取高德 Key/);
 
+assert.match(shareStudio,/experience==="v3" && !allowMissingPosters/);
+assert.match(shareStudio,/await loadMediaImage\(asset\)/,
+  "PNG must check actual canvas-safe decoded media instead of trusting URL references");
+assert.match(shareStudio,/有 \${unavailable} 张海报无法取得可导出的原图/);
+assert.match(shareStudio,/checked=\{allowMissingPosters\}/);
+assert.match(shareStudio,/允许海报占位色块/);
+const v3ShareCss=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
+assert.match(v3ShareCss,/\.share-v3-allow-missing/);
 console.log("Share layout engine contracts passed: ratio-preserving canvases, edge-filled walls, readable tickets, artist-aware magazine mosaics, and a fixed nationwide AMap extent across aspect ratios.");
