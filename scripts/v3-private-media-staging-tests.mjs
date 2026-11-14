@@ -45,6 +45,18 @@ const adapter={
   },
   assertScope:()=>{if(scope!=="account A")throw Error("V3_LEGACY_ACCOUNT_CHANGED")},
 };
+const emptyProof=await audit.auditLegacyMediaMigration({
+  ownerKey:oldOwner,records:[],assetRows:[],objectNames:[],
+  download:async()=>{throw Error("unexpected download");},
+  assertScope:()=>{},
+});
+assert.equal(emptyProof.objects,0);
+const beforeEmptyUploads=uploadCalls;
+await assert.rejects(stage.stageLegacyMediaCopies(emptyProof,{
+  ...adapter,sourcePaths:[],
+}),/V3_STAGING_NO_ORIGINAL_MEDIA/);
+assert.equal(uploadCalls,beforeEmptyUploads,
+  "An empty inventory must not be reported as a successfully migrated image");
 const result=await stage.stageLegacyMediaCopies(manifest,adapter);
 assert.equal(result.objectsVerified,1);
 assert.equal(result.copiesVerified,1);
@@ -178,6 +190,8 @@ assert.match(panel,/if\(!personalConnected\)\{/);
 assert.doesNotMatch(panel,/if\(backupInFlight\.current!==null\|\|pending\|\|!personalConnected\)return/);
 assert.match(panel,/只读复核已复制原图/);
 assert.match(panel,/progress\.copiesVerified/);
+assert.match(panel,/V3_STAGING_NO_ORIGINAL_MEDIA/);
+assert.match(panel,/不能作为复制成功的证据/);
 assert.match(infra,/verifyAuthenticatedStagedLegacyMedia/);
 assert.match(infra,/verifyOnly/);
 assert.match(infra,/onProgress:/);
