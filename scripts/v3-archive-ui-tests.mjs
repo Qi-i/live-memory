@@ -54,7 +54,20 @@ assert.equal(posterDisplayMode(.64,.67),"cover");
 assert.equal(posterDisplayMode(.42,.67),"backdrop");
 assert.ok(visibleCropFraction(.64,.67)<.24);
 assert.ok(visibleCropFraction(.42,.67)>.24);
-assert.match(workspace,/type Page = "档案" \| "统计" \| "城市" \| "迁移"/);
+assert.match(workspace,/type Page = "档案" \| "统计" \| "城市" \| "数据"/);
+assert.match(workspace,/navigation: Array<Exclude<Page,"数据">> = \["档案", "统计", "城市"\]/);
+assert.doesNotMatch(workspace,/navigation:.*"迁移"/,"Retired migration must not occupy a primary navigation slot");
+assert.match(workspace,/className="v3-real-more-tools"/);
+assert.match(workspace,/setPage\("数据"\)/);
+assert.match(workspace,/showLegacyDiagnostics&&<>/,
+  "Legacy cloud reconciliation diagnostics only mount on explicit advanced action");
+assert.match(workspace,/className="v3-real-poster-meta"/);
+assert.match(workspace,/className="v3-real-poster-edit"/);
+assert.match(workspace,/<Pencil size=\{16\}/);
+assert.doesNotMatch(workspace,/<div className="v3-real-card-actions">/,
+  "Do not waste a full row on redundant edit/detail buttons");
+assert.doesNotMatch(workspace,/aria-label=\{"更多详情 "\+record.title\}/);
+
 assert.doesNotMatch(workspace,/page==="完整档案"/);
 assert.match(workspace,/Object\.values\(posterRatios\)/);
 assert.match(workspace,/active\.map\(record=><PosterCard/);
@@ -104,6 +117,11 @@ assert.match(refineCss,/\.v3-real-refine-bar button\.is-active\{[^}]*var\(--v3-a
 assert.match(css,/\.v3-real-restore \{[^}]*var\(--v3-card-border\)/);
 assert.match(css,/\.v3-real-restore-review button:first-of-type \{[^}]*var\(--v3-accent\)/);
 assert.match(css,/\.v3-real-metrics article \{[^}]*var\(--v3-card-border\)/);
+assert.match(refineCss,/\.v3-real-poster-card \{[^}]*padding:0;/);
+assert.match(refineCss,/\.v3-real-poster-open \.v3-real-poster-image \{[^}]*border:0;/);
+assert.match(refineCss,/\.v3-real-poster-edit \{[^}]*position:absolute;/);
+assert.doesNotMatch(refineCss,/\.v3-real-card-actions/);
+assert.match(css,/\.v3-real-more-tools/);
 assert.match(workspace,/canEditLegacyAccount/);
 assert.match(workspace,/await requireAuthorizedWriter\(editing\.scope\)/);
 assert.match(workspace,/<V3ArchiveCollections mode=/);
