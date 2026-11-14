@@ -1,7 +1,8 @@
 import type { EventRecord } from "../../domain";
 import { currentStorageScope, normalizeRecord, storageScopeKey } from "../../storage";
 import { LocalRevisionChanged, type RecordRepository, type AppliedRemoteBatch } from "../../core/ports/RecordRepository";
-import { recordContentEqual } from "../../core/sync/revision";
+import { recordContentEqual, stableSerialize } from "../../core/sync/revision";
+import { inspectLegacyV3Adoption } from "../../core/application/inspectLegacyV3Adoption";
 import { applyRemoteAgainstLive } from "../../core/sync/applyRemote";
 
 const LEGACY_DB_VERSION = 1;
@@ -50,6 +51,46 @@ export class IndexedDbRecordRepository implements RecordRepository {
     });
   }
 
+
+  /**
+   * Atomic, exact local transport adoption. This is NOT a general replacement
+   * API: it rejects any changed, extra, absent or concurrently edited V2 row.
+   * The cloud snapshot must have already passed authenticated provenance and
+   * be fully cached for private image recovery before this method is called.
+   */
+  async adoptVerifiedCloudTransport(expected:EventRecord[],cloud:EventRecord[]){
+    this.checkScope();
+    const inspection=inspectLegacyV3Adoption(expected,cloud);
+    if(!inspection.changed)return inspection;
+    const db=await this.open();
+    this.checkScope();
+    return new Promise<typeof inspection>((resolve,reject)=>{
+      const tx=db.transaction(RECORD_STORE,"readwrite");
+      const store=tx.objectStore(RECORD_STORE);
+      const req=store.getAll();
+      let cause:Error|null=null;
+      req.onsuccess=()=>{
+        try{
+          this.checkScope();
+          const live=(req.result as EventRecord[]).map(normalizeRecord);
+          if(live.length!==expected.length)throw Error("V3_ADOPTION_LOCAL_CHANGED");
+          const before=new Map(expected.map(row=>[row.id,stableSerialize(row)]));
+          if(before.size!==expected.length||live.some(row=>
+            before.get(row.id)!==stableSerialize(row))){
+            throw Error("V3_ADOPTION_LOCAL_CHANGED");
+          }
+          inspectLegacyV3Adoption(live,cloud);
+          for(const row of cloud)store.put(normalizeRecord(row));
+        }catch(err){
+          cause=err instanceof Error?err:Error("V3_ADOPTION_CHECK_FAILED");
+          tx.abort();
+        }
+      };
+      tx.oncomplete=()=>{db.close();resolve(inspection);};
+      tx.onabort=()=>{db.close();reject(cause??tx.error??Error("V3_ADOPTION_ATOMIC_ABORT"));};
+      tx.onerror=()=>{db.close();reject(cause??tx.error??Error("V3_ADOPTION_ATOMIC_ERROR"));};
+    });
+  }
 
   async saveIfUnchanged(record: EventRecord, expectedSnapshot: EventRecord | null): Promise<void> {
     if (expectedSnapshot && expectedSnapshot.id !== record.id) {

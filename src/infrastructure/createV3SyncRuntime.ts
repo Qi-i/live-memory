@@ -1,4 +1,6 @@
 import type { AppSettings } from "../domain";
+import { inspectLegacyV3Adoption } from "../core/application/inspectLegacyV3Adoption";
+import { recordRevision } from "../core/sync/revision";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
 import { hasVerifiedOfflineMedia, persistVerifiedOfflineMedia, resolveMediaSource } from "../mediaCache";
@@ -61,6 +63,42 @@ export class V3SyncRuntime {
   /** Metadata-only V2 adoption: never transfers, edits or removes an archive. */
   async bootstrapMatchingHistory(): Promise<BaselineBootstrapReport> {
     return bootstrapEquivalentBaselines(this.local, this.remote, this.ledger);
+  }
+
+  /**
+   * A signed-in, already-activated V3 account may automatically re-home the
+   * SAME V2 browser's old image paths. No user export, no cloud write.
+   * Any divergent local edit, missing media or concurrent mutation aborts.
+   */
+  async adoptMatchingLegacyBrowserHistory():Promise<number>{
+    if(this.remote.provider!=="secure-account" ||
+       await this.remote.writerMode()!=="v3"){
+      throw Error("V3_ADOPTION_AUTHENTICATED_CUTOVER_REQUIRED");
+    }
+    const local=await this.local.list();
+    if(!local.length)return 0; // A completely fresh browser uses first-device pull.
+    const first=await this.remote.list();
+    const initial=inspectLegacyV3Adoption(local,first.map(item=>item.record));
+    if(!initial.changed){
+      await this.bootstrapMatchingHistory();
+      return 0;
+    }
+    // Every first-party original must be successfully fetched to the offline
+    // media cache BEFORE updating a single local record reference.
+    for(const item of first)await this.remote.prepareIncoming(item.record);
+    const second=await this.remote.list();
+    if(first.length!==second.length)throw Error("V3_ADOPTION_CLOUD_CHANGED");
+    for(let i=0;i<first.length;i++){
+      const a=first[i],b=second[i];
+      if(a.record.id!==b.record.id || a.serverRevision!==b.serverRevision ||
+         await recordRevision(a.record,true)!==await recordRevision(b.record,true)){
+        throw Error("V3_ADOPTION_CLOUD_CHANGED");
+      }
+    }
+    inspectLegacyV3Adoption(local,second.map(item=>item.record));
+    const adopted=await this.local.adoptVerifiedCloudTransport(local,second.map(item=>item.record));
+    await this.bootstrapMatchingHistory();
+    return adopted.changed;
   }
 
   async synchronize(options: {
