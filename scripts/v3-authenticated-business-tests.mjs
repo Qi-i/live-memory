@@ -98,8 +98,12 @@ assert.match(component,/v2AutoSyncDisabled:true/);
 assert.match(component,/initialTransferApproved:push\+pull>0/);
 assert.match(component,/V3_SYNC_MIGRATION_REVIEW_REQUIRED/);
 assert.match(component,/setTransferApproval\(\{scope:scoped\.scope,push,pull\}\)/);
-assert.equal((component.match(/\.synchronize\(/g)||[]).length,1,
-  "Only the explicit V3 runtime's gated synchronization may write to cloud");
+assert.equal((component.match(/\.synchronize\(/g)||[]).length,2,
+  "Only the two guarded V3 paths may synchronize: first-device pull or manual");
+assert.match(component,/if\(local\.length===0\)/,
+  "Automatic first-device restore must never overwrite pre-existing local history");
+assert.match(component,/review\.actions\["push-new"\]===0/,
+  "Automatic restore must never silently upload local records");
 assert.doesNotMatch(component,/saveRecord\(|\.upsert\(|\.compareAndSwap\(|replaceAllRecords\(|\.remove\(|deleteRecord\(/,
   "The workspace must never bypass optimistic local saves or call raw cloud writes");
 assert.doesNotMatch(component,/demoShows|demoPosters|demoData|mockCloud/);
