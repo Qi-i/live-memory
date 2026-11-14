@@ -304,6 +304,7 @@ export function V3RealWorkspace() {
     scope:"",mode:"v2",error:"",
   });
   const accountRuntime=useRef<{scope:string;runtime:V3SyncRuntime}|null>(null);
+  const rescueStarted=useRef<Set<string>>(new Set());
   const [syncBusy,setSyncBusy]=useState(false);
   const [transferApproval,setTransferApproval]=useState<{
     scope:string;push:number;pull:number;
@@ -330,6 +331,8 @@ export function V3RealWorkspace() {
         const mode=await runtime.writerMode();
         if(!alive||currentStorageScope()!==scope)return;
         accountRuntime.current={scope,runtime};
+        let readyForRescue=false;
+        let needsReload=false;
         if(mode==="v3"){
           // A freshly installed browser has no V2 IndexedDB. Recover the
           // already-owned cloud archive automatically; do not require JSON
@@ -348,6 +351,7 @@ export function V3RealWorkspace() {
                   v2AutoSyncDisabled:true,initialTransferApproved:true,
                 });
                 if(alive&&currentStorageScope()===scope){
+                  needsReload=true;
                   setReload(n=>n+1);
                   setNotice("已从当前账号的 V3 云端自动恢复档案及原图引用。");
                 }
@@ -355,10 +359,12 @@ export function V3RealWorkspace() {
             }else{
               const changed=await runtime.adoptMatchingLegacyBrowserHistory();
               if(alive&&currentStorageScope()===scope&&changed>0){
+                needsReload=true;
                 setReload(n=>n+1);
                 setNotice(`已核对并自动接管 ${changed} 条旧版档案的媒体路径；原始数据仍完整保留。`);
               }
             }
+            readyForRescue=true;
           }catch{
             if(alive&&currentStorageScope()===scope)
               setNotice("已保留本机旧版档案：云端和本机存在未同步差异，或原图暂不可用。没有自动覆盖任何内容。");
@@ -366,6 +372,32 @@ export function V3RealWorkspace() {
         }
         if(alive&&currentStorageScope()===scope)
           setCloudMode({scope,mode,error:""});
+        if(alive&&readyForRescue&&!needsReload&&!rescueStarted.current.has(scope)){
+          // This process is optional and runs after the archive is available.
+          // It cannot modify the user's original V2 browser history first.
+          rescueStarted.current.add(scope);
+          void import("../../infrastructure/supabase/rescueHistoricalCdnOriginals")
+            .then(module=>module.rescueHistoricalCdnOriginals(
+              scope,()=>alive&&currentStorageScope()===scope,
+            ))
+            .then(async result=>{
+              if(!alive||currentStorageScope()!==scope)return;
+              if(result.recovered>0){
+                // Reconcile cloud CAS versions into the local V3 ledger and
+                // cache the now-private originals before refreshing the views.
+                await runtime.synchronize({v2AutoSyncDisabled:true});
+                if(alive&&currentStorageScope()===scope){
+                  setNotice(`已将 ${result.recovered} 项历史海报/座位图原图复制到账号私有存储；${result.remaining} 项仍待回收。`);
+                  setReload(n=>n+1);
+                }
+              }else if(result.failed>0){
+                setNotice(`已检查历史媒体：${result.failed} 项原图暂无法从原网站获取，原链接和档案保持不变。`);
+              }
+            }).catch(()=>{
+              // Never block normal archive browsing because the CDN is down,
+              // or because local edits became concurrent with a cloud CAS.
+            });
+        }
       })().catch(()=>{
         if(alive&&currentStorageScope()===scope)
           setCloudMode({scope,mode:"v2",error:"账号写入状态无法验证，已保持只读。"});
