@@ -88,7 +88,7 @@ begin
         select o.name into strict v_path from storage.objects o
           where o.bucket_id='echo-v3-media-staging'
             and left(o.name,length(v_prefix))=v_prefix;
-        if v_path !~ ('^'||v_prefix||'[a-f0-9]{64}\\.(jpg|png|webp|gif|avif)$') then
+        if v_path !~ ('^'||v_prefix||'[a-f0-9]{64}[.](jpg|png|webp|gif|avif)$') then
           raise exception 'V3_ADMIN_PRIVATE_MEDIA_PATH_INVALID';
         end if;
         v_asset:=v_asset||jsonb_build_object(
