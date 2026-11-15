@@ -160,13 +160,17 @@ export class V3SyncRuntime {
     if (currentStorageScope() !== scope) throw Error("V3_CONFLICT_SCOPE_CHANGED");
 
     if (choice === "keep-cloud") {
-      // The protected local original remains in the separate vault even if
-      // a different tab wins the local CAS a moment before this commit.
-      await this.local.saveIfUnchanged(durableCloud, local);
-      const ack = await this.ledger.commitIfUnchanged(baseline, [
-        { id: expected.id, revision: cloudDigest },
+      // Fence the selected cloud revision with an atomic server-side CAS
+      // BEFORE touching local business data. A separate cloud read is NOT
+      // sufficient: another device could write between that read and our
+      // IndexedDB transaction. A content-identical CAS advances the server
+      // revision; it never selects the local record as the cloud winner.
+      const accepted = await this.remote.compareAndSwap(durableCloud, cloud.serverRevision);
+      await this.local.saveIfUnchanged(accepted.record, local);
+      const acknowledged = await this.ledger.commitIfUnchanged(baseline, [
+        { id: expected.id, revision: await recordRevision(accepted.record, true) },
       ]);
-      return { protectedKey, deferred: ack.deferredIds.length > 0 };
+      return { protectedKey, deferred: acknowledged.deferredIds.length > 0 };
     }
 
     // One final local check before remote CAS; its expected cloud revision
@@ -179,9 +183,11 @@ export class V3SyncRuntime {
     const applied = await this.local.applyRemoteIfUnchanged(
       locals, [accepted.record], { includeMedia: true },
     );
-    const acknowledged = await this.ledger.commitIfUnchanged(baseline, [
-      { id: expected.id, revision: await recordRevision(accepted.record, true) },
-    ]);
+    const acknowledged = applied.deferredIds.includes(expected.id)
+      ? { deferredIds: [expected.id] }
+      : await this.ledger.commitIfUnchanged(baseline, [
+          { id: expected.id, revision: await recordRevision(accepted.record, true) },
+        ]);
     return { protectedKey,
       deferred: applied.deferredIds.length > 0 || acknowledged.deferredIds.length > 0 };
   }
