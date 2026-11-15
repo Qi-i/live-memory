@@ -238,7 +238,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
 
   const distinctArtistPicks = useMemo(
     () => curateFeaturedRecords(eligibleRecords.filter(record => !record.deletedAt),
-      record => Boolean(primaryMedia(record)), 5),
+      record => Boolean(primaryMedia(record, ["poster"])), 5),
     [eligibleRecords],
   );
 
@@ -343,7 +343,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     // Share compositions use the primary poster from every selected record. Warm
     // those exact assets before mounting the dense canvas so the preview appears
     // as one composition instead of progressively refetching a few late posters.
-    void preloadPrimaryRecordMedia(selectedRecords).finally(() => {
+    void preloadPrimaryRecordMedia(selectedRecords, 6, true).finally(() => {
       if (active) setPreparing(false);
     });
     return () => { active = false; };
@@ -389,8 +389,8 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
         // CDN CORS. Never silently substitute colored placeholders in V3.
         let unavailable=0;
         const inspected=await Promise.all(selectedRecords.map(async record=>{
-          const asset=primaryMedia(record);
-          if(!asset)return false;
+          const asset=primaryMedia(record, ["poster"]);
+          if(!asset)return true; // No poster: render the neutral title placeholder, never a private ticket.
           try{return Boolean(await loadMediaImage(asset));}
           catch{return false;}
         }));
@@ -767,7 +767,7 @@ function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin:
 }
 
 function SharePoster({ record, preserveFull = false }: { record: EventRecord; preserveFull?: boolean }) {
-  const media = primaryMedia(record);
+  const media = primaryMedia(record, ["poster"]);
   const src = useCachedMediaSrc(media);
   const style = {
     "--poster-a": record.colors[0],
@@ -782,7 +782,7 @@ function SharePoster({ record, preserveFull = false }: { record: EventRecord; pr
 }
 
 function recordPosterRatio(record: EventRecord) {
-  const media = primaryMedia(record);
+  const media = primaryMedia(record, ["poster"]);
   if (!media?.width || !media.height) return 0.8;
   return clamp(media.width / media.height, 0.5, 1.55);
 }
@@ -1638,7 +1638,7 @@ async function drawTicket(
   context.save();
   roundedPath(context, slot.x, slot.y, slot.width, slot.height, Math.max(12, slot.height * 0.06));
   context.clip();
-  const image = await loadMediaImage(primaryMedia(record));
+  const image = await loadMediaImage(primaryMedia(record, ["poster"]));
   if (image) {
     context.save();
     context.filter = "blur(20px) saturate(1.15)";
@@ -1796,7 +1796,7 @@ async function drawPoster(
   roundedPath(context, slot.x, slot.y, slot.width, slot.height, radius);
   context.clip();
 
-  const image = await loadMediaImage(primaryMedia(record));
+  const image = await loadMediaImage(primaryMedia(record, ["poster"]));
   if (image) {
     const preserveFullPoster = slot.width / Math.max(1, slot.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
     if (preserveFullPoster) {
