@@ -1,6 +1,9 @@
 import type { AppSettings } from "../domain";
 import { inspectLegacyV3Adoption } from "../core/application/inspectLegacyV3Adoption";
 import { recordRevision } from "../core/sync/revision";
+import { decideRecordSync } from "../core/sync/policy";
+import { protectConflictVersion } from "./indexedDb/v3ConflictVault";
+import { recordContentEqual } from "../core/sync/revision";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
 import { hasVerifiedOfflineMedia, persistVerifiedOfflineMedia, resolveMediaSource } from "../mediaCache";
@@ -16,6 +19,16 @@ import { synchronizeWithLedger } from "../core/application/synchronizeWithLedger
 import { bootstrapEquivalentBaselines, type BaselineBootstrapReport } from "../core/application/bootstrapEquivalentBaselines";
 import type { SyncRunResult } from "../core/application/synchronizeRecords";
 import type { CloudRecordEnvelope } from "../core/ports/CloudRecordAdapter";
+
+export interface V3ConflictPreview {
+  id: string;
+  title: string;
+  action: "conflict" | "unbased-divergence";
+  localDigest: string;
+  cloudDigest: string;
+  cloudServerRevision: string;
+  baselineDigest: string | null;
+}
 
 /**
  * A real, authenticated V3 runtime, but still OPT-IN and not imported by V2.
@@ -54,6 +67,112 @@ export class V3SyncRuntime {
     return reviewMigrationReadOnly(this.local, this.remote, {
       read: (id) => baseline.get(id),
     });
+  }
+
+  /** Read the actual two competing versions and the acknowledged digest.
+   * A preview is a short-lived CAS token, never permission to overwrite
+   * whatever the other device has subsequently written.
+   */
+  async previewConflict(id: string): Promise<V3ConflictPreview> {
+    if (!id.trim()) throw Error("V3_CONFLICT_INVALID_ID");
+    const [locals, remote, baseline] = await Promise.all([
+      this.local.list(), this.remote.list(), this.ledger.snapshot(),
+    ]);
+    const local = locals.find(row => row.id === id);
+    const cloud = remote.find(row => row.record.id === id);
+    if (!local || !cloud) throw Error("V3_CONFLICT_TWO_VERSIONS_REQUIRED");
+    const localDigest = await recordRevision(local, true);
+    const cloudDigest = await recordRevision(cloud.record, true);
+    const base = baseline.get(id);
+    const action = decideRecordSync({
+      localRevision: localDigest, remoteRevision: cloudDigest,
+      acknowledgedRevision: base,
+    }).action;
+    if (action !== "conflict" && action !== "unbased-divergence") {
+      throw Error("V3_CONFLICT_NOT_CURRENT");
+    }
+    return { id, title: local.title || cloud.record.title, action,
+      localDigest, cloudDigest, cloudServerRevision: cloud.serverRevision,
+      baselineDigest: base ?? null };
+  }
+
+  /** Explicit manual selection. The losing version and ALL obtainable
+   * original media bytes must be durably protected before replacing anything.
+   * Every revision and the server writer fence is checked immediately again.
+   * A concurrent cloud CAS failure leaves both original versions unchanged.
+   */
+  async resolveConflict(
+    expected: V3ConflictPreview, choice: "keep-local" | "keep-cloud",
+  ): Promise<{ protectedKey: string; deferred: boolean }> {
+    if (choice !== "keep-local" && choice !== "keep-cloud") {
+      throw Error("V3_CONFLICT_CHOICE_REQUIRED");
+    }
+    if (await this.remote.writerMode() !== "v3") {
+      throw Error("V3_SERVER_CUTOVER_NOT_ACTIVE");
+    }
+    const scope = this.local.scope;
+    if (!scope || currentStorageScope() !== scope) throw Error("V3_CONFLICT_SCOPE_CHANGED");
+    const [locals, remote, baseline] = await Promise.all([
+      this.local.list(), this.remote.list(), this.ledger.snapshot(),
+    ]);
+    if (currentStorageScope() !== scope) throw Error("V3_CONFLICT_SCOPE_CHANGED");
+    const local = locals.find(row => row.id === expected.id);
+    const cloud = remote.find(row => row.record.id === expected.id);
+    if (!local || !cloud) throw Error("V3_CONFLICT_VERSION_CHANGED");
+    const [localDigest, cloudDigest] = await Promise.all([
+      recordRevision(local, true), recordRevision(cloud.record, true),
+    ]);
+    if (localDigest !== expected.localDigest ||
+      cloudDigest !== expected.cloudDigest ||
+      cloud.serverRevision !== expected.cloudServerRevision ||
+      (baseline.get(expected.id) ?? null) !== expected.baselineDigest ||
+      recordContentEqual(local, cloud.record, true)) {
+      throw Error("V3_CONFLICT_VERSION_CHANGED");
+    }
+    const decision = decideRecordSync({
+      localRevision: localDigest, remoteRevision: cloudDigest,
+      acknowledgedRevision: baseline.get(expected.id),
+    }).action;
+    if (decision !== expected.action || (
+      decision !== "conflict" && decision !== "unbased-divergence"
+    )) throw Error("V3_CONFLICT_VERSION_CHANGED");
+
+    // Hydration ensures cloud originals exist in the verified offline cache.
+    // Never replace an archive using only expiring private signed URLs.
+    const durableCloud = this.remote.prepareIncoming
+      ? await this.remote.prepareIncoming(cloud.record) : cloud.record;
+    const losing = choice === "keep-local" ? durableCloud : local;
+    const protectedKey = await protectConflictVersion(
+      scope, losing, choice === "keep-local" ? "cloud" : "local",
+      asset => resolveMediaSource(asset, true),
+    );
+    if (currentStorageScope() !== scope) throw Error("V3_CONFLICT_SCOPE_CHANGED");
+
+    if (choice === "keep-cloud") {
+      // The protected local original remains in the separate vault even if
+      // a different tab wins the local CAS a moment before this commit.
+      await this.local.saveIfUnchanged(durableCloud, local);
+      const ack = await this.ledger.commitIfUnchanged(baseline, [
+        { id: expected.id, revision: cloudDigest },
+      ]);
+      return { protectedKey, deferred: ack.deferredIds.length > 0 };
+    }
+
+    // One final local check before remote CAS; its expected cloud revision
+    // still provides the server-side atomic guarantee for other devices.
+    const current = (await this.local.list()).find(row => row.id === expected.id);
+    if (!current || await recordRevision(current, true) !== localDigest) {
+      throw Error("V3_CONFLICT_VERSION_CHANGED");
+    }
+    const accepted = await this.remote.compareAndSwap(local, cloud.serverRevision);
+    const applied = await this.local.applyRemoteIfUnchanged(
+      locals, [accepted.record], { includeMedia: true },
+    );
+    const acknowledged = await this.ledger.commitIfUnchanged(baseline, [
+      { id: expected.id, revision: await recordRevision(accepted.record, true) },
+    ]);
+    return { protectedKey,
+      deferred: applied.deferredIds.length > 0 || acknowledged.deferredIds.length > 0 };
   }
 
   /** Full personal cloud inventory for an explicit, user-downloaded
