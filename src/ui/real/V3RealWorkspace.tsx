@@ -705,11 +705,14 @@ export function V3RealWorkspace() {
         return;
       }
       const push=audit.actions["push-new"],pull=audit.actions["pull-new"];
-      if((push||pull)&&(!transferApproval||
+      // Once a revision was safely acknowledged in this exact account,
+      // subsequent new events are ordinary sync, not a repeated migration.
+      const alreadySynchronized=await scoped.runtime.hasAcknowledgedBaseline();
+      if((push||pull)&&!alreadySynchronized&&(!transferApproval||
           transferApproval.scope!==scoped.scope||
           transferApproval.push!==push||transferApproval.pull!==pull)){
         setTransferApproval({scope:scoped.scope,push,pull});
-        setNotice(`首次同步预计本机新增上传 ${push} 条、云端新增下载 ${pull} 条。
+        setNotice(`首次接入该账号预计上传本机新增 ${push} 条、下载云端新增 ${pull} 条。
           请检查数量，再点击一次“安全同步”以确认；不会覆盖不同内容的历史记录。`);
         return;
       }
