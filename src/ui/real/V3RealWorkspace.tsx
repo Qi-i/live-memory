@@ -648,6 +648,41 @@ export function V3RealWorkspace() {
     // CAS synchronization. No V2 upload, no silent account-cloud writer.
   };
 
+  const exportAndroidConcertReminders=async()=>{
+    if(!canEditLocal||snapshot.busy)return;
+    const scope=currentStorageScope();
+    try{
+      const {downloadBlob}=await import("../../media");
+      const originals=await listRecords();
+      if(scope!==currentStorageScope())throw Error("V3_ANDROID_EXPORT_ACCOUNT_CHANGED");
+      const shows=originals.filter(r=>
+        !r.deletedAt&&r.status==="planned"&&r.recordState==="normal"&&
+        /^\\d{4}-\\d{2}-\\d{2}$/.test(r.date||"")&&
+        typeof r.id==="string"&&typeof r.title==="string"
+      ).map(r=>({
+        schemaVersion:2,id:r.id,title:r.title,status:r.status,
+        recordState:r.recordState,date:r.date,time:r.time||"",
+        venue:r.venue||"",seat:r.seat||"",
+        media:[],
+      }));
+      if(!shows.length){
+        setNotice("本机没有待看演出可供导出；如云端有最新演出，请先安全同步并刷新。");
+        return;
+      }
+      const payload={app:"live-memory",version:3,
+        purpose:"android-concert-reminders",source:"current-local-v3",
+        generatedAt:new Date().toISOString(),records:shows};
+      if(scope!==currentStorageScope())throw Error("V3_ANDROID_EXPORT_ACCOUNT_CHANGED");
+      downloadBlob(JSON.stringify(payload),
+        "live-memory-android-reminders-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      setNotice(`已导出 ${shows.length} 场本机待看演出的时间、场馆及座位；不含票根、图片、金额、账号令牌。可在 Qi-Ledger Android 的「提醒与通知」中导入。`);
+    }catch(error){
+      setNotice("未完成安卓演出提醒导出，档案未改变。"+
+        (error instanceof Error?error.message:""));
+    }
+  };
+
   const exportVerifiedLocalBackup=async()=>{
     if(!canEditLocal||exportBusy)return;
     const scope=currentStorageScope();
@@ -1289,6 +1324,17 @@ export function V3RealWorkspace() {
           <header><span>DATA & BACKUP</span><h2>数据与备份</h2></header>
           <p>原始档案与图片始终保留。备份、恢复等操作仅在手动确认后执行。</p>
         </section>
+        {canEditLocal&&<section className="v3-real-restore"
+          aria-label="安卓演出提醒导出">
+          <strong>导出安卓演出与座位提醒</strong>
+          <p>从本机 V3 档案提取待看演出的准确日期、开演时间和座位，
+            供 Qi-Ledger Android 离线设置提醒。只导出简短日程 JSON，
+            不含票根原图、支付信息或云端凭据。导出前请核对已完成安全同步。</p>
+          <button type="button" disabled={snapshot.busy||syncBusy}
+            onClick={()=>void exportAndroidConcertReminders()}>
+            下载安卓提醒日程 JSON
+          </button>
+        </section>}
         {(canEditLocal||canEditAccount) && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
       <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>
