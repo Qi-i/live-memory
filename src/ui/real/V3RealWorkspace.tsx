@@ -5,7 +5,9 @@ import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
 import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
 import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
-import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
+import type { V3SyncRuntime, V3ConflictPreview } from "../../infrastructure/createV3SyncRuntime";
+import { listProtectedConflictVersions, readProtectedConflictVersion,
+  type ProtectedConflictSummary } from "../../infrastructure/indexedDb/v3ConflictVault";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
 import { saveRecordDraft } from "../../core/application/saveRecordDraft";
@@ -310,6 +312,8 @@ export function V3RealWorkspace() {
   const accountRuntime=useRef<{scope:string;runtime:V3SyncRuntime}|null>(null);
   const rescueStarted=useRef<Set<string>>(new Set());
   const [syncBusy,setSyncBusy]=useState(false);
+  const [conflictPreview,setConflictPreview]=useState<{scope:string;entry:V3ConflictPreview}|null>(null);
+  const [protectedVersions,setProtectedVersions]=useState<ProtectedConflictSummary[]>([]);
   const [syncReview,setSyncReview]=useState<{
     scope:string;checked:number;unresolved:number;
     details:Awaited<ReturnType<V3SyncRuntime["review"]>>;
@@ -447,6 +451,16 @@ export function V3RealWorkspace() {
     let alive=true;
     setPendingEditors([]);
     setPendingEditorsError("");
+    setConflictPreview(null);
+    setProtectedVersions([]);
+    if(validScope && access.mode==="account"){
+      void listProtectedConflictVersions(scope).then(rows=>{
+        if(alive && currentStorageScope()===scope)setProtectedVersions(rows);
+      }).catch(()=>{
+        if(alive && currentStorageScope()===scope)
+          setPendingEditorsError("历史冲突保留版本暂无法读取；未删除任何资料。");
+      });
+    }
     if(validScope && access.mode==="account"){
       void listPendingEditors(scope).then(rows=>{
         if(alive&&currentStorageScope()===scope)setPendingEditors(rows);
@@ -753,6 +767,84 @@ export function V3RealWorkspace() {
     }finally{setSyncBusy(false);}
   };
 
+  const inspectSpecificConflict=async(id:string)=>{
+    const scoped=accountRuntime.current;
+    if(!canEditAccount||!scoped||syncBusy||scoped.scope!==currentStorageScope())return;
+    setSyncBusy(true);
+    try{
+      const entry=await scoped.runtime.previewConflict(id);
+      if(currentStorageScope()!==scoped.scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      setConflictPreview({scope:scoped.scope,entry});
+      setNotice("已加载两份真实版本的字段对照。请逐项核对后手动选择；未改动正式数据。");
+    }catch(error){
+      setConflictPreview(null);
+      setNotice("无法验证当前冲突版本，请重新检查账号及网络。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
+  const confirmSpecificConflict=async(choice:"keep-local"|"keep-cloud")=>{
+    const scoped=accountRuntime.current;
+    const preview=conflictPreview;
+    if(!canEditAccount||!scoped||!preview||syncBusy||
+      scoped.scope!==preview.scope||currentStorageScope()!==preview.scope)return;
+    const label=choice==="keep-local"?"保留本机":"保留云端";
+    if(!window.confirm("确定"+label+"版本？另一份记录（含可取回的图片字节）必须先完整保存到本机保护区。" +
+      "遇到原图缺失、版本变化、空间不足会自动中止，不会静默丢弃。"))return;
+    setSyncBusy(true);
+    try{
+      const result=await scoped.runtime.resolveConflict(preview.entry,choice);
+      if(currentStorageScope()!==preview.scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      setConflictPreview(null);
+      setSyncReview(null);
+      const kept=await listProtectedConflictVersions(preview.scope);
+      if(currentStorageScope()===preview.scope)setProtectedVersions(kept);
+      setNotice(result.deferred
+        ? "已保留冲突版本，但另一标签页可能有新修改。请重新检查再同步；保护副本可导出。"
+        : "已按明确选择处理冲突；另一方版本与可获得的图片字节已保存到本机保护区。可导出保护副本。");
+      setReload(n=>n+1);
+    }catch(error){
+      setConflictPreview(null);
+      setNotice("冲突选择未完成；原有双端记录保留，可能已有本机保护副本。请重新检查差异。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
+  const exportProtectedConflict=async(key:string)=>{
+    const scope=currentStorageScope();
+    if(syncBusy||!canEditAccount||!scope)return;
+    setSyncBusy(true);
+    try{
+      const backup=await readProtectedConflictVersion(scope,key);
+      if(!backup)throw Error("V3_PROTECTED_VERSION_NOT_FOUND");
+      const {createPortableBackup,verifyPortableBackupDocument}=
+        await import("../../core/application/portableMediaBackup");
+      const {readAsDataUrl,downloadBlob}=await import("../../media");
+      const assets=new Map(backup.assets.map(item=>[item.id,item.bytes]));
+      const archive=await createPortableBackup([backup.record],{
+        assertScope(){
+          if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+        },
+        async load(asset){
+          const bytes=assets.get(asset.id);
+          if(!bytes)throw Error("V3_PROTECTED_IMAGE_MISSING");
+          return bytes;
+        },
+        encode:readAsDataUrl,
+      });
+      const checked=await verifyPortableBackupDocument(archive);
+      if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      downloadBlob(JSON.stringify(archive),
+        "live-memory-protected-"+backup.recordId+"-"+backup.savedAt.slice(0,10)+".json",
+        "application/json");
+      setNotice("已请求下载保护副本，内含 "+checked.records+" 条记录与 "+
+        checked.assets+" 张可验证图片；文件可离线保存。已有相同 ID 的正式档案不会被恢复入口覆盖。");
+    }catch(error){
+      setNotice("保护副本导出失败，原本机保护区仍保留。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
   const safeSync=async()=>{
     if(!canEditAccount||syncBusy)return;
     const scoped=accountRuntime.current;
@@ -1019,6 +1111,34 @@ export function V3RealWorkspace() {
             onClick={()=>void inspectSyncDifferences()}>
             {syncBusy?"正在检查…":"核对本机与云端差异"}
           </button>
+          {conflictPreview?.scope===actualScope&&
+            <div className="v3-real-restore-review" aria-label="V3 冲突版本对照">
+              <strong>{conflictPreview.entry.title} · 双版本逐项核对</strong>
+              <div className="v3-real-conflict-compare">
+                {(["local","cloud"] as const).map(side=>{
+                  const item=conflictPreview.entry[side];
+                  return <article key={side}>
+                    <strong>{side==="local"?"本机版本":"云端版本"}</strong>
+                    <p>标题：{item.title}</p>
+                    <p>日期：{item.date} · 城市：{item.city}</p>
+                    <p>场馆：{item.venue} · 状态：{item.status}</p>
+                    <p>图片：{item.mediaCount} 项 · 更新：{item.updatedAt}</p>
+                    <p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>备注：{item.note||"无"}</p>
+                  </article>;
+                })}
+              </div>
+              <p>系统先将被舍弃版本及可取得的图片字节保存至本机保护区；
+                必须校验云端版本号、当前账号与本机修订。任何步骤失败即停止覆盖。</p>
+              <button type="button" disabled={syncBusy}
+                onClick={()=>void confirmSpecificConflict("keep-local")}>
+                明确保留本机版本
+              </button>
+              <button type="button" disabled={syncBusy}
+                onClick={()=>void confirmSpecificConflict("keep-cloud")}>
+                明确保留云端版本
+              </button>
+              <button type="button" disabled={syncBusy} onClick={()=>setConflictPreview(null)}>暂不处理</button>
+            </div>}
           {syncReview?.scope===actualScope&&<>
             <p>核对 {syncReview.checked} 条记录；待人工确认 {syncReview.unresolved} 条；
               差异总数 {syncReview.details.total} 条。</p>
@@ -1029,11 +1149,27 @@ export function V3RealWorkspace() {
                 item.action==="push"?"本机改动":item.action==="pull"?"云端改动":"待核实"}</summary>
               <p>本机存在：{item.localPresent?"是":"否"} · 云端存在：{item.remotePresent?"是":"否"}</p>
               {item.differingFields.length>0&&<p>差异字段：{item.differingFields.join("、")}</p>}
-              {["conflict","unbased-divergence","defer-absence"].includes(item.action)&&
-                <p>此版本不执行覆盖式冲突解决。请保留本机输入，进入经典版进行人工核对。</p>}
+              {(item.action==="conflict"||item.action==="unbased-divergence")&&
+              <button type="button" disabled={syncBusy} onClick={()=>void inspectSpecificConflict(item.id)}>
+                对照并选择版本
+              </button>}
+            {item.action==="defer-absence"&&
+              <p>单端缺失可能是删除或清单不全，暂不推断或覆盖；请先核查缺失来源。</p>}
             </details>)}
             {syncReview.details.truncated&&<p>清单最多显示 100 条，需分批处理。</p>}
           </>}
+        </section>}
+        {validScope&&access.mode==="account"&&<section className="v3-real-restore"
+          aria-label="V3 冲突保护副本">
+          <strong>冲突保护副本 · {protectedVersions.length} 份</strong>
+          <p>只有明确处理冲突后才会形成副本，实际图片字节独立存于当前浏览器；
+            清理浏览器数据会丢失本机副本，请及时导出保存。</p>
+          {protectedVersions.map(item=><div key={item.key}>
+            <span><b>{item.title}</b> · 已保护{item.savedSide==="local"?"本机":"云端"}版本
+              · {item.assets} 张图片 · {item.savedAt.slice(0,16).replace("T"," ")}</span>
+            <button type="button" disabled={syncBusy||!canEditAccount}
+              onClick={()=>void exportProtectedConflict(item.key)}>下载完整保护副本</button>
+          </div>)}
         </section>}
         <section className="v3-real-restore" aria-label="V3 回收站">
           <strong>回收站 · {trashedRecords.length} 条</strong>
