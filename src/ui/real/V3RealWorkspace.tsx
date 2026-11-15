@@ -874,7 +874,8 @@ export function V3RealWorkspace() {
             setNotice("地图密钥尚未在 V3 中单独配置；请先在 V2 设置页配置，再返回 V3 分享。");
           }}
           onClose={()=>{setSharing(false);setShareRecord(null);}}/>
-      : editing && editing.scope===actualScope && canEdit
+      : editing && editing.scope===actualScope &&
+        (canEdit || (validScope && access.mode==="account"))
       ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
       : selected
