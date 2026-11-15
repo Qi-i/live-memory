@@ -763,8 +763,25 @@ export function V3RealWorkspace() {
       // A cloud CAS successful recovery is NOT a local-sync acknowledgement.
       // Never auto-merge an old local browser record after a cloud-side image
       // rewrite: the user can safely review before synchronizing.
+      const names:Record<string,string>={
+        CDN_FORBIDDEN:"原网站拒绝访问",CDN_NOT_FOUND:"原网站图片已失效",
+        CDN_RATE_LIMITED:"原网站限流",CDN_SERVER_ERROR:"原网站故障",
+        CDN_DOWNLOAD_UNAVAILABLE:"下载不可用",CDN_TIMEOUT:"下载超时",
+        CDN_IMAGE_TOO_LARGE:"原图超出限制",
+        CDN_EMPTY_OR_INVALID_IMAGE:"原图为空或无效",
+        CDN_NOT_A_SUPPORTED_IMAGE:"图片格式不受支持",
+        CDN_MISSING_BODY:"原站未提供图片",
+        UNTRUSTED_SOURCE:"来源不符合白名单",
+        PRIVATE_UPLOAD_FAILED:"私有存储上传失败",
+        PRIVATE_IMAGE_HASH_MISMATCH:"私有存储校验失败",
+        V3_REVISION_CONFLICT_OR_CAS_FAILED:"账号云端记录已更新",
+        UNKNOWN_FAILURE:"其他失败",
+      };
+      const reasons=Object.entries(report.failureReasons).map(([key,count])=>
+        (names[key]||"其他失败")+count+" 项").join("；");
       setNotice(`历史原图补全：实际私有化复制 ${report.recovered} 项，
         原图暂不可取回 ${report.failed} 项，仍有外链 ${report.remaining} 项。
+        ${reasons?"失败分类："+reasons+"。":""}
         ${report.recovered?"云端媒体引用已经更新；请先核对差异，再点击安全同步。":
           "云端记录未被替换。若一直失败，请保存原网站可见图片后从编辑器人工补图。"}`);
       if(report.recovered)setReload(n=>n+1);
