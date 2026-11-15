@@ -993,6 +993,9 @@ export function V3RealWorkspace() {
             setEditing({draft:blankRecord(),baseline:null,scope:actualScope});
             setSelectedId(null);
           }}>新增本机待提交草稿</button>
+          <button type="button" onClick={()=>setReload(n=>n+1)}>
+            重新检查网络与账号写入权限
+          </button>
           {pendingEditorsError&&<p role="alert">{pendingEditorsError}</p>}
           {pendingEditors.map(row=><div key={row.draft.id}>
             <strong>{row.draft.title}</strong>
