@@ -657,7 +657,7 @@ export function V3RealWorkspace() {
       if(scope!==currentStorageScope())throw Error("V3_ANDROID_EXPORT_ACCOUNT_CHANGED");
       const shows=originals.filter(r=>
         !r.deletedAt&&r.status==="planned"&&r.recordState==="normal"&&
-        /^\\d{4}-\\d{2}-\\d{2}$/.test(r.date||"")&&
+        /^\d{4}-\d{2}-\d{2}$/.test(r.date||"")&&
         typeof r.id==="string"&&typeof r.title==="string"
       ).map(r=>({
         schemaVersion:2,id:r.id,title:r.title,status:r.status,
