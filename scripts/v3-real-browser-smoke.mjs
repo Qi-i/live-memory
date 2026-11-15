@@ -237,7 +237,7 @@ try {
   await page.getByRole("heading",{name:"数据与备份"}).waitFor();
   if(await page.locator(".v3-migration-panel").count())
     throw Error("Legacy cloud diagnostics mounted before the explicit advanced toggle");
-  const restoreSection=page.locator(".v3-real-restore");
+  const restoreSection=page.getByRole("region",{name:"V3 完整备份恢复"});
   if(await restoreSection.count()){
     const restoreBorder=await restoreSection.evaluate(node=>getComputedStyle(node).borderStyle);
     if(restoreBorder==="none")throw Error("Backup restore entry lost the unified card boundary");
