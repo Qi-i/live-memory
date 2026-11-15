@@ -28,6 +28,10 @@ export interface V3ConflictPreview {
   cloudDigest: string;
   cloudServerRevision: string;
   baselineDigest: string | null;
+  local: { title:string; date:string; city:string; venue:string;
+    status:string; note:string; updatedAt:string; mediaCount:number };
+  cloud: { title:string; date:string; city:string; venue:string;
+    status:string; note:string; updatedAt:string; mediaCount:number };
 }
 
 /**
@@ -93,7 +97,14 @@ export class V3SyncRuntime {
     }
     return { id, title: local.title || cloud.record.title, action,
       localDigest, cloudDigest, cloudServerRevision: cloud.serverRevision,
-      baselineDigest: base ?? null };
+      baselineDigest: base ?? null,
+      local: {title:local.title,date:local.date,city:local.city,venue:local.venue,
+        status:local.status,note:local.note||"",updatedAt:local.updatedAt,mediaCount:local.media.length},
+      cloud: {title:cloud.record.title,date:cloud.record.date,
+        city:cloud.record.city,venue:cloud.record.venue,
+        status:cloud.record.status,note:cloud.record.note||"",
+        updatedAt:cloud.record.updatedAt,mediaCount:cloud.record.media.length},
+    };
   }
 
   /** Explicit manual selection. The losing version and ALL obtainable
