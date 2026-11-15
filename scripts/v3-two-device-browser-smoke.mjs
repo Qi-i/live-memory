@@ -218,7 +218,7 @@ try {
     serverRevision:String(Number(concurrent.serverRevision)+1),
   });
   result=await sync(B);
-  assert.equal(result.reviews.find(x=>x.id==="concert-1")?.action,"conflict");
+  assert.equal(result.reviews.find(x=>x.recordId==="concert-1")?.action,"conflict");
   let preview=await B.evaluate(()=>window.__v3Test.preview("concert-1"));
   assert.equal(preview.action,"conflict");
   assert.equal(preview.local.title,"Device B protected local draft");
