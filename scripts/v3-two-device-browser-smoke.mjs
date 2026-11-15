@@ -39,7 +39,11 @@ const fixture=(id,title)=>({
   schemaVersion:2,id,title,date:"2026-09-27",category:"concert",
   status:"watched",recordState:"normal",city:"北京",venue:"合成测试场馆",
   artists:["合成测试艺人"],lineup:[],companions:[],tags:[],setlist:[],
-  sourceChannel:"",media:[],favorite:false,colors:["#6671ab","#d2e2f2"],
+  sourceChannel:"",media:id==="concert-1"?[{
+    id:"media-concert-1",recordId:id,kind:"poster",title:"合成测试原图",
+    src:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2VUdMAAAAASUVORK5CYII=",
+    source:"local",mimeType:"image/png",
+  }]:[],favorite:false,colors:["#6671ab","#d2e2f2"],
   createdAt:"2026-09-27T00:00:00.000Z",
   updatedAt:"2026-09-27T00:00:00.000Z",
 });
@@ -84,6 +88,12 @@ try {
       const {synchronizeWithLedger}=await import(
         "/live-memory/src/core/application/synchronizeWithLedger.ts"
       );
+      const {V3SyncRuntime}=await import(
+        "/live-memory/src/infrastructure/createV3SyncRuntime.ts"
+      );
+      const {listProtectedConflictVersions,readProtectedConflictVersion} = await import(
+        "/live-memory/src/infrastructure/indexedDb/v3ConflictVault.ts"
+      );
       const local=new IndexedDbRecordRepository("device-local");
       const ledger=await IndexedDbRevisionLedger.create(
         "device-local","personal","isolated-v3-test-server"
@@ -91,6 +101,8 @@ try {
       const cloud={
         provider:"personal",accountScope:"device-local",
         identity:"isolated-v3-test-server",includeMedia:true,
+        writerMode:async()=> "v3",
+        prepareIncoming:async record=>record,
         list:async()=>{const reply=await window.__v3TestCloud({action:"list"});return reply.records;},
         compareAndSwap:async(record,expected)=>{
           const reply=await window.__v3TestCloud({action:"cas",record,expected});
@@ -103,6 +115,13 @@ try {
         save:(row,old)=>local.saveIfUnchanged(row,old),
         sync:()=>synchronizeWithLedger(local,cloud,ledger),
         ledger:()=>ledger.snapshot().then(items=>[...items]),
+        preview:(id)=>new V3SyncRuntime(local,cloud,ledger).previewConflict(id),
+        resolve:(entry,choice)=>new V3SyncRuntime(local,cloud,ledger).resolveConflict(entry,choice),
+        vault:()=>listProtectedConflictVersions("device-local"),
+        vaultRow:(key)=>readProtectedConflictVersion("device-local",key).then(row=>row && ({
+          title:row.record.title,savedSide:row.savedSide,
+          mediaCount:row.assets.length,bytes:row.assets.map(item=>item.bytes.size),
+        })),
       };
     });
   }
@@ -185,6 +204,57 @@ try {
   result=await sync(A);
   assert.ok(result.downloadedIds.includes("concert-offline"),
     "Reconnected cross-device data must be visible to both profiles");
+
+  // Actual production V3 conflict runtime against two independent browser
+  // databases. Never use a real Supabase account or modify production data.
+  // B has the prior acknowledged baseline, while A's CAS-raced remote has
+  // diverged. Create another independent B edit to force a true conflict.
+  const bBeforeResolve=(await list(B)).find(x=>x.id==="concert-1");
+  await save(B,{...bBeforeResolve,title:"Device B protected local draft"},bBeforeResolve);
+  result=await sync(B);
+  assert.equal(result.reviews.find(x=>x.id==="concert-1")?.action,"conflict");
+  let preview=await B.evaluate(()=>window.__v3Test.preview("concert-1"));
+  assert.equal(preview.action,"conflict");
+  assert.equal(preview.local.title,"Device B protected local draft");
+  assert.equal(preview.cloud.title,"Remote concurrent winner");
+
+  // The cloud is edited AFTER the preview, specifically during the selected
+  // cloud CAS. This must fail without modifying the local business record.
+  raceNextCAS=true;
+  await assert.rejects(B.evaluate(p=>window.__v3Test.resolve(p,"keep-cloud"),preview));
+  assert.equal((await list(B)).find(x=>x.id==="concert-1").title,
+    "Device B protected local draft","CAS race must not overwrite local draft");
+  assert.equal(server.get("concert-1").record.title,"Remote concurrent winner");
+  const oldVault=await B.evaluate(()=>window.__v3Test.vault());
+  assert.ok(oldVault.length>=1,"Losing version must be in durable local vault before CAS");
+  const oldVaultRow=await B.evaluate(key=>window.__v3Test.vaultRow(key),oldVault[0].key);
+  assert.equal(oldVaultRow.title,"Device B protected local draft");
+  assert.deepEqual(oldVaultRow.bytes.length,1,"Preserve actual poster bytes, not a signed URL");
+
+  // Explicitly accept a newly inspected cloud version; the server CAS
+  // confirmation must happen before B's conditional local replacement.
+  preview=await B.evaluate(()=>window.__v3Test.preview("concert-1"));
+  const accepted=await B.evaluate(p=>window.__v3Test.resolve(p,"keep-cloud"),preview);
+  assert.ok(accepted.protectedKey);
+  assert.equal(accepted.deferred,false);
+  assert.equal((await list(B)).find(x=>x.id==="concert-1").title,
+    "Remote concurrent winner");
+  assert.ok((await B.evaluate(()=>window.__v3Test.vault())).length>=2);
+  assert.equal((await sync(B)).reviews.length,0);
+
+  // A's independent pending version still exists; accepting the cloud on B
+  // must not erase another device's unsynchronized edits.
+  assert.equal((await list(A)).find(x=>x.id==="concert-1").title,"A pending edit");
+  const aPreview=await A.evaluate(()=>window.__v3Test.preview("concert-1"));
+  assert.equal(aPreview.action,"conflict");
+  const aAccepted=await A.evaluate(p=>window.__v3Test.resolve(p,"keep-local"),aPreview);
+  assert.equal(aAccepted.deferred,false);
+  assert.equal(server.get("concert-1").record.title,"A pending edit");
+  assert.equal((await sync(A)).reviews.length,0);
+  result=await sync(B);
+  assert.equal(result.downloadedIds.includes("concert-1"),true,
+    "Other device should pull newly accepted cloud record after local-only choice");
+  assert.equal((await list(B)).find(x=>x.id==="concert-1").title,"A pending edit");
 
   // Reloading one browser must preserve its IndexedDB + ledger, not reset sync.
   const beforeReload=await list(B);
