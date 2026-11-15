@@ -182,3 +182,19 @@
   .v3-real-refine-bar select{flex:1;min-width:0}
   .v3-real-refine-bar>span{margin-left:0}
 }
+
+/* Manual V3 reconciliation is secondary to archive browsing, but the
+ * competing versions must remain readable without tiny text or clipping. */
+.v3-real-conflict-compare {
+  display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:10px 0;
+}
+.v3-real-conflict-compare article {
+  min-width:0;border:1px solid var(--v3-card-border);border-radius:12px;
+  background:var(--v3-card-bg);padding:13px;
+  overflow-wrap:anywhere;
+}
+.v3-real-conflict-compare article strong {color:var(--v3-ink);font-size:14px;}
+.v3-real-conflict-compare article p {font-size:13px;line-height:1.55;margin:5px 0;}
+@media(max-width:700px){
+  .v3-real-conflict-compare{grid-template-columns:minmax(0,1fr);gap:8px;}
+}
