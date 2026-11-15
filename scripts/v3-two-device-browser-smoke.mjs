@@ -256,6 +256,27 @@ try {
     "Other device should pull newly accepted cloud record after local-only choice");
   assert.equal((await list(B)).find(x=>x.id==="concert-1").title,"A pending edit");
 
+  // The offline draft store is deliberately outside the formal V2/V3
+  // archive. A staged media addition must survive a full browser reload
+  // without appearing as a committed record or altering the cloud.
+  const pendingBase=(await list(B)).find(x=>x.id==="concert-1");
+  const pendingDraft={...pendingBase,title:"Offline staged poster update",
+    media:[...pendingBase.media,{
+      id:"staged-new-photo",recordId:pendingBase.id,kind:"photo",
+      src:"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO2VUdMAAAAASUVORK5CYII=",
+      source:"local",mimeType:"image/png",
+    }]};
+  await B.evaluate(async ({draft,baseline})=>{
+    const {stagePendingEditor}=await import(
+      "/live-memory/src/infrastructure/indexedDb/pendingEditorDrafts.ts"
+    );
+    await stagePendingEditor("device-local",draft,baseline);
+  },{draft:pendingDraft,baseline:pendingBase});
+  assert.equal((await list(B)).find(x=>x.id==="concert-1").title,"A pending edit",
+    "Staging cannot silently replace formal local record");
+  assert.equal(server.get("concert-1").record.title,"A pending edit",
+    "Staging cannot write to cloud");
+
   // Reloading one browser must preserve its IndexedDB + ledger, not reset sync.
   const beforeReload=await list(B);
   const ledgerBeforeReload=await ledger(B);
@@ -299,6 +320,18 @@ try {
   assert.deepEqual(await list(B),beforeReload,"Reload must not erase local records");
   assert.deepEqual(await ledger(B),ledgerBeforeReload,
     "Reload must preserve acknowledged remote revisions");
+  const offlineDrafts=await B.evaluate(async()=>{
+    const {listPendingEditors}=await import(
+      "/live-memory/src/infrastructure/indexedDb/pendingEditorDrafts.ts"
+    );
+    return listPendingEditors("device-local");
+  });
+  assert.equal(offlineDrafts.length,1);
+  assert.equal(offlineDrafts[0].draft.title,"Offline staged poster update");
+  assert.equal(offlineDrafts[0].draft.media.length,pendingDraft.media.length);
+  assert.equal(offlineDrafts[0].baseline.title,pendingBase.title);
+  assert.deepEqual(await list(B),beforeReload,
+    "A pending offline draft must not be counted as an official business record");
   assert.ok(casCalls>=5,"Test must actually exercise server-side optimistic writes");
   assert.deepEqual(outside,[],"No synthetic test may contact a real external API");
   console.log("V3 independent browser sync passed: 2 isolated IndexedDBs, real ledgers, CAS, conflict, offline, reconnect, reload. "+casCalls+" fake server writes.");
