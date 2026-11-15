@@ -3,7 +3,7 @@ import { Pencil } from "lucide-react";
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
-import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
+import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels, createId } from "../../domain";
 import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
 import type { V3SyncRuntime, V3ConflictPreview } from "../../infrastructure/createV3SyncRuntime";
 import { listProtectedConflictVersions, readProtectedConflictVersion,
@@ -847,6 +847,49 @@ export function V3RealWorkspace() {
     }finally{setSyncBusy(false);}
   };
 
+  const restoreProtectedAsPending=async(key:string)=>{
+    const scope=currentStorageScope();
+    if(syncBusy||!validScope||access.mode!=="account"||!scope)return;
+    if(!window.confirm("将保护副本另存为新的本机待提交草稿？"+
+      "正式记录和云端内容完全不变；图片将以已保护的实际字节重新附加。"))return;
+    setSyncBusy(true);
+    try{
+      const protectedRow=await readProtectedConflictVersion(scope,key);
+      if(!protectedRow)throw Error("V3_PROTECTED_VERSION_NOT_FOUND");
+      const {readAsDataUrl}=await import("../../media");
+      const newId=createId("record");
+      const now=new Date().toISOString();
+      const blobs=new Map(protectedRow.assets.map(item=>[item.id,item.bytes]));
+      if(blobs.size!==protectedRow.record.media.length)
+        throw Error("V3_PROTECTED_IMAGE_INCOMPLETE");
+      const media=await Promise.all(protectedRow.record.media.map(async asset=>{
+        const bytes=blobs.get(asset.id);
+        if(!bytes?.size)throw Error("V3_PROTECTED_IMAGE_MISSING");
+        const src=await readAsDataUrl(bytes);
+        if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+        return {...asset,id:createId("media"),recordId:newId,
+          storagePath:undefined,src,source:"local" as const,
+          mimeType:bytes.type||asset.mimeType,size:bytes.size,
+          createdAt:now,updatedAt:now};
+      }));
+      if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      const draft:EventRecord={
+        ...protectedRow.record,
+        id:newId,title:protectedRow.record.title+"（找回副本）",
+        media,mediaTombstones:[],deletedAt:undefined,syncedAt:undefined,
+        createdAt:now,updatedAt:now,
+      };
+      await stagePendingEditor(scope,draft,null);
+      if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      setNotice("已将保护副本完整另存为本机待提交草稿（含图片），"+
+        "正式档案和云端版本均未覆盖。请在上方待提交草稿核对后自行保存。");
+      setReload(n=>n+1);
+    }catch(error){
+      setNotice("恢复为草稿未完成，原保护副本保持不变。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
   const safeSync=async()=>{
     if(!canEditAccount||syncBusy)return;
     const scoped=accountRuntime.current;
@@ -1171,6 +1214,8 @@ export function V3RealWorkspace() {
               · {item.assets} 张图片 · {item.savedAt.slice(0,16).replace("T"," ")}</span>
             <button type="button" disabled={syncBusy}
               onClick={()=>void exportProtectedConflict(item.key)}>下载完整保护副本</button>
+            <button type="button" disabled={syncBusy}
+              onClick={()=>void restoreProtectedAsPending(item.key)}>找回为独立本机草稿</button>
           </div>)}
         </section>}
         <section className="v3-real-restore" aria-label="V3 回收站">
