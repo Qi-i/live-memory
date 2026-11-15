@@ -593,8 +593,8 @@ export function V3RealWorkspace() {
         throw new Error("V3_PENDING_SCOPE_CHANGED");
       await stagePendingEditor(editing.scope,draft,editing.baseline);
       setEditing(null);
-      setNotice("已持久保存为此账号的本机待提交草稿（含当前图片）；
-        不属于正式档案，也未写入云端。网络恢复后在「数据 → 待提交草稿」继续编辑并正式保存。");
+      setNotice("已保存为账号专属的本机待提交草稿（含图片）；" +
+        "尚未写入正式档案或云端。联网后在「数据 → 待提交草稿」继续编辑并提交。");
       setReload(n=>n+1);
       return;
     }
