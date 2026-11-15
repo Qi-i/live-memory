@@ -349,8 +349,8 @@ try {
   assert.match(archive, /loadMediaImage\(media\)/, "Map marker posters must be decoded through the shared media cache before marker mounting");
   assert.doesNotMatch(archive, /map\.setFitView/);
   assert.match(archive, /resizeEnable:\s*false/);
-  assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
-  assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords\)/);
+  assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record, \["poster"\]\)\)/);
+  assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords, 6, true\)/);
   assert.match(shareStudio, /SHARE_POSTER_MAX_FRAME_ASPECT\s*=\s*0\.86/);
   assert.match(shareStudio, /fitPosterRowRatios/);
   assert.match(shareStudio, /is-poster-preserved/);
