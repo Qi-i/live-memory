@@ -65,7 +65,7 @@ function PosterCard({record,onOpen,onEdit,frameRatio,onNaturalRatio}:{
   frameRatio:number;
   onNaturalRatio:(id:string,ratio:number)=>void;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   return <article className="v3-real-poster-card" data-record-id={record.id}>
     <button className="v3-real-poster-open" type="button" onClick={()=>onOpen(record.id)}
       aria-label={"查看 "+record.title}>
@@ -98,7 +98,7 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
   onShare:(record:EventRecord)=>void;
   onZoom:(media:MediaAsset)=>void;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   const detailRef=useDialogBehavior<HTMLElement>({
     onClose, focusSelector:'button[aria-label="关闭档案详情"]',
   });
@@ -117,9 +117,9 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
       </header>
       <div className="v3-real-modal-body">
         <button className="v3-real-modal-art" type="button"
-          disabled={!primaryMedia(record)}
-          onClick={()=>{const art=primaryMedia(record);if(art)onZoom(art);}}
-          aria-label={primaryMedia(record)?"放大主海报":"此记录没有可放大的主海报"}>
+          disabled={!primaryMedia(record, ["poster"])}
+          onClick={()=>{const art=primaryMedia(record, ["poster"]);if(art)onZoom(art);}}
+          aria-label={primaryMedia(record, ["poster"])?"放大主海报":"此记录没有可放大的主海报"}>
           {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
         </button>
         <dl>
@@ -161,7 +161,7 @@ function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
   onEdit?: (record:EventRecord)=>void;
   frameRatio:number;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   return <article className="v3-real-index-row" data-record-id={record.id}>
     <AdaptivePoster className="v3-real-index-thumb" src={src} alt="" frameRatio={frameRatio}/>
     <button type="button" className="v3-real-index-heading" onClick={()=>onOpen(record.id)}>
@@ -435,6 +435,8 @@ export function V3RealWorkspace() {
   // accounts should clear the status notice from the previous identity.
   useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
+  const trashedRecords=useMemo(()=>records.filter(row=>Boolean(row.deletedAt))
+    .sort((a,b)=>(b.deletedAt||"").localeCompare(a.deletedAt||"")),[records]);
   const frameRatio=useMemo(()=>dominantPosterRatio(Object.values(posterRatios)),
     [posterRatios]);
   const measurePoster=(id:string,ratio:number)=>{
@@ -445,7 +447,7 @@ export function V3RealWorkspace() {
     const all=describeRealArchive(records).records;
     return {
       cities:[...new Set(all.map(row=>row.city.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
-      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\\d{4}$/.test(y)))].sort().reverse(),
+      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort().reverse(),
     };
   },[records]);
   const active=useMemo(()=>model.records.filter(row=>
@@ -465,14 +467,14 @@ export function V3RealWorkspace() {
   };
   const visibleModel=useMemo(()=>describeRealArchive(active),[active]);
   const firstPosters=useMemo(()=>curateFeaturedRecords(
-    describeRealArchive(records).records, record=>Boolean(primaryMedia(record)),5,
+    describeRealArchive(records).records, record=>Boolean(primaryMedia(record, ["poster"])),5,
   ),[records]);
   useEffect(()=>{
     let alive=true;
     const scope=currentStorageScope();
     setPosters(firstPosters.map(record=>({id:record.id,title:record.title,city:record.city})));
     void Promise.all(firstPosters.map(async record=>{
-      const asset=primaryMedia(record) as MediaAsset;
+      const asset=primaryMedia(record, ["poster"]) as MediaAsset;
       const src=await resolveMediaSource(asset,true).catch(()=>"");
       return {id:record.id,title:record.title,city:record.city,src};
     })).then(rows=>{
@@ -525,8 +527,28 @@ export function V3RealWorkspace() {
     if(result.status!=="saved")throw Error("V3_RECORD_EDITED_ELSEWHERE");
     if(currentStorageScope()!==actualScope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
     setSelectedId(null);
-    setNotice("已按记录版本原子移入本机回收站；原图没有删除。云端变更仍须另行安全同步。");
+    setNotice("已移入本机回收站，原图未删除。进入「更多 → 数据与备份 → 回收站」可找回；账号云端仍须安全同步。");
     setReload(n=>n+1);
+  };
+
+  const restoreTrashedRecord=async(record:EventRecord)=>{
+    if(!canEdit || !record.deletedAt || restoreBusy)return;
+    const scope=currentStorageScope();
+    setRestoreBusy(true);
+    try{
+      if(scope!==actualScope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");
+      await requireAuthorizedWriter(scope);
+      const timestamp=new Date().toISOString();
+      const result=await saveRecordDraft(new IndexedDbRecordRepository(scope),
+        {...record,deletedAt:undefined,updatedAt:timestamp},record);
+      if(result.status!=="saved")throw Error("V3_RECORD_EDITED_ELSEWHERE");
+      if(currentStorageScope()!==scope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");
+      setNotice("已从本机回收站恢复「"+record.title+"」，原图引用不变；账号云端仍需另行安全同步。");
+      setReload(n=>n+1);
+    }catch(error){
+      setNotice("恢复未完成；原记录仍保留在回收站，请刷新检查版本后重试。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setRestoreBusy(false);}
   };
 
   const saveLocalDraft=async (draft:EventRecord)=>{
@@ -813,9 +835,9 @@ export function V3RealWorkspace() {
     </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
     <>
       {page==="档案" && <>
-        <V3FeaturedHero posters={posters} frameRatio={frameRatio}
+        {firstPosters.length>0 && <V3FeaturedHero posters={posters} frameRatio={frameRatio}
           onNaturalRatio={measurePoster} onBrowse={()=>
-          document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>
+          document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>}
         <div id="v3-real-archive-controls" className="v3-real-archive-controls">
           <ActionToolbar
             search={<input aria-label="搜索真实档案" value={search}
@@ -895,6 +917,19 @@ export function V3RealWorkspace() {
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="数据" && <>
+        <section className="v3-real-restore" aria-label="V3 回收站">
+          <strong>回收站 · {trashedRecords.length} 条</strong>
+          <p>已删除记录与媒体仍保留在当前档案；恢复先写回本机，账号档案需再点「安全同步」。</p>
+          {trashedRecords.length===0?<p>回收站为空。</p>:
+            <ul className="v3-real-trash-list">
+              {trashedRecords.map(record=><li key={record.id}>
+                <span><b>{record.title}</b> · {record.date} · 删除于 {record.deletedAt?.slice(0,10)}</span>
+                <button type="button" disabled={!canEdit||restoreBusy} onClick={()=>void restoreTrashedRecord(record)}>
+                  找回此记录
+                </button>
+              </li>)}
+            </ul>}
+        </section>
         <section className="v3-real-panel v3-real-data-heading">
           <header><span>DATA & BACKUP</span><h2>数据与备份</h2></header>
           <p>原始档案与图片始终保留。备份、恢复等操作仅在手动确认后执行。</p>
