@@ -42,6 +42,12 @@ export class V3SyncRuntime {
     });
   }
 
+  /** This provider- and account-scoped acknowledgement proves this is not
+   * the first archive transfer, while keeping all V3 write guards intact. */
+  async hasAcknowledgedBaseline(): Promise<boolean> {
+    return (await this.ledger.snapshot()).size > 0;
+  }
+
   /** Shows only private, in-browser conflict metadata. Never writes any record. */
   async review(): Promise<MigrationReview> {
     const baseline = await this.ledger.snapshot();
