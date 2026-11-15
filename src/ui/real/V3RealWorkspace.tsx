@@ -748,6 +748,32 @@ export function V3RealWorkspace() {
     }finally{setRestoreBusy(false);}
   };
 
+  const rescueCdnMediaManually=async()=>{
+    const scoped=accountRuntime.current;
+    if(!canEditAccount || syncBusy || !scoped ||
+      scoped.scope!==currentStorageScope())return;
+    setSyncBusy(true);
+    try{
+      const {rescueHistoricalCdnOriginals}=await import(
+        "../../infrastructure/supabase/rescueHistoricalCdnOriginals"
+      );
+      const report=await rescueHistoricalCdnOriginals(scoped.scope,
+        ()=>currentStorageScope()===scoped.scope);
+      if(currentStorageScope()!==scoped.scope)throw Error("V3_RESCUE_ACCOUNT_CHANGED");
+      // A cloud CAS successful recovery is NOT a local-sync acknowledgement.
+      // Never auto-merge an old local browser record after a cloud-side image
+      // rewrite: the user can safely review before synchronizing.
+      setNotice(`历史原图补全：实际私有化复制 ${report.recovered} 项，
+        原图暂不可取回 ${report.failed} 项，仍有外链 ${report.remaining} 项。
+        ${report.recovered?"云端媒体引用已经更新；请先核对差异，再点击安全同步。":
+          "云端记录未被替换。若一直失败，请保存原网站可见图片后从编辑器人工补图。"}`);
+      if(report.recovered)setReload(n=>n+1);
+    }catch(error){
+      setNotice("私有化补图检查失败，原链接及账号记录均保留。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
   const inspectSyncDifferences=async()=>{
     const scoped=accountRuntime.current;
     if(!canEditAccount||!scoped||syncBusy)return;
@@ -1148,6 +1174,17 @@ export function V3RealWorkspace() {
                 .catch(()=>setPendingEditorsError("草稿删除失败，原内容仍保留。"));
             }}>丢弃草稿</button>
           </div>)}
+        </section>}
+        {canEditAccount&&<section className="v3-real-restore"
+          aria-label="V3 历史外链原图补全">
+          <strong>历史海报与座位图 · 私有化补全</strong>
+          <p>只处理当前登录账号中仍指向大麦图片 CDN 的历史媒体。
+            每项须真实下载图片、验证 SHA-256、写入私有存储并通过云端 CAS，
+            否则保留原链接。不会触碰票根、其他账号或公开旧桶。</p>
+          <button type="button" disabled={syncBusy}
+            onClick={()=>void rescueCdnMediaManually()}>
+            {syncBusy?"正在核验账号…":"检查并补全外链原图"}
+          </button>
         </section>}
         {canEditAccount&&<section className="v3-real-restore" aria-label="V3 云端差异审阅">
           <strong>云端差异与冲突检查</strong>
