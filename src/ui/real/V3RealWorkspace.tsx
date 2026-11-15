@@ -306,6 +306,10 @@ export function V3RealWorkspace() {
   const accountRuntime=useRef<{scope:string;runtime:V3SyncRuntime}|null>(null);
   const rescueStarted=useRef<Set<string>>(new Set());
   const [syncBusy,setSyncBusy]=useState(false);
+  const [syncReview,setSyncReview]=useState<{
+    scope:string;checked:number;unresolved:number;
+    details:Awaited<ReturnType<V3SyncRuntime["review"]>>;
+  }|null>(null);
   const [transferApproval,setTransferApproval]=useState<{
     scope:string;push:number;pull:number;
   }|null>(null);
@@ -690,6 +694,25 @@ export function V3RealWorkspace() {
     }finally{setRestoreBusy(false);}
   };
 
+  const inspectSyncDifferences=async()=>{
+    const scoped=accountRuntime.current;
+    if(!canEditAccount||!scoped||syncBusy)return;
+    const scope=scoped.scope;
+    setSyncBusy(true);
+    try{
+      const audit=await scoped.runtime.audit();
+      const details=await scoped.runtime.review();
+      if(currentStorageScope()!==scope)throw Error("V3_REVIEW_ACCOUNT_CHANGED");
+      setSyncReview({scope,checked:audit.checkedRecords,
+        unresolved:audit.unresolved,details});
+      setNotice(audit.unresolved
+        ? "已列出需要人工核对的记录与字段；没有替您决定任何一方优先。"
+        : "云端差异核对完成。无双端分歧，仍须安全同步才能传输更改。");
+    }catch{
+      setNotice("无法读取当前账号的差异清单；本机记录未改变。请检查登录和网络。");
+    }finally{setSyncBusy(false);}
+  };
+
   const safeSync=async()=>{
     if(!canEditAccount||syncBusy)return;
     const scoped=accountRuntime.current;
@@ -920,6 +943,29 @@ export function V3RealWorkspace() {
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="数据" && <>
+        {canEditAccount&&<section className="v3-real-restore" aria-label="V3 云端差异审阅">
+          <strong>云端差异与冲突检查</strong>
+          <p>在当前账号内对比本机记录、云端记录与上次确认版本。检查为只读；不会自动丢弃任何一方。</p>
+          <button type="button" disabled={syncBusy}
+            onClick={()=>void inspectSyncDifferences()}>
+            {syncBusy?"正在检查…":"核对本机与云端差异"}
+          </button>
+          {syncReview?.scope===actualScope&&<>
+            <p>核对 {syncReview.checked} 条记录；待人工确认 {syncReview.unresolved} 条；
+              差异总数 {syncReview.details.total} 条。</p>
+            {syncReview.details.items.map(item=><details key={item.id}>
+              <summary><b>{item.title}</b> · {item.action==="conflict"?"双端并发修改":
+                item.action==="unbased-divergence"?"历史版本不一致":
+                item.action==="push-new"?"仅本机":item.action==="pull-new"?"仅云端":
+                item.action==="push"?"本机改动":item.action==="pull"?"云端改动":"待核实"}</summary>
+              <p>本机存在：{item.localPresent?"是":"否"} · 云端存在：{item.remotePresent?"是":"否"}</p>
+              {item.differingFields.length>0&&<p>差异字段：{item.differingFields.join("、")}</p>}
+              {["conflict","unbased-divergence","defer-absence"].includes(item.action)&&
+                <p>此版本不执行覆盖式冲突解决。请保留本机输入，进入经典版进行人工核对。</p>}
+            </details>)}
+            {syncReview.details.truncated&&<p>清单最多显示 100 条，需分批处理。</p>}
+          </>}
+        </section>}
         <section className="v3-real-restore" aria-label="V3 回收站">
           <strong>回收站 · {trashedRecords.length} 条</strong>
           <p>已删除记录与媒体仍保留在当前档案；恢复先写回本机，账号档案需再点「安全同步」。</p>
