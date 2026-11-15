@@ -83,9 +83,17 @@ export async function protectConflictVersion(
   resolveOriginal: (asset: EventRecord["media"][number]) => Promise<string>,
 ): Promise<string> {
   assertScope(scope);
+  if (!record.id?.trim() || !Array.isArray(record.media)) {
+    throw Error("V3_CONFLICT_INVALID_RECORD");
+  }
+  const ids = new Set<string>();
+  let totalBytes = 0;
   const assets: ProtectedConflictVersion["assets"] = [];
   for (const asset of record.media) {
     assertScope(scope);
+    if (!asset.id || asset.recordId !== record.id || ids.has(asset.id))
+      throw Error("V3_CONFLICT_INVALID_ASSET_ID");
+    ids.add(asset.id);
     const source = await resolveOriginal(asset);
     assertScope(scope);
     if (!source) throw Error("V3_CONFLICT_ORIGINAL_MISSING");
@@ -107,6 +115,12 @@ export async function protectConflictVersion(
       const actual=Array.from(hashed,v=>v.toString(16).padStart(2,"0")).join("");
       assertScope(scope);
       if(actual!==expected) throw Error("V3_CONFLICT_ORIGINAL_HASH_MISMATCH");
+    }
+    totalBytes += bytes.size;
+    if (totalBytes > 256 * 1024 * 1024) {
+      // Refuse a protected version that cannot be exported by the portable
+      // backup format; no official record may be changed in this case.
+      throw Error("V3_CONFLICT_PROTECTED_BYTES_TOO_LARGE");
     }
     assets.push({ id: asset.id, bytes });
   }
