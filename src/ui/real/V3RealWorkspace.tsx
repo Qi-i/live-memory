@@ -10,6 +10,8 @@ import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
 import { saveRecordDraft } from "../../core/application/saveRecordDraft";
 import { IndexedDbRecordRepository } from "../../infrastructure/indexedDb/recordRepository";
+import { listPendingEditors, stagePendingEditor, removePendingEditor,
+  type PendingEditorRow } from "../../infrastructure/indexedDb/pendingEditorDrafts";
 import { RecordEditor } from "../../overlays";
 import { blankRecord } from "../../seeds";
 import { ShareStudio, type ShareFormat } from "../../shareStudio";
@@ -294,6 +296,8 @@ export function V3RealWorkspace() {
   const [importOpen,setImportOpen]=useState(false);
   const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-portrait");
   const [restoreBusy,setRestoreBusy]=useState(false);
+  const [pendingEditors,setPendingEditors]=useState<PendingEditorRow[]>([]);
+  const [pendingEditorsError,setPendingEditorsError]=useState("");
   const [exportBusy,setExportBusy]=useState(false);
   const [restorePreview,setRestorePreview]=useState<{
     scope:string;name:string;document:unknown;records:number;assets:number;bytes:number;
@@ -438,6 +442,21 @@ export function V3RealWorkspace() {
   // A manual refresh must not erase the save confirmation. Only switching
   // accounts should clear the status notice from the previous identity.
   useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
+  useEffect(()=>{
+    const scope=currentStorageScope();
+    let alive=true;
+    setPendingEditors([]);
+    setPendingEditorsError("");
+    if(validScope && access.mode==="account"){
+      void listPendingEditors(scope).then(rows=>{
+        if(alive&&currentStorageScope()===scope)setPendingEditors(rows);
+      }).catch(()=>{
+        if(alive&&currentStorageScope()===scope)
+          setPendingEditorsError("本机待提交草稿暂无法读取，现有档案不受影响。");
+      });
+    }
+    return ()=>{alive=false;};
+  },[access.mode,access.user?.id,validScope,reload]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
   const trashedRecords=useMemo(()=>records.filter(row=>Boolean(row.deletedAt))
     .sort((a,b)=>(b.deletedAt||"").localeCompare(a.deletedAt||"")),[records]);
@@ -556,15 +575,36 @@ export function V3RealWorkspace() {
   };
 
   const saveLocalDraft=async (draft:EventRecord)=>{
-    if(!canEdit || !editing || editing.scope!==currentStorageScope()) {
+    const stageAllowed=validScope&&access.mode==="account";
+    if((!canEdit&&!stageAllowed)||!editing||
+        editing.scope!==currentStorageScope()) {
       throw new Error("账号作用域已更改；未保存任何记录");
     }
-    await requireAuthorizedWriter(editing.scope);
+    // Never treat an offline/unauthorized account edit as a formal V3 write.
+    // Stage its full record (including local image bytes) in a separate
+    // private IndexedDB store so it survives closing the browser.
+    let writerApproved=false;
+    if(canEdit){
+      try { await requireAuthorizedWriter(editing.scope); writerApproved=true; }
+      catch(error) { if(!stageAllowed) throw error; }
+    }
+    if(!writerApproved){
+      if(!stageAllowed||currentStorageScope()!==editing.scope)
+        throw new Error("V3_PENDING_SCOPE_CHANGED");
+      await stagePendingEditor(editing.scope,draft,editing.baseline);
+      setEditing(null);
+      setNotice("已持久保存为此账号的本机待提交草稿（含当前图片）；
+        不属于正式档案，也未写入云端。网络恢复后在「数据 → 待提交草稿」继续编辑并正式保存。");
+      setReload(n=>n+1);
+      return;
+    }
     const result=await saveRecordDraft(new IndexedDbRecordRepository(editing.scope),draft,editing.baseline);
     if(result.status==="review-required") {
       throw new Error("另一标签页已修改此记录。当前草稿保持打开；请复制修改内容并重新载入最新档案核对。");
     }
     if(currentStorageScope()!==editing.scope) throw new Error("保存期间账号已切换，请重新核查档案");
+    try { await removePendingEditor(editing.scope,draft.id); }
+    catch { /* Official CAS succeeded; never undo an accepted local save. */ }
     setEditing(null);
     setTransferApproval(null);
     setNotice(canEditAccount
@@ -943,6 +983,31 @@ export function V3RealWorkspace() {
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="数据" && <>
+        {validScope&&access.mode==="account"&&<section className="v3-real-restore"
+          aria-label="V3 离线待提交草稿">
+          <strong>本机待提交草稿 · {pendingEditors.length} 条</strong>
+          <p>断网或云端写入权限未确认时，编辑内容及补充的图片可先存于本机，
+            不覆盖正式档案；重新联网并通过授权检查后再提交。</p>
+          <button type="button" onClick={()=>{
+            setEditing({draft:blankRecord(),baseline:null,scope:actualScope});
+            setSelectedId(null);
+          }}>新增本机待提交草稿</button>
+          {pendingEditorsError&&<p role="alert">{pendingEditorsError}</p>}
+          {pendingEditors.map(row=><div key={row.draft.id}>
+            <strong>{row.draft.title}</strong>
+            <span> · {row.draft.date||"日期待补"} · 图片 {row.draft.media.length} 项
+              · 保存 {row.stagedAt.slice(0,16).replace("T"," ")}</span>
+            <button type="button" onClick={()=>{
+              setEditing({draft:row.draft,baseline:row.baseline,scope:actualScope});
+              setSelectedId(null);
+            }}>继续编辑／正式保存</button>
+            <button type="button" onClick={()=>{
+              if(!window.confirm("确认丢弃此条未提交的本机草稿及其临时图片吗？"))return;
+              void removePendingEditor(actualScope,row.draft.id).then(()=>setReload(n=>n+1))
+                .catch(()=>setPendingEditorsError("草稿删除失败，原内容仍保留。"));
+            }}>丢弃草稿</button>
+          </div>)}
+        </section>}
         {canEditAccount&&<section className="v3-real-restore" aria-label="V3 云端差异审阅">
           <strong>云端差异与冲突检查</strong>
           <p>在当前账号内对比本机记录、云端记录与上次确认版本。检查为只读；不会自动丢弃任何一方。</p>
