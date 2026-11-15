@@ -207,16 +207,22 @@ try {
 
   // Actual production V3 conflict runtime against two independent browser
   // databases. Never use a real Supabase account or modify production data.
-  // B has the prior acknowledged baseline, while A's CAS-raced remote has
-  // diverged. Create another independent B edit to force a true conflict.
+  // B has the most recently acknowledged remote version. After B makes
+  // a local edit, another device commits a different semantic cloud version:
+  // this is a true two-sided divergence, not a local-only push.
   const bBeforeResolve=(await list(B)).find(x=>x.id==="concert-1");
   await save(B,{...bBeforeResolve,title:"Device B protected local draft"},bBeforeResolve);
+  const concurrent=server.get("concert-1");
+  server.set("concert-1",{
+    record:{...copy(concurrent.record),title:"Cloud competing later edit"},
+    serverRevision:String(Number(concurrent.serverRevision)+1),
+  });
   result=await sync(B);
   assert.equal(result.reviews.find(x=>x.id==="concert-1")?.action,"conflict");
   let preview=await B.evaluate(()=>window.__v3Test.preview("concert-1"));
   assert.equal(preview.action,"conflict");
   assert.equal(preview.local.title,"Device B protected local draft");
-  assert.equal(preview.cloud.title,"Remote concurrent winner");
+  assert.equal(preview.cloud.title,"Cloud competing later edit");
 
   // The cloud is edited AFTER the preview, specifically during the selected
   // cloud CAS. This must fail without modifying the local business record.
