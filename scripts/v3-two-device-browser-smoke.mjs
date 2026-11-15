@@ -13,6 +13,7 @@ const copy=v=>structuredClone(v);
 const server=new Map();
 let offline=false;
 let raceNextCAS=false;
+let raceWinnerTitle="Remote concurrent winner";
 let casCalls=0;
 const cloudService=async(request)=>{
   const {action,record,expected}=request;
@@ -24,7 +25,7 @@ const cloudService=async(request)=>{
   if(raceNextCAS) {
     raceNextCAS=false;
     if(existing)server.set(record.id,{
-      record:{...existing.record,title:"Remote concurrent winner"},
+      record:{...existing.record,title:raceWinnerTitle},
       serverRevision:String(Number(existing.serverRevision)+1),
     });
   }
@@ -226,11 +227,12 @@ try {
 
   // The cloud is edited AFTER the preview, specifically during the selected
   // cloud CAS. This must fail without modifying the local business record.
+  raceWinnerTitle="Cloud racing writer v2";
   raceNextCAS=true;
   await assert.rejects(B.evaluate(p=>window.__v3Test.resolve(p,"keep-cloud"),preview));
   assert.equal((await list(B)).find(x=>x.id==="concert-1").title,
     "Device B protected local draft","CAS race must not overwrite local draft");
-  assert.equal(server.get("concert-1").record.title,"Remote concurrent winner");
+  assert.equal(server.get("concert-1").record.title,"Cloud racing writer v2");
   const oldVault=await B.evaluate(()=>window.__v3Test.vault());
   assert.ok(oldVault.length>=1,"Losing version must be in durable local vault before CAS");
   const oldVaultRow=await B.evaluate(key=>window.__v3Test.vaultRow(key),oldVault[0].key);
@@ -244,7 +246,7 @@ try {
   assert.ok(accepted.protectedKey);
   assert.equal(accepted.deferred,false);
   assert.equal((await list(B)).find(x=>x.id==="concert-1").title,
-    "Remote concurrent winner");
+    "Cloud racing writer v2");
   assert.ok((await B.evaluate(()=>window.__v3Test.vault())).length>=2);
   assert.equal((await sync(B)).reviews.length,0);
 
