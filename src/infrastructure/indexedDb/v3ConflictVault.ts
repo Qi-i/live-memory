@@ -112,7 +112,11 @@ export async function protectConflictVersion(
   }
   const key = scope + ":" + crypto.randomUUID();
   const row: ProtectedConflictVersion = {
-    key, scope, recordId: record.id, savedSide, record,
+    key, scope, recordId: record.id, savedSide,
+    // Original image bytes are already held in assets. Duplicating data:
+    // payloads can exhaust quota; expiring signed URLs must not be the proof
+    // of recovery or remain indefinitely in the private conflict vault.
+    record: { ...record, media: record.media.map(item => ({ ...item, src: "" })) },
     savedAt: new Date().toISOString(), assets,
   };
   await readOrWrite<void>(scope, "readwrite", (store, commit) => {
