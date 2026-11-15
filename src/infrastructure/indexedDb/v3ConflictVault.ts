@@ -95,12 +95,12 @@ export async function protectConflictVersion(
     assertScope(scope);
     const mime = (bytes.type || asset.mimeType || "").toLowerCase();
     if (!bytes.size || bytes.size > 32 * 1024 * 1024 ||
-      !/^(image\\/jpeg|image\\/png|image\\/webp|image\\/gif|image\\/avif)$/.test(mime)) {
+      !/^(image\/jpeg|image\/png|image\/webp|image\/gif|image\/avif)$/.test(mime)) {
       throw Error("V3_CONFLICT_ORIGINAL_INVALID");
     }
     if (asset.storagePath?.includes("/v3/")) {
       const expected=asset.storagePath.match(
-        /\\/v3\\/[a-f0-9]{64}\\/[a-f0-9]{64}\\/([a-f0-9]{64})\\.(?:jpg|png|webp|gif|avif)$/
+        /\/v3\/[a-f0-9]{64}\/[a-f0-9]{64}\/([a-f0-9]{64})\.(?:jpg|png|webp|gif|avif)$/
       )?.[1];
       if (!expected) throw Error("V3_CONFLICT_ORIGINAL_INVALID_PATH");
       const hashed=new Uint8Array(await crypto.subtle.digest("SHA-256",await bytes.arrayBuffer()));
