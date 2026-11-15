@@ -4,6 +4,15 @@ import { currentStorageScope } from "../../storage";
 const DATABASE = "live-memory-v3-conflict-vault";
 const STORE = "protected-versions";
 
+export interface ProtectedConflictSummary {
+  key: string;
+  recordId: string;
+  savedSide: "local" | "cloud";
+  title: string;
+  savedAt: string;
+  assets: number;
+}
+
 export interface ProtectedConflictVersion {
   key: string;
   scope: string;
@@ -101,13 +110,17 @@ export async function protectConflictVersion(
   return key;
 }
 
-export async function listProtectedConflictVersions(scope: string): Promise<ProtectedConflictVersion[]> {
+export async function listProtectedConflictVersions(scope: string): Promise<ProtectedConflictSummary[]> {
   assertScope(scope);
   return readOrWrite(scope, "readonly", (store, commit) => {
     const req = store.getAll();
     req.onsuccess = () => commit((req.result as ProtectedConflictVersion[])
       .filter(item => item.scope === scope)
-      .sort((a, b) => b.savedAt.localeCompare(a.savedAt)));
+      .sort((a, b) => b.savedAt.localeCompare(a.savedAt))
+      .map(item => ({
+        key: item.key, recordId: item.recordId, savedSide: item.savedSide,
+        title: item.record.title, savedAt: item.savedAt, assets: item.assets.length,
+      })));
   });
 }
 
