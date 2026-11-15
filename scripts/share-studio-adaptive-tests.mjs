@@ -18,7 +18,7 @@ assert.match(shareStudio, /function contentResolutionScale/);
 assert.match(shareStudio, /function buildWallFillSlots/);
 assert.match(shareStudio, /SHARE_POSTER_MAX_FRAME_ASPECT\s*=\s*0\.86/);
 assert.match(shareStudio, /function fitPosterRowRatios/);
-assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords\)/);
+assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords, 6, true\)/);
 assert.match(shareStudio, /is-poster-preserved/);
 assert.match(shareStudio, /partitionByAspect/);
 assert.match(shareStudio, /function buildFilledGridRects/);
