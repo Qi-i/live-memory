@@ -812,7 +812,9 @@ export function V3RealWorkspace() {
 
   const exportProtectedConflict=async(key:string)=>{
     const scope=currentStorageScope();
-    if(syncBusy||!canEditAccount||!scope)return;
+    // Export is read-only and remains available when the cloud is offline
+    // or the server has reverted to its legacy writer mode.
+    if(syncBusy||!validScope||access.mode!=="account"||!scope)return;
     setSyncBusy(true);
     try{
       const backup=await readProtectedConflictVersion(scope,key);
@@ -1167,7 +1169,7 @@ export function V3RealWorkspace() {
           {protectedVersions.map(item=><div key={item.key}>
             <span><b>{item.title}</b> · 已保护{item.savedSide==="local"?"本机":"云端"}版本
               · {item.assets} 张图片 · {item.savedAt.slice(0,16).replace("T"," ")}</span>
-            <button type="button" disabled={syncBusy||!canEditAccount}
+            <button type="button" disabled={syncBusy}
               onClick={()=>void exportProtectedConflict(item.key)}>下载完整保护副本</button>
           </div>)}
         </section>}
