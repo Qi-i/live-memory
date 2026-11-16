@@ -648,6 +648,49 @@ export function V3RealWorkspace() {
     // CAS synchronization. No V2 upload, no silent account-cloud writer.
   };
 
+  const exportQiHubNativeArchive=async()=>{
+    if(!(canEditLocal||canEditAccount)||snapshot.busy)return;
+    const scope=currentStorageScope();
+    try{
+      const {downloadBlob}=await import("../../media");
+      const {stableSerialize}=await import("../../core/sync/revision");
+      const originals=await listRecords();
+      if(scope!==currentStorageScope())throw Error("QIHUB_ARCHIVE_SCOPE_CHANGED");
+      if(!originals.length)throw Error("QIHUB_ARCHIVE_EMPTY_LOCAL");
+      const baseline=new Map(originals.map(r=>[r.id,stableSerialize(r)]));
+      const rows=originals.filter(r=>!r.deletedAt).map(r=>({
+        schemaVersion:2,id:r.id,title:r.title,category:r.category,
+        status:r.status,recordState:r.recordState,date:r.date,time:r.time||"",
+        city:r.city,venue:r.venue,address:r.address||"",seat:r.seat||"",
+        artists:r.artists,tags:r.tags,setlist:r.setlist,
+        companions:r.companions,price:r.price??null,favorite:r.favorite,
+        sourceChannel:r.sourceChannel,note:r.note||"",
+        createdAt:r.createdAt,updatedAt:r.updatedAt,
+        media:[], // No false claim that a media path contains offline bytes.
+      }));
+      const latest=await listRecords();
+      if(scope!==currentStorageScope()||latest.length!==originals.length||
+        latest.some(r=>baseline.get(r.id)!==stableSerialize(r))) {
+        throw Error("QIHUB_ARCHIVE_LOCAL_CHANGED");
+      }
+      const payload={
+        app:"live-memory",version:3,purpose:"qihub-native-offline-text",
+        source:"current-v3-local-archive",
+        generatedAt:new Date().toISOString(),
+        records:rows,
+      };
+      downloadBlob(JSON.stringify(payload),
+        "live-memory-qihub-native-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      setNotice("已导出 "+rows.length+" 条演出档案的原生离线文本数据。"+
+        "保留事件 ID、状态、日期、场馆、座位与必要业务字段；不含照片原图。"+
+        "原图仍需通过完整媒体备份导出，不能用此文件替代。");
+    }catch(error){
+      setNotice("QiHub 离线文本导出失败，未更改任何档案。"+
+        (error instanceof Error?error.message:""));
+    }
+  };
+
   const exportAndroidConcertReminders=async()=>{
     if(!canEditLocal||snapshot.busy)return;
     const scope=currentStorageScope();
@@ -1324,6 +1367,17 @@ export function V3RealWorkspace() {
           <header><span>DATA & BACKUP</span><h2>数据与备份</h2></header>
           <p>原始档案与图片始终保留。备份、恢复等操作仅在手动确认后执行。</p>
         </section>
+        {(canEditLocal||canEditAccount)&&<section className="v3-real-restore"
+          aria-label="QiHub 安卓原生离线档案导出">
+          <strong>QiHub 安卓离线档案（不含媒体）</strong>
+          <p>将当前设备已同步的 V3 演出记录导出为原生模块可导入的 JSON。
+            含已看、待看及想看档案的文字信息，不含账号凭据、海报或照片字节。
+            离线导入后可在 QiHub 内直接编辑；完整原图请另行使用媒体备份。</p>
+          <button type="button" disabled={snapshot.busy||syncBusy}
+            onClick={()=>void exportQiHubNativeArchive()}>
+            下载 QiHub 离线档案 JSON
+          </button>
+        </section>}
         {canEditLocal&&<section className="v3-real-restore"
           aria-label="安卓演出提醒导出">
           <strong>导出安卓演出与座位提醒</strong>
