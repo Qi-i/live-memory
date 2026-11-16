@@ -31,6 +31,10 @@ assert.equal(rows.length,9,"Curation is non-destructive");
 
 const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
 const collections=await readFile(new URL("../src/ui/real/V3ArchiveCollections.tsx",import.meta.url),"utf8");
+assert.match(collections,/useCachedMediaSrc\(primaryMedia\(record, \["poster"\]\)\)/,
+  "V3 collections must display an actual poster, never a private ticket or seat map");
+assert.doesNotMatch(collections,/useCachedMediaSrc\(primaryMedia\(record\)\)/,
+  "Ticket-first fallback must not be used for collection covers");
 const hero=await readFile(new URL("../src/ui/real/V3FeaturedHero.tsx",import.meta.url),"utf8");
 const css=await readFile(new URL("../src/ui/real/realWorkspace.css",import.meta.url),"utf8");
 const shell=await readFile(new URL("../src/ui/system/WorkspaceShell.tsx",import.meta.url),"utf8");
