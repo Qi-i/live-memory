@@ -3,13 +3,17 @@ import { Pencil } from "lucide-react";
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { EventRecord, MediaAsset } from "../../domain";
-import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
+import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels, createId } from "../../domain";
 import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
-import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
+import type { V3SyncRuntime, V3ConflictPreview } from "../../infrastructure/createV3SyncRuntime";
+import { listProtectedConflictVersions, readProtectedConflictVersion,
+  type ProtectedConflictSummary } from "../../infrastructure/indexedDb/v3ConflictVault";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
 import { saveRecordDraft } from "../../core/application/saveRecordDraft";
 import { IndexedDbRecordRepository } from "../../infrastructure/indexedDb/recordRepository";
+import { listPendingEditors, stagePendingEditor, removePendingEditor,
+  type PendingEditorRow } from "../../infrastructure/indexedDb/pendingEditorDrafts";
 import { RecordEditor } from "../../overlays";
 import { blankRecord } from "../../seeds";
 import { ShareStudio, type ShareFormat } from "../../shareStudio";
@@ -65,7 +69,7 @@ function PosterCard({record,onOpen,onEdit,frameRatio,onNaturalRatio}:{
   frameRatio:number;
   onNaturalRatio:(id:string,ratio:number)=>void;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   return <article className="v3-real-poster-card" data-record-id={record.id}>
     <button className="v3-real-poster-open" type="button" onClick={()=>onOpen(record.id)}
       aria-label={"查看 "+record.title}>
@@ -98,7 +102,7 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
   onShare:(record:EventRecord)=>void;
   onZoom:(media:MediaAsset)=>void;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   const detailRef=useDialogBehavior<HTMLElement>({
     onClose, focusSelector:'button[aria-label="关闭档案详情"]',
   });
@@ -117,9 +121,9 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
       </header>
       <div className="v3-real-modal-body">
         <button className="v3-real-modal-art" type="button"
-          disabled={!primaryMedia(record)}
-          onClick={()=>{const art=primaryMedia(record);if(art)onZoom(art);}}
-          aria-label={primaryMedia(record)?"放大主海报":"此记录没有可放大的主海报"}>
+          disabled={!primaryMedia(record, ["poster"])}
+          onClick={()=>{const art=primaryMedia(record, ["poster"]);if(art)onZoom(art);}}
+          aria-label={primaryMedia(record, ["poster"])?"放大主海报":"此记录没有可放大的主海报"}>
           {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
         </button>
         <dl>
@@ -161,7 +165,7 @@ function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
   onEdit?: (record:EventRecord)=>void;
   frameRatio:number;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   return <article className="v3-real-index-row" data-record-id={record.id}>
     <AdaptivePoster className="v3-real-index-thumb" src={src} alt="" frameRatio={frameRatio}/>
     <button type="button" className="v3-real-index-heading" onClick={()=>onOpen(record.id)}>
@@ -294,6 +298,8 @@ export function V3RealWorkspace() {
   const [importOpen,setImportOpen]=useState(false);
   const [shareFormat,setShareFormat]=useState<ShareFormat>("adaptive-portrait");
   const [restoreBusy,setRestoreBusy]=useState(false);
+  const [pendingEditors,setPendingEditors]=useState<PendingEditorRow[]>([]);
+  const [pendingEditorsError,setPendingEditorsError]=useState("");
   const [exportBusy,setExportBusy]=useState(false);
   const [restorePreview,setRestorePreview]=useState<{
     scope:string;name:string;document:unknown;records:number;assets:number;bytes:number;
@@ -306,6 +312,12 @@ export function V3RealWorkspace() {
   const accountRuntime=useRef<{scope:string;runtime:V3SyncRuntime}|null>(null);
   const rescueStarted=useRef<Set<string>>(new Set());
   const [syncBusy,setSyncBusy]=useState(false);
+  const [conflictPreview,setConflictPreview]=useState<{scope:string;entry:V3ConflictPreview}|null>(null);
+  const [protectedVersions,setProtectedVersions]=useState<ProtectedConflictSummary[]>([]);
+  const [syncReview,setSyncReview]=useState<{
+    scope:string;checked:number;unresolved:number;
+    details:Awaited<ReturnType<V3SyncRuntime["review"]>>;
+  }|null>(null);
   const [transferApproval,setTransferApproval]=useState<{
     scope:string;push:number;pull:number;
   }|null>(null);
@@ -434,7 +446,34 @@ export function V3RealWorkspace() {
   // A manual refresh must not erase the save confirmation. Only switching
   // accounts should clear the status notice from the previous identity.
   useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
+  useEffect(()=>{
+    const scope=currentStorageScope();
+    let alive=true;
+    setPendingEditors([]);
+    setPendingEditorsError("");
+    setConflictPreview(null);
+    setProtectedVersions([]);
+    if(validScope && access.mode==="account"){
+      void listProtectedConflictVersions(scope).then(rows=>{
+        if(alive && currentStorageScope()===scope)setProtectedVersions(rows);
+      }).catch(()=>{
+        if(alive && currentStorageScope()===scope)
+          setPendingEditorsError("历史冲突保留版本暂无法读取；未删除任何资料。");
+      });
+    }
+    if(validScope && access.mode==="account"){
+      void listPendingEditors(scope).then(rows=>{
+        if(alive&&currentStorageScope()===scope)setPendingEditors(rows);
+      }).catch(()=>{
+        if(alive&&currentStorageScope()===scope)
+          setPendingEditorsError("本机待提交草稿暂无法读取，现有档案不受影响。");
+      });
+    }
+    return ()=>{alive=false;};
+  },[access.mode,access.user?.id,validScope,reload]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
+  const trashedRecords=useMemo(()=>records.filter(row=>Boolean(row.deletedAt))
+    .sort((a,b)=>(b.deletedAt||"").localeCompare(a.deletedAt||"")),[records]);
   const frameRatio=useMemo(()=>dominantPosterRatio(Object.values(posterRatios)),
     [posterRatios]);
   const measurePoster=(id:string,ratio:number)=>{
@@ -445,7 +484,7 @@ export function V3RealWorkspace() {
     const all=describeRealArchive(records).records;
     return {
       cities:[...new Set(all.map(row=>row.city.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
-      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\\d{4}$/.test(y)))].sort().reverse(),
+      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort().reverse(),
     };
   },[records]);
   const active=useMemo(()=>model.records.filter(row=>
@@ -465,14 +504,14 @@ export function V3RealWorkspace() {
   };
   const visibleModel=useMemo(()=>describeRealArchive(active),[active]);
   const firstPosters=useMemo(()=>curateFeaturedRecords(
-    describeRealArchive(records).records, record=>Boolean(primaryMedia(record)),5,
+    describeRealArchive(records).records, record=>Boolean(primaryMedia(record, ["poster"])),5,
   ),[records]);
   useEffect(()=>{
     let alive=true;
     const scope=currentStorageScope();
     setPosters(firstPosters.map(record=>({id:record.id,title:record.title,city:record.city})));
     void Promise.all(firstPosters.map(async record=>{
-      const asset=primaryMedia(record) as MediaAsset;
+      const asset=primaryMedia(record, ["poster"]) as MediaAsset;
       const src=await resolveMediaSource(asset,true).catch(()=>"");
       return {id:record.id,title:record.title,city:record.city,src};
     })).then(rows=>{
@@ -525,20 +564,61 @@ export function V3RealWorkspace() {
     if(result.status!=="saved")throw Error("V3_RECORD_EDITED_ELSEWHERE");
     if(currentStorageScope()!==actualScope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
     setSelectedId(null);
-    setNotice("已按记录版本原子移入本机回收站；原图没有删除。云端变更仍须另行安全同步。");
+    setNotice("已移入本机回收站，原图未删除。进入「更多 → 数据与备份 → 回收站」可找回；账号云端仍须安全同步。");
     setReload(n=>n+1);
   };
 
+  const restoreTrashedRecord=async(record:EventRecord)=>{
+    if(!canEdit || !record.deletedAt || restoreBusy)return;
+    const scope=currentStorageScope();
+    setRestoreBusy(true);
+    try{
+      if(scope!==actualScope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");
+      await requireAuthorizedWriter(scope);
+      const timestamp=new Date().toISOString();
+      const result=await saveRecordDraft(new IndexedDbRecordRepository(scope),
+        {...record,deletedAt:undefined,updatedAt:timestamp},record);
+      if(result.status!=="saved")throw Error("V3_RECORD_EDITED_ELSEWHERE");
+      if(currentStorageScope()!==scope)throw Error("V3_RESTORE_ACCOUNT_CHANGED");
+      setNotice("已从本机回收站恢复「"+record.title+"」，原图引用不变；账号云端仍需另行安全同步。");
+      setReload(n=>n+1);
+    }catch(error){
+      setNotice("恢复未完成；原记录仍保留在回收站，请刷新检查版本后重试。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setRestoreBusy(false);}
+  };
+
   const saveLocalDraft=async (draft:EventRecord)=>{
-    if(!canEdit || !editing || editing.scope!==currentStorageScope()) {
+    const stageAllowed=validScope&&access.mode==="account";
+    if((!canEdit&&!stageAllowed)||!editing||
+        editing.scope!==currentStorageScope()) {
       throw new Error("账号作用域已更改；未保存任何记录");
     }
-    await requireAuthorizedWriter(editing.scope);
+    // Never treat an offline/unauthorized account edit as a formal V3 write.
+    // Stage its full record (including local image bytes) in a separate
+    // private IndexedDB store so it survives closing the browser.
+    let writerApproved=false;
+    if(canEdit){
+      try { await requireAuthorizedWriter(editing.scope); writerApproved=true; }
+      catch(error) { if(!stageAllowed) throw error; }
+    }
+    if(!writerApproved){
+      if(!stageAllowed||currentStorageScope()!==editing.scope)
+        throw new Error("V3_PENDING_SCOPE_CHANGED");
+      await stagePendingEditor(editing.scope,draft,editing.baseline);
+      setEditing(null);
+      setNotice("已保存为账号专属的本机待提交草稿（含图片）；" +
+        "尚未写入正式档案或云端。联网后在「数据 → 待提交草稿」继续编辑并提交。");
+      setReload(n=>n+1);
+      return;
+    }
     const result=await saveRecordDraft(new IndexedDbRecordRepository(editing.scope),draft,editing.baseline);
     if(result.status==="review-required") {
       throw new Error("另一标签页已修改此记录。当前草稿保持打开；请复制修改内容并重新载入最新档案核对。");
     }
     if(currentStorageScope()!==editing.scope) throw new Error("保存期间账号已切换，请重新核查档案");
+    try { await removePendingEditor(editing.scope,draft.id); }
+    catch { /* Official CAS succeeded; never undo an accepted local save. */ }
     setEditing(null);
     setTransferApproval(null);
     setNotice(canEditAccount
@@ -566,6 +646,84 @@ export function V3RealWorkspace() {
     setTransferApproval(null);
     // Imported media is local until the user explicitly triggers authorized
     // CAS synchronization. No V2 upload, no silent account-cloud writer.
+  };
+
+  const exportQiHubNativeArchive=async()=>{
+    if(!(canEditLocal||canEditAccount)||snapshot.busy)return;
+    const scope=currentStorageScope();
+    try{
+      const {downloadBlob}=await import("../../media");
+      const {stableSerialize}=await import("../../core/sync/revision");
+      const originals=await listRecords();
+      if(scope!==currentStorageScope())throw Error("QIHUB_ARCHIVE_SCOPE_CHANGED");
+      if(!originals.length)throw Error("QIHUB_ARCHIVE_EMPTY_LOCAL");
+      const baseline=new Map(originals.map(r=>[r.id,stableSerialize(r)]));
+      const rows=originals.filter(r=>!r.deletedAt).map(r=>({
+        schemaVersion:2,id:r.id,title:r.title,category:r.category,
+        status:r.status,recordState:r.recordState,date:r.date,time:r.time||"",
+        city:r.city,venue:r.venue,address:r.address||"",seat:r.seat||"",
+        artists:r.artists,tags:r.tags,setlist:r.setlist,
+        companions:r.companions,price:r.price??null,favorite:r.favorite,
+        sourceChannel:r.sourceChannel,note:r.note||"",
+        createdAt:r.createdAt,updatedAt:r.updatedAt,
+        media:[], // No false claim that a media path contains offline bytes.
+      }));
+      const latest=await listRecords();
+      if(scope!==currentStorageScope()||latest.length!==originals.length||
+        latest.some(r=>baseline.get(r.id)!==stableSerialize(r))) {
+        throw Error("QIHUB_ARCHIVE_LOCAL_CHANGED");
+      }
+      const payload={
+        app:"live-memory",version:3,purpose:"qihub-native-offline-text",
+        source:"current-v3-local-archive",
+        generatedAt:new Date().toISOString(),
+        records:rows,
+      };
+      downloadBlob(JSON.stringify(payload),
+        "live-memory-qihub-native-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      setNotice("已导出 "+rows.length+" 条演出档案的原生离线文本数据。"+
+        "保留事件 ID、状态、日期、场馆、座位与必要业务字段；不含照片原图。"+
+        "原图仍需通过完整媒体备份导出，不能用此文件替代。");
+    }catch(error){
+      setNotice("QiHub 离线文本导出失败，未更改任何档案。"+
+        (error instanceof Error?error.message:""));
+    }
+  };
+
+  const exportAndroidConcertReminders=async()=>{
+    if(!canEditLocal||snapshot.busy)return;
+    const scope=currentStorageScope();
+    try{
+      const {downloadBlob}=await import("../../media");
+      const originals=await listRecords();
+      if(scope!==currentStorageScope())throw Error("V3_ANDROID_EXPORT_ACCOUNT_CHANGED");
+      const shows=originals.filter(r=>
+        !r.deletedAt&&r.status==="planned"&&r.recordState==="normal"&&
+        /^\d{4}-\d{2}-\d{2}$/.test(r.date||"")&&
+        typeof r.id==="string"&&typeof r.title==="string"
+      ).map(r=>({
+        schemaVersion:2,id:r.id,title:r.title,status:r.status,
+        recordState:r.recordState,date:r.date,time:r.time||"",
+        venue:r.venue||"",seat:r.seat||"",
+        media:[],
+      }));
+      if(!shows.length){
+        setNotice("本机没有待看演出可供导出；如云端有最新演出，请先安全同步并刷新。");
+        return;
+      }
+      const payload={app:"live-memory",version:3,
+        purpose:"android-concert-reminders",source:"current-local-v3",
+        generatedAt:new Date().toISOString(),records:shows};
+      if(scope!==currentStorageScope())throw Error("V3_ANDROID_EXPORT_ACCOUNT_CHANGED");
+      downloadBlob(JSON.stringify(payload),
+        "live-memory-android-reminders-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      setNotice(`已导出 ${shows.length} 场本机待看演出的时间、场馆及座位；不含票根、图片、金额、账号令牌。可在 Qi-Ledger Android 的「提醒与通知」中导入。`);
+    }catch(error){
+      setNotice("未完成安卓演出提醒导出，档案未改变。"+
+        (error instanceof Error?error.message:""));
+    }
   };
 
   const exportVerifiedLocalBackup=async()=>{
@@ -668,6 +826,191 @@ export function V3RealWorkspace() {
     }finally{setRestoreBusy(false);}
   };
 
+  const rescueCdnMediaManually=async()=>{
+    const scoped=accountRuntime.current;
+    if(!canEditAccount || syncBusy || !scoped ||
+      scoped.scope!==currentStorageScope())return;
+    setSyncBusy(true);
+    try{
+      const {rescueHistoricalCdnOriginals}=await import(
+        "../../infrastructure/supabase/rescueHistoricalCdnOriginals"
+      );
+      const report=await rescueHistoricalCdnOriginals(scoped.scope,
+        ()=>currentStorageScope()===scoped.scope);
+      if(currentStorageScope()!==scoped.scope)throw Error("V3_RESCUE_ACCOUNT_CHANGED");
+      // A cloud CAS successful recovery is NOT a local-sync acknowledgement.
+      // Never auto-merge an old local browser record after a cloud-side image
+      // rewrite: the user can safely review before synchronizing.
+      const names:Record<string,string>={
+        CDN_FORBIDDEN:"原网站拒绝访问",CDN_NOT_FOUND:"原网站图片已失效",
+        CDN_RATE_LIMITED:"原网站限流",CDN_SERVER_ERROR:"原网站故障",
+        CDN_DOWNLOAD_UNAVAILABLE:"下载不可用",CDN_TIMEOUT:"下载超时",
+        CDN_IMAGE_TOO_LARGE:"原图超出限制",
+        CDN_EMPTY_OR_INVALID_IMAGE:"原图为空或无效",
+        CDN_NOT_A_SUPPORTED_IMAGE:"图片格式不受支持",
+        CDN_MISSING_BODY:"原站未提供图片",
+        UNTRUSTED_SOURCE:"来源不符合白名单",
+        PRIVATE_UPLOAD_FAILED:"私有存储上传失败",
+        PRIVATE_IMAGE_HASH_MISMATCH:"私有存储校验失败",
+        V3_REVISION_CONFLICT_OR_CAS_FAILED:"账号云端记录已更新",
+        UNKNOWN_FAILURE:"其他失败",
+      };
+      const reasons=Object.entries(report.failureReasons).map(([key,count])=>
+        (names[key]||"其他失败")+count+" 项").join("；");
+      setNotice(`历史原图补全：实际私有化复制 ${report.recovered} 项，
+        原图暂不可取回 ${report.failed} 项，仍有外链 ${report.remaining} 项。
+        ${reasons?"失败分类："+reasons+"。":""}
+        ${report.recovered?"云端媒体引用已经更新；请先核对差异，再点击安全同步。":
+          "云端记录未被替换。若一直失败，请保存原网站可见图片后从编辑器人工补图。"}`);
+      if(report.recovered)setReload(n=>n+1);
+    }catch(error){
+      setNotice("私有化补图检查失败，原链接及账号记录均保留。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
+  const inspectSyncDifferences=async()=>{
+    const scoped=accountRuntime.current;
+    if(!canEditAccount||!scoped||syncBusy)return;
+    const scope=scoped.scope;
+    setSyncBusy(true);
+    try{
+      const audit=await scoped.runtime.audit();
+      const details=await scoped.runtime.review();
+      if(currentStorageScope()!==scope)throw Error("V3_REVIEW_ACCOUNT_CHANGED");
+      setSyncReview({scope,checked:audit.checkedRecords,
+        unresolved:audit.unresolved,details});
+      setNotice(audit.unresolved
+        ? "已列出需要人工核对的记录与字段；没有替您决定任何一方优先。"
+        : "云端差异核对完成。无双端分歧，仍须安全同步才能传输更改。");
+    }catch{
+      setNotice("无法读取当前账号的差异清单；本机记录未改变。请检查登录和网络。");
+    }finally{setSyncBusy(false);}
+  };
+
+  const inspectSpecificConflict=async(id:string)=>{
+    const scoped=accountRuntime.current;
+    if(!canEditAccount||!scoped||syncBusy||scoped.scope!==currentStorageScope())return;
+    setSyncBusy(true);
+    try{
+      const entry=await scoped.runtime.previewConflict(id);
+      if(currentStorageScope()!==scoped.scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      setConflictPreview({scope:scoped.scope,entry});
+      setNotice("已加载两份真实版本的字段对照。请逐项核对后手动选择；未改动正式数据。");
+    }catch(error){
+      setConflictPreview(null);
+      setNotice("无法验证当前冲突版本，请重新检查账号及网络。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
+  const confirmSpecificConflict=async(choice:"keep-local"|"keep-cloud")=>{
+    const scoped=accountRuntime.current;
+    const preview=conflictPreview;
+    if(!canEditAccount||!scoped||!preview||syncBusy||
+      scoped.scope!==preview.scope||currentStorageScope()!==preview.scope)return;
+    const label=choice==="keep-local"?"保留本机":"保留云端";
+    if(!window.confirm("确定"+label+"版本？另一份记录（含可取回的图片字节）必须先完整保存到本机保护区。" +
+      "遇到原图缺失、版本变化、空间不足会自动中止，不会静默丢弃。"))return;
+    setSyncBusy(true);
+    try{
+      const result=await scoped.runtime.resolveConflict(preview.entry,choice);
+      if(currentStorageScope()!==preview.scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      setConflictPreview(null);
+      setSyncReview(null);
+      const kept=await listProtectedConflictVersions(preview.scope);
+      if(currentStorageScope()===preview.scope)setProtectedVersions(kept);
+      setNotice(result.deferred
+        ? "已保留冲突版本，但另一标签页可能有新修改。请重新检查再同步；保护副本可导出。"
+        : "已按明确选择处理冲突；另一方版本与可获得的图片字节已保存到本机保护区。可导出保护副本。");
+      setReload(n=>n+1);
+    }catch(error){
+      setConflictPreview(null);
+      setNotice("冲突选择未完成；原有双端记录保留，可能已有本机保护副本。请重新检查差异。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
+  const exportProtectedConflict=async(key:string)=>{
+    const scope=currentStorageScope();
+    // Export is read-only and remains available when the cloud is offline
+    // or the server has reverted to its legacy writer mode.
+    if(syncBusy||!validScope||access.mode!=="account"||!scope)return;
+    setSyncBusy(true);
+    try{
+      const backup=await readProtectedConflictVersion(scope,key);
+      if(!backup)throw Error("V3_PROTECTED_VERSION_NOT_FOUND");
+      const {createPortableBackup,verifyPortableBackupDocument}=
+        await import("../../core/application/portableMediaBackup");
+      const {readAsDataUrl,downloadBlob}=await import("../../media");
+      const assets=new Map(backup.assets.map(item=>[item.id,item.bytes]));
+      const archive=await createPortableBackup([backup.record],{
+        assertScope(){
+          if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+        },
+        async load(asset){
+          const bytes=assets.get(asset.id);
+          if(!bytes)throw Error("V3_PROTECTED_IMAGE_MISSING");
+          return bytes;
+        },
+        encode:readAsDataUrl,
+      });
+      const checked=await verifyPortableBackupDocument(archive);
+      if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      downloadBlob(JSON.stringify(archive),
+        "live-memory-protected-"+backup.recordId+"-"+backup.savedAt.slice(0,10)+".json",
+        "application/json");
+      setNotice("已请求下载保护副本，内含 "+checked.records+" 条记录与 "+
+        checked.assets+" 张可验证图片；文件可离线保存。已有相同 ID 的正式档案不会被恢复入口覆盖。");
+    }catch(error){
+      setNotice("保护副本导出失败，原本机保护区仍保留。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
+  const restoreProtectedAsPending=async(key:string)=>{
+    const scope=currentStorageScope();
+    if(syncBusy||!validScope||access.mode!=="account"||!scope)return;
+    if(!window.confirm("将保护副本另存为新的本机待提交草稿？"+
+      "正式记录和云端内容完全不变；图片将以已保护的实际字节重新附加。"))return;
+    setSyncBusy(true);
+    try{
+      const protectedRow=await readProtectedConflictVersion(scope,key);
+      if(!protectedRow)throw Error("V3_PROTECTED_VERSION_NOT_FOUND");
+      const {readAsDataUrl}=await import("../../media");
+      const newId=createId("record");
+      const now=new Date().toISOString();
+      const blobs=new Map(protectedRow.assets.map(item=>[item.id,item.bytes]));
+      if(blobs.size!==protectedRow.record.media.length)
+        throw Error("V3_PROTECTED_IMAGE_INCOMPLETE");
+      const media=await Promise.all(protectedRow.record.media.map(async asset=>{
+        const bytes=blobs.get(asset.id);
+        if(!bytes?.size)throw Error("V3_PROTECTED_IMAGE_MISSING");
+        const src=await readAsDataUrl(bytes);
+        if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+        return {...asset,id:createId("media"),recordId:newId,
+          storagePath:undefined,src,source:"local" as const,
+          mimeType:bytes.type||asset.mimeType,size:bytes.size,
+          createdAt:now,updatedAt:now};
+      }));
+      if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      const draft:EventRecord={
+        ...protectedRow.record,
+        id:newId,title:protectedRow.record.title+"（找回副本）",
+        media,mediaTombstones:[],deletedAt:undefined,syncedAt:undefined,
+        createdAt:now,updatedAt:now,
+      };
+      await stagePendingEditor(scope,draft,null);
+      if(currentStorageScope()!==scope)throw Error("V3_CONFLICT_ACCOUNT_CHANGED");
+      setNotice("已将保护副本完整另存为本机待提交草稿（含图片），"+
+        "正式档案和云端版本均未覆盖。请在上方待提交草稿核对后自行保存。");
+      setReload(n=>n+1);
+    }catch(error){
+      setNotice("恢复为草稿未完成，原保护副本保持不变。"+
+        (error instanceof Error?" "+error.message:""));
+    }finally{setSyncBusy(false);}
+  };
+
   const safeSync=async()=>{
     if(!canEditAccount||syncBusy)return;
     const scoped=accountRuntime.current;
@@ -683,11 +1026,14 @@ export function V3RealWorkspace() {
         return;
       }
       const push=audit.actions["push-new"],pull=audit.actions["pull-new"];
-      if((push||pull)&&(!transferApproval||
+      // Once a revision was safely acknowledged in this exact account,
+      // subsequent new events are ordinary sync, not a repeated migration.
+      const alreadySynchronized=await scoped.runtime.hasAcknowledgedBaseline();
+      if((push||pull)&&!alreadySynchronized&&(!transferApproval||
           transferApproval.scope!==scoped.scope||
           transferApproval.push!==push||transferApproval.pull!==pull)){
         setTransferApproval({scope:scoped.scope,push,pull});
-        setNotice(`首次同步预计本机新增上传 ${push} 条、云端新增下载 ${pull} 条。
+        setNotice(`首次接入该账号预计上传本机新增 ${push} 条、下载云端新增 ${pull} 条。
           请检查数量，再点击一次“安全同步”以确认；不会覆盖不同内容的历史记录。`);
         return;
       }
@@ -786,7 +1132,8 @@ export function V3RealWorkspace() {
             setNotice("地图密钥尚未在 V3 中单独配置；请先在 V2 设置页配置，再返回 V3 分享。");
           }}
           onClose={()=>{setSharing(false);setShareRecord(null);}}/>
-      : editing && editing.scope===actualScope && canEdit
+      : editing && editing.scope===actualScope &&
+        (canEdit || (validScope && access.mode==="account"))
       ? <RecordEditor record={editing.draft} cloudMediaSyncEnabled={false}
           onCancel={()=>setEditing(null)} onSave={saveLocalDraft}/>
       : selected
@@ -813,9 +1160,9 @@ export function V3RealWorkspace() {
     </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
     <>
       {page==="档案" && <>
-        <V3FeaturedHero posters={posters} frameRatio={frameRatio}
+        {firstPosters.length>0 && <V3FeaturedHero posters={posters} frameRatio={frameRatio}
           onNaturalRatio={measurePoster} onBrowse={()=>
-          document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>
+          document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>}
         <div id="v3-real-archive-controls" className="v3-real-archive-controls">
           <ActionToolbar
             search={<input aria-label="搜索真实档案" value={search}
@@ -895,10 +1242,153 @@ export function V3RealWorkspace() {
       </>}
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="数据" && <>
+        {validScope&&access.mode==="account"&&<section className="v3-real-restore"
+          aria-label="V3 离线待提交草稿">
+          <strong>本机待提交草稿 · {pendingEditors.length} 条</strong>
+          <p>断网或云端写入权限未确认时，编辑内容及补充的图片可先存于本机，
+            不覆盖正式档案；重新联网并通过授权检查后再提交。</p>
+          <button type="button" onClick={()=>{
+            setEditing({draft:blankRecord(),baseline:null,scope:actualScope});
+            setSelectedId(null);
+          }}>新增本机待提交草稿</button>
+          <button type="button" onClick={()=>setReload(n=>n+1)}>
+            重新检查网络与账号写入权限
+          </button>
+          {pendingEditorsError&&<p role="alert">{pendingEditorsError}</p>}
+          {pendingEditors.map(row=><div key={row.draft.id}>
+            <strong>{row.draft.title}</strong>
+            <span> · {row.draft.date||"日期待补"} · 图片 {row.draft.media.length} 项
+              · 保存 {row.stagedAt.slice(0,16).replace("T"," ")}</span>
+            <button type="button" onClick={()=>{
+              setEditing({draft:row.draft,baseline:row.baseline,scope:actualScope});
+              setSelectedId(null);
+            }}>继续编辑／正式保存</button>
+            <button type="button" onClick={()=>{
+              if(!window.confirm("确认丢弃此条未提交的本机草稿及其临时图片吗？"))return;
+              void removePendingEditor(actualScope,row.draft.id).then(()=>setReload(n=>n+1))
+                .catch(()=>setPendingEditorsError("草稿删除失败，原内容仍保留。"));
+            }}>丢弃草稿</button>
+          </div>)}
+        </section>}
+        {canEditAccount&&<section className="v3-real-restore"
+          aria-label="V3 历史外链原图补全">
+          <strong>历史海报与座位图 · 私有化补全</strong>
+          <p>只处理当前登录账号中仍指向大麦图片 CDN 的历史媒体。
+            每项须真实下载图片、验证 SHA-256、写入私有存储并通过云端 CAS，
+            否则保留原链接。不会触碰票根、其他账号或公开旧桶。</p>
+          <button type="button" disabled={syncBusy}
+            onClick={()=>void rescueCdnMediaManually()}>
+            {syncBusy?"正在核验账号…":"检查并补全外链原图"}
+          </button>
+        </section>}
+        {canEditAccount&&<section className="v3-real-restore" aria-label="V3 云端差异审阅">
+          <strong>云端差异与冲突检查</strong>
+          <p>在当前账号内对比本机记录、云端记录与上次确认版本。检查为只读；不会自动丢弃任何一方。</p>
+          <button type="button" disabled={syncBusy}
+            onClick={()=>void inspectSyncDifferences()}>
+            {syncBusy?"正在检查…":"核对本机与云端差异"}
+          </button>
+          {conflictPreview?.scope===actualScope&&
+            <div className="v3-real-restore-review" aria-label="V3 冲突版本对照">
+              <strong>{conflictPreview.entry.title} · 双版本逐项核对</strong>
+              <div className="v3-real-conflict-compare">
+                {(["local","cloud"] as const).map(side=>{
+                  const item=conflictPreview.entry[side];
+                  return <article key={side}>
+                    <strong>{side==="local"?"本机版本":"云端版本"}</strong>
+                    <p>标题：{item.title}</p>
+                    <p>日期：{item.date} · 城市：{item.city}</p>
+                    <p>场馆：{item.venue} · 状态：{item.status}</p>
+                    <p>图片：{item.mediaCount} 项 · 更新：{item.updatedAt}</p>
+                    <p style={{whiteSpace:"pre-wrap",overflowWrap:"anywhere"}}>备注：{item.note||"无"}</p>
+                  </article>;
+                })}
+              </div>
+              <p>系统先将被舍弃版本及可取得的图片字节保存至本机保护区；
+                必须校验云端版本号、当前账号与本机修订。任何步骤失败即停止覆盖。</p>
+              <button type="button" disabled={syncBusy}
+                onClick={()=>void confirmSpecificConflict("keep-local")}>
+                明确保留本机版本
+              </button>
+              <button type="button" disabled={syncBusy}
+                onClick={()=>void confirmSpecificConflict("keep-cloud")}>
+                明确保留云端版本
+              </button>
+              <button type="button" disabled={syncBusy} onClick={()=>setConflictPreview(null)}>暂不处理</button>
+            </div>}
+          {syncReview?.scope===actualScope&&<>
+            <p>核对 {syncReview.checked} 条记录；待人工确认 {syncReview.unresolved} 条；
+              差异总数 {syncReview.details.total} 条。</p>
+            {syncReview.details.items.map(item=><details key={item.id}>
+              <summary><b>{item.title}</b> · {item.action==="conflict"?"双端并发修改":
+                item.action==="unbased-divergence"?"历史版本不一致":
+                item.action==="push-new"?"仅本机":item.action==="pull-new"?"仅云端":
+                item.action==="push"?"本机改动":item.action==="pull"?"云端改动":"待核实"}</summary>
+              <p>本机存在：{item.localPresent?"是":"否"} · 云端存在：{item.remotePresent?"是":"否"}</p>
+              {item.differingFields.length>0&&<p>差异字段：{item.differingFields.join("、")}</p>}
+              {(item.action==="conflict"||item.action==="unbased-divergence")&&
+              <button type="button" disabled={syncBusy} onClick={()=>void inspectSpecificConflict(item.id)}>
+                对照并选择版本
+              </button>}
+            {item.action==="defer-absence"&&
+              <p>单端缺失可能是删除或清单不全，暂不推断或覆盖；请先核查缺失来源。</p>}
+            </details>)}
+            {syncReview.details.truncated&&<p>清单最多显示 100 条，需分批处理。</p>}
+          </>}
+        </section>}
+        {validScope&&access.mode==="account"&&<section className="v3-real-restore"
+          aria-label="V3 冲突保护副本">
+          <strong>冲突保护副本 · {protectedVersions.length} 份</strong>
+          <p>只有明确处理冲突后才会形成副本，实际图片字节独立存于当前浏览器；
+            清理浏览器数据会丢失本机副本，请及时导出保存。</p>
+          {protectedVersions.map(item=><div key={item.key}>
+            <span><b>{item.title}</b> · 已保护{item.savedSide==="local"?"本机":"云端"}版本
+              · {item.assets} 张图片 · {item.savedAt.slice(0,16).replace("T"," ")}</span>
+            <button type="button" disabled={syncBusy}
+              onClick={()=>void exportProtectedConflict(item.key)}>下载完整保护副本</button>
+            <button type="button" disabled={syncBusy}
+              onClick={()=>void restoreProtectedAsPending(item.key)}>找回为独立本机草稿</button>
+          </div>)}
+        </section>}
+        <section className="v3-real-restore" aria-label="V3 回收站">
+          <strong>回收站 · {trashedRecords.length} 条</strong>
+          <p>已删除记录与媒体仍保留在当前档案；恢复先写回本机，账号档案需再点「安全同步」。</p>
+          {trashedRecords.length===0?<p>回收站为空。</p>:
+            <ul className="v3-real-trash-list">
+              {trashedRecords.map(record=><li key={record.id}>
+                <span><b>{record.title}</b> · {record.date} · 删除于 {record.deletedAt?.slice(0,10)}</span>
+                <button type="button" disabled={!canEdit||restoreBusy} onClick={()=>void restoreTrashedRecord(record)}>
+                  找回此记录
+                </button>
+              </li>)}
+            </ul>}
+        </section>
         <section className="v3-real-panel v3-real-data-heading">
           <header><span>DATA & BACKUP</span><h2>数据与备份</h2></header>
           <p>原始档案与图片始终保留。备份、恢复等操作仅在手动确认后执行。</p>
         </section>
+        {(canEditLocal||canEditAccount)&&<section className="v3-real-restore"
+          aria-label="QiHub 安卓原生离线档案导出">
+          <strong>QiHub 安卓离线档案（不含媒体）</strong>
+          <p>将当前设备已同步的 V3 演出记录导出为原生模块可导入的 JSON。
+            含已看、待看及想看档案的文字信息，不含账号凭据、海报或照片字节。
+            离线导入后可在 QiHub 内直接编辑；完整原图请另行使用媒体备份。</p>
+          <button type="button" disabled={snapshot.busy||syncBusy}
+            onClick={()=>void exportQiHubNativeArchive()}>
+            下载 QiHub 离线档案 JSON
+          </button>
+        </section>}
+        {canEditLocal&&<section className="v3-real-restore"
+          aria-label="安卓演出提醒导出">
+          <strong>导出安卓演出与座位提醒</strong>
+          <p>从本机 V3 档案提取待看演出的准确日期、开演时间和座位，
+            供 Qi-Ledger Android 离线设置提醒。只导出简短日程 JSON，
+            不含票根原图、支付信息或云端凭据。导出前请核对已完成安全同步。</p>
+          <button type="button" disabled={snapshot.busy||syncBusy}
+            onClick={()=>void exportAndroidConcertReminders()}>
+            下载安卓提醒日程 JSON
+          </button>
+        </section>}
         {(canEditLocal||canEditAccount) && <section className="v3-real-restore" aria-label="V3 完整备份恢复">
       <strong>完整档案备份恢复</strong>
       <p>仅接受已验证原图 SHA-256 的 V3 全量备份。先审查，再在一个本机事务中只新增、绝不覆盖或清空旧档案；云端同步需另行授权。</p>

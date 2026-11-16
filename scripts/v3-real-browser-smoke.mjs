@@ -173,7 +173,10 @@ try {
   // The single real V3 archive replaces the redundant nested V2 archive.
   if(await page.getByRole("button",{name:"完整档案",exact:true}).count())
     throw Error("Redundant complete archive tab remains in V3");
-  await page.locator(".v3-real-featured").waitFor({state:"visible"});
+  // This synthetic two-record archive intentionally has no real poster.
+  // A ticket or image placeholder must not produce a large empty hero.
+  if(await page.locator(".v3-real-featured").count())
+    throw Error("No-poster archive must show the actual records first");
   if(await page.getByRole("button",{name:"上一组海报"}).count())
     throw Error("Featured hero must never require manual horizontal scrolling");
   await page.getByRole("button",{name:"制作分享图",exact:true}).click();
@@ -234,7 +237,7 @@ try {
   await page.getByRole("heading",{name:"数据与备份"}).waitFor();
   if(await page.locator(".v3-migration-panel").count())
     throw Error("Legacy cloud diagnostics mounted before the explicit advanced toggle");
-  const restoreSection=page.locator(".v3-real-restore");
+  const restoreSection=page.getByRole("region",{name:"V3 完整备份恢复"});
   if(await restoreSection.count()){
     const restoreBorder=await restoreSection.evaluate(node=>getComputedStyle(node).borderStyle);
     if(restoreBorder==="none")throw Error("Backup restore entry lost the unified card boundary");

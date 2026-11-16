@@ -78,7 +78,12 @@ try {
     assert.equal(noReader.venue, "国家体育馆");
     assert.equal(noReader.address, "北京市朝阳区天辰东路9号");
     assert.equal(noReader.importConfidence, 0.92);
-    assert.equal(noReader.status, "planned");
+    // Imported scheduled events are evaluated against the actual clock:
+    // this 2026-11-14 fixture becomes watched after the event, without
+    // changing the historical source evidence or the business rule.
+    assert.equal(noReader.status, domain.effectiveStatus({
+      status: "planned", date: noReader.date, time: noReader.time,
+    }));
     const pastedWithUrl = await importers.createDraftsFromText(desktopDamaiUrl + "\n" + eventPageExcerpt);
     assert.equal(pastedWithUrl.length, 1);
     assert.equal(pastedWithUrl[0].date, "2026-11-14");
@@ -344,8 +349,8 @@ try {
   assert.match(archive, /loadMediaImage\(media\)/, "Map marker posters must be decoded through the shared media cache before marker mounting");
   assert.doesNotMatch(archive, /map\.setFitView/);
   assert.match(archive, /resizeEnable:\s*false/);
-  assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record\)\)/);
-  assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords\)/);
+  assert.match(shareStudio, /loadMediaImage\(primaryMedia\(record, \["poster"\]\)\)/);
+  assert.match(shareStudio, /preloadPrimaryRecordMedia\(selectedRecords, 6, true\)/);
   assert.match(shareStudio, /SHARE_POSTER_MAX_FRAME_ASPECT\s*=\s*0\.86/);
   assert.match(shareStudio, /fitPosterRowRatios/);
   assert.match(shareStudio, /is-poster-preserved/);

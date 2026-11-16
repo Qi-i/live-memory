@@ -65,8 +65,13 @@ async function downloadOriginal(src:string){
       headers:{"Accept":"image/avif,image/webp,image/png,image/jpeg,image/gif,image/*;q=0.8",
         "Referer":"https://m.damai.cn/",
         "User-Agent":"Mozilla/5.0 (compatible; LiveMemoryOriginalArchiver/1.0)"}});
-    if(!response.ok||response.status>=300||response.type==="opaqueredirect")
-      throw Error("CDN_DOWNLOAD_UNAVAILABLE");
+    if(!response.ok||response.status>=300||response.type==="opaqueredirect"){
+      const category=response.status===403?"CDN_FORBIDDEN":
+        response.status===404?"CDN_NOT_FOUND":
+        response.status===429?"CDN_RATE_LIMITED":
+        response.status>=500?"CDN_SERVER_ERROR":"CDN_DOWNLOAD_UNAVAILABLE";
+      throw Error(category);
+    }
     const knownSize=Number(response.headers.get("content-length")||"0");
     if(knownSize>MAX_BYTES)throw Error("CDN_IMAGE_TOO_LARGE");
     if(!response.body)throw Error("CDN_MISSING_BODY");
@@ -82,6 +87,9 @@ async function downloadOriginal(src:string){
     const detected=identify(bytes);
     if(!detected)throw Error("CDN_NOT_A_SUPPORTED_IMAGE");
     return {bytes,...detected};
+  }catch(error){
+    if(error instanceof Error&&error.name==="AbortError")throw Error("CDN_TIMEOUT");
+    throw error;
   }finally{clearTimeout(timeout);}
 }
 Deno.serve(async(req:Request)=>{
@@ -126,6 +134,7 @@ Deno.serve(async(req:Request)=>{
       .map(a=>({row,asset:a})):[]);
   if(!pending.length||offset>=pending.length)return reply({remaining:pending.length,recovered:0,failed:0,attempted:0,nextOffset:0},200,origin);
   let recovered=0,failed=0;
+  const failureReasons:Record<string,number>={};
   for(const {row,asset} of pending.slice(offset,offset+limit)){
     try{
       const original=await downloadOriginal(asset.src);
@@ -158,12 +167,24 @@ Deno.serve(async(req:Request)=>{
       row.v3_revision+=1;
       row.payload=next;
       recovered++;
-    }catch{
-      // No raw external URL, ticket details or auth headers in log or response.
+    }catch(error){
+      // Only a bounded, fixed set of diagnostic *categories* is returned,
+      // never URLs, JWTs, concert titles, file names or raw exception text.
+      const code=error instanceof Error?error.message:"UNKNOWN_FAILURE";
+      const allowed=new Set([
+        "CDN_FORBIDDEN","CDN_NOT_FOUND","CDN_RATE_LIMITED",
+        "CDN_SERVER_ERROR","CDN_DOWNLOAD_UNAVAILABLE","CDN_TIMEOUT",
+        "CDN_IMAGE_TOO_LARGE","CDN_EMPTY_OR_INVALID_IMAGE",
+        "CDN_NOT_A_SUPPORTED_IMAGE","CDN_MISSING_BODY","UNTRUSTED_SOURCE",
+        "PRIVATE_UPLOAD_FAILED","PRIVATE_IMAGE_HASH_MISMATCH",
+        "V3_REVISION_CONFLICT_OR_CAS_FAILED",
+      ]);
+      const reason=allowed.has(code)?code:"UNKNOWN_FAILURE";
+      failureReasons[reason]=(failureReasons[reason]||0)+1;
       failed++;
     }
   }
   return reply({remaining:pending.length-recovered,recovered,failed,
     attempted:Math.min(limit,pending.length-offset),
-    nextOffset:offset+failed},200,origin);
+    nextOffset:offset+failed,failureReasons},200,origin);
 });

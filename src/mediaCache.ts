@@ -286,10 +286,10 @@ export function mediaPreloadPlan(limit = 80, constrained?: boolean) {
   };
 }
 
-export async function preloadPrimaryRecordMedia(records: EventRecord[], workers = 6) {
+export async function preloadPrimaryRecordMedia(records: EventRecord[], workers = 6, posterOnly = false) {
   const unique = new Map<string, MediaAsset>();
   for (const record of records) {
-    const asset = record.media.find((item) => item.kind === "poster") || record.media[0];
+    const asset = record.media.find((item) => item.kind === "poster") || (posterOnly ? undefined : record.media[0]);
     if (!asset) continue;
     const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
     if (!unique.has(identity)) unique.set(identity, asset);

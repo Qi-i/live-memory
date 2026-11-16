@@ -21,7 +21,9 @@ interface Props {
 function Artwork({record,frameRatio=2/3}:{
   record:EventRecord;frameRatio?:number;
 }){
-  const src=useCachedMediaSrc(primaryMedia(record));
+  // Match the V3 archive and share privacy rule: ticket and seat-map photos
+  // are never fallback artwork for a public-looking poster card.
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
   return <AdaptivePoster src={src} alt={record.title+"海报"}
     frameRatio={frameRatio} className="v3-collection-artwork"/>;
 }

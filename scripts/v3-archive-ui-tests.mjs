@@ -31,6 +31,10 @@ assert.equal(rows.length,9,"Curation is non-destructive");
 
 const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
 const collections=await readFile(new URL("../src/ui/real/V3ArchiveCollections.tsx",import.meta.url),"utf8");
+assert.match(collections,/useCachedMediaSrc\(primaryMedia\(record, \["poster"\]\)\)/,
+  "V3 collections must display an actual poster, never a private ticket or seat map");
+assert.doesNotMatch(collections,/useCachedMediaSrc\(primaryMedia\(record\)\)/,
+  "Ticket-first fallback must not be used for collection covers");
 const hero=await readFile(new URL("../src/ui/real/V3FeaturedHero.tsx",import.meta.url),"utf8");
 const css=await readFile(new URL("../src/ui/real/realWorkspace.css",import.meta.url),"utf8");
 const shell=await readFile(new URL("../src/ui/system/WorkspaceShell.tsx",import.meta.url),"utf8");
@@ -100,7 +104,7 @@ assert.match(workspace,/useDialogBehavior<HTMLElement>\(/,
 assert.match(workspace,/ref=\{detailRef\} className="v3-real-modal/);
 assert.doesNotMatch(workspace,/document\.addEventListener\("keydown",onKey\)/,
   "V3 event detail should not attach another uncoordinated Escape listener");
-assert.match(workspace,/disabled=\{!primaryMedia\(record\)\}/,
+assert.match(workspace,/disabled=\{!primaryMedia\(record, \["poster"\]\)\}/,
   "Poster zoom cannot stay actionable without a real poster");
 assert.match(workspace,/className="v3-real-detail-danger"/);
 assert.match(css,/\.v3-real-modal footer button\.v3-real-detail-danger/);
@@ -133,7 +137,7 @@ assert.match(workspace,/sortMode===\"edited\"/);
 for(const label of ["画报","票夹","票根","日历","城市/场馆","票价","汇总"]){
   assert.ok(collections.includes('"' + label + '"'),"Missing native collection view: "+label);
 }
-assert.match(workspace,/describeRealArchive\(records\)\.records, record=>Boolean\(primaryMedia\(record\)\),5/);
+assert.ok(workspace.includes('describeRealArchive(records).records, record=>Boolean(primaryMedia(record, ["poster"])),5'));
 assert.match(hero,/posters\.slice\(0,5\)/);
 assert.doesNotMatch(hero,/scrollBy|上一组海报|下一组海报/);
 assert.match(css,/\.v3-real-featured-gallery\s*\{[^}]*grid-template-columns:repeat\(5/);
@@ -141,4 +145,15 @@ assert.match(adaptive,/\.v3-adaptive-poster\.is-extreme > img\.v3-adaptive-poste
 assert.match(adaptive,/\.v3-adaptive-poster > img\.v3-adaptive-poster-image\s*\{[^}]*object-fit:cover/);
 assert.match(adaptive,/\.v3-adaptive-poster > img\.v3-adaptive-poster-backdrop/);
 assert.doesNotMatch(workspace,/--v3-real-poster-ratio/);
+const shareSource=await readFile(new URL("../src/shareStudio.tsx",import.meta.url),"utf8");
+const routeSource=await readFile(new URL("../src/main.tsx",import.meta.url),"utf8");
+assert.ok(workspace.includes('filter(y=>/^\\d{4}$/.test(y))'),
+  "Year facets must match four-digit dates, not a literal backslash");
+assert.match(workspace,/restoreTrashedRecord/);
+assert.match(workspace,/trashedRecords\.map\(record/);
+assert.match(workspace,/firstPosters\.length>0 && <V3FeaturedHero/);
+assert.match(routeSource,/access\.mode === "guest"/, "Guest sample must not enter a private V3 scope");
+assert.match(shareSource,/primaryMedia\(record, \["poster"\]\)/);
+assert.doesNotMatch(shareSource,/primaryMedia\(record\)/,
+  "A share must never substitute the private ticket for a missing poster");
 console.log("V3 majority-ratio, bounded crop, continuous scroll, inline edit, archived layouts passed.");

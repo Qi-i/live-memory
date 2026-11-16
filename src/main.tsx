@@ -1,7 +1,7 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App";
-import { AccessGate } from "./access";
+import { AccessGate, useAccess } from "./access";
 import { ExperienceThemeProvider } from "./experience";
 import "./base.css";
 import "./access.css";
@@ -44,8 +44,17 @@ if (v3Preview) {
   // a verified server-side V3 writer marker may edit and manually sync;
   // existing V2 owners stay read-only, and V2 AppRoot/timers never mount.
   void import("./ui/real/V3RealWorkspace").then(({ V3RealWorkspace }) => {
+    function V3PublicRoute() {
+      const access = useAccess();
+      // A visitor sees the isolated sample archive, never a private V3
+      // account/device scope. Mount classic only for the guest session.
+      if (access.mode === "guest") {
+        return <ExperienceThemeProvider><App /></ExperienceThemeProvider>;
+      }
+      return <V3RealWorkspace />;
+    }
     root.render(
-      <React.StrictMode><AccessGate><V3RealWorkspace /></AccessGate></React.StrictMode>,
+      <React.StrictMode><AccessGate><V3PublicRoute /></AccessGate></React.StrictMode>,
     );
   });
 } else {
