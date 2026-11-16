@@ -1,14 +1,8 @@
 name: Deploy GitHub Pages
 
+# Actions quota guard: no automatic runs while billing limit is reached.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Build V3 standalone preview"]
-    types: [completed]
-    branches: [refactor/core-v3-architecture-20261108]
-
 permissions:
   contents: write
   actions: read
