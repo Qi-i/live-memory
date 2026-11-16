@@ -1,28 +1,9 @@
 name: Verify V3 server CAS in isolated PostgreSQL
 
+# Actions quota guard: automatic checks/deploys/keepalives paused.
+# Only explicit manual dispatch is supported while billing is constrained.
 on:
-  push:
-    branches:
-      - refactor/core-v3-architecture-20261108
-  pull_request:
-    branches: [main, refactor/core-v3-architecture-20261108]
-    paths:
-      - "tests/db/**"
-      - "supabase/migrations/017_v3_private_media_bucket.sql"
-      - "supabase/migrations/018_v3_server_cutover_fence.sql"
-      - "supabase/migrations/019_v3_blinded_media_owner_prefix.sql"
-      - "supabase/migrations/020_v3_owner_activation_cas_gate.sql"
-      - "supabase/migrations/021_v3_private_storage_cutover_gate.sql"
-      - "supabase/migrations/022_v3_personal_media_cas_integrity.sql"
-      - "supabase/migrations/023_v3_account_session_scoped_cas.sql"
-      - "supabase/migrations/024_v3_authenticated_media_staging.sql"
-      - "supabase/migrations/025_v3_authenticated_full_media_archive.sql"
-      - "supabase/migrations/026_v3_verified_account_cutover_approval.sql"
-      - "supabase/migrations/027_v3_legacy_cdn_media_reference_compat.sql"
-      - "src/core/**"
-      - "src/infrastructure/supabase/**"
-      - ".github/workflows/v3-db-contract.yml"
-
+  workflow_dispatch:
 permissions:
   contents: read
 

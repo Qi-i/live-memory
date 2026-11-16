@@ -1,10 +1,9 @@
 name: Publish verified V2 with optional V3 real-data beta
 
+# Actions quota guard: automatic checks/deploys/keepalives paused.
+# Only explicit manual dispatch is supported while billing is constrained.
 on:
-  push:
-    branches: [refactor/core-v3-architecture-20261108]
   workflow_dispatch:
-
 permissions:
   contents: read
   actions: read

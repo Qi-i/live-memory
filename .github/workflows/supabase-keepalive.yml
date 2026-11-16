@@ -1,16 +1,9 @@
 name: Supabase Keepalive
 
+# Actions quota guard: automatic checks/deploys/keepalives paused.
+# Only explicit manual dispatch is supported while billing is constrained.
 on:
-  schedule:
-    # Four independent user-database reads per day. Spreading them across the day
-    # is more representative of ongoing activity than a burst of requests once daily.
-    - cron: '17 1,7,13,19 * * *'
   workflow_dispatch:
-  pull_request:
-    paths:
-      - '.github/workflows/supabase-keepalive.yml'
-      - 'supabase/migrations/011_project_activity_probe.sql'
-
 permissions:
   contents: read
 

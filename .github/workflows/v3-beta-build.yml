@@ -1,15 +1,7 @@
 name: Validate isolated V3 real-data beta
+# Actions quota guard: automatic checks/deploys/keepalives paused.
+# Only explicit manual dispatch is supported while billing is constrained.
 on:
-  pull_request:
-    branches: [refactor/core-v3-architecture-20261108]
-    paths:
-      - "src/main.tsx"
-      - "vite.config.ts"
-      - "src/ui/real/**"
-      - "scripts/v3-beta-release-guards.mjs"
-      - ".github/workflows/v3-beta-build.yml"
-      - ".github/workflows/v3-beta-publish.yml"
-      - ".github/workflows/v3-preview.yml"
   workflow_dispatch:
 permissions:
   contents: read

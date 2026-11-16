@@ -1,14 +1,9 @@
 name: Deploy GitHub Pages
 
+# Actions quota guard: automatic checks/deploys/keepalives paused.
+# Only explicit manual dispatch is supported while billing is constrained.
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
-  workflow_run:
-    workflows: ["Build V3 standalone preview"]
-    types: [completed]
-    branches: [refactor/core-v3-architecture-20261108]
-
 permissions:
   contents: write
   actions: read

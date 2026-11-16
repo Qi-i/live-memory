@@ -1,11 +1,9 @@
 name: Validate pull request
 
+# Actions quota guard: automatic checks/deploys/keepalives paused.
+# Only explicit manual dispatch is supported while billing is constrained.
 on:
-  pull_request:
-    branches: [main, refactor/core-v3-architecture-20261108]
-  push:
-    branches: [refactor/experience-system-v3]
-
+  workflow_dispatch:
 permissions:
   contents: read
 
