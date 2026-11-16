@@ -1,10 +1,8 @@
 name: Publish verified V2 with optional V3 real-data beta
 
+# Actions quota guard: no automatic CI, sync keepalive or beta publishing.
 on:
-  push:
-    branches: [refactor/core-v3-architecture-20261108]
   workflow_dispatch:
-
 permissions:
   contents: read
   actions: read

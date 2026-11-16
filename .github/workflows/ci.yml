@@ -1,11 +1,8 @@
 name: Validate pull request
 
+# Actions quota guard: no automatic CI, sync keepalive or beta publishing.
 on:
-  pull_request:
-    branches: [main, refactor/core-v3-architecture-20261108]
-  push:
-    branches: [refactor/experience-system-v3]
-
+  workflow_dispatch:
 permissions:
   contents: read
 
