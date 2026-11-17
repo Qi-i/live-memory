@@ -76,4 +76,14 @@ assert.match(shareCSS,/\.share-studio-stage.is-v3 \.share-preview-area\{[\s\S]*?
   "Mobile sharing must present the live artwork before the long control panel");
 assert.match(share,/setFormat\("adaptive-portrait"\)/,
   "Poster wall presets must offer a portrait-oriented, readable default");
+
+assert.match(ui,/aria-label=\{presentation\?"退出纯净展示":"纯净截图展示"\}/,
+  "All seven collections should expose the same screenshot presentation action");
+assert.match(ui,/v3-collection-calendar-agenda/,
+  "Mobile calendar must offer a date/title/venue agenda instead of tiny cells");
+assert.match(viewCSS,/@container\(max-width:570px\)[\s\S]*?\.v3-collection-calendar-grid\{display:none\}/,
+  "Mobile width must display the readable agenda instead of a 660px-wide grid");
+assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation \.v3-collection-actions/,
+  "Screenshot mode hides redundant edit/detail action rows");
+
 console.log("V3 native views, persisted display choice, readable mobile collections and preview-first sharing passed.");
