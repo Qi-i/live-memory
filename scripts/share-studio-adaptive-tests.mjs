@@ -88,4 +88,11 @@ assert.match(v3ShareCss,/\.share-studio-stage\.is-v3\.is-preview-clean/,
 assert.match(shareStudio,/\[posterPreloadKey\]/,
   "Metadata-only changes must not warm the same signed poster twice");
 
+assert.match(shareStudio,/if \(cleanPreview\) setCleanPreview\(false\);\s*else requestClose\(\)/,
+  "Tapping the screenshot overlay must exit clean preview, not discard the share draft");
+assert.match(shareStudio,/cleanPreview && event\.target === event\.currentTarget/,
+  "A phone user must be able to leave full-screen artwork using the backdrop");
+assert.match(v3ShareCss,/@media \(hover:none\), \(pointer:coarse\)[\s\S]*?share-clean-preview-exit/,
+  "Screenshot close control must be discoverable on touch devices");
+
 console.log("Share layout engine contracts passed: ratio-preserving canvases, edge-filled walls, readable tickets, artist-aware magazine mosaics, and a fixed nationwide AMap extent across aspect ratios.");
