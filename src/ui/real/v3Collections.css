@@ -310,3 +310,13 @@
     padding:20px 13px;border-radius:14px;
   }
 }
+
+
+@media (hover:none), (pointer:coarse) {
+  .v3-collection-presentation.is-presentation
+  .v3-collection-presentation-tools>button {
+    opacity:.72;
+    color:#243752;
+    background:rgba(255,255,255,.9);
+  }
+}
