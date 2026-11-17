@@ -40,9 +40,11 @@ const share=await readFile(new URL("../src/shareStudio.tsx",import.meta.url),"ut
 const migration=await readFile(new URL("../src/ui/system/V3MigrationPanel.tsx",import.meta.url),"utf8");
 const viewCSS=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
 const shareCSS=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
-for(const mode of ["画报","票夹","票根","日历","城市/场馆","票价","汇总"]){
+for(const mode of ["画报","票夹","票根","日历","城市/场馆","票价"]){
   assert.match(ui,new RegExp('mode==="'+mode.replace("/","\\/")+'"'));
 }
+assert.match(ui,/<Summary records=\{records\} onOpen=\{onOpen\}/,
+  "The final collection mode must render the summary rather than disappearing");
 for(const keyword of [".map(", "onOpen(record.id)", "onShare", "onEdit"])assert.ok(ui.includes(keyword));
 assert.match(ui,/groupByCity\(records\)/);
 assert.match(ui,/groupByArtist\(records\)/);
@@ -76,4 +78,21 @@ assert.match(shareCSS,/\.share-studio-stage.is-v3 \.share-preview-area\{[\s\S]*?
   "Mobile sharing must present the live artwork before the long control panel");
 assert.match(share,/setFormat\("adaptive-portrait"\)/,
   "Poster wall presets must offer a portrait-oriented, readable default");
+
+assert.match(ui,/aria-label=\{presentation\?"退出纯净展示":"纯净截图展示"\}/,
+  "All seven collections should expose the same screenshot presentation action");
+assert.match(ui,/v3-collection-calendar-agenda/,
+  "Mobile calendar must offer a date/title/venue agenda instead of tiny cells");
+assert.match(viewCSS,/@container\(max-width:570px\)[\s\S]*?\.v3-collection-calendar-grid\{display:none\}/,
+  "Mobile width must display the readable agenda instead of a 660px-wide grid");
+assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation \.v3-collection-actions/,
+  "Screenshot mode hides redundant edit/detail action rows");
+assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation\{[\s\S]*?position:fixed;inset:0;z-index:10000/,
+  "Screenshot view must cover the app navigation and toolbar, not only hide buttons");
+assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation>\.v3-collection/,
+  "Screenshot mode must render the same real collection without a second poster cache");
+
+assert.match(viewCSS,/@media \(hover:none\), \(pointer:coarse\)[\s\S]*?v3-collection-presentation-tools/,
+  "Collection screenshots must have an accessible touch exit");
+
 console.log("V3 native views, persisted display choice, readable mobile collections and preview-first sharing passed.");
