@@ -31,6 +31,7 @@ import { loadMediaImage, preloadPrimaryRecordMedia, useCachedMediaSrc } from "./
 import "./shareStudio.css";
 import { useDialogBehavior } from "./ui/useDialogBehavior";
 import { curateFeaturedRecords } from "./ui/real/curateFeaturedRecords";
+import { posterDisplayMode } from "./ui/real/posterFraming";
 
 export type ShareFormat =
   | "adaptive-landscape"
@@ -719,7 +720,7 @@ function buildTicketSlots(records: EventRecord[], area: Rect, spec: CanvasSpec):
 }
 
 function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
-  const media = primaryMedia(slot.record);
+  const media = primaryMedia(slot.record, ["poster"]);
   const src = useCachedMediaSrc(media);
   const ticketPad = clamp(slot.rect.height * 0.065, 10, 22);
   const posterHeight = Math.max(1, slot.rect.height - ticketPad * 2);
@@ -754,30 +755,53 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
 }
 
 function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
-  const preserveFullPoster = slot.rect.width / Math.max(1, slot.rect.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
+  const frameRatio = slot.rect.width / Math.max(1, slot.rect.height);
+  const preserveFullPoster = frameRatio > SHARE_POSTER_MAX_FRAME_ASPECT;
   return (
     <figure
       className={`share-layout-poster is-${slot.emphasis || "normal"}${preserveFullPoster ? " is-poster-preserved" : ""}`}
       style={localRectStyle(slot.rect, origin)}
     >
-      <SharePoster record={slot.record} preserveFull={preserveFullPoster} />
+      <SharePoster record={slot.record} preserveFull={preserveFullPoster} frameRatio={frameRatio} />
       {showDetails ? <figcaption><span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span><b>{slot.record.title}</b></figcaption> : null}
     </figure>
   );
 }
 
-function SharePoster({ record, preserveFull = false }: { record: EventRecord; preserveFull?: boolean }) {
+function SharePoster({ record, preserveFull = false, frameRatio }: {
+  record: EventRecord;
+  preserveFull?: boolean;
+  frameRatio?: number;
+}) {
   const media = primaryMedia(record, ["poster"]);
   const src = useCachedMediaSrc(media);
+  const [loadedRatio, setLoadedRatio] = useState<number | null>(null);
+  useEffect(() => setLoadedRatio(null), [src]);
+  // The preview and PNG exporter use the same real-image crop threshold.
+  // Metadata is a hint only; an actual downloaded image wins over stale
+  // width/height fields. Tall originals remain legible against soft artwork.
+  const natural = loadedRatio ?? (media?.width && media?.height
+    ? media.width / media.height : null);
+  const full = preserveFull || (frameRatio && natural
+    ? posterDisplayMode(natural, frameRatio) === "backdrop" : false);
   const style = {
     "--poster-a": record.colors[0],
     "--poster-b": record.colors[1],
     aspectRatio: String(recordPosterRatio(record)),
   } as CSSProperties;
-  if (!src) return <span className={`share-poster-frame${preserveFull ? " is-preserved" : ""}`} style={style}><span className="share-poster-fallback">{record.title.slice(0, 4)}</span></span>;
-  return <span className={`share-poster-frame${preserveFull ? " is-preserved" : ""}`} style={style}>
-    {preserveFull ? <img className="share-poster-backdrop" src={src} alt="" aria-hidden="true" decoding="async" /> : null}
-    <img className="share-poster-foreground" src={src} alt={record.title} decoding="async" />
+  if (!src) return <span className={`share-poster-frame${full ? " is-preserved" : ""}`} style={style}>
+    <span className="share-poster-fallback">{record.title.slice(0, 4)}</span>
+  </span>;
+  return <span className={`share-poster-frame${full ? " is-preserved" : ""}`} style={style}>
+    {full ? <img className="share-poster-backdrop" src={src} alt="" aria-hidden="true" decoding="async" /> : null}
+    <img className="share-poster-foreground" src={src} alt={record.title} decoding="async"
+      onLoad={event => {
+        const image = event.currentTarget;
+        if (image.naturalWidth && image.naturalHeight) {
+          const actual = image.naturalWidth / image.naturalHeight;
+          setLoadedRatio(previous => previous === actual ? previous : actual);
+        }
+      }} />
   </span>;
 }
 
@@ -1798,7 +1822,10 @@ async function drawPoster(
 
   const image = await loadMediaImage(primaryMedia(record, ["poster"]));
   if (image) {
-    const preserveFullPoster = slot.width / Math.max(1, slot.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
+    const frameRatio = slot.width / Math.max(1, slot.height);
+    const naturalRatio = image.naturalWidth / Math.max(1, image.naturalHeight);
+    const preserveFullPoster = frameRatio > SHARE_POSTER_MAX_FRAME_ASPECT ||
+      posterDisplayMode(naturalRatio, frameRatio) === "backdrop";
     if (preserveFullPoster) {
       context.save();
       context.filter = "blur(18px) saturate(.9)";
