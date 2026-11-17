@@ -780,7 +780,9 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
     <article className="share-ticket-card" style={style}>
       <span className="share-ticket-backdrop" aria-hidden="true">{src ? <img src={src} alt="" decoding="async" /> : null}</span>
       <span className="share-ticket-tint" aria-hidden="true" />
-      <div className="share-ticket-poster"><SharePoster record={slot.record} /></div>
+      <div className="share-ticket-poster">
+          <SharePoster record={slot.record} frameRatio={posterWidth/posterHeight} />
+        </div>
       <section>
         <span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span>
         <h3>{slot.record.title}</h3>
