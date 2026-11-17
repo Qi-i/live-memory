@@ -299,6 +299,18 @@ function RealCityView({ records, onOpen }: { records: EventRecord[]; onOpen: (id
 export function V3RealWorkspace() {
   const access=useAccess();
   const [page,setPage]=useState<Page>("档案");
+  const [screenshotMode,setScreenshotMode]=useState(false);
+  useEffect(()=>{
+    if(!screenshotMode)return;
+    const onEscape=(event:KeyboardEvent)=>{
+      if(event.key!=="Escape")return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setScreenshotMode(false);
+    };
+    document.addEventListener("keydown",onEscape,true);
+    return()=>document.removeEventListener("keydown",onEscape,true);
+  },[screenshotMode]);
   const [showLegacyDiagnostics,setShowLegacyDiagnostics]=useState(false);
   const [mode,setMode]=useState<Mode>(savedArchiveMode);
   useEffect(()=>{
@@ -1088,6 +1100,8 @@ export function V3RealWorkspace() {
   const navButtons=navigation.map(label=><button type="button" key={label}
     aria-current={page===label?"page":undefined} onClick={()=>setPage(label)}>{label}</button>);
   return <WorkspaceShell
+    screenshot={screenshotMode}
+    onExitScreenshot={()=>setScreenshotMode(false)}
     brand={<><span className="v3-preview-brand"><BrandMark size={36} title="Live Memory 标识" /></span>
       <strong className="v3-preview-brand-name">Live Memory</strong>
       <small>V3 · 现场记忆</small></>}
@@ -1112,7 +1126,10 @@ export function V3RealWorkspace() {
           {canEditLocal?"新增本机演出":"新增演出"}</button>}
         {canEditAccount && <button className="v3-real-sync-trigger" type="button" onClick={()=>void safeSync()} disabled={syncBusy||snapshot.busy}>
           {syncBusy?"安全检查与同步中…":"安全同步"}</button>}
-        <button type="button" onClick={()=>{setShareRecord(null);setSharing(true);}}
+        <button type="button" onClick={()=>setScreenshotMode(true)}
+          disabled={snapshot.busy || !records.length}
+          title="隐藏工作台操作，直接截图当前视图">纯净截图</button>
+        <button type="button" onClick={()=>{setScreenshotMode(false);setShareRecord(null);setSharing(true);}}
           disabled={!records.length}>制作分享图</button>
         {canEdit && <button type="button" onClick={()=>setImportOpen(true)}
           disabled={snapshot.busy||syncBusy||restoreBusy}>批量导入</button>}
