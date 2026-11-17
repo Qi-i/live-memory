@@ -71,16 +71,20 @@ class Ledger {
   provider = "account";
   identity = "account-cloud";
   rows = new Map();
+  writes = 0;
   onCommit = null;
   async snapshot() { return new Map(this.rows); }
   async commitIfUnchanged(expected, entries) {
     if (this.onCommit) { await this.onCommit(); this.onCommit = null; }
     const acknowledgedIds = [], deferredIds = [];
     for (const { id, revision } of entries) {
-      if (this.rows.get(id) !== expected.get(id)) {
+      if (this.rows.get(id) === revision) {
+        acknowledgedIds.push(id);
+      } else if (this.rows.get(id) !== expected.get(id)) {
         deferredIds.push(id);
       } else {
         this.rows.set(id, revision);
+        this.writes++;
         acknowledgedIds.push(id);
       }
     }
@@ -102,6 +106,8 @@ assert.equal(ledger.rows.get("demo"), await revisions.exports.recordRevision(upd
 
 result = await wrapper.exports.synchronizeWithLedger(local, remote, ledger);
 assert.equal(result.activity.type, "connected", "Repeated sync must be silent and stable");
+assert.equal(ledger.writes,2,
+  "Repeated no-change sync must not rewrite already acknowledged digests");
 
 // If another tab acknowledges a different remote version during our session,
 // the stale acknowledgment must be deferred, never regress the current digest.
@@ -120,6 +126,8 @@ assert.match(idbCode, /DB_NAME = "live-memory-v3-revision-ledger"/);
 assert.match(idbCode, /db\.transaction\(STORE, "readwrite"\)/);
 assert.match(idbCode, /const request = store\.getAll\(\)/);
 assert.match(idbCode, /current\.get\(id\) !== expected\.get\(id\)/);
+assert.match(idbCode,/if \(current\.get\(id\) === revision\)/,
+  "Real V3 IndexedDB ledger must skip repeated identical acknowledgements");
 assert.match(idbCode, /store\.put\(\{ key: this\.prefix \+ id, revision \}/);
 assert.doesNotMatch(idbCode, /store\.clear\(|deleteDatabase\(/);
 assert.doesNotMatch(wrapper.source, /localStorage|indexedDB|supabase\.from|fetch\s*\(/,
