@@ -307,8 +307,10 @@ export async function preloadPrimaryRecordMedia(records: EventRecord[], workers 
   await Promise.all(tasks);
 }
 
-export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
-  const plan = mediaPreloadPlan(limit);
+/** Deterministic, zero-network preload ordering shared by V2 and V3. */
+export function planMediaPreload(records: Pick<EventRecord, "media">[], limit: number): MediaAsset[] {
+  const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  if (cap === 0) return [];
   const unique = new Map<string, MediaAsset>();
   // Posters appear in the primary archive and across all collection modes.
   // Reserve the bounded initial cache budget for one poster per record first,
@@ -316,26 +318,30 @@ export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
   // All other assets remain accessible on demand through the same cache.
   const enqueue = (asset: MediaAsset) => {
     const identity = mediaIdentity(asset);
-    if (identity && !unique.has(identity) && unique.size < plan.limit) {
+    if (identity && !unique.has(identity) && unique.size < cap) {
       unique.set(identity, asset);
     }
   };
   for (const record of records) {
     const poster = record.media.find(asset => asset.kind === "poster");
     if (poster) enqueue(poster);
-    if (unique.size >= plan.limit) break;
+    if (unique.size >= cap) break;
   }
-  if (unique.size < plan.limit) {
+  if (unique.size < cap) {
     for (const record of records) {
       for (const asset of record.media) {
         if (asset.kind !== "poster") enqueue(asset);
-        if (unique.size >= plan.limit) break;
+        if (unique.size >= cap) break;
       }
-      if (unique.size >= plan.limit) break;
+      if (unique.size >= cap) break;
     }
   }
+  return Array.from(unique.values());
+}
 
-  const queue = Array.from(unique.values());
+export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
+  const plan = mediaPreloadPlan(limit);
+  const queue = planMediaPreload(records, plan.limit);
   let cursor = 0;
   const workers = Array.from({ length: Math.min(plan.workers, queue.length) }, async () => {
     while (cursor < queue.length) {
