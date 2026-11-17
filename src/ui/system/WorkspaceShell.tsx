@@ -83,6 +83,8 @@ export function WorkspaceShell({
   appearance = "liquid",
   demoStatus = false,
   showStatusCenter = true,
+  screenshot = false,
+  onExitScreenshot,
 }: {
   brand: ReactNode;
   navigation: ReactNode;
@@ -96,9 +98,12 @@ export function WorkspaceShell({
   appearance?: "liquid" | "editorial";
   demoStatus?: boolean;
   showStatusCenter?: boolean;
+  screenshot?: boolean;
+  onExitScreenshot?: () => void;
 }) {
   return (
-    <div className="v3-workspace-shell" data-ui-system="v3" data-v3-surface={appearance}>
+    <div className={"v3-workspace-shell" + (screenshot ? " is-screenshot" : "")}
+      data-ui-system="v3" data-v3-surface={appearance}>
       <aside className="v3-sidebar" aria-label="应用导航">
         <div className="v3-sidebar-brand">{brand}</div>
         <nav className="v3-sidebar-navigation" aria-label="主导航">{navigation}</nav>
@@ -109,7 +114,13 @@ export function WorkspaceShell({
       </aside>
       <div className="v3-workspace-column">
         <header className="v3-global-toolbar">{toolbar}</header>
-        <main className="v3-workspace-content" id="v3-workspace-content">{children}</main>
+        <main className="v3-workspace-content" id="v3-workspace-content">
+          {screenshot && onExitScreenshot && <button type="button"
+            className="v3-workspace-screenshot-exit"
+            onClick={onExitScreenshot} aria-label="退出截图展示"
+            title="退出纯净截图（Esc）">退出截图</button>}
+          {children}
+        </main>
       </div>
       {mobileNavigation && (
         <nav className="v3-mobile-navigation" aria-label="手机主导航">
