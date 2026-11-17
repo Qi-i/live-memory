@@ -35,7 +35,7 @@ const port={
     const insertedIds=[],alreadyPresentIds=[];
     for(const row of rows){
       const older=records.get(row.id);
-      if(older && revisions.out.stableSerialize(older)!==revisions.out.stableSerialize(row))
+      if(older && !revisions.out.recordContentEqual(older,row,true))
         throw Error("V3_RESTORE_EXISTING_RECORD_CONFLICT");
       if(older)alreadyPresentIds.push(row.id);
       else {records.set(row.id,structuredClone(row));insertedIds.push(row.id);writes++;}
@@ -52,6 +52,22 @@ assert.equal(records.get(raw.id).media[0].src,backup.records[0].media[0].src);
 const again=await service.out.restoreVerifiedPortableArchive(backup,port,()=>{});
 assert.equal(again.inserted,0);assert.equal(again.alreadyPresent,1);
 assert.equal(writes,1,"No duplicate record was overwritten");
+
+const originalStored=records.get(raw.id);
+// A signed-link/token refresh or sync bookkeeping is not a new event.
+records.set(raw.id,{...originalStored,
+  syncedAt:"2026-11-17T10:00:00Z",
+  updatedAt:"2026-11-17T10:01:00Z",
+  media:originalStored.media.map(asset=>({...asset,
+    updatedAt:"2026-11-17T10:02:00Z",
+  })),
+});
+const semanticDuplicate=await service.out.restoreVerifiedPortableArchive(backup,port,()=>{});
+assert.deepEqual(semanticDuplicate,{inserted:0,alreadyPresent:1,
+  verifiedAssets:1,verifiedBytes:bytes.size});
+assert.equal(writes,1,
+  "A transport-only change cannot cause a duplicate restore write");
+
 const tampered=structuredClone(backup);
 tampered.records[0].media[0].src="data:image/png;base64,"+Buffer.from("TAMPERED").toString("base64");
 await assert.rejects(service.out.restoreVerifiedPortableArchive(tampered,port,()=>{}),/HASH_MISMATCH/);
@@ -72,6 +88,10 @@ assert.match(repoSource,/async insertMissingAtomic\(/);
 assert.match(repoSource,/db\.transaction\(RECORD_STORE, "readwrite"\)/);
 assert.match(repoSource,/store\.add\(row\)/);
 assert.match(repoSource,/V3_RESTORE_EXISTING_RECORD_CONFLICT/);
+assert.match(repoSource,/!recordContentEqual\(current, row, true\)/,
+  "Real IndexedDB restore must compare meaningful content, not JSON order");
+assert.doesNotMatch(repoSource,/JSON\.stringify\(current\) !== JSON\.stringify\(row\)/,
+  "Metadata-only changes must not become restore conflicts");
 const workspace=await readFile(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
 assert.match(workspace,/restoreVerifiedPortableArchive\(/);
 assert.match(workspace,/verifyPortableBackupDocument\(parsed\)/);
