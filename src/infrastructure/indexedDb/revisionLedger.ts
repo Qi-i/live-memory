@@ -99,6 +99,13 @@ export class IndexedDbRevisionLedger implements RevisionLedger {
         try {
           const current = this.readPartition(request.result as StoredEntry[]);
           for (const [id, revision] of pending) {
+            // Repeated no-change checks and another tab acknowledging the
+            // exact same content are already resolved. Do not write the
+            // identical digest again or report a fictitious conflict.
+            if (current.get(id) === revision) {
+              acknowledgedIds.push(id);
+              continue;
+            }
             if (current.get(id) !== expected.get(id)) {
               deferredIds.push(id);
               continue;
