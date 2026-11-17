@@ -38,22 +38,32 @@ const MEDIA_REFRESH_EVENT = "live-memory:cloud-media-refresh";
 const REMOTE_CHECK_INTERVAL = 5 * 60 * 1000;
 
 function recordFingerprint(records: EventRecord[]) {
-  return records.map((record) => `${record.id}:${record.updatedAt}:${record.deletedAt || ""}`).join("|");
+  // Display order is not a data change.
+  return records.map((record) =>
+    `${record.id}:${record.updatedAt}:${record.deletedAt || ""}`
+  ).sort().join("|");
 }
 
 function mediaFingerprint(records: EventRecord[]) {
-  return records.flatMap((record) => record.media.map((asset) => `${asset.id}:${asset.src}:${asset.storagePath || ""}`)).join("|");
+  // Expiring signed URLs for an unchanged stored original are transport
+  // details, not new user media. Include source when no stable path exists.
+  return records.flatMap((record) => record.media.map((asset) =>
+    `${record.id}:${asset.id}:${asset.storagePath || asset.src}`
+  )).sort().join("|");
 }
 
 function mediaPathFingerprint(records: EventRecord[]) {
-  return records.flatMap((record) => record.media.filter((asset) => asset.storagePath).map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`)).join("|");
+  return records.flatMap((record) =>
+    record.media.filter((asset) => asset.storagePath)
+      .map((asset) => `${record.id}:${asset.id}:${asset.storagePath}`)
+  ).sort().join("|");
 }
 
 export function autoSyncFingerprint(records: EventRecord[], settings: AppSettings) {
   const recordPart = recordFingerprint(records);
   const mediaPart = records.flatMap((record) => record.media.map((asset) =>
-    `${record.id}:${asset.id}:${asset.storagePath || (asset.src.startsWith("data:") ? "local-data" : asset.src)}`,
-  )).join("|");
+    `${record.id}:${asset.id}:${asset.storagePath || (asset.src.startsWith("data:") ? "local-data:" + asset.updatedAt : asset.src)}`,
+  )).sort().join("|");
   const cloudPart = [
     hasPersonalCloudConnection(settings) ? "personal" : "",
     settings.supabase.url.trim(),
