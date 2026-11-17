@@ -475,7 +475,11 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
 
   return (
     <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}${experience === "v3" ? " is-v3" : ""}${cleanPreview ? " is-preview-clean" : ""}`} onMouseDown={(event) => {
-      if (event.target === event.currentTarget) requestClose();
+      if (event.target !== event.currentTarget) return;
+      // In screenshot mode, tapping the backdrop means exit presentation,
+      // not discard the selected concerts and close the editing session.
+      if (cleanPreview) setCleanPreview(false);
+      else requestClose();
     }}>
       <aside className="share-studio-panel" aria-label="分享图设置">
         <header className="share-studio-heading">
@@ -639,7 +643,10 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
         </button>
       </aside>
 
-      <main ref={previewAreaRef} className={`share-preview-area ${format === "long" ? "is-long" : "is-fixed"}`} onMouseDown={(event) => event.stopPropagation()}>
+      <main ref={previewAreaRef} className={`share-preview-area ${format === "long" ? "is-long" : "is-fixed"}`} onMouseDown={(event) => {
+          if (cleanPreview && event.target === event.currentTarget) setCleanPreview(false);
+          event.stopPropagation();
+        }}>
         {cleanPreview && <button type="button" className="share-clean-preview-exit"
           aria-label="退出纯净预览" title="退出纯净预览（Esc）"
           onClick={() => setCleanPreview(false)}><X size={18}/></button>}
