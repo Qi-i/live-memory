@@ -78,7 +78,7 @@ try {
     assert.equal(noReader.venue, "国家体育馆");
     assert.equal(noReader.address, "北京市朝阳区天辰东路9号");
     assert.equal(noReader.importConfidence, 0.92);
-    assert.equal(noReader.status, "planned");
+    assert.equal(noReader.status, domain.effectiveStatus({ status: "planned", date: "2026-11-14", time: "19:00" }));
     const pastedWithUrl = await importers.createDraftsFromText(desktopDamaiUrl + "\n" + eventPageExcerpt);
     assert.equal(pastedWithUrl.length, 1);
     assert.equal(pastedWithUrl[0].date, "2026-11-14");
