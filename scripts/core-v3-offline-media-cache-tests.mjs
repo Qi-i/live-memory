@@ -49,31 +49,6 @@ assert.equal(saved.length,1);
 assert.ok(Buffer.from(await saved[0].arrayBuffer()).equals(bytes),
   "The CacheStorage entry must contain actual original ticket bytes");
 
-assert.match(source,/await persistVerifiedOfflineMedia\(asset, blob\)/,
-  "Network and inline V3 originals must pass SHA-256 verification");
-
-const earlierFetch=globalThis.fetch;
-try {
-  const targetBytes=Buffer.from("SYNTHETIC NETWORK ORIGINAL WITH INTACT BYTES");
-  const targetDigest=createHash("sha256").update(targetBytes).digest("hex");
-  const remoteAsset={...record,id:"r2",recordId:"r2",
-    storagePath:record.storagePath.replace(checksum,targetDigest),
-    src:"https://signed.example.test/private-image"};
-  globalThis.fetch=async()=>new Response(new Blob([Buffer.from("CORRUPT")],
-    {type:"image/png"}));
-  await cache.resolveMediaSource(remoteAsset);
-  assert.equal(await cache.hasVerifiedOfflineMedia(remoteAsset),false,
-    "A downloaded body with the wrong SHA-256 cannot enter the verified V3 cache");
-  globalThis.fetch=async()=>new Response(new Blob([targetBytes],
-    {type:"image/png"}));
-  await cache.resolveMediaSource(remoteAsset);
-  assert.equal(await cache.hasVerifiedOfflineMedia(remoteAsset),true,
-    "A verified network original is retained after its content hash matches");
-}finally{
-  globalThis.fetch=earlierFetch;
-}
-
-
 const before=saved.length;
 await assert.rejects(cache.persistVerifiedOfflineMedia({
   ...record,storagePath:record.storagePath.replace(checksum,"a".repeat(64)),
@@ -119,5 +94,29 @@ assert.deepEqual(cache.planMediaPreload(preloadRecords,3).map(asset=>asset.id),[
   "Unused preload capacity may fetch other media without starving posters");
 assert.deepEqual(cache.planMediaPreload(preloadRecords,0),[],
   "Disabled preload budget never touches the network");
+
+assert.match(source,/await persistVerifiedOfflineMedia\(asset, blob\)/,
+  "Network and inline V3 originals must pass SHA-256 verification");
+
+const earlierFetch=globalThis.fetch;
+try {
+  const targetBytes=Buffer.from("SYNTHETIC NETWORK ORIGINAL WITH INTACT BYTES");
+  const targetDigest=createHash("sha256").update(targetBytes).digest("hex");
+  const remoteAsset={...record,id:"r2",recordId:"r2",
+    storagePath:record.storagePath.replace(checksum,targetDigest),
+    src:"https://signed.example.test/private-image"};
+  globalThis.fetch=async()=>new Response(new Blob([Buffer.from("CORRUPT")],
+    {type:"image/png"}));
+  await cache.resolveMediaSource(remoteAsset);
+  assert.equal(await cache.hasVerifiedOfflineMedia(remoteAsset),false,
+    "A downloaded body with the wrong SHA-256 cannot enter the verified V3 cache");
+  globalThis.fetch=async()=>new Response(new Blob([targetBytes],
+    {type:"image/png"}));
+  await cache.resolveMediaSource(remoteAsset);
+  assert.equal(await cache.hasVerifiedOfflineMedia(remoteAsset),true,
+    "A verified network original is retained after its content hash matches");
+}finally{
+  globalThis.fetch=earlierFetch;
+}
 
 console.log("V3 offline bytes cache passed: original bytes, SHA-256, bad MIME/path, account-switch fence");
