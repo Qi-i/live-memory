@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const controller = await readFile(new URL("../src/appController.ts", import.meta.url), "utf8");
-const root = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
+const controller = (await readFile(new URL("../src/appController.ts", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const root = (await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 
 assert.match(controller, /currentStorageScope/);
 assert.match(controller, /activeControllerScope\.current !== sessionScope/);

@@ -2,10 +2,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import ts from "typescript";
 
-const page = await readFile(new URL("../src/statsPage.tsx", import.meta.url), "utf8");
-const css = await readFile(new URL("../src/statsPage.css", import.meta.url), "utf8");
-const appRoot = await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8");
-const keepsake = await readFile(new URL("../src/keepsakeStudio.tsx", import.meta.url), "utf8");
+const page = (await readFile(new URL("../src/statsPage.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const css = (await readFile(new URL("../src/statsPage.css", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const appRoot = (await readFile(new URL("../src/AppRoot.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
+const keepsake = (await readFile(new URL("../src/keepsakeStudio.tsx", import.meta.url), "utf8")).replace(/\r\n/g, "\n");
 const extract = page.match(/function monthlyTrend\([\s\S]*?\n\}\n(?=\nfunction Metric)/);
 assert.ok(extract, "Month trend model should remain separately testable");
 const source = "export " + extract[0];

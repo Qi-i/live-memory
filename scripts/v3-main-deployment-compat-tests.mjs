@@ -10,9 +10,8 @@ const classic=await readFile(new URL("../src/AppRoot.tsx",import.meta.url),"utf8
 
 // The published V2 route MUST remain the authoritative app while the V3
 // standalone demo is attached as a verified, isolated artifact.
-assert.match(deploy,/branches: \[main\]/);
-assert.match(deploy,/workflow_run:/);
-assert.match(deploy,/workflows: \["Build V3 standalone preview"\]/);
+assert.match(deploy,/on:\s*\r?\n\s*workflow_dispatch:/);
+assert.doesNotMatch(deploy,/^\s{2}(?:push|pull_request|workflow_run|schedule):/m, "Deployment must not consume Actions automatically");
 assert.match(deploy,/gh run download "\$source_run" --name v3-static-preview/);
 assert.match(deploy,/info\.browserVerified !== true/);
 assert.match(deploy,/info\.type !== "demo-only"/);
