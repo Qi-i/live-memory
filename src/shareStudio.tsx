@@ -188,6 +188,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   const [allowMissingPosters, setAllowMissingPosters] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [cleanPreview, setCleanPreview] = useState(false);
   const [preparing, setPreparing] = useState(true);
   const [error, setError] = useState("");
   const [fitScale, setFitScale] = useState(0.5);
@@ -336,6 +337,18 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   }, [format, layout, recalculateFit, selectedRecords.length]);
 
   const requestClose = () => { if (!saving) onClose(); };
+  useEffect(() => {
+    if (!cleanPreview) return;
+    const exitOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      // Leave clean screenshot view first; never close the whole editor.
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      setCleanPreview(false);
+    };
+    document.addEventListener("keydown", exitOnEscape, true);
+    return () => document.removeEventListener("keydown", exitOnEscape, true);
+  }, [cleanPreview]);
   const shareRef = useDialogBehavior<HTMLElement>({ onClose: requestClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
 
   useEffect(() => {
@@ -441,7 +454,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   } as CSSProperties;
 
   return (
-    <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}${experience === "v3" ? " is-v3" : ""}`} onMouseDown={(event) => {
+    <section ref={shareRef} role="dialog" aria-label="分享工作室" aria-modal="true" className={`share-studio-stage share-theme-${palette}${experience === "v3" ? " is-v3" : ""}${cleanPreview ? " is-preview-clean" : ""}`} onMouseDown={(event) => {
       if (event.target === event.currentTarget) requestClose();
     }}>
       <aside className="share-studio-panel" aria-label="分享图设置">
@@ -607,7 +620,15 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
       </aside>
 
       <main ref={previewAreaRef} className={`share-preview-area ${format === "long" ? "is-long" : "is-fixed"}`} onMouseDown={(event) => event.stopPropagation()}>
+        {cleanPreview && <button type="button" className="share-clean-preview-exit"
+          aria-label="退出纯净预览" title="退出纯净预览（Esc）"
+          onClick={() => setCleanPreview(false)}><X size={18}/></button>}
         <div className="share-preview-toolbar" aria-label="预览缩放">
+          {experience === "v3" && <button type="button" className="share-clean-preview-enter"
+            aria-label="纯净全屏预览" title="手机或网页可直接截图"
+            onClick={() => { setCleanPreview(true); setManualScale(null); }}>
+              <Maximize2 />纯净截图
+            </button>}
           <button type="button" className={manualScale === null ? "is-active" : ""} onClick={() => setManualScale(null)}><Maximize2 />适应窗口</button>
           <button type="button" aria-label="缩小预览" onClick={() => nudgeScale(-0.08)}><Minus /></button>
           <strong>{Math.round(effectiveScale * 100)}%</strong>
