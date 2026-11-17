@@ -156,4 +156,13 @@ assert.match(routeSource,/access\.mode === "guest"/, "Guest sample must not ente
 assert.match(shareSource,/primaryMedia\(record, \["poster"\]\)/);
 assert.doesNotMatch(shareSource,/primaryMedia\(record\)/,
   "A share must never substitute the private ticket for a missing poster");
+assert.match(workspace,/function RealStatisticsSpotlight\(/,
+  "Stats must expose a visual hero composed from real archive records");
+assert.match(workspace,/primaryMedia\(record, \["poster"\]\)/,
+  "Only actual poster media may be used as the statistics hero");
+assert.match(workspace,/v3-real-city-insights/,
+  "City page must show grounded city and record-count context");
+assert.match(css,/\.v3-real-stat-spotlight\{/,
+  "Stats poster hero requires responsive screenshot-ready styling");
+
 console.log("V3 majority-ratio, bounded crop, continuous scroll, inline edit, archived layouts passed.");
