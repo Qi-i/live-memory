@@ -179,6 +179,13 @@ async function persistInlineSource(asset: MediaAsset, identity: string, epoch: n
     if (!response.ok) return;
     const blob = await response.blob();
     if (!blob.size || epoch !== mediaCacheEpoch) return;
+    if (asset.storagePath?.includes("/v3/")) {
+      // Content-addressed V3 originals are immutable. A legacy data: URL
+      // must never overwrite a verified private original with unchecked
+      // bytes sharing the same storage path. Validate SHA-256 before caching.
+      await persistVerifiedOfflineMedia(asset, blob);
+      return;
+    }
     const cache = await caches.open(currentCacheName());
     if (epoch !== mediaCacheEpoch) return;
     await cache.put(cacheRequest(identity), new Response(blob, {
