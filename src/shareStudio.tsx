@@ -361,17 +361,26 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   }, [cleanPreview]);
   const shareRef = useDialogBehavior<HTMLElement>({ onClose: requestClose, allowEscape: !saving, focusSelector: 'button[aria-label="退出分享制作"]' });
 
+  const posterPreloadKey = selectedRecords.map(record => {
+    const poster = primaryMedia(record, ["poster"]);
+    // Signed URL renewal and record metadata edits are not a new poster.
+    // Keep ordering because the visible first row should warm first.
+    return record.id + ":" + (poster?.storagePath ||
+      (poster?.src.startsWith("data:") ? poster.id + ":" + poster.updatedAt : poster?.src || ""));
+  }).join("|");
   useEffect(() => {
     let active = true;
     setPreparing(true);
-    // Share compositions use the primary poster from every selected record. Warm
-    // those exact assets before mounting the dense canvas so the preview appears
-    // as one composition instead of progressively refetching a few late posters.
+    // Warm the same poster assets used by preview and PNG. No second cache,
+    // and no redundant reload when only title or signed transport URL changes.
     void preloadPrimaryRecordMedia(selectedRecords, 6, true).finally(() => {
       if (active) setPreparing(false);
     });
     return () => { active = false; };
-  }, [selectedRecords]);
+  // Record list identity is intentionally excluded: posterPreloadKey captures
+  // the only information that can change which images require preparation.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posterPreloadKey]);
 
   function toggleCategory(category: EventCategory) {
     setCategories((current) => {
