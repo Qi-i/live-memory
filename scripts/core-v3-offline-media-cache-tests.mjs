@@ -77,4 +77,22 @@ await cache.persistVerifiedOfflineMedia(record,blob);
 assert.equal(await cache.hasVerifiedOfflineMedia(record),true);
 assert.equal(cacheByName.size,2,
   "A new account has its own isolated offline cache, never the first account's files");
+
+// First visual paint must not spend the entire preload limit on the earliest
+// concert's ticket and seat-map bytes while other poster cards remain blank.
+const firstPoster={id:"p1",kind:"poster",storagePath:"r1/poster",src:"https://example.test/p1"};
+const firstTicket={id:"t1",kind:"ticket",storagePath:"r1/ticket",src:"https://example.test/t1"};
+const secondPoster={id:"p2",kind:"poster",storagePath:"r2/poster",src:"https://example.test/p2"};
+const secondSeat={id:"s2",kind:"seatMap",storagePath:"r2/seat",src:"https://example.test/s2"};
+const preloadRecords=[
+  {media:[firstTicket,firstPoster]},
+  {media:[secondSeat,secondPoster]},
+];
+assert.deepEqual(cache.planMediaPreload(preloadRecords,2).map(asset=>asset.id),["p1","p2"],
+  "Both visible poster cards must load before private ticket/seat attachments");
+assert.deepEqual(cache.planMediaPreload(preloadRecords,3).map(asset=>asset.id),["p1","p2","t1"],
+  "Unused preload capacity may fetch other media without starving posters");
+assert.deepEqual(cache.planMediaPreload(preloadRecords,0),[],
+  "Disabled preload budget never touches the network");
+
 console.log("V3 offline bytes cache passed: original bytes, SHA-256, bad MIME/path, account-switch fence");
