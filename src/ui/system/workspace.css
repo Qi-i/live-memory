@@ -369,3 +369,16 @@
     height:auto;overflow:visible;
   }
 }
+
+
+/* Touchscreens have no hover and often no Escape key: the clean preview exit
+   must remain discoverable without taking over the screenshot composition. */
+@media (hover:none), (pointer:coarse) {
+  .v3-workspace-shell .v3-workspace-screenshot-exit {
+    opacity:.72;
+    background:rgba(255,255,255,.88);
+    font-size:11px;
+    right:max(5px,env(safe-area-inset-right));
+    top:max(5px,env(safe-area-inset-top));
+  }
+}
