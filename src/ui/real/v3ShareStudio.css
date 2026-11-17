@@ -358,3 +358,36 @@
     box-shadow:none!important;
   }
 }
+
+
+/* Screenshot-first V3 preview: give phone screens nearly the full viewport to
+   the actual exported composition, rather than 58dvh and a tall control pane.
+   PNG export still uses its independent full-resolution canvas. */
+@media (max-width: 860px) {
+  .share-studio-stage.is-v3 .share-preview-area,
+  .share-studio-stage.is-v3 .share-preview-area.is-fixed {
+    order: 0;
+    flex: none;
+    height: 78dvh;
+    min-height: 78dvh;
+    overscroll-behavior: contain;
+  }
+  .share-studio-stage.is-v3 .share-studio-panel {
+    padding: 13px max(14px, env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+  }
+}
+@media (max-width: 500px) {
+  .share-studio-stage.is-v3 .share-preview-area,
+  .share-studio-stage.is-v3 .share-preview-area.is-fixed {
+    height: 82dvh;
+    min-height: 82dvh;
+  }
+  .share-studio-stage.is-v3 .share-preview-toolbar {
+    min-height: 44px;
+    gap: 6px;
+  }
+  .share-studio-stage.is-v3 .share-preview-toolbar button {
+    min-height: 36px;
+    padding-inline: 9px;
+  }
+}
