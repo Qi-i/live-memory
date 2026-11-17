@@ -310,13 +310,29 @@ export async function preloadPrimaryRecordMedia(records: EventRecord[], workers 
 export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
   const plan = mediaPreloadPlan(limit);
   const unique = new Map<string, MediaAsset>();
+  // Posters appear in the primary archive and across all collection modes.
+  // Reserve the bounded initial cache budget for one poster per record first,
+  // instead of filling it with ticket/seat photos from the earliest record.
+  // All other assets remain accessible on demand through the same cache.
+  const enqueue = (asset: MediaAsset) => {
+    const identity = mediaIdentity(asset);
+    if (identity && !unique.has(identity) && unique.size < plan.limit) {
+      unique.set(identity, asset);
+    }
+  };
   for (const record of records) {
-    for (const asset of record.media) {
-      const identity = mediaIdentity(asset);
-      if (identity && !unique.has(identity)) unique.set(identity, asset);
+    const poster = record.media.find(asset => asset.kind === "poster");
+    if (poster) enqueue(poster);
+    if (unique.size >= plan.limit) break;
+  }
+  if (unique.size < plan.limit) {
+    for (const record of records) {
+      for (const asset of record.media) {
+        if (asset.kind !== "poster") enqueue(asset);
+        if (unique.size >= plan.limit) break;
+      }
       if (unique.size >= plan.limit) break;
     }
-    if (unique.size >= plan.limit) break;
   }
 
   const queue = Array.from(unique.values());
