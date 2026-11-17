@@ -74,4 +74,18 @@ assert.match(shareStudio,/checked=\{allowMissingPosters\}/);
 assert.match(shareStudio,/允许海报占位色块/);
 const v3ShareCss=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
 assert.match(v3ShareCss,/\.share-v3-allow-missing/);
+
+assert.match(shareStudio,/posterDisplayMode\(naturalRatio, frameRatio\)/,
+  "Exported poster crop must use actual decoded image dimensions");
+assert.match(shareStudio,/posterDisplayMode\(sourceRatio, targetRatio\)/,
+  "Ticket-album PNG must preserve extreme vertical posters");
+assert.match(shareStudio,/useState\(false\);\s*const \[preparing/,
+  "Clean screenshot mode remains a separate presentation state");
+assert.match(shareStudio,/aria-label="纯净全屏预览"/,
+  "V3 share studio must allow a screenshot-friendly fullscreen preview");
+assert.match(v3ShareCss,/\.share-studio-stage\.is-v3\.is-preview-clean/,
+  "Fullscreen preview must be styled on desktop and mobile");
+assert.match(shareStudio,/\[posterPreloadKey\]/,
+  "Metadata-only changes must not warm the same signed poster twice");
+
 console.log("Share layout engine contracts passed: ratio-preserving canvases, edge-filled walls, readable tickets, artist-aware magazine mosaics, and a fixed nationwide AMap extent across aspect ratios.");
