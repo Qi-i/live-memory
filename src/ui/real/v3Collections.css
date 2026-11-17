@@ -128,3 +128,43 @@
   .v3-collection-cost-totals article:first-child{grid-column:1/-1}
   .v3-collection-cost-totals strong{font-size:clamp(19px,5.5vw,26px)}
 }
+
+
+/* Shared readable card hierarchy for desktop and direct mobile screenshots.
+   Preserve posters at their intended aspect ratio; reclaim space from
+   chrome and gaps, not from the actual text. */
+.v3-collection-showcase-caption > strong,
+.v3-collection-wallet-info > h3,
+.v3-collection-stub-main > h3 {
+  text-wrap: pretty;
+}
+.v3-collection-showcase-caption > strong {
+  font-size: clamp(14px, 1.25vw, 16px);
+  line-height: 1.42;
+}
+.v3-collection-showcase-caption .v3-collection-meta {
+  font-size: 13px;
+  color: #4d5b78;
+}
+.v3-collection-wallet-info > span,
+.v3-collection-wallet-info > p,
+.v3-collection-wallet-info > div:not(.v3-collection-actions) {
+  font-size: 13px;
+  line-height: 1.48;
+}
+.v3-collection-actions > button {
+  min-height: 38px;
+  padding: 7px 11px;
+  font-size: 13px;
+}
+@container (max-width: 570px) {
+  .v3-collection-showcase-grid { gap: 10px; }
+  .v3-collection-showcase-grid > article { padding: 7px; }
+  .v3-collection-showcase-grid > .is-featured .v3-collection-showcase-caption > strong {
+    font-size: clamp(17px, 4.5vw, 21px);
+  }
+  .v3-collection-showcase-caption > strong { font-size: 14px; }
+  .v3-collection-wallet-info > p,
+  .v3-collection-wallet-info > div:not(.v3-collection-actions) { font-size: 13px; }
+  .v3-collection-actions { gap: 5px; }
+}
