@@ -275,3 +275,38 @@
   .v3-collection-places-grid>article>div,
   .v3-collection-summary-content>div{max-height:none;overflow:visible}
 }
+
+
+/* Presentation is a layer above the workspace shell, not merely hidden
+   card buttons inside the same dashboard. Keep the collection component
+   mounted so existing poster loads, map state and cache are not restarted. */
+.v3-collection-presentation.is-presentation{
+  position:fixed;inset:0;z-index:10000;
+  display:block;width:100vw;height:100dvh;
+  max-width:none;max-height:none;
+  overflow:auto;overscroll-behavior:contain;
+  background:radial-gradient(circle at 55% 16%,#fff 0%,#f2f5fa 63%,#e9eef5 100%);
+  padding:clamp(12px,2.5vw,32px);
+}
+.v3-collection-presentation.is-presentation>.v3-collection{
+  width:min(100%,1490px);max-width:1490px;
+  margin:0 auto;min-width:0;
+  border-radius:clamp(14px,2vw,22px);
+  padding:clamp(16px,2.5vw,32px);
+}
+.v3-collection-presentation.is-presentation>.v3-collection:has(.v3-collection-showcase-grid){
+  background:linear-gradient(140deg,#fff,#f5f7ff);
+}
+.v3-collection-presentation.is-presentation .v3-collection-presentation-tools{
+  position:fixed;z-index:10001;
+  right:max(10px,env(safe-area-inset-right));
+  top:max(10px,env(safe-area-inset-top));
+}
+@media(max-width:570px){
+  .v3-collection-presentation.is-presentation{
+    padding:clamp(7px,2.5vw,13px);
+  }
+  .v3-collection-presentation.is-presentation>.v3-collection{
+    padding:20px 13px;border-radius:14px;
+  }
+}
