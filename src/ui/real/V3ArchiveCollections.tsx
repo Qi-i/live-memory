@@ -1,4 +1,4 @@
-import {useMemo,useState,type CSSProperties} from "react";
+import {useEffect,useMemo,useState,type CSSProperties} from "react";
 import {CalendarDays,MapPin,Music2,Ticket,ArrowUpRight} from "lucide-react";
 import type {EventRecord} from "../../domain";
 import {categoryLabels,primaryMedia,statusLabels} from "../../domain";
@@ -51,7 +51,10 @@ function Showcase({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
           <Artwork record={record} frameRatio={index===0?4/5:2/3}/>
         </button>
         <div className="v3-collection-showcase-caption">
-          <strong>{record.title}</strong><Meta record={record}/>
+          <strong>{record.title}</strong>
+          {record.artists.length>0&&<span className="v3-collection-artists">{record.artists.join(" · ")}</span>}
+          <Meta record={record}/>
+          {record.venue&&<span className="v3-collection-venue"><MapPin size={13}/>{record.venue}</span>}
           <Actions record={record} onOpen={onOpen} onEdit={onEdit} onShare={onShare} records={records} mode="画报"/>
         </div>
       </article>)}
@@ -73,6 +76,8 @@ function Wallet({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
           <div><CalendarDays size={14}/>{record.date||"日期待补"}</div>
           <div><MapPin size={14}/>{record.venue||record.city||"场馆待补"}</div>
           {record.seat&&<div><Ticket size={14}/>{record.seat}</div>}
+          {typeof record.price==="number"&&record.price>=0&&
+            <div className="v3-collection-wallet-price">票价 ¥{record.price.toLocaleString("zh-CN")}</div>}
           <Actions record={record} onOpen={onOpen} onEdit={onEdit} onShare={onShare} records={records} mode="票夹"/>
         </div>
       </article>)}
@@ -109,6 +114,9 @@ function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
   const days=new Date(year,month,0).getDate();
   const cells=Math.ceil((offset+days)/7)*7;
   const grouped=useMemo(()=>groupCalendarDays(records,selectedMonth),[records,selectedMonth]);
+  const agenda=useMemo(()=>records.filter(record=>record.date.startsWith(selectedMonth))
+    .slice().sort((a,b)=>a.date.localeCompare(b.date)||a.title.localeCompare(b.title)),
+    [records,selectedMonth]);
   function move(delta:number){
     const next=new Date(year,month-1+delta,1);
     setSelectedMonth(`${next.getFullYear()}-${String(next.getMonth()+1).padStart(2,"0")}`);
@@ -134,6 +142,19 @@ function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
               onClick={()=>onOpen(record.id)} title={record.title}>{record.title}</button>)}</>}
         </div>;
       })}
+    </div>
+    <div className="v3-collection-calendar-agenda" aria-label="本月演出列表">
+      {agenda.length===0?<p className="v3-collection-agenda-empty">本月还没有演出记录</p>:
+        agenda.map(record=><button key={record.id} type="button"
+          onClick={()=>onOpen(record.id)} className="v3-collection-agenda-item">
+          <span className="v3-collection-agenda-date"><b>{Number(record.date.slice(-2))}</b>
+            <small>{record.date.slice(0,7)}</small></span>
+          <span className="v3-collection-agenda-copy">
+            <strong>{record.title}</strong>
+            <small>{[record.city,record.venue].filter(Boolean).join(" · ")||"地点待补"}</small>
+          </span>
+          <ArrowUpRight size={18}/>
+        </button>)}
     </div>
   </section>;
 }
@@ -192,12 +213,32 @@ function Summary({records,onOpen}:Pick<Props,"records"|"onOpen">){
   </section>;
 }
 export function V3ArchiveCollections({mode,records,onOpen,onEdit,onShare}:Props){
-  if(mode==="画报")return <Showcase records={records} onOpen={onOpen} onEdit={onEdit} onShare={onShare}/>;
-  if(mode==="票夹")return <Wallet records={records} onOpen={onOpen} onEdit={onEdit} onShare={onShare}/>;
-  if(mode==="票根")return <Stubs records={records} onOpen={onOpen} onEdit={onEdit} onShare={onShare}/>;
-  if(mode==="日历")return <Calendar records={records} onOpen={onOpen}/>;
-  if(mode==="城市/场馆")return <Places records={records} onOpen={onOpen}/>;
-  if(mode==="票价")return <Costs records={records} onOpen={onOpen}/>;
-  if(mode==="汇总")return <Summary records={records} onOpen={onOpen}/>;
-  return null;
+  const [presentation,setPresentation]=useState(false);
+  useEffect(()=>{
+    if(!presentation)return;
+    const onKey=(event:KeyboardEvent)=>{
+      if(event.key==="Escape")setPresentation(false);
+    };
+    document.addEventListener("keydown",onKey);
+    return()=>document.removeEventListener("keydown",onKey);
+  },[presentation]);
+  const props={records,onOpen,onEdit,onShare};
+  const content=mode==="画报"?<Showcase {...props}/>:
+    mode==="票夹"?<Wallet {...props}/>:
+    mode==="票根"?<Stubs {...props}/>:
+    mode==="日历"?<Calendar records={records} onOpen={onOpen}/>:
+    mode==="城市/场馆"?<Places records={records} onOpen={onOpen}/>:
+    mode==="票价"?<Costs records={records} onOpen={onOpen}/>:
+    <Summary records={records} onOpen={onOpen}/>;
+  return <div className={`v3-collection-presentation${presentation?" is-presentation":""}`}>
+    <div className="v3-collection-presentation-tools">
+      <span>{records.length} 条现场记录 · {mode}</span>
+      <button type="button" onClick={()=>setPresentation(current=>!current)}
+        aria-pressed={presentation} aria-label={presentation?"退出纯净展示":"纯净截图展示"}
+        title={presentation?"返回正常视图":"隐藏操作按钮，便于手机和电脑截图"}>
+        {presentation?"退出纯净展示":"纯净截图"}
+      </button>
+    </div>
+    {content}
+  </div>;
 }
