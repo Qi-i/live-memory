@@ -118,7 +118,12 @@ export class IndexedDbRecordRepository implements RecordRepository {
           tx.abort();
           return;
         }
-        store.put(normalizeRecord(record));
+        // Unchanged editor content is not a new archive revision. Do not
+        // rewrite the IndexedDB record for a timestamp-only Save.
+        if (!existing || !recordContentEqual(normalizeRecord(existing),
+          record)) {
+          store.put(normalizeRecord(record));
+        }
       };
       tx.oncomplete = () => { db.close(); resolve(); };
       tx.onabort = () => {
@@ -167,7 +172,10 @@ export class IndexedDbRecordRepository implements RecordRepository {
           for (const row of normalized) {
             const current = existing.get(row.id);
             if (!current) continue;
-            if (JSON.stringify(current) !== JSON.stringify(row)) {
+            // The restore is already present when actual user content and
+            // original media identities agree. Ordering, signed URLs and
+            // sync timestamps alone are not another version of a concert.
+            if (!recordContentEqual(current, row, true)) {
               throw new Error("V3_RESTORE_EXISTING_RECORD_CONFLICT");
             }
             alreadyPresentIds.push(row.id);
@@ -223,7 +231,12 @@ export class IndexedDbRecordRepository implements RecordRepository {
         const existing = new Map(rows.map((record) => [record.id, record]));
         for (const candidate of result.records) {
           if (!accepted.has(candidate.id)) continue;
-          if (JSON.stringify(existing.get(candidate.id)) !== JSON.stringify(candidate)) {
+          const stored = existing.get(candidate.id);
+          // Keep the current IndexedDB row when the remote only refreshed
+          // transport metadata. A duplicate put may invalidate the image
+          // cache and make the archive/map appear to reload.
+          if (!stored || !recordContentEqual(stored, candidate,
+            options.includeMedia !== false)) {
             store.put(normalizeRecord(candidate));
           }
         }
