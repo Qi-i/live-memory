@@ -1,13 +1,29 @@
 # V3 server CAS and safe migration review
 
-Status: review-only document. This is NOT a migration, and must NOT be applied directly to the production database.
+Status: **backend contract review, updated after production metadata-only read on 2026-11-18**. This is NOT an executable migration and must not be applied directly to production. The verified presence of database functions is not the same as acceptance of real user records, exact media recovery or mixed-device behavior.
 
 ## Verified existing schema
 
 - public.echo_passkey_records: composite key (owner_key,id), JSONB payload, existing owner-key header RLS, complete personal-cloud records.
 - public.echo_passkey_media_assets: per-owner private media indexes, linked to record IDs; private object storage remains separate.
 - public.echo_text_backups: composite key (user_id,id), auth.uid ownership RLS, text-only account backup.
-- None of these tables currently exposes v3_revision. The new client intentionally rejects records without a valid version.
+- **Production metadata check 2026-11-18:** `echo_passkey_records`, `echo_text_backups`, and `live_memory_v3_secure_records` all have `v3_revision BIGINT`. The first two retain V2 UPDATE triggers that advance the revision; the secure table has its own CAS guard. This observation corrects the former *pre-migration* description and does not claim a successful historical media migration.
+
+### Verified production metadata (read-only SQL, no rows or private content queried)
+
+| Check | Observed result |
+| --- | --- |
+| V3 CAS callable functions | Four: `live_memory_v3_cas_personal`, `live_memory_v3_cas_account`, `live_memory_v3_cas_account_scoped`, `live_memory_v3_cas_secure_account` |
+| Execution mode | All four `SECURITY INVOKER`, each fixed `search_path=pg_catalog` |
+| Revision preconditions | All four function definitions contain the expected-revision guard |
+| `authenticated` EXECUTE | Granted on all four CAS functions |
+| `anon` EXECUTE | Only `cas_personal`, which follows the separate owner-key personal-cloud model; never treat this as a general account-cloud authorization |
+| PUBLIC EXECUTE | Not granted on any of the four |
+| Legacy V2 write paths | Personal/account tables have row-level revision triggers with `OLD.v3_revision + 1` |
+| Secure V3 table | `v3_revision` column and authenticated CAS guard trigger exist |
+| Live auth flow and real-device CAS | **NOT RUN**, requires actual independent write tests and verified backups |
+
+This result verifies only the deployed **database structure**, not that every client always uses the correct RPC, not that authenticated RLS is correctly enforced for a tested user, and not that an old web tab cannot race a new native device. Do not perform production data writes merely to turn these NOT RUN cases into PASS.
 
 ## Required server protocol
 
