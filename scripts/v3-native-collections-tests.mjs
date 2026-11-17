@@ -90,4 +90,7 @@ assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation\{[\s\S]*?pos
 assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation>\.v3-collection/,
   "Screenshot mode must render the same real collection without a second poster cache");
 
+assert.match(viewCSS,/@media \(hover:none\), \(pointer:coarse\)[\s\S]*?v3-collection-presentation-tools/,
+  "Collection screenshots must have an accessible touch exit");
+
 console.log("V3 native views, persisted display choice, readable mobile collections and preview-first sharing passed.");
