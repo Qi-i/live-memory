@@ -1713,8 +1713,24 @@ async function drawTicket(
   const posterHeight = Math.max(1, slot.height - inset * 2);
   const posterWidth = Math.min(slot.width * 0.46, posterHeight * recordPosterRatio(record));
   const posterRect = { x: slot.x + inset, y: slot.y + inset, width: posterWidth, height: posterHeight };
-  if (image) drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
-  else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
+  if (image) {
+    const sourceRatio = image.naturalWidth / Math.max(1, image.naturalHeight);
+    const targetRatio = posterRect.width / Math.max(1, posterRect.height);
+    context.save();
+    roundedPath(context, posterRect.x, posterRect.y, posterRect.width, posterRect.height, 10);
+    context.clip();
+    if (posterDisplayMode(sourceRatio, targetRatio) === "backdrop") {
+      context.save();
+      context.filter = "blur(15px) brightness(.78)";
+      drawCover(context, image, posterRect.x - 12, posterRect.y - 12,
+        posterRect.width + 24, posterRect.height + 24, palette.surface);
+      context.restore();
+      drawContain(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
+    } else {
+      drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
+    }
+    context.restore();
+  } else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
   roundedPath(context, posterRect.x, posterRect.y, posterRect.width, posterRect.height, 10);
   context.strokeStyle = "rgba(255,255,255,.42)";
   context.lineWidth = 1.5;
