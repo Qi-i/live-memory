@@ -181,6 +181,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   const [startDate, setStartDate] = useState(earliestDate);
   const [endDate, setEndDate] = useState(latestDate);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(() => new Set(eligibleRecords.map((record) => record.id)));
+  const manualSelectionTouched = useRef(false);
   const [selectionQuery, setSelectionQuery] = useState("");
   const [showDetails, setShowDetails] = useState(experience === "v3");
   const [showBrand, setShowBrand] = useState(true);
@@ -211,7 +212,16 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setEndDate((current) => current || latestDate);
     setSelectedIds((current) => {
       const valid = new Set(eligibleRecords.filter((record) => current.has(record.id)).map((record) => record.id));
-      return valid.size ? valid : new Set(eligibleRecords.map((record) => record.id));
+      // User explicitly cleared a manual share selection: never silently
+      // reselect everything when a media URL renews or records refresh.
+      // An untouched new/empty archive may still select its first data load.
+      if (!valid.size && !manualSelectionTouched.current) {
+        const defaults = new Set(eligibleRecords.map(record => record.id));
+        if (defaults.size === current.size && [...defaults].every(id => current.has(id))) return current;
+        return defaults;
+      }
+      if (valid.size === current.size && [...valid].every(id => current.has(id))) return current;
+      return valid;
     });
   }, [earliestDate, latestDate, eligibleRecords]);
 
@@ -373,6 +383,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   }
 
   function toggleRecord(recordId: string) {
+    manualSelectionTouched.current = true;
     setSelectedIds((current) => {
       const next = new Set(current);
       if (next.has(recordId)) next.delete(recordId);
@@ -547,8 +558,8 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
           <section className="share-selection-browser">
             <label><Search /><input value={selectionQuery} onChange={(event) => setSelectionQuery(event.target.value)} placeholder="搜索标题、城市、场馆或日期" /></label>
             <div className="share-selection-actions">
-              <button type="button" onClick={() => setSelectedIds(new Set(visibleSelectionRecords.map((record) => record.id)))}>选择当前结果</button>
-              <button type="button" onClick={() => setSelectedIds(new Set<string>())}>清空</button>
+              <button type="button" onClick={() => { manualSelectionTouched.current = true; setSelectedIds(new Set(visibleSelectionRecords.map((record) => record.id))); }}>选择当前结果</button>
+              <button type="button" onClick={() => { manualSelectionTouched.current = true; setSelectedIds(new Set<string>()); }}>清空</button>
             </div>
             <div className="share-selection-grid">
               {visibleSelectionRecords.map((record) => (
