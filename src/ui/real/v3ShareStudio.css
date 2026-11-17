@@ -391,3 +391,12 @@
     padding-inline: 9px;
   }
 }
+
+
+/* A hidden hover-only exit traps phone users in the screenshot overlay. */
+@media (hover:none), (pointer:coarse) {
+  .share-studio-stage.is-v3 .share-clean-preview-exit {
+    opacity:.72;
+    background:rgba(255,255,255,.88);
+  }
+}
