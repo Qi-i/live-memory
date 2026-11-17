@@ -180,12 +180,30 @@ function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
     </div>
   </article>;
 }
+function RealStatisticsSpotlight({record}:{record:EventRecord}){
+  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
+  return <article className="v3-real-stat-spotlight" aria-label="真实档案主视觉">
+    <div className="v3-real-stat-spotlight-art">
+      <AdaptivePoster src={src} alt={record.title+"海报"} frameRatio={2/3}/>
+    </div>
+    <div className="v3-real-stat-spotlight-copy">
+      <span>RECENT LIVE STORY · 真实记录</span>
+      <h2>{record.title}</h2>
+      {record.artists.length>0&&<p className="v3-real-stat-artists">{record.artists.join(" · ")}</p>}
+      <p>{[record.date,record.city,record.venue].filter(Boolean).join(" · ")}</p>
+      <small>选自现有档案海报；未使用票券或座位图替代。</small>
+    </div>
+  </article>;
+}
 function RealStatistics({ records }: { records: EventRecord[] }) {
   const data = useMemo(() => describeRealArchive(records), [records]);
+  const spotlight=useMemo(()=>data.records.find(record=>
+    Boolean(primaryMedia(record, ["poster"]))),[data.records]);
   return (
-    <section className="v3-real-panel">
+    <section className="v3-real-panel v3-real-stat-dashboard">
       <header><span>YOUR REAL DATA · READ ONLY</span><h1>观演统计</h1>
         <p>按本机实际档案计算，取消、退款和删除的记录不计入已看场次。</p></header>
+      {spotlight&&<RealStatisticsSpotlight record={spotlight}/>}
       <div className="v3-real-metrics">
         <article><strong>{data.records.length}</strong><span>有效档案</span></article>
         <article><strong>{data.watchedCount}</strong><span>已看演出</span></article>
@@ -256,7 +274,13 @@ function RealCityView({ records, onOpen }: { records: EventRecord[]; onOpen: (id
     map={<RealCityMap records={data.records} chosenCity={city} />}
     list={<div className="v3-real-city-list">
       <header><span>ACTUAL FOOTPRINTS</span><h2>城市与场馆</h2>
-        <p>来自真实档案，点击城市查看对应演出。</p></header>
+        <p>仅按档案中已记录的城市与真实坐标展示，不推算未知地点。</p>
+        <div className="v3-real-city-insights">
+          <span><b>{data.cities.length}</b> 座城市</span>
+          <span><b>{data.records.length}</b> 条档案</span>
+          {data.cities.length>0&&<span>最多场次：<b>{data.cities[0].city}</b></span>}
+        </div>
+      </header>
       {data.cities.map(item=><button type="button" key={item.city} aria-pressed={item.city===city}
         onClick={()=>setCity(item.city===city?null:item.city)}>
         <strong title={item.city}>{item.city}</strong><span>已看 {item.watched}</span><b>{item.total}</b>
