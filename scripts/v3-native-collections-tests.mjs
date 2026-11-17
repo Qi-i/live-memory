@@ -85,5 +85,9 @@ assert.match(viewCSS,/@container\(max-width:570px\)[\s\S]*?\.v3-collection-calen
   "Mobile width must display the readable agenda instead of a 660px-wide grid");
 assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation \.v3-collection-actions/,
   "Screenshot mode hides redundant edit/detail action rows");
+assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation\{[\s\S]*?position:fixed;inset:0;z-index:10000/,
+  "Screenshot view must cover the app navigation and toolbar, not only hide buttons");
+assert.match(viewCSS,/\.v3-collection-presentation\.is-presentation>\.v3-collection/,
+  "Screenshot mode must render the same real collection without a second poster cache");
 
 console.log("V3 native views, persisted display choice, readable mobile collections and preview-first sharing passed.");
