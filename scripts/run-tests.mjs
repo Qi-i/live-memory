@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import "./concert-reminder-handoff-tests.mjs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "vite";
 

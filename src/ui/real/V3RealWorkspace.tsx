@@ -14,6 +14,7 @@ import { RecordEditor } from "../../overlays";
 import { blankRecord } from "../../seeds";
 import { ShareStudio, type ShareFormat } from "../../shareStudio";
 import { duplicateRecordForNextShow } from "../../recordActions";
+import { createConcertReminderHandoff } from "../../core/application/concertReminderHandoff";
 import { hasPersonalCloudConnection } from "../../supabase";
 import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
@@ -617,6 +618,33 @@ export function V3RealWorkspace() {
         (error instanceof Error?error.message:""));
     }finally{setExportBusy(false);}
   };
+  const exportAndroidConcertReminders=async()=>{
+    if(!canEdit||snapshot.busy||syncBusy)return;
+    const scope=currentStorageScope();
+    try{
+      const {downloadBlob}=await import("../../media");
+      const {stableSerialize}=await import("../../core/sync/revision");
+      const originals=await listRecords();
+      if(scope!==currentStorageScope())throw Error("REMINDER_EXPORT_ACCOUNT_CHANGED");
+      if(!originals.length){setNotice("当前设备没有演出记录可供导出。");return;}
+      const baseline=new Map(originals.map(row=>[row.id,stableSerialize(row)]));
+      const handoff=createConcertReminderHandoff(originals);
+      const latest=await listRecords();
+      if(scope!==currentStorageScope()||latest.length!==originals.length||
+        latest.some(row=>baseline.get(row.id)!==stableSerialize(row))){
+        throw Error("REMINDER_EXPORT_ARCHIVE_CHANGED");
+      }
+      downloadBlob(JSON.stringify(handoff),
+        "live-memory-concert-reminders-"+new Date().toISOString().slice(0,10)+".json",
+        "application/json");
+      const schedulable=handoff.records.filter(row=>
+        !row.deletedAt&&row.status==="planned"&&row.recordState==="normal"&&row.time).length;
+      setNotice(`已导出 ${handoff.records.length} 条演出日程（可排程 ${schedulable} 条）。含场馆、座位、取消标记，不含票根、订单或媒体；在 Qi Ledger 安卓端「提醒与通知」导入后才会设置本地提醒。`);
+    }catch(error){
+      setNotice("演出提醒导出失败，未改变档案。"+
+        (error instanceof Error?" "+error.message:""));
+    }
+  };
 
   const inspectRestore=async(file?:File)=>{
     if(!file||!canEdit||restoreBusy)return;
@@ -754,6 +782,11 @@ export function V3RealWorkspace() {
         <details className="v3-real-more-tools">
           <summary aria-label="更多工具">更多</summary>
           <div className="v3-real-more-menu">
+            <button type="button" disabled={!canEdit||snapshot.busy||syncBusy}
+              onClick={event=>{
+                event.currentTarget.closest("details")?.removeAttribute("open");
+                void exportAndroidConcertReminders();
+              }}>导出安卓演出／座位提醒 JSON</button>
             <button type="button" onClick={event=>{
               event.currentTarget.closest("details")?.removeAttribute("open");
               setPage("数据");
