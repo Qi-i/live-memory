@@ -289,3 +289,72 @@
 .share-studio-stage.is-v3 .share-export-error{
   font-size:12px;line-height:1.55;
 }
+
+
+/* Screenshot-first composition: keep actual poster content as the only
+   visible surface, including on 360px-wide Android/Brave windows. The editor
+   remains mounted: no image re-download and no different render pipeline. */
+.share-studio-stage.is-v3 .share-clean-preview-enter {
+  display:inline-flex;align-items:center;gap:5px;
+  color:var(--share-ui-accent);font-weight:750;
+  background:var(--share-ui-soft);
+  border:1px solid var(--share-ui-border);
+}
+.share-studio-stage.is-v3.is-preview-clean {
+  position:fixed;inset:0;z-index:10000;
+  display:block;overflow:hidden;
+  width:100vw;height:100dvh;max-width:none;max-height:none;
+  background:#dfe8e7;
+}
+.share-studio-stage.is-v3.is-preview-clean .share-studio-panel,
+.share-studio-stage.is-v3.is-preview-clean .share-preview-toolbar {
+  display:none!important;
+}
+.share-studio-stage.is-v3.is-preview-clean .share-preview-area,
+.share-studio-stage.is-v3.is-preview-clean .share-preview-area.is-fixed,
+.share-studio-stage.is-v3.is-preview-clean .share-preview-area.is-long {
+  display:flex!important;align-items:safe center;justify-content:safe center;
+  width:100%;height:100dvh!important;min-height:100dvh!important;
+  max-height:100dvh;overflow:auto;
+  padding:12px;
+  margin:0;
+  background:radial-gradient(circle at 50% 30%,#f3f8f6,#dfe9e8 75%);
+  overscroll-behavior:contain;
+}
+.share-studio-stage.is-v3.is-preview-clean .share-preview-viewport {
+  flex:0 0 auto;
+  margin:auto;
+}
+.share-studio-stage.is-v3.is-preview-clean .share-preview {
+  box-shadow:0 15px 42px rgba(24,48,45,.18);
+}
+.share-studio-stage.is-v3 .share-clean-preview-exit {
+  position:fixed;z-index:10010;right:max(8px,env(safe-area-inset-right));
+  top:max(8px,env(safe-area-inset-top));
+  width:44px;height:44px;display:grid;place-items:center;
+  border:0;border-radius:12px;cursor:pointer;
+  color:#143c37;background:rgba(255,255,255,.85);
+  opacity:.08;transition:opacity .15s;
+}
+.share-studio-stage.is-v3 .share-clean-preview-exit:hover,
+.share-studio-stage.is-v3 .share-clean-preview-exit:focus-visible {
+  opacity:1;outline:2px solid #447e76;
+}
+@media(max-width:540px) {
+  .share-studio-stage.is-v3.is-preview-clean .share-preview-area {
+    padding:8px 4px;
+  }
+  .share-studio-stage.is-v3 .share-clean-preview-enter {
+    font-size:12px;min-height:38px;
+  }
+}
+@media print {
+  .share-studio-stage.is-v3 .share-studio-panel,
+  .share-studio-stage.is-v3 .share-preview-toolbar,
+  .share-studio-stage.is-v3 .share-clean-preview-exit {
+    display:none!important;
+  }
+  .share-studio-stage.is-v3 .share-preview {
+    box-shadow:none!important;
+  }
+}
