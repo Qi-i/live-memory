@@ -211,10 +211,17 @@ async function fetchAndCache(asset: MediaAsset, identity: string, epoch: number)
   if (!blob.size) throw new Error("Image response was empty");
   if (epoch !== mediaCacheEpoch) return "";
   if (typeof caches !== "undefined") {
-    const cache = await caches.open(currentCacheName());
-    if (epoch !== mediaCacheEpoch) return "";
-    await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
-    verifiedOfflineImages.delete(identity); // HTTP cache writes require SHA revalidation before sync.
+    if (asset.storagePath?.includes("/v3/")) {
+      // Signed URLs are merely transports. The private V3 path contains a
+      // SHA-256 digest, so never overwrite an immutable original with an
+      // unchecked HTTP response or a server-side error disguised as an image.
+      await persistVerifiedOfflineMedia(asset, blob);
+    } else {
+      const cache = await caches.open(currentCacheName());
+      if (epoch !== mediaCacheEpoch) return "";
+      await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
+      verifiedOfflineImages.delete(identity);
+    }
   }
   if (epoch !== mediaCacheEpoch) return "";
   const objectUrl = URL.createObjectURL(blob);
