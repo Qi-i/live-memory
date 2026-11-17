@@ -179,6 +179,13 @@ async function persistInlineSource(asset: MediaAsset, identity: string, epoch: n
     if (!response.ok) return;
     const blob = await response.blob();
     if (!blob.size || epoch !== mediaCacheEpoch) return;
+    if (asset.storagePath?.includes("/v3/")) {
+      // Content-addressed V3 originals are immutable. A legacy data: URL
+      // must never overwrite a verified private original with unchecked
+      // bytes sharing the same storage path. Validate SHA-256 before caching.
+      await persistVerifiedOfflineMedia(asset, blob);
+      return;
+    }
     const cache = await caches.open(currentCacheName());
     if (epoch !== mediaCacheEpoch) return;
     await cache.put(cacheRequest(identity), new Response(blob, {
@@ -204,10 +211,17 @@ async function fetchAndCache(asset: MediaAsset, identity: string, epoch: number)
   if (!blob.size) throw new Error("Image response was empty");
   if (epoch !== mediaCacheEpoch) return "";
   if (typeof caches !== "undefined") {
-    const cache = await caches.open(currentCacheName());
-    if (epoch !== mediaCacheEpoch) return "";
-    await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
-    verifiedOfflineImages.delete(identity); // HTTP cache writes require SHA revalidation before sync.
+    if (asset.storagePath?.includes("/v3/")) {
+      // Signed URLs are merely transports. The private V3 path contains a
+      // SHA-256 digest, so never overwrite an immutable original with an
+      // unchecked HTTP response or a server-side error disguised as an image.
+      await persistVerifiedOfflineMedia(asset, blob);
+    } else {
+      const cache = await caches.open(currentCacheName());
+      if (epoch !== mediaCacheEpoch) return "";
+      await cache.put(cacheRequest(identity), cacheable).catch(() => undefined);
+      verifiedOfflineImages.delete(identity);
+    }
   }
   if (epoch !== mediaCacheEpoch) return "";
   const objectUrl = URL.createObjectURL(blob);
@@ -286,10 +300,10 @@ export function mediaPreloadPlan(limit = 80, constrained?: boolean) {
   };
 }
 
-export async function preloadPrimaryRecordMedia(records: EventRecord[], workers = 6) {
+export async function preloadPrimaryRecordMedia(records: EventRecord[], workers = 6, posterOnly = false) {
   const unique = new Map<string, MediaAsset>();
   for (const record of records) {
-    const asset = record.media.find((item) => item.kind === "poster") || record.media[0];
+    const asset = record.media.find((item) => item.kind === "poster") || (posterOnly ? undefined : record.media[0]);
     if (!asset) continue;
     const identity = mediaIdentity(asset) || `inline:${asset.id}:${asset.updatedAt || ""}`;
     if (!unique.has(identity)) unique.set(identity, asset);
@@ -307,19 +321,41 @@ export async function preloadPrimaryRecordMedia(records: EventRecord[], workers 
   await Promise.all(tasks);
 }
 
+/** Deterministic, zero-network preload ordering shared by V2 and V3. */
+export function planMediaPreload(records: Pick<EventRecord, "media">[], limit: number): MediaAsset[] {
+  const cap = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 0;
+  if (cap === 0) return [];
+  const unique = new Map<string, MediaAsset>();
+  // Posters appear in the primary archive and across all collection modes.
+  // Reserve the bounded initial cache budget for one poster per record first,
+  // instead of filling it with ticket/seat photos from the earliest record.
+  // All other assets remain accessible on demand through the same cache.
+  const enqueue = (asset: MediaAsset) => {
+    const identity = mediaIdentity(asset);
+    if (identity && !unique.has(identity) && unique.size < cap) {
+      unique.set(identity, asset);
+    }
+  };
+  for (const record of records) {
+    const poster = record.media.find(asset => asset.kind === "poster");
+    if (poster) enqueue(poster);
+    if (unique.size >= cap) break;
+  }
+  if (unique.size < cap) {
+    for (const record of records) {
+      for (const asset of record.media) {
+        if (asset.kind !== "poster") enqueue(asset);
+        if (unique.size >= cap) break;
+      }
+      if (unique.size >= cap) break;
+    }
+  }
+  return Array.from(unique.values());
+}
+
 export async function preloadRecordMedia(records: EventRecord[], limit = 80) {
   const plan = mediaPreloadPlan(limit);
-  const unique = new Map<string, MediaAsset>();
-  for (const record of records) {
-    for (const asset of record.media) {
-      const identity = mediaIdentity(asset);
-      if (identity && !unique.has(identity)) unique.set(identity, asset);
-      if (unique.size >= plan.limit) break;
-    }
-    if (unique.size >= plan.limit) break;
-  }
-
-  const queue = Array.from(unique.values());
+  const queue = planMediaPreload(records, plan.limit);
   let cursor = 0;
   const workers = Array.from({ length: Math.min(plan.workers, queue.length) }, async () => {
     while (cursor < queue.length) {

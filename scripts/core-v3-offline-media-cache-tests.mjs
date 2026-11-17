@@ -77,4 +77,46 @@ await cache.persistVerifiedOfflineMedia(record,blob);
 assert.equal(await cache.hasVerifiedOfflineMedia(record),true);
 assert.equal(cacheByName.size,2,
   "A new account has its own isolated offline cache, never the first account's files");
+
+// First visual paint must not spend the entire preload limit on the earliest
+// concert's ticket and seat-map bytes while other poster cards remain blank.
+const firstPoster={id:"p1",kind:"poster",storagePath:"r1/poster",src:"https://example.test/p1"};
+const firstTicket={id:"t1",kind:"ticket",storagePath:"r1/ticket",src:"https://example.test/t1"};
+const secondPoster={id:"p2",kind:"poster",storagePath:"r2/poster",src:"https://example.test/p2"};
+const secondSeat={id:"s2",kind:"seatMap",storagePath:"r2/seat",src:"https://example.test/s2"};
+const preloadRecords=[
+  {media:[firstTicket,firstPoster]},
+  {media:[secondSeat,secondPoster]},
+];
+assert.deepEqual(cache.planMediaPreload(preloadRecords,2).map(asset=>asset.id),["p1","p2"],
+  "Both visible poster cards must load before private ticket/seat attachments");
+assert.deepEqual(cache.planMediaPreload(preloadRecords,3).map(asset=>asset.id),["p1","p2","t1"],
+  "Unused preload capacity may fetch other media without starving posters");
+assert.deepEqual(cache.planMediaPreload(preloadRecords,0),[],
+  "Disabled preload budget never touches the network");
+
+assert.match(source,/await persistVerifiedOfflineMedia\(asset, blob\)/,
+  "Network and inline V3 originals must pass SHA-256 verification");
+
+const earlierFetch=globalThis.fetch;
+try {
+  const targetBytes=Buffer.from("SYNTHETIC NETWORK ORIGINAL WITH INTACT BYTES");
+  const targetDigest=createHash("sha256").update(targetBytes).digest("hex");
+  const remoteAsset={...record,id:"r2",recordId:"r2",
+    storagePath:record.storagePath.replace(checksum,targetDigest),
+    src:"https://signed.example.test/private-image"};
+  globalThis.fetch=async()=>new Response(new Blob([Buffer.from("CORRUPT")],
+    {type:"image/png"}));
+  await cache.resolveMediaSource(remoteAsset);
+  assert.equal(await cache.hasVerifiedOfflineMedia(remoteAsset),false,
+    "A downloaded body with the wrong SHA-256 cannot enter the verified V3 cache");
+  globalThis.fetch=async()=>new Response(new Blob([targetBytes],
+    {type:"image/png"}));
+  await cache.resolveMediaSource(remoteAsset);
+  assert.equal(await cache.hasVerifiedOfflineMedia(remoteAsset),true,
+    "A verified network original is retained after its content hash matches");
+}finally{
+  globalThis.fetch=earlierFetch;
+}
+
 console.log("V3 offline bytes cache passed: original bytes, SHA-256, bad MIME/path, account-switch fence");
