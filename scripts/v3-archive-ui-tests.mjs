@@ -165,4 +165,16 @@ assert.match(workspace,/v3-real-city-insights/,
 assert.match(css,/\.v3-real-stat-spotlight\{/,
   "Stats poster hero requires responsive screenshot-ready styling");
 
+const liveShellSource=await readFile(new URL("../src/ui/system/WorkspaceShell.tsx",import.meta.url),"utf8");
+assert.match(workspace,/screenshot=\{screenshotMode\}/,
+  "Every Live Memory workspace page must offer clean screenshot presentation");
+assert.match(workspace,/setScreenshotMode\(true\)/,
+  "Clean screenshot entry must be available from the real toolbar");
+assert.match(liveShellSource,/className=\{"v3-workspace-shell" \+ \(screenshot/,
+  "Screenshot must reuse the same shell and record nodes, not mount a second archive");
+assert.match(shellCss,/\.v3-workspace-shell\.is-screenshot\{/,
+  "Full-viewport screenshot layout must be present");
+assert.match(shellCss,/\.v3-workspace-shell\.is-screenshot \.v3-workspace-content/,
+  "Screenshot must preserve readable content across desktop and phone");
+
 console.log("V3 majority-ratio, bounded crop, continuous scroll, inline edit, archived layouts passed.");
