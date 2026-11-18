@@ -98,8 +98,10 @@ assert.match(component,/v2AutoSyncDisabled:true/);
 assert.match(component,/initialTransferApproved:push\+pull>0/);
 assert.match(component,/V3_SYNC_MIGRATION_REVIEW_REQUIRED/);
 assert.match(component,/setTransferApproval\(\{scope:scoped\.scope,push,pull\}\)/);
-assert.equal((component.match(/\.synchronize\(/g)||[]).length,3,
-  "Only three gated V3 paths may synchronize: first-device pull, manual, or authenticated CDN recovery");
+assert.equal((component.match(/\.synchronize\(/g)||[]).length,4,
+  "Only four gated V3 paths may synchronize: initial pull, manual, CDN recovery and reviewed reconnection");
+assert.match(component,/audit\.requiresMigrationReview\|\|audit\.actions\["push-new"\]/,
+  "WAN reconnection must never silently bypass migration conflict review");
 assert.match(component,/if\(local\.length===0\)/,
   "Automatic first-device restore must never overwrite pre-existing local history");
 assert.match(component,/review\.actions\["push-new"\]===0/,
