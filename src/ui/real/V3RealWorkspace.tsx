@@ -37,6 +37,11 @@ type Mode = "海报"|"时间线"|"列表"|CollectionMode;
 const navigation: Array<Exclude<Page,"数据">> = ["档案", "统计", "城市"];
 const archiveModes:Mode[]=["海报","时间线","列表"];
 const viewPreferenceKey="live-memory-v3-archive-view";
+const autoSyncPreferenceKey="live-memory-v3-auto-sync";
+function readAutoSyncPreference(){
+  try{return window.localStorage.getItem(autoSyncPreferenceKey)!=="off";}
+  catch{return true;}
+}
 function savedArchiveMode():Mode{
   try{
     const stored=window.localStorage.getItem(viewPreferenceKey) as Mode|null;
@@ -307,6 +312,8 @@ export function V3RealWorkspace() {
   const accountRuntime=useRef<{scope:string;runtime:V3SyncRuntime}|null>(null);
   const rescueStarted=useRef<Set<string>>(new Set());
   const [syncBusy,setSyncBusy]=useState(false);
+  const [autoSyncEnabled,setAutoSyncEnabled]=useState(readAutoSyncPreference);
+  const lastAutoSyncAt=useRef(0);
   const [transferApproval,setTransferApproval]=useState<{
     scope:string;push:number;pull:number;
   }|null>(null);
@@ -734,6 +741,52 @@ export function V3RealWorkspace() {
         : "同步未完成：身份变化、网络故障或云端版本冲突。已保留本机记录，请重新检查。");
     }finally{setSyncBusy(false);}
   };
+  useEffect(()=>{
+    if(!autoSyncEnabled||!canEditAccount||cloudMode.mode!=="v3"||
+      cloudMode.scope!==currentStorageScope())return;
+    let active=true;
+    let running=false;
+    const check=async()=>{
+      if(!active||running||!navigator.onLine||document.hidden||
+        syncBusy||snapshot.busy||editing||restoreBusy||exportBusy)return;
+      if(Date.now()-lastAutoSyncAt.current<60_000)return;
+      const scoped=accountRuntime.current;
+      if(!scoped||scoped.scope!==currentStorageScope())return;
+      running=true;
+      lastAutoSyncAt.current=Date.now();
+      try{
+        if(await scoped.runtime.writerMode()!=="v3"||
+          currentStorageScope()!==scoped.scope)return;
+        const audit=await scoped.runtime.audit();
+        if(!active||currentStorageScope()!==scoped.scope)return;
+        // No automatic first-time history transfer or unresolved conflicts.
+        // Those retain the manual two-click review in safeSync.
+        if(audit.requiresMigrationReview||audit.actions["push-new"]||
+          audit.actions["pull-new"])return;
+        const result=await scoped.runtime.synchronize({
+          v2AutoSyncDisabled:true,initialTransferApproved:false,
+        });
+        if(active&&currentStorageScope()===scoped.scope&&
+          (result.uploadedIds.length||result.downloadedIds.length)){
+          setReload(n=>n+1);
+          setNotice(`网络恢复后已自动同步：上传 ${result.uploadedIds.length} 条、下载 ${result.downloadedIds.length} 条；尚有 ${result.deferredIds.length} 条待处理。`);
+        }
+      }catch{
+        // Do not discard drafts or claim a cloud ACK on an unreliable WAN.
+      }finally{running=false;}
+    };
+    const online=()=>{void check();};
+    window.addEventListener("online",online);
+    const visible=()=>{if(!document.hidden)void check();};
+    document.addEventListener("visibilitychange",visible);
+    void check();
+    return ()=>{
+      active=false;
+      window.removeEventListener("online",online);
+      document.removeEventListener("visibilitychange",visible);
+    };
+  },[autoSyncEnabled,canEditAccount,cloudMode.mode,cloudMode.scope,
+      syncBusy,snapshot.busy,editing,restoreBusy,exportBusy]);
   // One continuous scroll contains every filtered record; images load lazily.
   const yearGroups=useMemo(()=>{
     const groups=new Map<string,EventRecord[]>();
@@ -782,6 +835,14 @@ export function V3RealWorkspace() {
         <details className="v3-real-more-tools">
           <summary aria-label="更多工具">更多</summary>
           <div className="v3-real-more-menu">
+            <button type="button" onClick={()=>{
+              setAutoSyncEnabled(value=>{
+                const next=!value;
+                try{window.localStorage.setItem(autoSyncPreferenceKey,
+                  next?"on":"off");}catch{}
+                return next;
+              });
+            }}>{autoSyncEnabled?"关闭联网自动同步":"开启联网自动同步"}</button>
             <button type="button" disabled={!canEdit||snapshot.busy||syncBusy}
               onClick={event=>{
                 event.currentTarget.closest("details")?.removeAttribute("open");

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import "./concert-reminder-handoff-tests.mjs";
+import "./v3-wan-sync-retry-tests.mjs";
 import { readFile } from "node:fs/promises";
 import { createServer } from "vite";
 

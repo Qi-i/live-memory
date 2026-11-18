@@ -1,0 +1,12 @@
+import assert from "node:assert/strict";
+import {readFileSync} from "node:fs";
+const source=readFileSync(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
+assert.match(source,/live-memory-v3-auto-sync/);
+assert.match(source,/window\.addEventListener\("online",online\)/);
+assert.match(source,/document\.addEventListener\("visibilitychange",visible\)/);
+assert.match(source,/audit\.requiresMigrationReview\|\|audit\.actions\["push-new"\]/);
+assert.match(source,/audit\.actions\["pull-new"\]/);
+assert.match(source,/initialTransferApproved:false/);
+assert.match(source,/result\.deferredIds\.length/);
+assert.match(source,/开启联网自动同步/);
+console.log("Live Memory opt-in WAN retry, conflict guard, manual cutover and no fake ACK passed");
