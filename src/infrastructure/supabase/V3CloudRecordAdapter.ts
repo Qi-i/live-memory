@@ -98,9 +98,14 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
    * This does not replace CAS at write-time, but prevents applying an
    * internally inconsistent multi-page response as a deletion/recovery.
    */
-  async list(): Promise<CloudRecordEnvelope[]> {
+  async listMetadataOnly(): Promise<CloudRecordEnvelope[]> {
     await this.guardIdentity();
     const first = await this.scanAllPages();
+    // Freeze first-pass content BEFORE the second scan. Some fake clients or
+    // IndexedDB adapters reuse mutable object references; comparing two live
+    // references after mutation can falsely declare a changing inventory
+    // stable. This matters for preserving private records and deletion state.
+    const firstContents = first.map(row => stableSerialize(row.record));
     const verified = await this.scanAllPages();
     await this.guardIdentity();
     if (first.length !== verified.length) {
@@ -109,10 +114,18 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     for (let i = 0; i < first.length; i += 1) {
       if (first[i].record.id !== verified[i].record.id ||
           first[i].serverRevision !== verified[i].serverRevision ||
-          stableSerialize(first[i].record) !== stableSerialize(verified[i].record)) {
+          firstContents[i] !== stableSerialize(verified[i].record)) {
         throw new Error("V3_REMOTE_INVENTORY_CHANGED: Cloud records changed during pagination; retry");
       }
     }
+    // No signed media URLs, CDN fetch or image bytes for QiHub metadata sync.
+    // This is the same *twice verified* remote snapshot used by normal V3,
+    // not the display-hydrated inventory with temporary Storage signatures.
+    return verified;
+  }
+
+  async list(): Promise<CloudRecordEnvelope[]> {
+    const verified = await this.listMetadataOnly();
     if (!this.includeMedia || !this.mediaTransport) {
       await this.guardIdentity();
       return verified;

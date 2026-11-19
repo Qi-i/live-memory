@@ -13,6 +13,8 @@
 
 ## 在线使用
 
+**QiHub Android 原生读取增量（2026-11-19）**：正式 V3 账号登录后，原站可通过受控的 QiHub Android 通道提供已完成两次一致性核验的云端演出元数据、媒体引用和 CAS 服务端修订号；不向 Android 传递登录令牌，也不额外下载或声称已保存原图。原站 V3 仍独立处理媒体字节、账号权限、冲突与云端写入；QiHub 的离线加密元数据副本不等于 V3 完整离线媒体或双向同步。相关源码：`src/infrastructure/qihubNativeV3Snapshot.ts`、`V3CloudRecordAdapter.listMetadataOnly()`。
+
 **<https://qi-i.github.io/live-memory/>**
 
 进入应用后可选择：
