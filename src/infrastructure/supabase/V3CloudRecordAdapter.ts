@@ -124,6 +124,16 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     return verified;
   }
 
+  async readVerifiedOriginalForQiHub(asset: EventRecord["media"][number]): Promise<Blob> {
+    if(this.provider!=="secure-account"||!this.mediaTransport?.readVerifiedOriginal){
+      throw Error("QIHUB_V3_ORIGINAL_AUTH_REQUIRED");
+    }
+    await this.guardIdentity();
+    const blob=await this.mediaTransport.readVerifiedOriginal(asset);
+    await this.guardIdentity();
+    return blob;
+  }
+
   async list(): Promise<CloudRecordEnvelope[]> {
     const verified = await this.listMetadataOnly();
     if (!this.includeMedia || !this.mediaTransport) {

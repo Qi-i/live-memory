@@ -62,6 +62,29 @@ export class SupabaseV3AccountMediaTransport implements V3MediaTransport {
       throw Error("V3_ACCOUNT_MEDIA_INVALID_PATH");
     return match[1];
   }
+
+  /** Authenticated original-byte read for explicitly requested QiHub export.
+   * Supabase's account JWT/RLS stays inside Live Memory's own Web origin.
+   * No temporary signed URL, stale cache, or file-system path is accepted
+   * as proof: the returned actual bytes MUST match the content hash.
+   */
+  async readVerifiedOriginal(asset:MediaAsset):Promise<Blob>{
+    const expected=await this.verifyPath(asset);
+    this.assertScope();
+    const response=await this.client.storage
+      .from(V3_ACCOUNT_MEDIA_BUCKET).download(asset.storagePath!);
+    this.assertScope();
+    if(response.error||!response.data||
+       response.data.size<1||response.data.size>MAX){
+      throw Error("QIHUB_V3_ORIGINAL_UNAVAILABLE");
+    }
+    const bytes=await response.data.arrayBuffer();
+    this.assertScope();
+    if(await sha256(bytes)!==expected){
+      throw Error("QIHUB_V3_ORIGINAL_CHECKSUM_MISMATCH");
+    }
+    return new Blob([bytes],{type:response.data.type||asset.mimeType||"application/octet-stream"});
+  }
   async stage(recordId:string,asset:MediaAsset):Promise<MediaAsset>{
     this.assertScope();
     if(!recordId||!asset.id||asset.recordId!==recordId)

@@ -13,6 +13,9 @@ export interface V3MediaTransport {
   hydrate(record: EventRecord): Promise<EventRecord>;
   ensureOffline(record: EventRecord): Promise<void>;
   assertScope(): void;
+  /** Read the authenticated immutable original, verifying its path SHA.
+   * Used only by QiHub's explicitly requested original-byte transfer. */
+  readVerifiedOriginal?(asset: MediaAsset): Promise<Blob>;
 }
 interface UploadResult { error: { message: string; statusCode?: string | number; code?: string } | null }
 interface DownloadResult { data: Blob | null; error: { message: string } | null }

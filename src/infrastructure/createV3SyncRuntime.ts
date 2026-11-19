@@ -71,6 +71,25 @@ export class V3SyncRuntime {
     return this.remote.listMetadataOnly();
   }
 
+  async readAuthenticatedV3OriginalForQiHub(
+    recordId: string, assetId: string, revision: number,
+  ): Promise<Blob> {
+    if(this.remote.provider!=="secure-account" ||
+       await this.remote.writerMode()!=="v3"){
+      throw Error("QIHUB_V3_AUTHENTICATED_CUTOVER_REQUIRED");
+    }
+    const rows=await this.remote.listMetadataOnly();
+    const row=rows.find(item=>item.record.id===recordId);
+    if(!row||Number(row.serverRevision)!==revision){
+      throw Error("QIHUB_V3_MEDIA_RECORD_REVISION_CHANGED");
+    }
+    const asset=row.record.media.find(item=>item.id===assetId);
+    if(!asset||asset.recordId!==recordId||!asset.storagePath){
+      throw Error("QIHUB_V3_ORIGINAL_REFERENCE_MISSING");
+    }
+    return this.remote.readVerifiedOriginalForQiHub(asset);
+  }
+
   /** Metadata-only V2 adoption: never transfers, edits or removes an archive. */
   async bootstrapMatchingHistory(): Promise<BaselineBootstrapReport> {
     return bootstrapEquivalentBaselines(this.local, this.remote, this.ledger);
