@@ -112,6 +112,11 @@ assert.ok(fake.rows.get("concert-1").payload.media[0].storagePath===path);
 const hydrated=await account.list();
 assert.equal(hydrated[0].record.media[0].storagePath,path);
 assert.match(hydrated[0].record.media[0].src,/^https:\/\/signed\.test\//);
+const actualOriginal=await account.readVerifiedOriginalForQiHub(
+  hydrated[0].record.media[0]);
+assert.deepEqual(Buffer.from(await actualOriginal.arrayBuffer()),sourceBytes,
+  "QiHub original-byte reader must return genuine downloaded private bytes");
+assert.equal(actualOriginal.type,"image/png");
 assert.equal(await rev.recordRevision(hydrated[0].record,true),
   await rev.recordRevision(committed.record,true));
 cache.clear();
@@ -137,6 +142,9 @@ saved.set(path,new Blob(["CORRUPTED PRIVATE BYTES"],{type:"image/png"}));
 await assert.rejects(media.stage(record.id,renewed),
   /V3_ACCOUNT_MEDIA_EXISTING_BYTES_MISMATCH/,
   "A hash-named path must never substitute for byte-level integrity");
+await assert.rejects(account.readVerifiedOriginalForQiHub(
+  hydrated[0].record.media[0]),/QIHUB_V3_ORIGINAL_CHECKSUM_MISMATCH/,
+  "A private Storage path is not proof that an original was recovered");
 saved.set(path,originalObject);
 const revived=await media.stage(record.id,{...renewed,src:""});
 assert.match(revived.src,/^https:\/\/signed\.test\//,
@@ -156,6 +164,11 @@ await assert.rejects(media.hydrate({...record,media:[{
   ...record.media[0],storagePath:foreign+"/v3/"+sha("concert-1")+
     "/"+sha("poster-1")+"/"+sha(sourceBytes)+".png",
 }]}),/V3_ACCOUNT_MEDIA_INVALID_PATH/);
+await assert.rejects(media.readVerifiedOriginal({
+  ...hydrated[0].record.media[0],storagePath:foreign+"/v3/"+sha("concert-1")+
+    "/"+sha("poster-1")+"/"+sha(sourceBytes)+".png",
+}),/V3_ACCOUNT_MEDIA_INVALID_PATH/,
+  "QiHub must not download originals belonging to another Supabase account");
 cache.clear();
 failDownload=true;
 await assert.rejects(account.prepareIncoming(hydrated[0].record),/V3_ACCOUNT_MEDIA_DOWNLOAD_FAILED/);

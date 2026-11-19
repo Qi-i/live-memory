@@ -15,6 +15,8 @@
 
 **QiHub Android 原生读取增量（2026-11-19）**：正式 V3 账号登录后，原站可通过受控的 QiHub Android 通道提供已完成两次一致性核验的云端演出元数据、媒体引用和 CAS 服务端修订号；不向 Android 传递登录令牌，也不额外下载或声称已保存原图。原站 V3 仍独立处理媒体字节、账号权限、冲突与云端写入；QiHub 的离线加密元数据副本不等于 V3 完整离线媒体或双向同步。相关源码：`src/infrastructure/qihubNativeV3Snapshot.ts`、`V3CloudRecordAdapter.listMetadataOnly()`。
 
+**QiHub Android V3 私有原图读取（2026-11-19 后续增量）：** 仅当用户在 QiHub 工具页主动请求，原站才使用当前账号的私有 Supabase Storage 读取实际原始对象；每张图重新核验账号范围、V3 服务端修订号和内容 SHA-256，之后交给 QiHub 本机加密库。已有并通过 SHA 校验的本机副本可跳过重新下载；原图丢失、字节不匹配或登录账户变化均不会被标记为完成。仅覆盖 V3 私有存储中确实存在的原图；历史第三方海报 URL、无 storagePath 的图片仍需单独迁移验证。不执行自动云端写入。
+
 **<https://qi-i.github.io/live-memory/>**
 
 进入应用后可选择：
