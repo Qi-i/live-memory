@@ -205,6 +205,45 @@ missingRevision.rows.set(record.id,{id:record.id,payload:record});
 await assert.rejects(new adapter.SupabaseV3RecordAdapter(
   missingRevision,"personal","owner-test","account-test",
 ).list(),/version/i,"Old schema cannot be silently treated as CAS-capable");
+
+// QiHub uses the real signed-in V3 account but fetches metadata only:
+// never hydrate signed private media URLs or download original image bytes.
+const nativeFeedClient=new FakeRpc();
+nativeFeedClient.mode="v3";
+nativeFeedClient.rows.set("one", {
+  id:"one",payload:{...record,id:"one",media:[{
+    id:"poster",recordId:"one",kind:"poster",src:"",
+    storagePath:"private/user/one.png",
+  }]},v3_revision:7,
+});
+let hydrateCalls=0;
+const nativeMedia={
+  assertScope(){},
+  async hydrate(){hydrateCalls++;throw Error("Private media must not be fetched");},
+};
+const nativeAdapter=new adapter.SupabaseV3RecordAdapter(
+  nativeFeedClient,"secure-account","authenticated-v3",ACCOUNT_A,nativeMedia,
+  async()=>{assert.equal(nativeFeedClient.actor,ACCOUNT_A);},
+);
+const nativeRows=await nativeAdapter.listMetadataOnly();
+assert.equal(nativeRows.length,1);
+assert.equal(nativeRows[0].serverRevision,"7");
+assert.equal(nativeRows[0].record.media[0].storagePath,"private/user/one.png");
+assert.equal(hydrateCalls,0);
+assert.equal(nativeFeedClient.calls.filter(call=>call[0]==="select").length,2,
+  "Native V3 metadata must verify the full cloud inventory twice");
+
+// Mutating the SAME response object before the second scan previously
+// tricked a pair of live object references into appearing identical.
+nativeFeedClient.onRange=async()=>{
+  if(nativeFeedClient.calls.filter(call=>call[0]==="select").length===4){
+    nativeFeedClient.rows.get("one").payload.title="Changed during scan";
+  }
+};
+await assert.rejects(nativeAdapter.listMetadataOnly(),/V3_REMOTE_INVENTORY_CHANGED/,
+  "Source changes must be detected even when the RPC reuses object references");
+nativeFeedClient.onRange=null;
+
 assert.doesNotMatch(adapterCode, /\.upsert\(|\.delete\(/,
   "V3 cloud adapter cannot fall back to an unconditional public write");
-console.log("V3 cloud transport tests passed: CAS revisions, stale-write rejection, local-byte guard, signed-URL stripping, account privacy, schema fail-close, concurrent inventory drift detection.");
+console.log("V3 cloud transport tests passed: CAS revisions, source metadata-only account read, no media hydration, mutable snapshot drift, signed-URL stripping, account privacy.");

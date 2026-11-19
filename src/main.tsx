@@ -43,6 +43,18 @@ if (v3Preview) {
   // AccessGate establishes the actual scoped identity. Only an account with
   // a verified server-side V3 writer marker may edit and manually sync;
   // existing V2 owners stay read-only, and V2 AppRoot/timers never mount.
+  // The QiHub JavaScript channel is installed by its native host BEFORE the
+  // page loads. Only the authenticated V3 production branch exposes a scoped
+  // metadata reader. Never mount V2 sync or leak an account session to native.
+  if ("QiHubNativeSnapshot" in window) {
+    void import("./infrastructure/qihubNativeV3Snapshot").then(
+      ({ collectQiHubReadOnlySnapshot }) => {
+        Object.defineProperty(window, "__qihubReadOnlySnapshot", {
+          value: collectQiHubReadOnlySnapshot, configurable: false,
+        });
+      },
+    );
+  }
   void import("./ui/real/V3RealWorkspace").then(({ V3RealWorkspace }) => {
     root.render(
       <React.StrictMode><AccessGate><V3RealWorkspace /></AccessGate></React.StrictMode>,

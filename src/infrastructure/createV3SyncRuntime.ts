@@ -60,6 +60,17 @@ export class V3SyncRuntime {
     return this.remote.list();
   }
 
+  /** QiHub Android metadata-only read of the exact authenticated V3 account.
+   * Preserves server CAS revisions and private Storage *references* without
+   * copying any media bytes or revealing the Supabase session credential. */
+  async readAuthenticatedV3ManifestForQiHub(): Promise<CloudRecordEnvelope[]> {
+    if (this.remote.provider !== "secure-account" ||
+        await this.remote.writerMode() !== "v3") {
+      throw new Error("QIHUB_V3_AUTHENTICATED_CUTOVER_REQUIRED");
+    }
+    return this.remote.listMetadataOnly();
+  }
+
   /** Metadata-only V2 adoption: never transfers, edits or removes an archive. */
   async bootstrapMatchingHistory(): Promise<BaselineBootstrapReport> {
     return bootstrapEquivalentBaselines(this.local, this.remote, this.ledger);
