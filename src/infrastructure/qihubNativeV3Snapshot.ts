@@ -1,4 +1,6 @@
 import { createV3SyncRuntime } from "./createV3SyncRuntime";
+import { RemoteRevisionChanged } from "../core/ports/CloudRecordAdapter";
+import type { QiHubMemoryCommand } from "./qihubNativeMemoryFields";
 import { currentStorageScope, readSettings } from "../storage";
 
 /** Existing signed-in V3 account, double-verified by the original V3 adapter.
@@ -79,4 +81,32 @@ export async function readQiHubVerifiedOriginalMedia(
     throw Error("QIHUB_V3_ACCOUNT_CHANGED");
   }
   return blob;
+}
+
+/** Only exposed to the actual QiHub Android bridge, never to anonymous V2
+ * archives. Returns the real source CAS acknowledgement, not a local draft. */
+export async function mutateQiHubNativeMemory(command: QiHubMemoryCommand) {
+  const accountId=currentStorageScope();
+  if (!/^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/.test(accountId)) {
+    throw Error("QIHUB_SOURCE_SIGN_IN_REQUIRED");
+  }
+  const runtime=await createV3SyncRuntime(readSettings(),"secure-account");
+  try {
+    const {committed,localUpdated}=await runtime.mutateQiHubMemory(command);
+    if(currentStorageScope()!==accountId)throw Error("QIHUB_V3_ACCOUNT_CHANGED");
+    if(localUpdated)window.dispatchEvent(new Event("qihub-native-memory-accepted"));
+    return {
+      ok:true,
+      record:{...committed.record,
+        media:committed.record.media.map(asset=>({...asset,src:""}))},
+      serverRevision:Number(committed.serverRevision),
+      localUpdated,
+    };
+  } catch(error) {
+    if(error instanceof RemoteRevisionChanged ||
+       (error instanceof Error && error.message==="QIHUB_MEMORY_REVISION_CHANGED")) {
+      return {ok:false,conflict:true};
+    }
+    throw error;
+  }
 }

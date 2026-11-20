@@ -46,10 +46,12 @@ if (v3Preview) {
   // The QiHub JavaScript channel is installed by its native host BEFORE the
   // page loads. Only the authenticated V3 production branch exposes a scoped
   // metadata reader. Never mount V2 sync or leak an account session to native.
-  if ("QiHubNativeSnapshot" in window || "QiHubNativeMedia" in window) {
+  if ("QiHubNativeSnapshot" in window || "QiHubNativeMedia" in window ||
+      "QiHubNativeMemoryCrud" in window) {
     void import("./infrastructure/qihubNativeV3Snapshot").then(
       ({ collectQiHubReadOnlySnapshot,
-         listQiHubOriginalMediaCandidates, readQiHubVerifiedOriginalMedia }) => {
+         listQiHubOriginalMediaCandidates, readQiHubVerifiedOriginalMedia,
+         mutateQiHubNativeMemory }) => {
         if("QiHubNativeSnapshot" in window){
           Object.defineProperty(window, "__qihubReadOnlySnapshot", {
             value: collectQiHubReadOnlySnapshot, configurable: false,
@@ -62,6 +64,11 @@ if (v3Preview) {
               read:readQiHubVerifiedOriginalMedia,
             }),
             configurable: false,
+          });
+        }
+        if("QiHubNativeMemoryCrud" in window){
+          Object.defineProperty(window,"__qihubNativeMemoryCrud",{
+            value:mutateQiHubNativeMemory,configurable:false,
           });
         }
       },
