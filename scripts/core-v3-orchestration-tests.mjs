@@ -89,6 +89,20 @@ assert.equal(result.reviews.length, 0);
 assert.equal(result.activity.type, "connected");
 assert.equal(bases.read(first.id), await revisions.recordRevision(first));
 
+// An established browser may pull new phone records. A new local record
+// appearing after preflight must still not be uploaded without approval.
+const appendLocal = new MemoryRepo([first, {...first,id:"new-local"}]);
+const appendCloud = new MemoryCloud([first, {...first,id:"new-phone"}]);
+const appendBases = new MemoryBaselines();
+let append = await sync.synchronizeRecords(appendLocal, appendCloud, appendBases,{newRecordPolicy:"none"});
+assert.deepEqual(append.downloadedIds,[]);
+assert.deepEqual(append.uploadedIds,[]);
+append = await sync.synchronizeRecords(appendLocal, appendCloud, appendBases,{newRecordPolicy:"pull-only"});
+assert.deepEqual(append.downloadedIds,["new-phone"]);
+assert.deepEqual(append.uploadedIds,[]);
+assert.ok(append.deferredIds.includes("new-local"));
+assert.equal(appendCloud.byId.has("new-local"),false);
+
 // A NORMAL edit: upload once and never create an artificial conflict.
 await local.upsert(edit(first, "本机刚修改的标题"));
 result = await sync.synchronizeRecords(local, cloud, bases);

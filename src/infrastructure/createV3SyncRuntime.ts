@@ -117,6 +117,8 @@ export class V3SyncRuntime {
     v2AutoSyncDisabled: true;
     /** Explicit opt-in only for first-time one-sided records. */
     initialTransferApproved?: boolean;
+    /** Only established secure accounts may automatically receive new cloud rows. */
+    ongoingAutoSync?: true;
   }): Promise<SyncRunResult> {
     if (options?.v2AutoSyncDisabled !== true) {
       throw new Error("V3 sync cannot run concurrently with the V2 automatic sync engine");
@@ -130,10 +132,16 @@ export class V3SyncRuntime {
       throw new Error("V3_SYNC_MIGRATION_REVIEW_REQUIRED: Existing local and remote versions differ");
     }
     const oneSided = review.actions["pull-new"] + review.actions["push-new"];
+    const establishedPull = options.ongoingAutoSync === true &&
+      this.remote.provider === "secure-account" &&
+      review.actions["push-new"] === 0 &&
+      (await this.ledger.snapshot()).size > 0;
     if (oneSided > 0 && !options.initialTransferApproved) {
-      throw new Error("V3_INITIAL_TRANSFER_APPROVAL_REQUIRED: Confirm old records before first transfer");
+      if (!establishedPull) throw new Error("V3_INITIAL_TRANSFER_APPROVAL_REQUIRED: Confirm old records before first transfer");
     }
-    return synchronizeWithLedger(this.local, this.remote, this.ledger);
+    return synchronizeWithLedger(this.local, this.remote, this.ledger, {
+      newRecordPolicy: options.initialTransferApproved ? "both" : establishedPull ? "pull-only" : "none",
+    });
   }
 }
 
