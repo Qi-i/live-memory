@@ -1,6 +1,8 @@
 import type { AppSettings } from "../domain";
 import { inspectLegacyV3Adoption } from "../core/application/inspectLegacyV3Adoption";
-import { recordRevision } from "../core/sync/revision";
+import { recordRevision, recordContentEqual } from "../core/sync/revision";
+import { blankRecord } from "../seeds";
+import { composeQiHubMemoryRecord, type QiHubMemoryCommand } from "./qihubNativeMemoryFields";
 import { currentStorageScope } from "../storage";
 import { getAccountClient, makeSupabaseClient } from "../supabase";
 import { hasVerifiedOfflineMedia, persistVerifiedOfflineMedia, resolveMediaSource } from "../mediaCache";
@@ -69,6 +71,98 @@ export class V3SyncRuntime {
       throw new Error("QIHUB_V3_AUTHENTICATED_CUTOVER_REQUIRED");
     }
     return this.remote.listMetadataOnly();
+  }
+
+  async readAuthenticatedV3OriginalForQiHub(
+    recordId: string, assetId: string, revision: number,
+  ): Promise<Blob> {
+    if(this.remote.provider!=="secure-account" ||
+       await this.remote.writerMode()!=="v3"){
+      throw Error("QIHUB_V3_AUTHENTICATED_CUTOVER_REQUIRED");
+    }
+    const rows=await this.remote.listMetadataOnly();
+    const row=rows.find(item=>item.record.id===recordId);
+    if(!row||Number(row.serverRevision)!==revision){
+      throw Error("QIHUB_V3_MEDIA_RECORD_REVISION_CHANGED");
+    }
+    const asset=row.record.media.find(item=>item.id===assetId);
+    if(!asset||asset.recordId!==recordId||!asset.storagePath){
+      throw Error("QIHUB_V3_ORIGINAL_REFERENCE_MISSING");
+    }
+    return this.remote.readVerifiedOriginalForQiHub(asset);
+  }
+
+  /** Explicit QiHub native event editor. The authenticated source app owns
+   * the cloud CAS, local archive and acknowledged synchronization baseline.
+   * Editing a cloud row with unsynced local changes is refused before RPC.
+   */
+  async mutateQiHubMemory(command: QiHubMemoryCommand) {
+    if (this.remote.provider !== "secure-account" ||
+        await this.remote.writerMode() !== "v3") {
+      throw Error("QIHUB_MEMORY_V3_WRITER_NOT_ACTIVE");
+    }
+    if (!["create", "update", "trash", "restore"].includes(command.operation)) {
+      throw Error("QIHUB_MEMORY_INVALID_OPERATION");
+    }
+    const originalRemote = await this.remote.listMetadataOnly();
+    const beforeLocal = await this.local.list();
+    const previous = command.id
+      ? originalRemote.find(item => item.record.id === command.id)
+      : undefined;
+    const isCreate = command.operation === "create";
+    if (isCreate ? Boolean(command.id || command.expectedRevision !== undefined) :
+        (!previous || !Number.isSafeInteger(command.expectedRevision) ||
+         command.expectedRevision !== Number(previous.serverRevision))) {
+      throw Error("QIHUB_MEMORY_REVISION_CHANGED");
+    }
+    if (!isCreate && previous) {
+      const localRecord=beforeLocal.find(item => item.id === previous.record.id);
+      // Editing must not overwrite an unsynced edit kept in the original
+      // browser. A freshly signed-in origin should recover first.
+      if (!localRecord || !recordContentEqual(localRecord, previous.record, true)) {
+        throw Error("QIHUB_MEMORY_LOCAL_CLOUD_DIVERGED");
+      }
+    }
+    const now = new Date().toISOString();
+    let next = isCreate
+      ? blankRecord() : {...previous!.record};
+    if (isCreate || command.operation === "update") {
+      next = composeQiHubMemoryRecord(next, command.fields ?? {});
+    }
+    if (command.operation === "trash") {
+      if (next.deletedAt) throw Error("QIHUB_MEMORY_ALREADY_TRASHED");
+      next = {...next, deletedAt:now};
+    } else if (command.operation === "restore") {
+      if (!next.deletedAt) throw Error("QIHUB_MEMORY_NOT_TRASHED");
+      const {deletedAt: _deletedAt, ...restored}=next;
+      next=restored;
+    }
+    next={...next,updatedAt:now};
+    const committed=await this.remote.compareAndSwapQiHubMetadata(next,previous ?? null);
+    // The source local media URLs/cache remain untouched; the CAS returned
+    // the same immutable private media references.
+    const localBefore=beforeLocal.find(item=>item.id===committed.record.id);
+    const localRecord={...committed.record,
+      media:localBefore?.media ?? committed.record.media};
+    let localUpdated=false;
+    try {
+      const applied=await this.local.applyRemoteIfUnchanged(
+        beforeLocal,[localRecord],{includeMedia:true},
+      );
+      localUpdated=applied.acceptedIds.includes(committed.record.id);
+      if (localUpdated) {
+        const ledgerBefore=await this.ledger.snapshot();
+        await this.ledger.commitIfUnchanged(ledgerBefore,[{
+          id:committed.record.id,
+          revision:await recordRevision(committed.record,true),
+        }]);
+      }
+    } catch {
+      // The cloud row already committed. A local persistence problem must
+      // never turn a successful cloud write into an ambiguous "failed" ACK.
+      localUpdated=false;
+    }
+    return {committed,localUpdated};
   }
 
   /** Metadata-only V2 adoption: never transfers, edits or removes an archive. */

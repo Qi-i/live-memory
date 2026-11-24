@@ -320,6 +320,11 @@ export function V3RealWorkspace() {
   const [posters,setPosters]=useState<Array<{id:string;title:string;city:string;src?:string}>>([]);
   const [posterRatios,setPosterRatios]=useState<Record<string,number>>({});
   const actualScope=currentStorageScope();
+  useEffect(()=>{
+    const update=()=>setReload(value=>value+1);
+    window.addEventListener("qihub-native-memory-accepted",update);
+    return ()=>window.removeEventListener("qihub-native-memory-accepted",update);
+  },[]);
   const permitted=access.mode==="account" || access.mode==="device";
   const validScope=permitted && Boolean(actualScope) &&
     (access.mode==="device" || actualScope===access.user?.id?.toLowerCase());

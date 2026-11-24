@@ -124,6 +124,16 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
     return verified;
   }
 
+  async readVerifiedOriginalForQiHub(asset: EventRecord["media"][number]): Promise<Blob> {
+    if(this.provider!=="secure-account"||!this.mediaTransport?.readVerifiedOriginal){
+      throw Error("QIHUB_V3_ORIGINAL_AUTH_REQUIRED");
+    }
+    await this.guardIdentity();
+    const blob=await this.mediaTransport.readVerifiedOriginal(asset);
+    await this.guardIdentity();
+    return blob;
+  }
+
   async list(): Promise<CloudRecordEnvelope[]> {
     const verified = await this.listMetadataOnly();
     if (!this.includeMedia || !this.mediaTransport) {
@@ -251,5 +261,46 @@ export class SupabaseV3RecordAdapter implements CloudRecordAdapter {
           ? { ...asset, src: local.src, source: local.source } : asset;
       }),
     } };
+  }
+
+  /**
+   * QiHub may change only event metadata through an explicitly invoked
+   * source-owned editor. Existing private images are immutable references:
+   * do not re-upload originals just to change a concert title or its status.
+   * The actual Supabase RLS + revision-conditional RPC is still authoritative.
+   */
+  async compareAndSwapQiHubMetadata(
+    next: EventRecord, previous: CloudRecordEnvelope | null,
+  ): Promise<CloudRecordEnvelope> {
+    if (this.provider !== "secure-account") {
+      throw Error("QIHUB_MEMORY_ACCOUNT_WRITER_REQUIRED");
+    }
+    await this.guardIdentity();
+    if (await this.writerMode() !== "v3") {
+      throw Error("QIHUB_MEMORY_V3_WRITER_NOT_ACTIVE");
+    }
+    if (!next.id || (previous && previous.record.id !== next.id) ||
+        (previous && stableSerialize(previous.record.media) !== stableSerialize(next.media)) ||
+        (previous && stableSerialize(previous.record.mediaTombstones ?? []) !==
+          stableSerialize(next.mediaTombstones ?? [])) ||
+        (!previous && (next.media.length !== 0 || (next.mediaTombstones?.length ?? 0) !== 0))) {
+      throw Error("QIHUB_MEMORY_METADATA_ONLY");
+    }
+    const payload: EventRecord = {
+      ...next,
+      media: next.media.map(asset => asset.storagePath
+        ? {...asset, src: ""} : asset),
+    };
+    await this.guardIdentity();
+    const {data,error}=await this.client.rpc("live_memory_v3_cas_secure_account",{
+      p_id:next.id,
+      p_payload:payload,
+      p_expected_revision:previous ? Number(previous.serverRevision) : null,
+      p_expected_user:this.accountScope,
+    });
+    await this.guardIdentity();
+    if(error)throw rpcFailure(error.message);
+    const row=Array.isArray(data)?(data.length===1?data[0]:null):data;
+    return parseRow(row);
   }
 }
