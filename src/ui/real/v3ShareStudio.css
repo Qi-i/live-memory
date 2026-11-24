@@ -289,3 +289,25 @@
 .share-studio-stage.is-v3 .share-export-error{
   font-size:12px;line-height:1.55;
 }
+
+/* Desktop inspector keeps the artwork and export action in view while
+   settings scroll. Use solid clean controls and one restrained accent. */
+.share-studio-stage.is-v3{--share-ui-accent:#176b60;--share-ui-soft:#e1f2ea;--share-ui-ink:#192c2a;--share-ui-muted:#526a65;--share-ui-border:#d8e5e0;grid-template-columns:clamp(340px,27vw,408px) minmax(0,1fr)}
+.share-studio-stage.is-v3 .share-studio-panel{overflow:hidden;box-sizing:border-box}
+.share-studio-stage.is-v3 .share-studio-heading{flex-shrink:0}
+.share-studio-stage.is-v3 .share-settings-scroll{flex:1}
+.share-studio-stage.is-v3 .share-intro-copy>span{font-size:10px}
+.share-studio-stage.is-v3 .share-intro-copy h2{font-size:21px;letter-spacing:-.02em}
+.share-studio-stage.is-v3 .share-intro-copy p{font-size:12px}
+.share-studio-stage.is-v3 .share-v3-presets{background:#f4faf7}
+.share-studio-stage.is-v3 .share-v3-preset-actions .share-v3-preset-featured{grid-column:auto;min-height:44px}
+.share-studio-stage.is-v3 .share-v3-preset-actions button{min-height:44px}
+.share-studio-stage.is-v3 .share-control-group>strong{font-size:13px}
+.share-studio-stage.is-v3 .share-control-group>strong small{font-size:11px}
+.share-studio-stage.is-v3 .share-control-compact-grid{grid-template-columns:minmax(0,1fr)}
+.share-studio-stage.is-v3 .share-category-control{grid-template-columns:repeat(3,minmax(0,1fr))}
+.share-studio-stage.is-v3 .share-format-control button{font-size:12px;min-height:34px}
+.share-studio-stage.is-v3 .share-preview-area.is-long{overflow-x:auto}
+.share-studio-stage.is-v3 .share-preview-toolbar{position:sticky;top:8px;z-index:12;flex-shrink:0}
+.share-studio-stage.is-v3 .share-export-dock>.share-export-button{box-shadow:none}
+@media(max-width:860px){.share-studio-stage.is-v3 .share-studio-panel{overflow:visible}.share-studio-stage.is-v3 .share-settings-scroll{flex:none}}

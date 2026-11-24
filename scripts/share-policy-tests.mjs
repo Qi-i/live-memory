@@ -1,0 +1,15 @@
+import assert from "node:assert/strict";
+import {reconcileSelection,preservePoster,assertShareCanvas,chronologicalGroups,timelineBandHeights} from "../src/sharePolicy.ts";
+const rows=[{id:"a",date:"2025-01-01"},{id:"b",date:"2025-01-20"},{id:"c",date:"2025-03-01"}];
+assert.equal(reconcileSelection(new Set(),rows).size,0);
+assert.deepEqual([...reconcileSelection(new Set(["a","missing"]),rows)],["a"]);
+assert.equal(preservePoster(.65,.65),false);
+assert.equal(preservePoster(.65,.95),true);
+assert.equal(preservePoster(1.7,.65),true);
+assert.deepEqual(chronologicalGroups(rows,true).map(g=>[g.label,g.records.length]),[["2025-01",2],["2025-03",1]]);
+const heights=timelineBandHeights([1,9,3],1500,14);
+assert.ok(heights[1]>heights[0]*2);
+assert.ok(Math.abs(heights.reduce((a,b)=>a+b,0)+28-1500)<.001);
+assert.doesNotThrow(()=>assertShareCanvas(1200,12000));
+assert.throws(()=>assertShareCanvas(1200,17000),/画布过大/);
+console.log("Share selection, crop protection, monthly geometry and canvas limits passed");

@@ -51,6 +51,19 @@
 .share-preview-toolbar button:hover { transform: translateY(-1px); box-shadow: 0 8px 18px rgba(31, 59, 51, .12); }
 .share-studio-panel svg { width: 17px; height: 17px; }
 
+.share-settings-scroll{display:flex;flex-direction:column;gap:12px;min-height:0;overflow-y:auto;overscroll-behavior:contain;scrollbar-gutter:stable;padding-right:5px}
+.share-settings-scroll> *{flex-shrink:0}
+.share-export-dock{display:grid;gap:6px;flex-shrink:0;padding-top:10px;border-top:1px solid rgba(100,120,130,.18)}
+.share-export-dock>small{font-size:12px;color:#536b65}
+.share-export-dock>.share-export-button{width:100%;margin:0}
+.share-year-review{display:grid;gap:7px;font-size:13px}
+.share-year-review>div{display:flex;flex-wrap:wrap;gap:6px}
+.share-year-review button{font:inherit;padding:7px 12px;color:inherit;background:#fff;border:1px solid #cddbd7;border-radius:8px;cursor:pointer}
+.share-year-review button[aria-pressed=true]{background:#145d50;color:#fff;border-color:#145d50}
+.share-privacy-toggle{display:flex;align-items:center;gap:6px;font-size:13px}
+.share-preview-area.is-long{overflow-x:auto}
+@media(max-width:860px){.share-settings-scroll{overflow:visible;scrollbar-gutter:auto;padding:0}.share-export-dock{position:sticky;bottom:0;background:#fff;padding:9px 0;z-index:12;box-shadow:0 -10px 20px #fff}}
+
 .share-intro-copy { display: grid; gap: 2px; }
 .share-intro-copy > span { color: #0a826e; font-size: 10px; font-weight: 950; letter-spacing: .16em; }
 .share-intro-copy h2 { margin: 0; font-size: 20px; line-height: 1.08; letter-spacing: -.045em; }

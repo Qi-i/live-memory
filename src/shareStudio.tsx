@@ -31,6 +31,7 @@ import { loadMediaImage, preloadPrimaryRecordMedia, useCachedMediaSrc } from "./
 import "./shareStudio.css";
 import { useDialogBehavior } from "./ui/useDialogBehavior";
 import { curateFeaturedRecords } from "./ui/real/curateFeaturedRecords";
+import { assertShareCanvas, chronologicalGroups, preservePoster, reconcileSelection, timelineBandHeights } from "./sharePolicy";
 
 export type ShareFormat =
   | "adaptive-landscape"
@@ -184,6 +185,8 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   const [showDetails, setShowDetails] = useState(experience === "v3");
   const [showBrand, setShowBrand] = useState(true);
   const [showStats, setShowStats] = useState(true);
+  const [watchedOnly,setWatchedOnly]=useState(false);
+  const [privateDetails,setPrivateDetails]=useState(false);
   const [allowMissingPosters, setAllowMissingPosters] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -208,15 +211,14 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setStartDate((current) => current || earliestDate);
     setEndDate((current) => current || latestDate);
     setSelectedIds((current) => {
-      const valid = new Set(eligibleRecords.filter((record) => current.has(record.id)).map((record) => record.id));
-      return valid.size ? valid : new Set(eligibleRecords.map((record) => record.id));
+      return reconcileSelection(current,eligibleRecords);
     });
   }, [earliestDate, latestDate, eligibleRecords]);
 
   const categoryFilteredRecords = useMemo(() => {
-    if (!categories.size) return eligibleRecords;
-    return eligibleRecords.filter((record) => categories.has(record.category));
-  }, [categories, eligibleRecords]);
+    return eligibleRecords.filter(record=>(!categories.size||categories.has(record.category))&&
+      (!watchedOnly||effectiveStatus(record)==="watched"));
+  }, [categories, eligibleRecords,watchedOnly]);
 
   const scopedRecords = useMemo(() => {
     if (scope === "range") {
@@ -232,8 +234,9 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   }), [scopedRecords, sortMode]);
 
   const selectedRecords = useMemo(
-    () => itemLimit === "all" ? sortedRecords : sortedRecords.slice(0, itemLimit),
-    [itemLimit, sortedRecords],
+    () => (itemLimit === "all" ? sortedRecords : sortedRecords.slice(0, itemLimit))
+      .map(record=>privateDetails?record:{...record,seat:"",price:undefined,publicPriceRange:""}),
+    [itemLimit, sortedRecords,privateDetails],
   );
 
   const distinctArtistPicks = useMemo(
@@ -246,6 +249,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     // Real records only; never create demo items or mutate archive data.
     if (!distinctArtistPicks.length) return;
     setCategories(new Set<EventCategory>());
+    setWatchedOnly(false);
     setScope("manual");
     setSelectedIds(new Set(distinctArtistPicks.map(record => record.id)));
     setItemLimit("all");
@@ -257,6 +261,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   }
 
   function selectV3AllArchive() {
+    setWatchedOnly(false);
     setCategories(new Set<EventCategory>());
     setScope("all");
     setSelectedIds(new Set(eligibleRecords.map(record => record.id)));
@@ -288,11 +293,27 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
 
   function selectV3CityStory() {
     selectV3AllArchive();
+    setWatchedOnly(true);
     setLayout("cities");
     setPalette("paper");
     setHeadline("我去过的现场城市");
     setFormat("adaptive-landscape");
     setShowDetails(true);
+  }
+
+  function selectAnnualReview(year:string) {
+    selectV3AllArchive();
+    setWatchedOnly(true);
+    setScope("range");
+    setStartDate(year+"-01-01");
+    setEndDate(year+"-12-31");
+    setSortMode("date-asc");
+    setLayout("timeline");
+    setFormat("long");
+    setPalette("graphite");
+    setHeadline(year+" · 我的现场记忆");
+    setShowDetails(true);
+    setPrivateDetails(false);
   }
 
   const visibleSelectionRecords = useMemo(() => {
@@ -321,13 +342,12 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     const next = format === "long"
       ? Math.min(1, availableWidth / spec.width)
       : Math.min(1, availableWidth / spec.width, availableHeight / spec.height);
-    setFitScale(clamp(next, 0.14, 1));
+    setFitScale(clamp(next, 0.015, 1));
   }, [format, spec.height, spec.width]);
 
   useLayoutEffect(() => {
     const area = previewAreaRef.current;
     if (!area) return;
-    setManualScale(null);
     recalculateFit();
     const observer = new ResizeObserver(recalculateFit);
     observer.observe(area);
@@ -374,7 +394,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
   }
 
   function nudgeScale(delta: number) {
-    setManualScale((current) => clamp((current ?? fitScale) + delta, 0.18, 1.35));
+    setManualScale((current) => clamp((current ?? fitScale) * (delta>0?1.25:.8), 0.015, 2));
   }
 
   async function savePng() {
@@ -383,6 +403,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
     setSaved(false);
     setError("");
     try {
+      assertShareCanvas(spec.width,spec.height);
       if(experience==="v3" && !allowMissingPosters){
         // Checking the shared decoded-media cache is essential: a browser
         // can show a remote <img> yet be unable to draw it into a PNG due to
@@ -401,6 +422,10 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
         }
       }
       const mapSnapshot = layout === "cities" ? captureShareAmapSurface() : null;
+      if(layout==="cities"&&!mapSnapshot) {
+        setError("地图尚未就绪或浏览器不允许导出底图。请等待地图加载，或选择其他分享布局。");
+        return;
+      }
       await exportSharePng({
         records: selectedRecords,
         format,
@@ -417,7 +442,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
       window.setTimeout(() => setSaved(false), 2400);
     } catch (caught) {
       console.error("Share PNG export failed", caught);
-      setError("图片生成失败。请稍后重试；无法读取的图片会自动改用标题色块。");
+      setError(caught instanceof Error?caught.message:"图片生成失败，请重试。");
     } finally {
       setSaving(false);
     }
@@ -449,6 +474,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
           <button type="button" aria-label="退出分享制作" title="关闭（Esc）" disabled={saving} onClick={requestClose}><X /></button>
         </header>
 
+        <div className="share-settings-scroll">
         <div className="share-intro-copy">
           <span>{experience === "v3" ? "LIVE MEMORY · V3 STORY STUDIO" : "现场分享图"}</span>
           <h2>{experience === "v3" ? "把每一场现场，编成故事" : "选择真正想分享的现场"}</h2>
@@ -478,6 +504,11 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
               城市足迹 <small>高德地图</small>
             </button>
           </div>
+          <div className="share-year-review"><strong>年度回顾</strong><div>
+            {years.map(year=><button key={year} type="button"
+              aria-pressed={watchedOnly&&scope==="range"&&startDate===year+"-01-01"&&endDate===year+"-12-31"}
+              onClick={()=>selectAnnualReview(year)}>{year}</button>)}
+          </div></div>
         </div>}
 
         <div className="share-studio-summary">
@@ -491,6 +522,8 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
 
         <section className="share-control-group">
           <strong>演出类型 <small>可多选</small></strong>
+          <label className="share-privacy-toggle"><input type="checkbox" checked={watchedOnly}
+            onChange={event=>setWatchedOnly(event.target.checked)}/>仅已看演出</label>
           <div className="share-category-control">
             <button className={!categories.size ? "is-active" : ""} type="button" onClick={() => setCategories(new Set<EventCategory>())}>全部 <i>{eligibleRecords.length}</i></button>
             {categoryOptions.map((category) => (
@@ -533,7 +566,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
           <section className="share-selection-browser">
             <label><Search /><input value={selectionQuery} onChange={(event) => setSelectionQuery(event.target.value)} placeholder="搜索标题、城市、场馆或日期" /></label>
             <div className="share-selection-actions">
-              <button type="button" onClick={() => setSelectedIds(new Set(visibleSelectionRecords.map((record) => record.id)))}>选择当前结果</button>
+              <button type="button" onClick={() => setSelectedIds(current=>new Set([...current,...visibleSelectionRecords.map(record=>record.id)]))}>添加当前结果</button>
               <button type="button" onClick={() => setSelectedIds(new Set<string>())}>清空</button>
             </div>
             <div className="share-selection-grid">
@@ -591,6 +624,7 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
         </section>
 
         <section className="share-switches">
+          <label><input type="checkbox" checked={privateDetails} onChange={event=>setPrivateDetails(event.target.checked)}/><span><b>公开票价与座位</b><small>默认隐藏，预览与 PNG 同步生效。</small></span></label>
           {experience==="v3" && <label className="share-v3-allow-missing"><input type="checkbox"
             checked={allowMissingPosters} onChange={event=>setAllowMissingPosters(event.target.checked)}/>
             <span><b>允许海报占位色块</b><small>仅在你接受缺失海报时启用；默认拒绝不完整的 PNG。</small></span></label>}
@@ -598,11 +632,15 @@ export function ShareStudio({ records, experience, format, setFormat, mapSetting
           <label><input type="checkbox" checked={showBrand} onChange={(event) => setShowBrand(event.target.checked)} /><span><b>品牌标识</b><small>显示 Live Memory Logo 与 GitHub 项目。</small></span></label>
           <label><input type="checkbox" checked={showStats} onChange={(event) => setShowStats(event.target.checked)} /><span><b>档案统计</b><small>显示城市数和已看场次。</small></span></label>
         </section>
+        </div>
 
+        <div className="share-export-dock">
         {error && <p className="share-export-error">{error}</p>}
+        <small>{selectedRecords.length} 场 · {spec.width} × {spec.height} px · PNG</small>
         <button className="share-export-button" type="button" disabled={saving || preparing || !selectedRecords.length} onClick={() => void savePng()}>
           <Download />{preparing ? "正在准备海报…" : saving ? "正在生成…" : saved ? "已保存到下载目录" : `保存 ${selectedRecords.length} 项档案的 PNG`}
         </button>
+        </div>
       </aside>
 
       <main ref={previewAreaRef} className={`share-preview-area ${format === "long" ? "is-long" : "is-fixed"}`} onMouseDown={(event) => event.stopPropagation()}>
@@ -738,15 +776,15 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
     <article className="share-ticket-card" style={style}>
       <span className="share-ticket-backdrop" aria-hidden="true">{src ? <img src={src} alt="" decoding="async" /> : null}</span>
       <span className="share-ticket-tint" aria-hidden="true" />
-      <div className="share-ticket-poster"><SharePoster record={slot.record} /></div>
+      <div className="share-ticket-poster"><SharePoster record={slot.record} preserveFull /></div>
       <section>
         <span>{slot.record.date} · {slot.record.city || categoryLabels[slot.record.category]}</span>
         <h3>{slot.record.title}</h3>
         <p>{slot.record.artists.join(" / ") || "艺人待补"}</p>
         <dl>
           <dt>VENUE</dt><dd>{slot.record.venue || "场馆待补"}</dd>
-          <dt>SEAT</dt><dd>{slot.record.seat || "座位待补"}</dd>
-          <dt>PRICE</dt><dd>{slot.record.price ? `¥${slot.record.price}` : slot.record.publicPriceRange || "票价待补"}</dd>
+          {slot.record.seat&&<><dt>SEAT</dt><dd>{slot.record.seat}</dd></>}
+          {(slot.record.price!=null||slot.record.publicPriceRange)&&<><dt>PRICE</dt><dd>{slot.record.price!=null ? `¥${slot.record.price}` : slot.record.publicPriceRange}</dd></>}
         </dl>
       </section>
     </article>
@@ -754,7 +792,7 @@ function ShareTicketCard({ slot, origin }: { slot: PosterSlot; origin: Rect }) {
 }
 
 function PosterFigure({ slot, origin, showDetails }: { slot: PosterSlot; origin: Rect; showDetails: boolean }) {
-  const preserveFullPoster = slot.rect.width / Math.max(1, slot.rect.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
+  const preserveFullPoster = preservePoster(slot.rect.width / Math.max(1, slot.rect.height),recordPosterRatio(slot.record));
   return (
     <figure
       className={`share-layout-poster is-${slot.emphasis || "normal"}${preserveFullPoster ? " is-poster-preserved" : ""}`}
@@ -1165,16 +1203,21 @@ function buildWeightedMosaic(weights: number[], area: Rect, gap: number): Rect[]
 }
 
 function buildTimelineBands(records: EventRecord[], area: Rect, spec: CanvasSpec): TimelineBand[] {
-  const groups = groupByYear(records);
+  const groups = chronologicalGroups(records,spec.format==="long");
   if (!groups.length) return [];
   const scale = spec.width / 1600;
   const gap = clamp(14 * scale, 9, 22);
-  const rects = buildFilledGridRects(
+  let offsetY=area.y;
+  const rects = spec.format==="long" ? timelineBandHeights(groups.map(group=>group.records.length),area.height,gap).map(height=>{
+    const rect={x:area.x,y:offsetY,width:area.width,height};
+    offsetY+=height+gap;
+    return rect;
+  }) : buildFilledGridRects(
     groups.length,
     area,
     gap,
-    spec.format === "long" ? 0.86 : isLandscapeFormat(spec.format) ? 2.15 : 1.05,
-    spec.format === "long" ? 1 : isLandscapeFormat(spec.format) ? 3 : 2,
+    isLandscapeFormat(spec.format) ? 2.15 : 1.05,
+    isLandscapeFormat(spec.format) ? 3 : 2,
     240 * scale,
   );
   return groups.map((group, index) => {
@@ -1567,9 +1610,9 @@ function getCanvasSpec(format: ShareFormat, count: number, layout: ShareLayout, 
     const padding = 54;
     const headerHeight = 156;
     const footerHeight = 68;
-    const groupCount = layout === "timeline" ? groupByYear(records).length : 0;
+    const groupCount = layout === "timeline" ? chronologicalGroups(records,true).length : 0;
     const contentHeight = layout === "timeline"
-      ? Math.max(1500, count * 135 + groupCount * 95)
+      ? Math.max(950, chronologicalGroups(records,true).reduce((sum,group)=>sum+Math.ceil(group.records.length/3)*300+84,0)+groupCount*14)
       : layout === "tickets"
         ? Math.max(1500, Math.ceil(Math.max(1, count) / 3) * 270)
         : layout === "cities"
@@ -1657,7 +1700,7 @@ async function drawTicket(
   const posterHeight = Math.max(1, slot.height - inset * 2);
   const posterWidth = Math.min(slot.width * 0.46, posterHeight * recordPosterRatio(record));
   const posterRect = { x: slot.x + inset, y: slot.y + inset, width: posterWidth, height: posterHeight };
-  if (image) drawCover(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height, palette.surface);
+  if (image) drawContain(context, image, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
   else drawFallback(context, record, posterRect.x, posterRect.y, posterRect.width, posterRect.height);
   roundedPath(context, posterRect.x, posterRect.y, posterRect.width, posterRect.height, 10);
   context.strokeStyle = "rgba(255,255,255,.42)";
@@ -1681,7 +1724,7 @@ async function drawTicket(
   context.fillText(trimText(context, record.artists.join(" / ") || "艺人待补", copyWidth - 8), copyX, slot.y + slot.height * 0.55);
   context.font = `750 ${metaSize}px system-ui, sans-serif`;
   context.fillText(trimText(context, `${record.date} · ${record.city || "城市待补"} · ${record.venue || "场馆待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.70);
-  context.fillText(trimText(context, `${record.seat || "座位待补"} · ${record.price ? `¥${record.price}` : record.publicPriceRange || "票价待补"}`, copyWidth - 8), copyX, slot.y + slot.height * 0.84);
+  context.fillText(trimText(context, [record.seat,record.price!=null?`¥${record.price}`:record.publicPriceRange].filter(Boolean).join(" · "), copyWidth - 8), copyX, slot.y + slot.height * 0.84);
   context.restore();
 
   roundedPath(context, slot.x, slot.y, slot.width, slot.height, Math.max(12, slot.height * 0.06));
@@ -1798,7 +1841,7 @@ async function drawPoster(
 
   const image = await loadMediaImage(primaryMedia(record));
   if (image) {
-    const preserveFullPoster = slot.width / Math.max(1, slot.height) > SHARE_POSTER_MAX_FRAME_ASPECT;
+    const preserveFullPoster = preservePoster(slot.width / Math.max(1, slot.height),image.naturalWidth/image.naturalHeight);
     if (preserveFullPoster) {
       context.save();
       context.filter = "blur(18px) saturate(.9)";
@@ -1850,7 +1893,7 @@ function drawShareFooter(context: CanvasRenderingContext2D, spec: CanvasSpec, op
   }
   if (options.showStats) {
     const cities = new Set(options.records.map((record) => record.city).filter(Boolean)).size;
-    const watched = options.records.filter((record) => record.status === "watched").length;
+    const watched = options.records.filter((record) => effectiveStatus(record) === "watched").length;
     context.fillStyle = palette.muted;
     context.font = `700 ${Math.max(11, Math.round(spec.width * 0.0095))}px system-ui, sans-serif`;
     context.textAlign = "right";
