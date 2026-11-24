@@ -16,6 +16,7 @@ export async function synchronizeWithLedger(
   local: RecordRepository,
   cloud: CloudRecordAdapter,
   ledger: RevisionLedger,
+  options: { newRecordPolicy?: "none" | "pull-only" | "both" } = {},
 ): Promise<SyncRunResult> {
   if (!local.scope || ledger.accountScope !== local.scope
     || cloud.accountScope !== local.scope
@@ -31,7 +32,7 @@ export async function synchronizeWithLedger(
     acknowledge(items: RevisionEntry[]) {
       pending.push(...items);
     },
-  });
+  }, options);
   const commit = await ledger.commitIfUnchanged(baseline, pending);
   const deferred = new Set([...result.deferredIds, ...commit.deferredIds]);
   return { ...result, deferredIds: Array.from(deferred) };

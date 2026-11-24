@@ -766,10 +766,9 @@ export function V3RealWorkspace() {
         if(!active||currentStorageScope()!==scoped.scope)return;
         // No automatic first-time history transfer or unresolved conflicts.
         // Those retain the manual two-click review in safeSync.
-        if(audit.requiresMigrationReview||audit.actions["push-new"]||
-          audit.actions["pull-new"])return;
+        if(audit.requiresMigrationReview||audit.actions["push-new"])return;
         const result=await scoped.runtime.synchronize({
-          v2AutoSyncDisabled:true,initialTransferApproved:false,
+          v2AutoSyncDisabled:true,initialTransferApproved:false,ongoingAutoSync:true,
         });
         if(active&&currentStorageScope()===scoped.scope&&
           (result.uploadedIds.length||result.downloadedIds.length)){
@@ -784,11 +783,15 @@ export function V3RealWorkspace() {
     window.addEventListener("online",online);
     const visible=()=>{if(!document.hidden)void check();};
     document.addEventListener("visibilitychange",visible);
+    window.addEventListener("focus",visible);
+    const refreshTimer=window.setInterval(visible,60_000);
     void check();
     return ()=>{
       active=false;
       window.removeEventListener("online",online);
       document.removeEventListener("visibilitychange",visible);
+      window.removeEventListener("focus",visible);
+      window.clearInterval(refreshTimer);
     };
   },[autoSyncEnabled,canEditAccount,cloudMode.mode,cloudMode.scope,
       syncBusy,snapshot.busy,editing,restoreBusy,exportBusy]);

@@ -37,6 +37,7 @@ export async function synchronizeRecords(
   local: RecordRepository,
   cloud: CloudRecordAdapter,
   baselines: Pick<RevisionBaselineStore, "read" | "acknowledge">,
+  options: { newRecordPolicy?: "none" | "pull-only" | "both" } = {},
 ): Promise<SyncRunResult> {
   if (!local.scope || cloud.accountScope !== local.scope) {
     throw new Error("Sync was refused because the account scopes are different");
@@ -85,10 +86,12 @@ export async function synchronizeRecords(
         if (inCloud) toAcknowledge.push({ id, revision: await recordRevision(inCloud, cloud.includeMedia) });
         break;
       case "pull-new":
+        if (options.newRecordPolicy === "none") { deferred.add(id); break; }
       case "pull":
         if (inCloud) downloadCandidates.push(inCloud);
         break;
       case "push-new":
+        if (options.newRecordPolicy === "none" || options.newRecordPolicy === "pull-only") { deferred.add(id); break; }
       case "push":
         if (onDevice) toUpload.push({ record: onDevice, expected: envelope?.serverRevision ?? null });
         break;
