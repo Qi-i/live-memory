@@ -186,7 +186,7 @@ function RealStatistics({ records }: { records: EventRecord[] }) {
   const data = useMemo(() => describeRealArchive(records), [records]);
   return (
     <section className="v3-real-panel">
-      <header><span>YOUR REAL DATA · READ ONLY</span><h1>观演统计</h1>
+      <header><h1>观演统计</h1>
         <p>按本机实际档案计算，取消、退款和删除的记录不计入已看场次。</p></header>
       <div className="v3-real-metrics">
         <article><strong>{data.records.length}</strong><span>有效档案</span></article>
@@ -226,7 +226,7 @@ function RealCityMap({ records, chosenCity }: { records: EventRecord[]; chosenCi
   const minY = Math.min(...allY), maxY = Math.max(...allY);
   return (
     <div className="v3-real-map">
-      <span>COORDINATE VIEW · REAL DATA</span><h2>已记录的经纬度</h2>
+      <h2>已记录的经纬度</h2>
       <p>仅展示档案中实际保存的坐标。相对位置示意，无地图底图，不用于距离测量。</p>
       {mapped.length ? <svg role="img" aria-label={mapped.length+" 条带坐标的演出分布"} viewBox="0 0 1000 480"
         preserveAspectRatio="xMidYMid meet">

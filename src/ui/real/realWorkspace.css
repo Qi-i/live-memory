@@ -78,9 +78,10 @@
 .v3-real-table-scroll td:first-child { font-weight:720; max-width:350px; overflow-wrap:anywhere; }
 .v3-real-table-scroll td:not(:first-child) { white-space:nowrap; }
 .v3-real-table-scroll button { border:1px solid #cbd0eb; border-radius:8px; min-height:32px; padding-inline:11px; background:white; cursor:pointer; }
-.v3-real-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; }
-.v3-real-metrics article { display:grid; gap:7px; min-width:0; padding:17px; border:1px solid var(--v3-card-border); border-radius:15px; background:linear-gradient(145deg,var(--v3-accent-tint),#edf6f8); }
-.v3-real-metrics article strong { font-size:clamp(25px,2.8vw,41px); font-variant-numeric:tabular-nums; }
+.v3-real-metrics { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:12px; }
+.v3-real-metrics article { display:grid; gap:8px; min-width:0; padding:16px; border:1px solid var(--v3-card-border); border-radius:8px; background:var(--v3-card-bg); }
+.v3-real-metrics article:nth-child(2) { background:var(--v3-accent-tint); }
+.v3-real-metrics article strong { font-size:clamp(24px,2.6vw,36px); font-weight:600; font-variant-numeric:tabular-nums; }
 .v3-real-metrics article span { font-size:13px; color:var(--v3-muted); }
 .v3-real-breakdown { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:14px; }
 .v3-real-breakdown > div { display:grid; align-content:start; gap:10px; border:1px solid var(--v3-card-border); border-radius:15px; background:var(--v3-control-bg); padding:15px; min-width:0; }
@@ -88,7 +89,7 @@
 .v3-real-bar-row { display:grid; grid-template-columns:minmax(60px,.7fr) minmax(80px,1.4fr) 30px; gap:9px; align-items:center; min-width:0; font-size:13px; }
 .v3-real-bar-row > span { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .v3-real-bar-row > div { height:7px; background:#e6eaf2; border-radius:99px; overflow:hidden; }
-.v3-real-bar-row i { display:block; height:100%; background:linear-gradient(90deg,#83cbaa,#8b9de5); border-radius:inherit; }
+.v3-real-bar-row i { display:block; height:100%; background:var(--v3-accent); border-radius:inherit; }
 .v3-real-bar-row b { text-align:right; font-variant-numeric:tabular-nums; }
 .v3-real-map { display:flex; flex-direction:column; gap:7px; min-height:0; padding:clamp(14px,2.2vw,30px); color:#385d70; background:linear-gradient(142deg,#e3eeef,#eef0f8); }
 .v3-real-map > span { font-size:10px; font-weight:820; letter-spacing:.12em; }

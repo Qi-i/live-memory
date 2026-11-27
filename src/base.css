@@ -67,15 +67,14 @@ img {
   color: var(--experience-text, #111318);
   background: var(--experience-surface-solid, #fffdf5);
   box-shadow: none;
-  font-weight: 920;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
-  transition: transform 140ms ease, box-shadow 140ms ease, background 140ms ease, opacity 140ms ease;
+  transition: background 140ms ease, border-color 140ms ease, opacity 140ms ease;
 }
 
 .button:hover:not(:disabled) {
-  transform: translateY(-1px);
-  box-shadow: 0 7px 18px color-mix(in srgb, var(--experience-text, #111318) 11%, transparent);
+  border-color: var(--experience-muted, #69737d);
 }
 
 .button:active:not(:disabled) {
@@ -96,8 +95,8 @@ img {
 .button.primary {
   border-color: transparent;
   color: #111318;
-  background: linear-gradient(135deg, var(--experience-accent, #dfff4f), color-mix(in srgb, var(--experience-accent, #dfff4f) 60%, white));
-  box-shadow: 3px 3px 0 color-mix(in srgb, var(--experience-text, #111318) 15%, transparent);
+  background: var(--experience-accent, #dfff4f);
+  box-shadow: none;
 }
 
 .button.ghost {
