@@ -77,7 +77,13 @@ assert.match(component,/snapshot\.scope===actualScope/);
 assert.match(component,/useCachedMediaSrc\(media\)/);
 assert.match(component,/useCachedMediaSrc\(primaryMedia\(record\)\)/);
 assert.match(component,/resolveMediaSource\(asset,true\)/);
-assert.match(component,/MapSplitPane/);
+const archive=await readFile(new URL("../src/archive.tsx",import.meta.url),"utf8");
+assert.match(component,/<VenueView[\s\S]*?records=\{describeRealArchive\(records\)\.records\}/,
+  "The authenticated city page must use the original footprint component with actual archive records");
+assert.match(archive,/export function VenueView/);
+assert.match(archive,/mode === "city" \? cityCoordinateFallbacks/,
+  "Only city-level markers may use the existing approximate city-center fallback");
+assert.match(archive,/className="venue-selected-records"/);
 assert.match(component,/<V3FeaturedHero posters=\{posters\}/);
 assert.match(component,/read-only|只读/);
 assert.match(component,/canEditLocal=validScope && access\.mode==="device" && actualScope==="device-local"/,
