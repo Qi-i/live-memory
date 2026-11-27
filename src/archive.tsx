@@ -606,10 +606,12 @@ function buildPlaceGroups(records: EventRecord[], mode: PlaceMode): PlaceGroup[]
   return Array.from(grouped.entries()).map(([key, items]) => {
     const ordered = [...items].sort((a, b) => b.date.localeCompare(a.date));
     const count = ordered.length;
-    const explicit = ordered.find((record) => record.coordinates)?.coordinates;
+    const explicit = ordered.find((record) => record.coordinates &&
+      Number.isFinite(record.coordinates.lng) && Number.isFinite(record.coordinates.lat) &&
+      Math.abs(record.coordinates.lng)<=180 && Math.abs(record.coordinates.lat)<=90)?.coordinates;
     const point: [number, number] | undefined = explicit
       ? [explicit.lng, explicit.lat]
-      : cityCoordinateFallbacks[ordered[0]?.city || ""];
+      : mode === "city" ? cityCoordinateFallbacks[(ordered[0]?.city || "").trim().replace(/市$/, "")] : undefined;
     return { key, label: key, count, heat: count / maxCount, point, records: ordered };
   }).sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, "zh-CN"));
 }
@@ -693,7 +695,7 @@ function buildPosterMarkerContent(group: PlaceGroup, posterSources: Map<string, 
   return markerContent;
 }
 
-function VenueView({ records, mapSettings, onOpenMapSettings, onOpen }: { records: EventRecord[]; mapSettings: AppSettings["map"]; onOpenMapSettings: () => void; onOpen: (record: EventRecord) => void }) {
+export function VenueView({ records, mapSettings, onOpenMapSettings, onOpen }: { records: EventRecord[]; mapSettings: AppSettings["map"]; onOpenMapSettings: () => void; onOpen: (record: EventRecord) => void }) {
   const [mode, setMode] = useState<PlaceMode>("city");
   const [selectedPlaceKey, setSelectedPlaceKey] = useState<string | null>(null);
   const [hoveredPlaceKey, setHoveredPlaceKey] = useState<string | null>(null);
@@ -731,7 +733,7 @@ function VenueView({ records, mapSettings, onOpenMapSettings, onOpen }: { record
     <section className="archive-venue-view">
       {mapPanel}
       <div className="venue-ranking">
-        <header><span>足迹整理</span><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button></div></header>
+        <header><h2>{mode === "city" ? "常去城市" : "常去场馆"}</h2><div><button className={mode === "city" ? "is-active" : ""} type="button" onClick={() => setMode("city")}>城市</button><button className={mode === "venue" ? "is-active" : ""} type="button" onClick={() => setMode("venue")}>场馆</button><button type="button" onClick={onOpenMapSettings}>地图设置</button></div></header>
         <div className="venue-ranking-list">
           {groups.map((group) => <button
             key={group.key}
@@ -744,6 +746,13 @@ function VenueView({ records, mapSettings, onOpenMapSettings, onOpen }: { record
           ><span>{group.label}</span><i /><b>{group.count}</b></button>)}
         </div>
         <div className="venue-heat-legend"><span>低频</span><i /><span>高频</span></div>
+        {selectedPlaceKey && <section className="venue-selected-records" aria-label="地点演出">
+          <h3>{selectedPlaceKey} · {groups.find(group=>group.key===selectedPlaceKey)?.count||0} 场</h3>
+          {groups.find(group=>group.key===selectedPlaceKey)?.records.map(record=><button key={record.id} type="button" onClick={()=>onOpen(record)}>
+            <span><RecordMedia media={primaryMedia(record,["poster"])} alt="" fallback="演"/></span>
+            <div><strong>{record.title}</strong><small>{record.date} · {record.venue}</small></div>
+          </button>)}
+        </section>}
       </div>
     </section>
   );
@@ -838,7 +847,7 @@ function AmapFootprintMap({ groups, mode, mapSettings, selectedPlaceKey, hovered
   }, [focusPlaceKey]);
 
   return <div className="amap-map-shell" data-map-mode="amap">
-    <div className="venue-map-heading"><span>AMAP · MEMORY MAP</span><strong>{mode === "city" ? "城市海报足迹" : "场馆海报足迹"}</strong><small>{status === "ready" ? "地图保持当前视野；点击地点时才会主动聚焦" : status === "error" ? "地图加载失败，请检查 Key、安全密钥或域名白名单" : "正在载入高德地图…"}</small></div>
+    <div className="venue-map-heading"><strong>{mode === "city" ? "城市海报足迹" : "场馆海报足迹"}</strong><small>{status === "ready" ? (mode==="city"?"未记录场馆坐标时使用城市中心位置":"显示有坐标的场馆") : status === "error" ? "地图加载失败，请检查地图设置" : "正在载入高德地图…"}</small></div>
     <div ref={hostRef} className="amap-map-host" data-amap-status={status} />
     <div className="map-heat-legend"><span>低频</span><i /><span>高频</span></div>
     {selectedGroup && <div className="venue-place-picker" data-place-key={selectedGroup.key}>

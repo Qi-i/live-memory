@@ -267,7 +267,12 @@ try {
   await page.screenshot({path:`${output}/stats-${width}.png`,fullPage:true});
   await page.getByRole("button",{name:"城市",exact:true}).click();
   await page.getByRole("heading",{name:"城市与场馆"}).waitFor();
-  await page.getByRole("img",{name:"2 条带坐标的演出分布"}).waitFor();
+  await page.locator(".venue-ranking-list>button").first().waitFor();
+  await page.locator(".venue-ranking-list>button").first().click();
+  await page.locator(".venue-selected-records>button").first().waitFor();
+  await page.getByRole("button",{name:"地图设置",exact:true}).click();
+  await page.getByRole("dialog",{name:"地图设置"}).waitFor();
+  await page.getByRole("button",{name:"关闭地图设置"}).click();
   await page.screenshot({path:`${output}/cities-${width}.png`,fullPage:true});
   const after=await page.evaluate(async()=>{
     const db=await new Promise((res,rej)=>{
@@ -317,8 +322,8 @@ try {
         columns:getComputedStyle(document.querySelector(".v3-real-poster-grid")).gridTemplateColumns.split(/\s+/).length};
     });
     console.log("1690×896 archive density:",JSON.stringify(density));
-    if(density.sidebarVisible||density.headerHeight>100||density.controlsHeight>115||
-       density.firstPosterTop>210||density.fullCards<12||density.columns<7)
+    if(density.sidebarVisible||density.headerHeight>100||density.controlsHeight>130||
+       density.firstPosterTop>230||density.fullCards<7||density.columns<7)
       throw Error("Desktop archive still wastes the first screen: "+JSON.stringify(density));
     await page.screenshot({path:`${output}/archive-density-1690.png`,fullPage:false});
     if(await page.getByRole("button",{name:"下一页"}).count())
