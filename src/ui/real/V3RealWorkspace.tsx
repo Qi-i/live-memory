@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, MapPin, CloudAlert } from "lucide-react";
+import { Pencil, MapPin, CloudAlert, Images, Sparkles, Ticket, Wallet, CalendarDays, List, Clock3, ChartBar, CircleDollarSign } from "lucide-react";
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { AppSettings, EventRecord, MediaAsset } from "../../domain";
@@ -37,6 +37,7 @@ type Page = "档案" | "统计" | "城市" | "数据";
 type Mode = "海报"|"时间线"|"列表"|CollectionMode;
 const navigation: Array<Exclude<Page,"数据">> = ["档案", "统计", "城市"];
 const archiveModes:Mode[]=["海报","时间线","列表"];
+const viewGroups=[{label:"收藏",items:[["海报",Images],["画报",Sparkles],["票夹",Wallet],["票根",Ticket]]},{label:"浏览",items:[["时间线",Clock3],["日历",CalendarDays],["城市/场馆",MapPin],["列表",List]]},{label:"分析",items:[["票价",CircleDollarSign],["汇总",ChartBar]]}] as const;
 const viewPreferenceKey="live-memory-v3-archive-view";
 const autoSyncPreferenceKey="live-memory-v3-auto-sync";
 function readAutoSyncPreference(){
@@ -162,6 +163,10 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
     </section>
   </div>;
 }
+function TimelineArt({record}:{record:EventRecord}){
+  const src=useCachedMediaSrc(primaryMedia(record,["poster"]));
+  return <AdaptivePoster className="v3-timeline-art" src={src} alt="" frameRatio={2/3}/>;
+}
 function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
   record:EventRecord;
   onOpen:(id:string)=>void;
@@ -248,8 +253,12 @@ export function V3RealWorkspace() {
   const [filterStatus,setFilterStatus]=useState<"all"|"watched"|"planned"|"wish">("all");
   const [filterCity,setFilterCity]=useState("");
   const [filterYear,setFilterYear]=useState("");
+  const [filterCategory,setFilterCategory]=useState("");
+  const [filterArtist,setFilterArtist]=useState("");
+  const [filterTag,setFilterTag]=useState("");
+  const [advancedFilters,setAdvancedFilters]=useState(false);
   const [favoritesOnly,setFavoritesOnly]=useState(false);
-  const [sortMode,setSortMode]=useState<"newest"|"oldest"|"edited">("newest");
+  const [sortMode,setSortMode]=useState<"newest"|"oldest"|"edited"|"price">("newest");
   const [snapshot,setSnapshot]=useState<{scope:string;records:EventRecord[];error:string;busy:boolean}>({
     scope:"",records:[],error:"",busy:true,
   });
@@ -435,6 +444,9 @@ export function V3RealWorkspace() {
     return {
       cities:[...new Set(all.map(row=>row.city.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
       years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort().reverse(),
+      categories:[...new Set(all.map(row=>row.category))],
+      artists:[...new Set(all.flatMap(row=>row.artists).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
+      tags:[...new Set(all.flatMap(row=>row.tags).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
     };
   },[records]);
   const active=useMemo(()=>model.records.filter(row=>
@@ -442,15 +454,20 @@ export function V3RealWorkspace() {
       ?isWatchedRealRecord(row):row.status===filterStatus))&&
     (!filterCity||row.city===filterCity)&&
     (!filterYear||row.date.startsWith(filterYear))&&
+    (!filterCategory||row.category===filterCategory)&&
+    (!filterArtist||row.artists.includes(filterArtist))&&
+    (!filterTag||row.tags.includes(filterTag))&&
     (!favoritesOnly||row.favorite)
   ).sort((a,b)=>{
     if(sortMode==="edited")return b.updatedAt.localeCompare(a.updatedAt)||b.date.localeCompare(a.date);
+    if(sortMode==="price")return (b.price??-1)-(a.price??-1)||b.date.localeCompare(a.date);
     return sortMode==="newest"?b.date.localeCompare(a.date):a.date.localeCompare(b.date);
-  }),[model.records,filterStatus,filterCity,filterYear,favoritesOnly,sortMode]);
-  const filterApplied=filterStatus!=="all"||Boolean(filterCity||filterYear||favoritesOnly||search.trim());
+  }),[model.records,filterStatus,filterCity,filterYear,filterCategory,filterArtist,filterTag,favoritesOnly,sortMode]);
+  const filterApplied=filterStatus!=="all"||Boolean(filterCity||filterYear||filterCategory||filterArtist||filterTag||favoritesOnly||search.trim());
   const clearArchiveFilters=()=>{
     setSearch("");setFilterStatus("all");setFilterCity("");setFilterYear("");
     setFavoritesOnly(false);setSortMode("newest");
+    setFilterCategory("");setFilterArtist("");setFilterTag("");
   };
   const visibleModel=useMemo(()=>describeRealArchive(records),[records]);
   const firstPosters=useMemo(()=>curateFeaturedRecords(
@@ -926,6 +943,9 @@ export function V3RealWorkspace() {
               {collectionModes.map(label=>
                 <option key={label} value={label}>{label}</option>)}
             </select>}/>
+        <nav className="v3-view-library" aria-label="全部档案视图">
+          {viewGroups.map(group=><div key={group.label}><span>{group.label}</span>{group.items.map(([label,Icon])=><button key={label} type="button" aria-pressed={mode===label} onClick={()=>setMode(label)}><Icon size={15}/>{label}</button>)}</div>)}
+        </nav>
         <div className="v3-real-refine-bar" aria-label="档案筛选和排序">
           <label>状态<select aria-label="按观演状态筛选" value={filterStatus}
             onChange={e=>setFilterStatus(e.target.value as typeof filterStatus)}>
@@ -946,7 +966,9 @@ export function V3RealWorkspace() {
             onChange={e=>setSortMode(e.target.value as typeof sortMode)}>
             <option value="newest">时间最新</option><option value="oldest">时间最早</option>
             <option value="edited">最近编辑</option>
+            <option value="price">票价从高到低</option>
           </select></label>
+          <button type="button" aria-expanded={advancedFilters} onClick={()=>setAdvancedFilters(v=>!v)}>更多筛选{filterCategory||filterArtist||filterTag?" · 已启用":""}</button>
           <button type="button" className={favoritesOnly?"is-active":""}
             aria-pressed={favoritesOnly} onClick={()=>setFavoritesOnly(v=>!v)}>
             {favoritesOnly?"♥ 已收藏":"♡ 仅收藏"}</button>
@@ -960,6 +982,11 @@ export function V3RealWorkspace() {
           </select></label>}
           <span className="v3-real-results" aria-live="polite">{filterApplied?"筛选结果":"全部演出"} <b>{active.length}</b> / {visibleModel.records.length} 场</span>
         </div>
+        {advancedFilters&&<div className="v3-real-refine-bar v3-advanced-facets">
+          <label>类别<select aria-label="按类别筛选" value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}><option value="">全部类别</option>{facets.categories.map(value=><option key={value} value={value}>{categoryLabels[value]}</option>)}</select></label>
+          <label>艺人<select aria-label="按艺人筛选" value={filterArtist} onChange={e=>setFilterArtist(e.target.value)}><option value="">全部艺人</option>{facets.artists.map(value=><option key={value}>{value}</option>)}</select></label>
+          <label>标签<select aria-label="按标签筛选" value={filterTag} onChange={e=>setFilterTag(e.target.value)}><option value="">全部标签</option>{facets.tags.map(value=><option key={value}>{value}</option>)}</select></label>
+        </div>}
         </div>
         {mode==="海报"&&featuredOpen&&<V3FeaturedHero posters={posters} frameRatio={frameRatio}
           onNaturalRatio={measurePoster} onBrowse={()=>setFeaturedOpen(false)}/>}
@@ -983,7 +1010,9 @@ export function V3RealWorkspace() {
             <div className="v3-real-timeline">
               {rows.map(row=><button type="button" key={row.id} onClick={()=>setSelectedId(row.id)}>
                 <time>{row.date.slice(5)||row.date}</time>
-                <strong>{row.title}</strong><small>{row.city} · {row.venue||"场馆待补"}</small>
+                <TimelineArt record={row}/>
+                <span className="v3-timeline-copy"><strong>{row.title}</strong><small>{row.artists.join(" · ")}</small><small>{row.city} · {row.venue||"场馆待补"}</small></span>
+                <span className="v3-timeline-price">{typeof row.price==="number"?"¥"+row.price:""}</span>
               </button>)}
             </div>
           </div>)}

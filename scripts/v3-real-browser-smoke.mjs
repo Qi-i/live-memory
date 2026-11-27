@@ -116,7 +116,13 @@ try {
     throw Error("Real mobile navigation must expose exactly three core tabs: "+JSON.stringify(chrome));
   if(await page.getByRole("navigation",{name:"手机主导航"}).getByRole("button",{name:"迁移",exact:true}).count())
     throw Error("Migration is not a regular destination after V3 release");
-  await page.getByLabel("更多档案视图").selectOption("画报");
+  const selectMode=async(mode)=>{
+    if(await page.locator(".v3-view-library").isVisible()){
+      if(await page.locator(".v3-view-library button").count()!==10)throw Error("Desktop view library must expose all ten layouts");
+      await page.locator(".v3-view-library").getByRole("button",{name:mode,exact:true}).click();
+    }else await page.getByLabel("更多档案视图").selectOption(mode);
+  };
+  await selectMode("画报");
   const {columns,available}=await page.locator(".v3-collection-showcase-grid").evaluate(element=>({
     columns:getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
     available:element.closest(".v3-collection").clientWidth-
@@ -337,7 +343,7 @@ try {
       ["票价",".v3-collection-cost-list"],
       ["汇总",".v3-collection-summary-grid"],
     ]){
-      await page.getByLabel("更多档案视图").selectOption(name);
+      await selectMode(name);
       await page.locator(selector).waitFor({state:"visible"});
       if(await page.locator(".v3-real-embedded-archive .archive-page").count())
         throw Error("V2 embedded archive leaked into native "+name);
