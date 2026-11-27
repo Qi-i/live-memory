@@ -53,9 +53,7 @@ body {
   gap: var(--experience-page-gap);
   padding: var(--experience-page-pad);
   color: var(--experience-text);
-  background:
-    linear-gradient(112deg, color-mix(in srgb, var(--experience-accent) 12%, transparent) 0 18%, transparent 18% 65%, color-mix(in srgb, var(--experience-accent-2) 11%, transparent) 65% 76%, transparent 76%),
-    var(--experience-canvas);
+  background: var(--experience-canvas);
 }
 
 .experience-rail {
@@ -66,13 +64,12 @@ body {
   height: calc(100vh - var(--experience-page-pad) * 2);
   min-height: 0;
   flex-direction: column;
-  gap: 18px;
-  padding: 14px;
+  gap: 16px;
+  padding: 12px;
   border: 1px solid var(--experience-border);
   border-radius: var(--experience-radius);
-  background: var(--experience-surface);
-  box-shadow: var(--experience-shadow);
-  backdrop-filter: blur(20px);
+  background: var(--experience-surface-solid);
+  box-shadow: none;
 }
 
 .experience-nav-scrim { display: none; }

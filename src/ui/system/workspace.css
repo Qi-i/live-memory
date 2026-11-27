@@ -1,33 +1,29 @@
 /* V3 layout system: geometry, typography and safe material tokens.
    This stylesheet is isolated from V2. No !important and no time-ordered hotfixes. */
 .v3-workspace-shell {
-  --v3-ink: #182542;
-  --v3-muted: #65718a;
-  --v3-border: rgba(141,156,200,.23);
-  --v3-panel: rgba(250,252,255,.75);
-  --v3-strong-panel: rgba(249,251,255,.92);
+  --v3-ink: #262522;
+  --v3-muted: #6c6861;
+  --v3-border: rgba(38,37,34,.12);
+  --v3-panel: #ffffff;
+  --v3-strong-panel: #ffffff;
   --v3-accent: #675bb6;
   --v3-accent-tint: #ece9fb;
-  --v3-card-border: rgba(141,156,200,.26);
-  --v3-card-bg: rgba(252,253,255,.88);
-  --v3-control-bg: rgba(255,255,255,.92);
-  --v3-radius: 20px;
-  --v3-control-radius: 11px;
-  --v3-gap: 14px;
+  --v3-card-border: rgba(38,37,34,.12);
+  --v3-card-bg: #ffffff;
+  --v3-control-bg: #ffffff;
+  --v3-radius: 12px;
+  --v3-control-radius: 8px;
+  --v3-gap: 12px;
   box-sizing: border-box;
   display: grid;
   grid-template-columns: clamp(200px, 14.5vw, 246px) minmax(0,1fr);
   gap: var(--v3-gap);
   height: 100dvh;
   min-height: 0;
-  padding: 14px;
+  padding: 12px;
   overflow: hidden;
   color: var(--v3-ink);
-  background:
-    radial-gradient(ellipse 57% 67% at 2% 0%, rgba(168,160,249,.46), transparent 78%),
-    radial-gradient(ellipse 63% 75% at 103% 6%, rgba(123,222,231,.39), transparent 75%),
-    radial-gradient(ellipse 54% 70% at 88% 97%, rgba(244,157,204,.32), transparent 75%),
-    linear-gradient(128deg,#e8eafa,#e9f4f7 52%,#f2ebf7);
+  background: #f5f5f3;
   font-family: Inter,"PingFang SC","Microsoft YaHei",system-ui,sans-serif;
 }
 .v3-workspace-shell *, .v3-workspace-shell *::before, .v3-workspace-shell *::after { box-sizing: border-box; }
@@ -45,7 +41,7 @@
   background:var(--v3-control-bg);
   box-shadow:none;
   font-size:13px;
-  font-weight:720;
+  font-weight:600;
 }
 .v3-workspace-shell .button.primary {
   border-color:var(--v3-accent);
@@ -67,7 +63,7 @@
 }
 .v3-workspace-shell :is(.v3-real-panel,.v3-collection) {
   border-radius:var(--v3-radius);
-  box-shadow:0 10px 30px rgba(48,67,119,.075);
+  box-shadow:none;
 }
 .v3-workspace-shell :is(.v3-real-panel,.v3-collection) > header > span {
   color:var(--v3-accent);
@@ -75,7 +71,7 @@
 }
 .v3-workspace-shell :is(.v3-real-panel,.v3-collection) > header > :is(h1,h2) {
   color:var(--v3-ink);
-  letter-spacing:-.025em;
+  letter-spacing:0;
 }
 .v3-workspace-shell :is(.v3-real-panel,.v3-collection) > header > p {
   color:var(--v3-muted);
@@ -86,12 +82,12 @@
   --v3-panel: #fffefa;
   --v3-strong-panel: #fffefa;
   --v3-border: rgba(61,76,96,.25);
-  background:linear-gradient(145deg,#ebe8e2,#f9f6ee);
+  background:#f5f3ee;
 }
 .v3-workspace-shell[data-v3-surface="editorial"] :is(.v3-sidebar,.v3-global-toolbar,.v3-stage-hero,.v3-action-toolbar,.v3-map-stage,.v3-map-side) {
   -webkit-backdrop-filter:none;
   backdrop-filter:none;
-  box-shadow:0 4px 17px rgba(38,42,54,.07);
+  box-shadow:none;
 }
 
 .v3-sidebar,
@@ -100,29 +96,29 @@
 .v3-action-toolbar,
 .v3-map-stage,
 .v3-map-side {
-  border: 1px solid rgba(255,255,255,.77);
+  border: 1px solid var(--v3-border);
   background: var(--v3-panel);
-  box-shadow: 0 15px 45px rgba(48,67,119,.11), inset 0 1px 0 rgba(255,255,255,.78);
-  -webkit-backdrop-filter: blur(22px) saturate(1.45);
-  backdrop-filter: blur(22px) saturate(1.45);
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .v3-sidebar {
   display: grid;
   grid-template-rows: auto minmax(0,1fr) auto;
   min-height: 0;
-  padding: 17px 12px 12px;
-  border-radius: 26px;
+  padding: 16px 12px 12px;
+  border-radius: 12px;
 }
-.v3-sidebar-brand { padding: 4px 9px 17px; font-weight: 840; font-size: 18px; letter-spacing:-.05em; }
+.v3-sidebar-brand { padding: 4px 8px 16px; font-weight: 600; font-size: 18px; letter-spacing:0; }
 .v3-sidebar-navigation { display: grid; gap: 4px; min-width: 0; align-content: start; overflow-y: auto; }
 .v3-sidebar-navigation button, .v3-mobile-navigation button {
-  border: 0; border-radius: 13px; background: transparent;
-  color: var(--v3-ink); padding: 11px 14px; min-height: 43px;
-  font:inherit; font-size:13px; font-weight:730; text-align:left; cursor:pointer;
+  border: 0; border-radius: 8px; background: transparent;
+  color: var(--v3-ink); padding: 8px 12px; min-height: 36px;
+  font:inherit; font-size:14px; font-weight:500; text-align:left; cursor:pointer;
 }
 .v3-sidebar-navigation button[aria-current="page"],
 .v3-mobile-navigation button[aria-current="page"] {
-  background: linear-gradient(112deg,rgba(191,177,249,.70),rgba(137,211,229,.42));
+  background: var(--v3-accent-tint); color: var(--v3-accent); font-weight:600;
 }
 .v3-sidebar-utility { display: grid; gap: 10px; align-self: end; min-height: 0; max-height: 46dvh; overflow-y: auto; scrollbar-width: thin; }
 .v3-sidebar-account {
@@ -151,8 +147,8 @@
 .v3-workspace-column { display:flex; flex-direction:column; min-width:0; min-height:0; gap:var(--v3-gap); }
 .v3-global-toolbar {
   position:relative; z-index:30;
-  display:flex; align-items:center; flex:0 0 auto; min-height:74px;
-  gap:13px; padding:12px 22px; border-radius:23px;
+  display:flex; align-items:center; flex:0 0 auto; min-height:64px;
+  gap:12px; padding:12px 16px; border-radius:12px;
 }
 .v3-workspace-content { display:flex; flex-direction:column; gap:var(--v3-gap); min-width:0; min-height:0; overflow-y:auto; overflow-x:hidden; overscroll-behavior:contain; padding:1px 5px 18px 1px; scrollbar-width:thin; scrollbar-color:rgba(112,128,175,.48) transparent; }
 /* One content scrollbar owns overflow. Neither map nor hero is squeezed to fit the viewport. */
@@ -166,25 +162,22 @@
 .v3-stage-hero {
   display:grid; grid-template-columns:minmax(255px,.34fr) minmax(0,.66fr);
   gap:clamp(12px,1.5vw,20px); align-items:stretch;
-  min-height:0; padding:12px 16px; border-radius:25px; overflow:hidden;
-  background:
-    radial-gradient(ellipse at 4% 14%, rgba(200,190,255,.61),transparent 52%),
-    radial-gradient(ellipse at 99% 80%, rgba(121,219,223,.37),transparent 55%),
-    var(--v3-panel);
+  min-height:0; padding:16px; border-radius:12px; overflow:hidden;
+  background:var(--v3-panel);
 }
 .v3-stage-hero-copy { display:grid; align-content:center; min-width:0; gap:9px; padding:8px 3px; }
-.v3-stage-hero-copy > span { color:#6458ba; font-size:11px; font-weight:850; letter-spacing:.15em; }
-.v3-stage-hero-copy h1 { margin:0; font-size:clamp(29px,3vw,46px); line-height:1.17; font-weight:860; letter-spacing:-.055em; overflow-wrap:anywhere; }
+.v3-stage-hero-copy > span { color:var(--v3-muted); font-size:12px; font-weight:500; letter-spacing:0; }
+.v3-stage-hero-copy h1 { margin:0; font-size:clamp(24px,2.5vw,36px); line-height:1.25; font-weight:600; letter-spacing:0; overflow-wrap:anywhere; }
 .v3-stage-hero-copy p { margin:0; color:var(--v3-muted); font-size:14px; line-height:1.65; }
 .v3-stage-hero-media { display:grid; grid-template-rows:auto auto; align-content:center; min-width:0; min-height:0; gap:8px; }
 .v3-stage-hero-controls { display:flex; align-items:center; justify-content:space-between; min-height:30px; gap:12px; padding:0 3px; }
-.v3-stage-hero-controls > span { color:var(--v3-muted); font-size:11px; font-weight:770; letter-spacing:.07em; }
+.v3-stage-hero-controls > span { color:var(--v3-muted); font-size:12px; font-weight:500; letter-spacing:0; }
 .v3-stage-hero-controls > div { display:flex; gap:7px; }
 .v3-stage-hero-controls button {
   display:grid; place-items:center; width:33px; height:33px;
-  border:1px solid var(--v3-border); border-radius:50%;
-  background:rgba(255,255,255,.83); color:#404779; font-size:22px; line-height:1;
-  cursor:pointer; box-shadow:0 2px 10px rgba(50,65,110,.07);
+  border:1px solid var(--v3-border); border-radius:8px;
+  background:var(--v3-control-bg); color:var(--v3-ink); font-size:22px; line-height:1;
+  cursor:pointer;
 }
 .v3-stage-hero-controls button:focus-visible { outline:3px solid #675bc0; outline-offset:2px; }
 .v3-stage-hero-gallery {
@@ -206,9 +199,9 @@
 }
 .v3-portrait-frame {
   display:grid; place-items:center; width:100%; aspect-ratio:2/3; overflow:hidden;
-  border:4px solid rgba(255,255,255,.91); border-radius:18px;
-  background:linear-gradient(155deg,#e3e1fa,#d3e9f0);
-  box-shadow:0 17px 30px rgba(47,50,111,.23);
+  border:1px solid var(--v3-border); border-radius:8px;
+  background:#eeedea;
+  box-shadow:0 3px 8px rgba(38,37,34,.10);
 }
 .v3-portrait-frame img { display:block; width:100%; height:100%; object-fit:contain; }
 .v3-portrait-frame > span { font-size:32px; font-weight:880; color:#8f87bf; letter-spacing:-.08em; }
@@ -220,13 +213,13 @@
 .v3-portrait-artwork figcaption small { font-size:11px; color:var(--v3-muted); }
 .v3-action-toolbar {
   display:flex; flex-wrap:wrap; align-items:center; gap:8px; min-width:0;
-  padding:10px; border-radius:19px; background:var(--v3-strong-panel);
+  padding:8px; border-radius:12px; background:var(--v3-strong-panel);
 }
 .v3-toolbar-search { flex:1 1 220px; min-width:160px; }
 .v3-toolbar-modes { flex:2 1 370px; min-width:0; display:flex; flex-wrap:wrap; gap:6px; }
 .v3-toolbar-actions { flex:1 1 auto; min-width:0; display:flex; justify-content:flex-end; flex-wrap:wrap; gap:7px; }
-.v3-action-toolbar input { width:100%; min-height:43px; border:1px solid var(--v3-border); border-radius:12px; background:rgba(255,255,255,.7); padding:0 13px; color:var(--v3-ink); font:inherit; font-size:13px; }
-.v3-action-toolbar button { min-height:39px; padding:0 12px; border:1px solid var(--v3-border); border-radius:11px; background:rgba(255,255,255,.68); color:var(--v3-ink); font:inherit; font-size:12px; font-weight:740; white-space:nowrap; cursor:pointer; }
+.v3-action-toolbar input { width:100%; min-height:40px; border:1px solid var(--v3-border); border-radius:8px; background:var(--v3-control-bg); padding:0 12px; color:var(--v3-ink); font:inherit; font-size:14px; }
+.v3-action-toolbar button { min-height:36px; padding:0 12px; border:1px solid var(--v3-border); border-radius:8px; background:var(--v3-control-bg); color:var(--v3-ink); font:inherit; font-size:13px; font-weight:500; white-space:nowrap; cursor:pointer; }
 .v3-action-toolbar button[aria-pressed="true"] { background:#dcd7fa; border-color:#c6bcf1; color:#343075; }
 .v3-map-split {
   display:grid; grid-template-columns:minmax(0,1.65fr) minmax(290px,.85fr);

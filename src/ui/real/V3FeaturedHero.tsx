@@ -16,10 +16,9 @@ export function V3FeaturedHero({posters,onBrowse,frameRatio,onNaturalRatio}:{
 }){
   return <section className="v3-real-featured" aria-label="精选现场">
     <div className="v3-real-featured-copy">
-      <span>LIVE MEMORY · YOUR MOMENTS</span>
-      <h1>每一场，都值得珍藏</h1>
-      <p>你的演出档案，自动精选不同艺人的现场海报。</p>
-      <button type="button" onClick={onBrowse}>浏览全部档案 <span aria-hidden="true">↗</span></button>
+      <h1>精选现场</h1>
+      <p>来自演出档案的不同艺人海报。</p>
+      <button type="button" onClick={onBrowse}>浏览全部档案</button>
     </div>
     <div className="v3-real-featured-gallery" aria-label={`精选 ${posters.length} 张不同艺人的海报`}>
       {posters.length?posters.slice(0,5).map((poster,index)=><figure
