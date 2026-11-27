@@ -159,6 +159,37 @@
 .v3-mobile-status { display:none; }
 .v3-overlay-host { position:fixed; inset:0; z-index:100; pointer-events:none; }
 .v3-overlay-host > * { pointer-events:auto; }
+.v3-top-navigation { display:none; }
+/* The real archive has only three destinations; a full-height rail wastes
+   an entire column. Keep the demo shell independent. */
+.v3-workspace-shell[data-v3-navigation="top"] {
+  grid-template-columns:minmax(0,1fr);
+  --v3-gap:8px;
+  padding:8px;
+}
+.v3-workspace-shell[data-v3-navigation="top"] .v3-sidebar { display:none; }
+.v3-workspace-shell[data-v3-navigation="top"] .v3-global-toolbar {
+  gap:12px; padding:8px 12px; min-height:56px; flex-wrap:wrap;
+}
+.v3-workspace-shell[data-v3-navigation="top"] .v3-workspace-content {
+  padding:0 3px 12px 0;
+}
+@media(min-width:801px) {
+  .v3-workspace-shell[data-v3-navigation="top"] .v3-top-navigation {
+    display:flex; align-items:center; gap:14px; flex:0 0 auto;
+  }
+  .v3-top-navigation .v3-sidebar-brand {
+    display:flex; align-items:center; gap:8px; padding:0;
+  }
+  .v3-top-navigation .v3-sidebar-brand small { display:none; }
+  .v3-top-navigation .v3-sidebar-navigation {
+    display:flex; align-items:center; gap:3px; overflow:visible;
+  }
+  .v3-top-navigation .v3-sidebar-navigation button { white-space:nowrap; }
+}
+@media(max-width:800px) {
+  .v3-workspace-shell[data-v3-navigation="top"] {padding-bottom:max(76px,env(safe-area-inset-bottom));}
+}
 .v3-stage-hero {
   display:grid; grid-template-columns:minmax(255px,.34fr) minmax(0,.66fr);
   gap:clamp(12px,1.5vw,20px); align-items:stretch;

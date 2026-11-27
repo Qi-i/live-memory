@@ -83,6 +83,7 @@ export function WorkspaceShell({
   appearance = "liquid",
   demoStatus = false,
   showStatusCenter = true,
+  navigationLayout = "sidebar",
 }: {
   brand: ReactNode;
   navigation: ReactNode;
@@ -96,9 +97,10 @@ export function WorkspaceShell({
   appearance?: "liquid" | "editorial";
   demoStatus?: boolean;
   showStatusCenter?: boolean;
+  navigationLayout?: "sidebar" | "top";
 }) {
   return (
-    <div className="v3-workspace-shell" data-ui-system="v3" data-v3-surface={appearance}>
+    <div className="v3-workspace-shell" data-ui-system="v3" data-v3-surface={appearance} data-v3-navigation={navigationLayout}>
       <aside className="v3-sidebar" aria-label="应用导航">
         <div className="v3-sidebar-brand">{brand}</div>
         <nav className="v3-sidebar-navigation" aria-label="主导航">{navigation}</nav>
@@ -108,7 +110,13 @@ export function WorkspaceShell({
         </div>
       </aside>
       <div className="v3-workspace-column">
-        <header className="v3-global-toolbar">{toolbar}</header>
+        <header className="v3-global-toolbar">
+          {navigationLayout === "top" && <div className="v3-top-navigation">
+            <div className="v3-sidebar-brand">{brand}</div>
+            <nav className="v3-sidebar-navigation" aria-label="主导航">{navigation}</nav>
+          </div>}
+          {toolbar}
+        </header>
         <main className="v3-workspace-content" id="v3-workspace-content">{children}</main>
       </div>
       {mobileNavigation && (

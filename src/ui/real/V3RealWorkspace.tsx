@@ -279,6 +279,7 @@ export function V3RealWorkspace() {
   const [page,setPage]=useState<Page>("档案");
   const [showLegacyDiagnostics,setShowLegacyDiagnostics]=useState(false);
   const [mode,setMode]=useState<Mode>(savedArchiveMode);
+  const [featuredOpen,setFeaturedOpen]=useState(false);
   useEffect(()=>{
     try{window.localStorage.setItem(viewPreferenceKey,mode);}catch{ /* private browsing */ }
   },[mode]);
@@ -481,6 +482,7 @@ export function V3RealWorkspace() {
     describeRealArchive(records).records, record=>Boolean(primaryMedia(record)),5,
   ),[records]);
   useEffect(()=>{
+    if(!featuredOpen)return;
     let alive=true;
     const scope=currentStorageScope();
     setPosters(firstPosters.map(record=>({id:record.id,title:record.title,city:record.city})));
@@ -492,7 +494,7 @@ export function V3RealWorkspace() {
       if(alive && currentStorageScope()===scope)setPosters(rows);
     });
     return ()=>{alive=false;};
-  },[firstPosters]);
+  },[firstPosters,featuredOpen]);
   const selected=records.find(row=>row.id===selectedId);
   // The only permitted V3 write before cloud cutover is to the explicit
   // standalone local device archive. Authenticated V2 users remain read-only.
@@ -812,12 +814,13 @@ export function V3RealWorkspace() {
       <small>V3 · 现场记忆</small></>}
     navigation={navButtons}
     mobileNavigation={navButtons}
+    navigationLayout="top"
     appearance="liquid"
     demoStatus={false}
     showStatusCenter={false}
     activity={{type:"idle"}}
     toolbar={<div className="v3-real-topbar">
-      <div><span>LIVE MEMORY · YOUR ARCHIVE</span>
+      <div>
         <strong>{page==="档案"?"演出档案":page==="数据"?"数据与备份":page}</strong>
         <small>{canEditLocal?"本机档案可编辑"
           : canEditAccount?"当前账户 · 云端同步可用"
@@ -915,9 +918,6 @@ export function V3RealWorkspace() {
     </section> : snapshot.busy ? <section className="v3-real-panel" role="status">正在读取当前设备的档案快照…</section> :
     <>
       {page==="档案" && <>
-        <V3FeaturedHero posters={posters} frameRatio={frameRatio}
-          onNaturalRatio={measurePoster} onBrowse={()=>
-          document.getElementById("v3-real-archive-controls")?.scrollIntoView({behavior:"smooth",block:"start"})}/>
         <div id="v3-real-archive-controls" className="v3-real-archive-controls">
           <ActionToolbar
             search={<input aria-label="搜索真实档案" value={search}
@@ -956,10 +956,15 @@ export function V3RealWorkspace() {
           <button type="button" className={favoritesOnly?"is-active":""}
             aria-pressed={favoritesOnly} onClick={()=>setFavoritesOnly(v=>!v)}>
             {favoritesOnly?"♥ 已收藏":"♡ 仅收藏"}</button>
+          {mode==="海报"&&firstPosters.length>0&&<button type="button"
+            aria-expanded={featuredOpen} className={featuredOpen?"is-active":""}
+            onClick={()=>setFeaturedOpen(value=>!value)}>精选现场 {featuredOpen?"收起":"展开"}</button>}
           {filterApplied&&<button type="button" className="v3-real-refine-clear"
             onClick={clearArchiveFilters}>清除筛选</button>}
           <span>{active.length} / {describeRealArchive(records).records.length} 场</span>
         </div>
+        {mode==="海报"&&featuredOpen&&<V3FeaturedHero posters={posters} frameRatio={frameRatio}
+          onNaturalRatio={measurePoster} onBrowse={()=>setFeaturedOpen(false)}/>}
         {!active.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
           <p>当前筛选下没有演出。</p><button type="button" onClick={clearArchiveFilters}>显示全部档案</button></div>:
         collectionModes.includes(mode as CollectionMode)?
@@ -968,14 +973,14 @@ export function V3RealWorkspace() {
             onEdit={canEdit?startEdit:undefined}
             onShare={record=>{setShareRecord(record);setSelectedId(null);setSharing(true);}}/>:
                 mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
-          <header><span>LIVE MEMORY · ARCHIVE</span><h2>全部演出 <small>({active.length})</small></h2></header>
+          <header><h2>全部演出 <small>({active.length})</small></h2></header>
           <div className="v3-real-poster-grid">
             {active.map(record=><PosterCard key={record.id} record={record}
               onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
               frameRatio={frameRatio} onNaturalRatio={measurePoster}/>)}
           </div></section>:
         mode==="时间线"?<section className="v3-real-panel v3-real-chronicle">
-          <header><span>CHRONICLE · BY YEAR</span><h2>演出时间线</h2></header>
+          <header><h2>演出时间线</h2></header>
           {yearGroups.map(([year,rows])=><div className="v3-real-year-group" key={year}>
             <h3>{year}<small> · {rows.length} 场</small></h3>
             <div className="v3-real-timeline">
@@ -987,7 +992,7 @@ export function V3RealWorkspace() {
           </div>)}
         </section>:
         <section className="v3-real-panel v3-real-index-panel">
-          <header><span>ARCHIVE INDEX · ALL SHOWS</span><h2>演出索引</h2></header>
+          <header><h2>演出索引 <small>({active.length})</small></h2></header>
           <div className="v3-real-index-list">
             {active.map(record=><RecordIndexCard key={record.id} record={record}
               onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
@@ -998,7 +1003,7 @@ export function V3RealWorkspace() {
       {page==="统计" && <RealStatistics records={records}/>}
       {page==="数据" && <>
         <section className="v3-real-panel v3-real-data-heading">
-          <header><span>DATA & BACKUP</span><h2>数据与备份</h2></header>
+          <header><h2>数据与备份</h2></header>
           <p>原始档案与图片始终保留。备份、恢复等操作仅在手动确认后执行。</p>
         </section>
         {(canEditLocal||canEditAccount) && <section className="v3-real-restore" aria-label="V3 完整备份恢复">

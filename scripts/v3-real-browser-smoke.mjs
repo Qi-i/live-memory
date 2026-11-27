@@ -5,7 +5,7 @@ import { createHash } from "node:crypto";
 const base=process.env.V3_REAL_AUDIT_URL||"http://127.0.0.1:4173/live-memory/?v3-real-workspace=1";
 const output="visual-artifacts/v3-real";
 await mkdir(output,{recursive:true});
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,...(process.env.V3_BROWSER_EXECUTABLE?{executablePath:process.env.V3_BROWSER_EXECUTABLE}:{})});
 const fixture=(id,title,city,status,extra={})=>({
  schemaVersion:2,id,title,city,venue:city+"测试场馆",
  date:"2026-09-27",status,recordState:"normal",category:"concert",
@@ -117,9 +117,13 @@ try {
   if(await page.getByRole("navigation",{name:"手机主导航"}).getByRole("button",{name:"迁移",exact:true}).count())
     throw Error("Migration is not a regular destination after V3 release");
   await page.getByLabel("更多档案视图").selectOption("画报");
-  const columns=await page.locator(".v3-collection-showcase-grid").evaluate(element=>
-    getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length);
-  const expectedColumns=width>1180?5:width>610?3:2;
+  const {columns,available}=await page.locator(".v3-collection-showcase-grid").evaluate(element=>({
+    columns:getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+    available:element.closest(".v3-collection").clientWidth-
+      parseFloat(getComputedStyle(element.closest(".v3-collection")).paddingLeft)-
+      parseFloat(getComputedStyle(element.closest(".v3-collection")).paddingRight),
+  }));
+  const expectedColumns=available>880?5:available>570?3:2;
   if(columns!==expectedColumns)throw Error("V3 collection columns ignore content width: "+
     JSON.stringify({width,columns,expectedColumns}));
   await page.getByRole("button",{name:"海报",exact:true}).click();
@@ -153,6 +157,18 @@ try {
   await page.getByRole("button",{name:"清除筛选"}).click();
   await page.getByRole("button",{name:"列表",exact:true}).click();
   await page.locator(".v3-real-index-row").filter({hasText:"北京现场 · 真实本机回归"}).waitFor();
+  const indexGeometry=await page.locator(".v3-real-index-list").evaluate(node=>({
+    width:node.clientWidth,
+    columns:getComputedStyle(node).gridTemplateColumns.split(/\s+/).length,
+    actions:[...node.querySelectorAll(".v3-real-index-actions button")].map(button=>({
+      nowrap:getComputedStyle(button).whiteSpace==="nowrap",
+      fits:button.scrollWidth<=button.clientWidth+1,
+    })),
+  }));
+  if(indexGeometry.width>=1200&&indexGeometry.columns!==2||
+     indexGeometry.actions.some(action=>!action.nowrap||!action.fits))
+    throw Error("Archive list wastes width or clips actions: "+JSON.stringify(indexGeometry));
+  await page.screenshot({path:`${output}/index-${width}.png`,fullPage:true});
   await page.getByRole("button",{name:"时间线",exact:true}).click();
   await page.getByText("郑州巡回演出 · 真实本机回归").first().waitFor();
   await page.getByRole("button",{name:"海报",exact:true}).click();
@@ -173,7 +189,8 @@ try {
   // The single real V3 archive replaces the redundant nested V2 archive.
   if(await page.getByRole("button",{name:"完整档案",exact:true}).count())
     throw Error("Redundant complete archive tab remains in V3");
-  await page.locator(".v3-real-featured").waitFor({state:"visible"});
+  if(await page.locator(".v3-real-featured").count())
+    throw Error("Optional featured gallery consumes archive space by default");
   if(await page.getByRole("button",{name:"上一组海报"}).count())
     throw Error("Featured hero must never require manual horizontal scrolling");
   await page.getByRole("button",{name:"制作分享图",exact:true}).click();

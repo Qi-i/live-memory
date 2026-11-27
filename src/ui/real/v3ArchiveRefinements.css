@@ -108,9 +108,9 @@
 }
 .v3-real-index-row {cursor:auto;}
 .v3-real-index-heading {border:0;text-align:left;background:transparent;color:inherit;padding:0;cursor:pointer;font:inherit;}
-.v3-real-index-actions {display:flex;gap:4px;justify-content:flex-end;}
-.v3-real-index-actions button {min-height:36px;border:1px solid var(--v3-card-border);border-radius:var(--v3-control-radius);background:var(--v3-control-bg);font:inherit;font-size:12px;padding:7px 10px;cursor:pointer;color:var(--v3-ink);}
-.v3-real-index-thumb.v3-adaptive-poster {width:51px;}
+.v3-real-index-actions {display:flex;gap:5px;justify-content:flex-end;flex-wrap:nowrap;}
+.v3-real-index-actions button {min-height:36px;border:1px solid var(--v3-card-border);border-radius:var(--v3-control-radius);background:var(--v3-control-bg);font:inherit;font-size:13px;padding:6px 9px;cursor:pointer;color:var(--v3-ink);white-space:nowrap;flex:0 0 auto;}
+.v3-real-index-thumb.v3-adaptive-poster {width:44px;}
 .v3-real-extra-views {min-width:120px;min-height:40px;padding:0 11px;border:1px solid var(--v3-card-border);border-radius:var(--v3-control-radius);color:var(--v3-ink);background:var(--v3-control-bg);font:inherit;font-size:13px;font-weight:720;cursor:pointer;}
 .v3-real-archive-controls .v3-toolbar-actions {flex:0 0 auto;}
 .v3-real-classic-fallback {align-self:flex-start;min-height:39px;padding:9px 14px;border:1px solid #c7cde8;border-radius:12px;background:rgba(255,255,255,.86);font:inherit;color:#4d5685;cursor:pointer;}
@@ -132,7 +132,7 @@
   .v3-real-index-row time {display:block;grid-column:2;grid-row:2;font-size:12px;}
   .v3-real-index-place {display:none;}
   .v3-real-index-row .v3-real-index-thumb {grid-row:1/3;}
-  .v3-real-index-row .v3-real-index-actions {grid-column:3;grid-row:1/3;flex-wrap:wrap;}
+  .v3-real-index-row .v3-real-index-actions {grid-column:3;grid-row:1/3;flex-wrap:nowrap;}
   .v3-real-embedded-archive .archive-command {grid-template-columns:1fr;}
   .v3-real-extra-views {width:100%;}
 }
@@ -162,9 +162,8 @@
 /* Cross-view search, facets, collection and sorting have one owner: V3. */
 .v3-real-refine-bar{
   display:flex;align-items:center;gap:9px;flex-wrap:wrap;
-  min-width:0;padding:10px 12px;border:1px solid var(--v3-card-border);
-  border-radius:16px;background:var(--v3-card-bg);
-  box-shadow:0 8px 25px rgba(45,59,97,.05);
+  min-width:0;padding:6px 8px;border:1px solid var(--v3-card-border);
+  border-radius:8px;background:var(--v3-card-bg);
 }
 .v3-real-refine-bar label{display:flex;gap:7px;align-items:center;color:var(--v3-muted);font-size:12px;font-weight:720}
 .v3-real-refine-bar select,.v3-real-refine-bar button{

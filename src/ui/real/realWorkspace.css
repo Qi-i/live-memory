@@ -1,13 +1,13 @@
 /* Real V3 route: completely isolated from the public demo and V2 screens. */
-.v3-real-topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; gap:9px 13px; width:100%; min-width:0; }
-.v3-real-topbar > div:first-child { display:grid; gap:3px; min-width:0; }
+.v3-real-topbar { display:flex; flex:1 1 760px; flex-wrap:wrap; align-items:center; gap:8px 16px; min-width:0; }
+.v3-real-topbar > div:first-child { display:grid; gap:2px; min-width:0; flex:0 0 auto; }
 .v3-real-topbar > div:first-child > span { font-size:11px; font-weight:800; letter-spacing:.07em; color:var(--v3-accent); }
 .v3-real-topbar > div:first-child > strong { font-size:clamp(18px,1.6vw,22px); line-height:1.25; overflow-wrap:anywhere; }
 .v3-real-topbar > div:first-child > small { color:var(--v3-muted); font-size:12px; }
 .v3-real-topbar-stats { display:flex; justify-content:flex-end; gap:6px; min-width:0; }
-.v3-real-topbar-stats b { display:grid; justify-items:center; min-width:54px; border:1px solid var(--v3-card-border); border-radius:10px; background:var(--v3-control-bg); padding:5px 8px; font-size:16px; font-variant-numeric:tabular-nums; }
+.v3-real-topbar-stats b { display:flex; align-items:baseline; gap:4px; white-space:nowrap; font-size:15px; font-variant-numeric:tabular-nums; }
 .v3-real-topbar-stats b small { font-size:11px; font-weight:650; color:var(--v3-muted); }
-.v3-real-topbar-actions { grid-column:1/-1; display:flex; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:7px; min-width:0; }
+.v3-real-topbar-actions { display:flex; flex:1 1 auto; align-items:center; justify-content:flex-end; flex-wrap:wrap; gap:6px; min-width:0; }
 .v3-real-topbar-actions button, .v3-real-account button { min-height:38px; padding:7px 12px; border:1px solid var(--v3-card-border); border-radius:var(--v3-control-radius); background:var(--v3-control-bg); font:inherit; font-size:13px; font-weight:720; color:var(--v3-ink); cursor:pointer; }
 .v3-real-topbar-actions button:not(:disabled):hover { background:var(--v3-accent-tint); border-color:var(--v3-accent); }
 .v3-real-topbar-actions button:disabled { opacity:.48; cursor:not-allowed; }
@@ -52,7 +52,7 @@
   outline:3px solid rgba(103,91,182,.45);outline-offset:2px;
 }
 
-.v3-real-panel { display:grid; align-content:start; gap:16px; min-width:0; flex:0 0 auto; padding:clamp(15px,2vw,25px); border:1px solid rgba(255,255,255,.88); border-radius:22px; background:rgba(252,253,255,.8); box-shadow:0 12px 35px rgba(49,70,118,.08); }
+.v3-real-panel { display:grid; align-content:start; gap:10px; min-width:0; flex:0 0 auto; padding:12px 14px; border:1px solid var(--v3-card-border); border-radius:12px; background:var(--v3-card-bg); }
 .v3-real-panel > header { display:grid; gap:5px; }
 .v3-real-panel > header > span { color:#6259ac; font-size:10px; font-weight:850; letter-spacing:.12em; }
 .v3-real-panel h1, .v3-real-panel h2 { margin:0; overflow-wrap:anywhere; }
@@ -144,7 +144,7 @@
  .v3-real-map { min-height:320px; }
 }
 @media(max-width:610px) {
- .v3-real-topbar { grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+ .v3-real-topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:8px; }
  .v3-real-topbar > div:first-child { grid-column:1; grid-row:1; }
  .v3-real-topbar-stats { grid-column:2; grid-row:1; gap:4px; }
  .v3-real-topbar-stats b { min-width:39px; padding:5px 4px; font-size:14px; }
@@ -184,19 +184,19 @@
 
 /* Editorial V3 home: selected originals are composed, not manually scrolled. */
 .v3-real-featured {
-  display:grid; grid-template-columns:minmax(230px,.34fr) minmax(0,.66fr);
-  align-items:center; gap:clamp(14px,2.2vw,30px);
-  min-height:clamp(235px,32dvh,330px); padding:clamp(20px,2.5vw,37px);
+  display:grid; grid-template-columns:minmax(140px,180px) minmax(0,1fr);
+  align-items:center; gap:16px;
+  padding:12px 14px;
   position:relative; isolation:isolate; overflow:hidden; flex:0 0 auto;
   border:1px solid var(--v3-card-border); border-radius:12px;
   background:var(--v3-card-bg);
 }
 .v3-real-featured-copy { display:grid; align-content:center; justify-items:start; gap:13px; min-width:0; }
 .v3-real-featured-copy > span { font-size:10px; letter-spacing:.16em; color:#665bb9; font-weight:850; }
-.v3-real-featured-copy h1 { margin:0; font-size:clamp(24px,2.4vw,34px); line-height:1.25; font-weight:600; letter-spacing:0; }
+.v3-real-featured-copy h1 { margin:0; font-size:20px; line-height:1.25; font-weight:600; letter-spacing:0; }
 .v3-real-featured-copy p { max-width:340px; margin:0; color:var(--v3-muted); font-size:14px; line-height:1.6; }
 .v3-real-featured-copy button { display:flex; align-items:center; gap:8px; border:0; border-radius:8px; padding:10px 16px; background:var(--v3-accent); color:white; font:inherit; font-size:13px; font-weight:600; cursor:pointer; }
-.v3-real-featured-gallery { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:clamp(5px,.85vw,13px); align-items:center; min-width:0; min-height:0; }
+.v3-real-featured-gallery { display:grid; grid-template-columns:repeat(5,minmax(0,140px)); gap:10px; align-items:start; min-width:0; min-height:0; }
 .v3-real-featured-card { display:grid; gap:6px; align-content:start; margin:0; min-width:0; }
 .v3-real-featured-image { display:grid; place-items:center; aspect-ratio:2/3; width:100%; overflow:hidden; border-radius:13px; border:3px solid rgba(255,255,255,.94); background:rgba(243,245,253,.82); }
 .v3-real-featured-image img { width:100%; height:100%; display:block; object-fit:contain; object-position:center; }
@@ -207,14 +207,18 @@
 .v3-real-archive-controls .v3-action-toolbar { box-shadow:0 8px 25px rgba(54,67,107,.06); }
 .v3-real-archive-controls .v3-toolbar-modes { flex:0 0 auto; }
 
-.v3-real-index-list { display:grid; gap:9px; }
-.v3-real-index-row { display:grid; grid-template-columns:54px minmax(0,1.8fr) minmax(85px,.7fr) minmax(75px,.65fr) 62px; gap:13px; align-items:center; min-height:83px; width:100%; padding:9px 14px; border:1px solid #e0e5f2; border-radius:14px; text-align:left; color:var(--v3-ink); background:#fff; font:inherit; cursor:pointer; }
+.v3-real-index-panel { container-type:inline-size; }
+.v3-real-index-list { display:grid; grid-template-columns:minmax(0,1fr); gap:4px 12px; }
+.v3-real-index-row { display:grid; grid-template-columns:44px minmax(0,1fr) max-content minmax(40px,70px) max-content; gap:10px; align-items:center; min-height:68px; width:100%; padding:6px 9px; border:1px solid var(--v3-card-border); border-radius:8px; text-align:left; color:var(--v3-ink); background:#fff; font:inherit; cursor:pointer; }
+@container(min-width:1200px) {
+  .v3-real-index-list { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
 .v3-real-index-row:hover { background:#f3f4fd; }
 .v3-real-index-thumb { display:grid; place-items:center; width:51px; aspect-ratio:2/3; background:#e9edf7; border-radius:7px; overflow:hidden; font-size:10px; color:#7d86a0; }
 .v3-real-index-thumb img { display:block; width:100%; height:100%; object-fit:contain; }
 .v3-real-index-heading { display:grid; min-width:0; gap:4px; }
-.v3-real-index-heading strong { font-size:13px; line-height:1.4; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
-.v3-real-index-heading small { font-size:11px; color:#687a96; overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
+.v3-real-index-heading strong { font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
+.v3-real-index-heading small { font-size:12px; color:var(--v3-muted); overflow:hidden; white-space:nowrap; text-overflow:ellipsis; }
 .v3-real-index-row time,.v3-real-index-place { color:#66738d; font-size:12px; white-space:nowrap; }
 .v3-real-index-status { border-radius:999px; background:#e9e5fa; color:#5d528b; font-size:11px; padding:6px 4px; text-align:center; }
 .v3-real-year-group { display:grid; gap:11px; padding:10px 0; }
@@ -224,8 +228,8 @@
 .v3-real-detail-actions { display:flex; gap:8px; flex-wrap:wrap; }
 
 @media(max-width:800px) {
-  .v3-real-featured { grid-template-columns:1fr; gap:18px; padding:20px; }
-  .v3-real-featured-copy h1 { font-size:clamp(26px,5.4vw,37px); }
+  .v3-real-featured { grid-template-columns:1fr; gap:10px; padding:12px; }
+  .v3-real-featured-copy h1 { font-size:20px; }
   .v3-real-featured-gallery { max-width:670px; }
 }
 @media(max-width:610px) {
