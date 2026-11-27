@@ -811,7 +811,7 @@ export function V3RealWorkspace() {
   return <WorkspaceShell
     brand={<><span className="v3-preview-brand"><BrandMark size={36} title="Live Memory 标识" /></span>
       <strong className="v3-preview-brand-name">Live Memory</strong>
-      <small>V3 · 现场记忆</small></>}
+      </>}
     navigation={navButtons}
     mobileNavigation={navButtons}
     navigationLayout="top"
@@ -820,13 +820,13 @@ export function V3RealWorkspace() {
     showStatusCenter={false}
     activity={{type:"idle"}}
     toolbar={<div className="v3-real-topbar">
-      <div>
+      <div className="v3-real-context">
         <strong>{page==="档案"?"演出档案":page==="数据"?"数据与备份":page}</strong>
         <small>{canEditLocal?"本机档案可编辑"
           : canEditAccount?"当前账户 · 云端同步可用"
           : canEditLegacyAccount?"当前账户 · 本机修改待同步"
           : "正在连接你的档案"}</small></div>
-      <div className="v3-real-topbar-stats"><b>{active.length}<small>档案</small></b>
+      <div className="v3-real-topbar-stats"><b>{visibleModel.records.length}<small>档案</small></b>
         <b>{visibleModel.watchedCount}<small>已看</small></b>
         <b>{visibleModel.cities.length}<small>城市</small></b></div>
       <div className="v3-real-topbar-actions" aria-label="档案操作">
@@ -931,7 +931,6 @@ export function V3RealWorkspace() {
               {collectionModes.map(label=>
                 <option key={label} value={label}>{label}</option>)}
             </select>}/>
-        </div>
         <div className="v3-real-refine-bar" aria-label="档案筛选和排序">
           <label>状态<select aria-label="按观演状态筛选" value={filterStatus}
             onChange={e=>setFilterStatus(e.target.value as typeof filterStatus)}>
@@ -961,7 +960,8 @@ export function V3RealWorkspace() {
             onClick={()=>setFeaturedOpen(value=>!value)}>精选现场 {featuredOpen?"收起":"展开"}</button>}
           {filterApplied&&<button type="button" className="v3-real-refine-clear"
             onClick={clearArchiveFilters}>清除筛选</button>}
-          <span>{active.length} / {describeRealArchive(records).records.length} 场</span>
+          <span className="v3-real-results" aria-live="polite">{filterApplied?"筛选结果":"全部演出"} <b>{active.length}</b> / {visibleModel.records.length} 场</span>
+        </div>
         </div>
         {mode==="海报"&&featuredOpen&&<V3FeaturedHero posters={posters} frameRatio={frameRatio}
           onNaturalRatio={measurePoster} onBrowse={()=>setFeaturedOpen(false)}/>}
@@ -972,8 +972,7 @@ export function V3RealWorkspace() {
             onOpen={setSelectedId}
             onEdit={canEdit?startEdit:undefined}
             onShare={record=>{setShareRecord(record);setSelectedId(null);setSharing(true);}}/>:
-                mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel">
-          <header><h2>全部演出 <small>({active.length})</small></h2></header>
+                mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel" aria-label="全部演出">
           <div className="v3-real-poster-grid">
             {active.map(record=><PosterCard key={record.id} record={record}
               onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
@@ -991,8 +990,7 @@ export function V3RealWorkspace() {
             </div>
           </div>)}
         </section>:
-        <section className="v3-real-panel v3-real-index-panel">
-          <header><h2>演出索引 <small>({active.length})</small></h2></header>
+        <section className="v3-real-panel v3-real-index-panel" aria-label="演出索引">
           <div className="v3-real-index-list">
             {active.map(record=><RecordIndexCard key={record.id} record={record}
               onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}

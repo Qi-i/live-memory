@@ -16,7 +16,7 @@ const fixture=(id,title,city,status,extra={})=>({
 });
 let passed=0;
 try {
- for(const [width,height] of [[390,844],[768,1024],[1024,820],[1440,900]]) {
+ for(const [width,height] of [[390,844],[768,1024],[1024,820],[1440,900],[1690,896]]) {
   const context=await browser.newContext({viewport:{width,height},serviceWorkers:"block"});
   await context.addInitScript(()=>{
     localStorage.setItem("live-memory-device-only-v1","1");
@@ -284,7 +284,7 @@ try {
   });
   if(initial!==after)throw Error("Read-only browsing modified IndexedDB");
   // 36+ real rows are visible in one scroll: no pagination or 18-item limit.
-  if(width===1440){
+  if(width===1690){
     const rows=Array.from({length:35},(_,i)=>fixture(
       "bulk-"+i,"连续档案回归 "+i,"北京","watched",
       {artists:["测试艺人"+i],date:"2026-08-01"},
@@ -305,6 +305,22 @@ try {
     await page.locator(".v3-real-poster-card").first().waitFor();
     const cards=await page.locator(".v3-real-poster-card").count();
     if(cards!==37)throw Error("All 37 records must be on one scrolling page: "+cards);
+    const density=await page.evaluate(()=>{
+      const rect=selector=>document.querySelector(selector).getBoundingClientRect();
+      const header=rect(".v3-global-toolbar");
+      const controls=rect(".v3-real-archive-controls");
+      const wall=rect(".v3-real-poster-grid");
+      const rows=[...document.querySelectorAll(".v3-real-poster-card")].map(card=>card.getBoundingClientRect());
+      return {headerHeight:header.height,controlsHeight:controls.height,firstPosterTop:wall.top,
+        sidebarVisible:getComputedStyle(document.querySelector(".v3-sidebar")).display!=="none",
+        fullCards:rows.filter(row=>row.top>=0&&row.bottom<=innerHeight).length,
+        columns:getComputedStyle(document.querySelector(".v3-real-poster-grid")).gridTemplateColumns.split(/\s+/).length};
+    });
+    console.log("1690×896 archive density:",JSON.stringify(density));
+    if(density.sidebarVisible||density.headerHeight>100||density.controlsHeight>115||
+       density.firstPosterTop>210||density.fullCards<12||density.columns<7)
+      throw Error("Desktop archive still wastes the first screen: "+JSON.stringify(density));
+    await page.screenshot({path:`${output}/archive-density-1690.png`,fullPage:false});
     if(await page.getByRole("button",{name:"下一页"}).count())
       throw Error("Pagination must not interrupt a long archive");
     for(const [name,selector] of [
