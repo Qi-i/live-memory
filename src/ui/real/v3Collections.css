@@ -90,8 +90,13 @@
 
 /* Readable information density across the seven native archive views:
  * reduce decorative whitespace rather than shrinking content on small screens. */
-.v3-collection{gap:14px;padding:clamp(13px,1.6vw,20px)}
+.v3-collection{gap:10px;padding:12px}
 .v3-collection>header{gap:4px}
+.v3-collection-showcase-grid{align-items:start;gap:10px}
+.v3-collection-wallet-grid,.v3-collection-stubs,.v3-collection-summary-grid{align-items:start;gap:10px}
+.v3-collection-calendar-grid [role=gridcell]:not(.has-events){min-height:64px}
+.v3-collection-places-grid{align-items:start;gap:10px}
+.v3-collection-places-grid>article{padding:12px;gap:7px}
 .v3-collection>header>p{font-size:13px;line-height:1.48}
 .v3-collection-meta{font-size:12.5px;line-height:1.45}
 .v3-collection-showcase-caption>strong{font-size:14px;line-height:1.42}
