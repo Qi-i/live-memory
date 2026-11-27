@@ -1,7 +1,7 @@
 import {useEffect,useMemo,useState,type CSSProperties} from "react";
 import {CalendarDays,MapPin,Music2,Ticket,ArrowUpRight} from "lucide-react";
 import type {EventRecord} from "../../domain";
-import {categoryLabels,primaryMedia,statusLabels} from "../../domain";
+import {categoryLabels,primaryMedia,statusLabels,effectiveStatus} from "../../domain";
 import {useCachedMediaSrc} from "../../mediaCache";
 import {AdaptivePoster} from "./AdaptivePoster";
 import {groupByCity,groupByArtist,summarizeRecordedPrices,groupCalendarDays} from "./collectionMetrics";
@@ -29,7 +29,7 @@ function Artwork({record,frameRatio=2/3}:{
 }
 function Meta({record}:{record:EventRecord}){
   return <span className="v3-collection-meta">
-    {record.date||"日期待补"} · {record.city||"城市待补"} · {statusLabels[record.status]}
+    {record.date||"日期待补"} · {record.city||"城市待补"} · {statusLabels[effectiveStatus(record)]}
   </span>;
 }
 function Actions({record,onOpen,onEdit,onShare}:Props&{record:EventRecord}){
@@ -48,7 +48,7 @@ function Showcase({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
         className={index===0?"is-featured":""}>
         <button type="button" className="v3-collection-showcase-image"
           aria-label={"查看 "+record.title} onClick={()=>onOpen(record.id)}>
-          <Artwork record={record} frameRatio={index===0?4/5:2/3}/>
+          <Artwork record={record} frameRatio={2/3}/>
         </button>
         <div className="v3-collection-showcase-caption">
           <strong>{record.title}</strong>
@@ -70,7 +70,7 @@ function Wallet({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
         style={{"--ticket-a":record.colors[0],"--ticket-b":record.colors[1]} as CSSProperties}>
         <div className="v3-collection-wallet-cover"><Artwork record={record}/></div>
         <div className="v3-collection-wallet-info">
-          <span>{categoryLabels[record.category]} · {statusLabels[record.status]}</span>
+          <span>{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</span>
           <h3>{record.title}</h3>
           <p>{record.artists.join(" · ")||"艺人待补"}</p>
           <div><CalendarDays size={14}/>{record.date||"日期待补"}</div>
@@ -175,33 +175,45 @@ function Places({records,onOpen}:Pick<Props,"records"|"onOpen">){
 }
 function Costs({records,onOpen}:Pick<Props,"records"|"onOpen">){
   const priceSummary=useMemo(()=>summarizeRecordedPrices(records),[records]);
+  const [priceOrder,setPriceOrder]=useState("high");
+  const ranked=useMemo(()=>[...records].sort((a,b)=>priceOrder==="date"?b.date.localeCompare(a.date):priceOrder==="low"?(a.price??Infinity)-(b.price??Infinity):(b.price??-1)-(a.price??-1)),[records,priceOrder]);
+  const max=Math.max(1,...records.map(r=>r.price??0));
   const format=(n:number)=>"¥"+n.toLocaleString("zh-CN",{maximumFractionDigits:2});
   return <section className="v3-collection" aria-label="票价视图">
-    <header><span>YOUR SHOW BUDGET</span><h2>票价记录</h2>
-      <p>仅汇总已填写的票价；不把票面价推定为实际支付额。</p></header>
+    <header><h2>票价记录</h2><p>票面金额 · 不含未记录票价</p></header>
     <div className="v3-collection-cost-totals">
       <article><small>已记录票价合计</small><strong>{format(priceSummary.total)}</strong></article>
       <article><small>有票价的场次</small><strong>{priceSummary.count}</strong></article>
+      <article><small>平均票价</small><strong>{priceSummary.count?format(priceSummary.total/priceSummary.count):"—"}</strong></article>
       <article><small>未填写价格</small><strong>{priceSummary.missing}</strong></article>
     </div>
-    <div className="v3-collection-cost-list">
-      {records.map(record=><button key={record.id} type="button" onClick={()=>onOpen(record.id)}>
+    <label className="v3-collection-local-filter">票价排序 <select aria-label="票价视图排序" value={priceOrder} onChange={e=>setPriceOrder(e.target.value)}><option value="high">从高到低</option><option value="low">从低到高</option><option value="date">按日期</option></select></label>
+    <div className="v3-collection-cost-list v3-cost-ranked">
+      {ranked.map(record=><button key={record.id} type="button" onClick={()=>onOpen(record.id)}>
         <time>{record.date}</time><strong>{record.title}</strong>
+        <i className="v3-price-track" aria-hidden="true"><b style={{width:Math.max(0,100*(record.price??0)/max)+"%"}}/></i>
         <span>{typeof record.price==="number"?format(record.price):"票价未记录"}</span>
       </button>)}
     </div>
   </section>;
 }
 function Summary({records,onOpen}:Pick<Props,"records"|"onOpen">){
-  const artists=useMemo(()=>groupByArtist(records),[records]);
+  const [dimension,setDimension]=useState<"艺人"|"城市"|"类型"|"标签">("艺人");
+  const artists=useMemo(()=>{
+    if(dimension==="艺人")return groupByArtist(records);
+    if(dimension==="城市")return groupByCity(records);
+    const groups=new Map<string,EventRecord[]>();
+    for(const r of records)for(const label of new Set(dimension==="类型"?[categoryLabels[r.category]]:r.tags.filter(Boolean)))groups.set(label,[...(groups.get(label)||[]),r]);
+    return [...groups].sort((a,b)=>b[1].length-a[1].length||a[0].localeCompare(b[0],"zh"));
+  },[records,dimension]);
   return <section className="v3-collection" aria-label="艺人汇总视图">
-    <header><span>ARTISTS YOU HAVE SEEN</span><h2>艺人与现场汇总</h2>
-      <p>按实际演出记录聚合，不将同一场的重复阵容算作多场。</p></header>
+    <header><h2>艺人与现场汇总</h2><p>按{dimension}汇总 · {artists.length} 组</p></header>
+    <div className="v3-summary-dimensions" role="group" aria-label="汇总维度">{(["艺人","城市","类型","标签"] as const).map(item=><button key={item} type="button" aria-pressed={dimension===item} onClick={()=>setDimension(item)}>{item}</button>)}</div>
     <div className="v3-collection-summary-grid">
       {artists.map(([artist,shows])=><article key={artist}>
         <div className="v3-collection-summary-art"><Artwork record={shows[0]}/></div>
         <div className="v3-collection-summary-content">
-          <span><Music2 size={14}/> ARTIST / {shows.length} SHOWS</span>
+          <span><Music2 size={14}/> {dimension} · {shows.length} 场</span>
           <h3>{artist}</h3>
           <p>{new Set(shows.map(r=>r.city).filter(Boolean)).size} 座城市 · 最近 {shows[0]?.date}</p>
           <div>{shows.map(show=><button type="button" key={show.id} onClick={()=>onOpen(show.id)}>
