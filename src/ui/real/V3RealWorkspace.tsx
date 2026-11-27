@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil } from "lucide-react";
+import { Pencil, MapPin, CloudAlert } from "lucide-react";
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
-import type { EventRecord, MediaAsset } from "../../domain";
+import type { AppSettings, EventRecord, MediaAsset } from "../../domain";
 import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
-import { currentStorageScope, listRecords, normalizeRecord, readSettings } from "../../storage";
+import { currentStorageScope, listRecords, normalizeRecord, readSettings, writeSettings } from "../../storage";
+import { VenueView } from "../../archive";
 import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
 import { resolveMediaSource, useCachedMediaSrc } from "../../mediaCache";
 import { describeRealArchive, isWatchedRealRecord } from "../../core/application/describeRealArchive";
@@ -18,7 +19,7 @@ import { createConcertReminderHandoff } from "../../core/application/concertRemi
 import { hasPersonalCloudConnection } from "../../supabase";
 import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
-import { ActionToolbar, MapSplitPane, WorkspaceShell } from "../system/WorkspaceShell";
+import { ActionToolbar, WorkspaceShell } from "../system/WorkspaceShell";
 import { useDialogBehavior } from "../useDialogBehavior";
 import { curateFeaturedRecords } from "./curateFeaturedRecords";
 import { V3FeaturedHero } from "./V3FeaturedHero";
@@ -183,18 +184,35 @@ function RecordIndexCard({record,onOpen,onEdit,frameRatio}:{
   </article>;
 }
 function RealStatistics({ records }: { records: EventRecord[] }) {
-  const data = useMemo(() => describeRealArchive(records), [records]);
+  const [year,setYear]=useState("");
+  const all=useMemo(()=>describeRealArchive(records),[records]);
+  const data = useMemo(() => describeRealArchive(year?records.filter(r=>r.date.startsWith(year+"-")):records), [records,year]);
+  const watched=data.records.filter(r=>isWatchedRealRecord(r));
+  const priced=watched.filter(r=>typeof r.price==="number"&&Number.isFinite(r.price));
+  const total=priced.reduce((sum,r)=>sum+(r.price??0),0);
+  const artists=new Map<string,number>();
+  for(const row of watched)for(const artist of new Set(row.artists))artists.set(artist,(artists.get(artist)||0)+1);
+  const ranked=[...artists].sort((a,b)=>b[1]-a[1]).slice(0,10);
+  const months=Array.from({length:12},(_,i)=>({label:String(i+1)+"月",total:watched.filter(r=>r.date.slice(5,7)===String(i+1).padStart(2,"0")).length}));
   return (
     <section className="v3-real-panel">
-      <header><h1>观演统计</h1>
-        <p>按本机实际档案计算，取消、退款和删除的记录不计入已看场次。</p></header>
+      <header className="v3-stats-heading"><h1>观演统计</h1>
+        <label>年份 <select aria-label="统计年份" value={year} onChange={e=>setYear(e.target.value)}>
+          <option value="">全部年份</option>{all.years.map(row=><option key={row.year}>{row.year}</option>)}
+        </select></label></header>
       <div className="v3-real-metrics">
         <article><strong>{data.records.length}</strong><span>有效档案</span></article>
         <article><strong>{data.watchedCount}</strong><span>已看演出</span></article>
         <article><strong>{data.cities.length}</strong><span>涉及城市</span></article>
-        <article><strong>{data.mediaCount}</strong><span>媒体附件</span></article>
+        <article><strong>¥{total.toLocaleString("zh-CN",{maximumFractionDigits:2})}</strong><span>已看演出票价</span><small>{priced.length} 场有票价记录</small></article>
       </div>
       <div className="v3-real-breakdown">
+        <div><h2>{year||"历年"}月度观演</h2><div className="v3-stats-months">
+          {months.map(m=><div key={m.label}><b>{m.total}</b><span><i style={{height:100*m.total/Math.max(1,...months.map(x=>x.total))+"%"}}/></span><small>{m.label}</small></div>)}
+        </div></div>
+        <div><h2>常看艺人</h2>{ranked.map(([label,count])=><div className="v3-real-bar-row" key={label}>
+          <span title={label}>{label}</span><div><i style={{width:100*count/Math.max(1,...ranked.map(r=>r[1]))+"%"}}/></div><b>{count}</b>
+        </div>)}{!ranked.length&&<p>暂无已看艺人记录</p>}</div>
         <div><h2>年度分布</h2>
           {data.years.map(item => <div className="v3-real-bar-row" key={item.year}>
             <span>{item.year}</span>
@@ -213,73 +231,16 @@ function RealStatistics({ records }: { records: EventRecord[] }) {
     </section>
   );
 }
-function RealCityMap({ records, chosenCity }: { records: EventRecord[]; chosenCity: string | null }) {
-  const positions = records.filter(r => r.coordinates &&
-    Number.isFinite(r.coordinates.lng) && Number.isFinite(r.coordinates.lat) &&
-    Math.abs(r.coordinates.lng) <= 180 && Math.abs(r.coordinates.lat) <= 90);
-  const providers = new Set(positions.map(r => r.coordinates?.provider || "unmarked"));
-  // Different coordinate reference systems must not be mixed in a fake map.
-  const mapped = providers.size <= 1 ? positions : [];
-  const allX = mapped.map(r => r.coordinates!.lng);
-  const allY = mapped.map(r => r.coordinates!.lat);
-  const minX = Math.min(...allX), maxX = Math.max(...allX);
-  const minY = Math.min(...allY), maxY = Math.max(...allY);
-  return (
-    <div className="v3-real-map">
-      <h2>已记录的经纬度</h2>
-      <p>仅展示档案中实际保存的坐标。相对位置示意，无地图底图，不用于距离测量。</p>
-      {mapped.length ? <svg role="img" aria-label={mapped.length+" 条带坐标的演出分布"} viewBox="0 0 1000 480"
-        preserveAspectRatio="xMidYMid meet">
-        <rect x="16" y="16" width="968" height="448" rx="14" fill="none" stroke="currentColor" opacity=".15"/>
-        {mapped.map(row => {
-          const point = row.coordinates!;
-          const x = 65 + (maxX === minX ? .5 : (point.lng-minX)/(maxX-minX))*870;
-          const y = 430 - (maxY === minY ? .5 : (point.lat-minY)/(maxY-minY))*375;
-          return <g key={row.id} opacity={chosenCity && chosenCity !== row.city ? .22 : 1}>
-            <circle cx={x} cy={y} r={chosenCity===row.city?11:8}
-              fill={chosenCity===row.city?"#7563bd":"#4c82b8"} stroke="white" strokeWidth="2"/>
-            <title>{row.title} · {row.city}</title>
-          </g>;
-        })}
-      </svg> : <div className="v3-real-map-empty">
-        {providers.size > 1 ? "坐标系混用，已停止叠加显示以免产生错误位置。" :
-          "当前档案没有可直接绘制的有效经纬度，未虚构任何城市坐标。"}
-      </div>}
-      <small>{mapped.length} 条有效坐标 / {records.length} 条档案
-        {chosenCity ? " · 已选择 " + chosenCity : ""}</small>
-    </div>
-  );
-}
-function RealCityView({ records, onOpen }: { records: EventRecord[]; onOpen: (id: string) => void }) {
-  const data=useMemo(()=>describeRealArchive(records),[records]);
-  const [city,setCity]=useState<string|null>(null);
-  const selected=data.records.filter(row=>row.city===city);
-  return <MapSplitPane
-    map={<RealCityMap records={data.records} chosenCity={city} />}
-    list={<div className="v3-real-city-list">
-      <header><span>ACTUAL FOOTPRINTS</span><h2>城市与场馆</h2>
-        <p>来自真实档案，点击城市查看对应演出。</p></header>
-      {data.cities.map(item=><button type="button" key={item.city} aria-pressed={item.city===city}
-        onClick={()=>setCity(item.city===city?null:item.city)}>
-        <strong title={item.city}>{item.city}</strong><span>已看 {item.watched}</span><b>{item.total}</b>
-      </button>)}
-      {!data.cities.length && <p>尚无城市记录。</p>}
-    </div>}
-    detail={city && <div className="v3-real-map-details">
-      <header><strong>{city} · {selected.length} 场</strong>
-        <button type="button" onClick={()=>setCity(null)} aria-label="关闭城市记录">×</button></header>
-      {selected.map(row=><button type="button" key={row.id} onClick={()=>onOpen(row.id)}>
-        <strong>{row.title}</strong><small>{row.date} · {row.venue}</small>
-      </button>)}
-    </div>}
-  />;
-}
 export function V3RealWorkspace() {
   const access=useAccess();
   const [page,setPage]=useState<Page>("档案");
   const [showLegacyDiagnostics,setShowLegacyDiagnostics]=useState(false);
   const [mode,setMode]=useState<Mode>(savedArchiveMode);
   const [featuredOpen,setFeaturedOpen]=useState(false);
+  const [posterSize,setPosterSize]=useState<"compact"|"balanced"|"large">(()=>{
+    try{const v=localStorage.getItem("live-memory-poster-size");return v==="compact"||v==="large"?v:"balanced";}catch{return "balanced";}
+  });
+  useEffect(()=>{try{localStorage.setItem("live-memory-poster-size",posterSize);}catch{}},[posterSize]);
   useEffect(()=>{
     try{window.localStorage.setItem(viewPreferenceKey,mode);}catch{ /* private browsing */ }
   },[mode]);
@@ -307,6 +268,9 @@ export function V3RealWorkspace() {
   }|null>(null);
   const [editing,setEditing]=useState<{draft:EventRecord;baseline:EventRecord|null;scope:string}|null>(null);
   const [notice,setNotice]=useState("");
+  const [syncIssue,setSyncIssue]=useState("");
+  const [mapEditor,setMapEditor]=useState<{scope:string;map:AppSettings["map"]}|null>(null);
+  const [mapRevision,setMapRevision]=useState(0);
   const [cloudMode,setCloudMode]=useState<{scope:string;mode:"v2"|"v3";error:string}>({
     scope:"",mode:"v2",error:"",
   });
@@ -377,11 +341,22 @@ export function V3RealWorkspace() {
                 setReload(n=>n+1);
                 setNotice(`已核对并自动接管 ${changed} 条旧版档案的媒体路径；原始数据仍完整保留。`);
               }
+              const review=await runtime.audit();
+              if(!alive||currentStorageScope()!==scope)return;
+              setSyncIssue(review.requiresMigrationReview?`${review.unresolved} 条档案需要核对版本。`:
+                review.actions["push-new"]||review.actions["pull-new"]?"存在尚未同步的新增档案。":"");
             }
             readyForRescue=true;
           }catch{
-            if(alive&&currentStorageScope()===scope)
-              setNotice("已保留本机旧版档案：云端和本机存在未同步差异，或原图暂不可用。没有自动覆盖任何内容。");
+            if(alive&&currentStorageScope()===scope){
+              try{
+                const audit=await runtime.audit();
+                if(alive&&currentStorageScope()===scope)
+                  setSyncIssue(audit.requiresMigrationReview?`${audit.unresolved} 条档案需要核对版本。`:audit.actions["push-new"]||audit.actions["pull-new"]?"存在尚未同步的档案。":"档案已核对，部分历史原图仍待检查。");
+              }catch{
+                if(alive&&currentStorageScope()===scope)setSyncIssue("暂时无法核对云端档案，请重试同步。");
+              }
+            }
           }
         }
         if(alive&&currentStorageScope()===scope)
@@ -447,7 +422,7 @@ export function V3RealWorkspace() {
   },[access.mode,access.user?.id,validScope,reload]);
   // A manual refresh must not erase the save confirmation. Only switching
   // accounts should clear the status notice from the previous identity.
-  useEffect(()=>{setNotice("");setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
+  useEffect(()=>{setNotice("");setSyncIssue("");setMapEditor(null);setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
   const frameRatio=useMemo(()=>dominantPosterRatio(Object.values(posterRatios)),
     [posterRatios]);
@@ -459,7 +434,7 @@ export function V3RealWorkspace() {
     const all=describeRealArchive(records).records;
     return {
       cities:[...new Set(all.map(row=>row.city.trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,"zh")),
-      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\\d{4}$/.test(y)))].sort().reverse(),
+      years:[...new Set(all.map(row=>row.date.slice(0,4)).filter(y=>/^\d{4}$/.test(y)))].sort().reverse(),
     };
   },[records]);
   const active=useMemo(()=>model.records.filter(row=>
@@ -477,7 +452,7 @@ export function V3RealWorkspace() {
     setSearch("");setFilterStatus("all");setFilterCity("");setFilterYear("");
     setFavoritesOnly(false);setSortMode("newest");
   };
-  const visibleModel=useMemo(()=>describeRealArchive(active),[active]);
+  const visibleModel=useMemo(()=>describeRealArchive(records),[records]);
   const firstPosters=useMemo(()=>curateFeaturedRecords(
     describeRealArchive(records).records, record=>Boolean(primaryMedia(record)),5,
   ),[records]);
@@ -721,7 +696,8 @@ export function V3RealWorkspace() {
       const audit=await scoped.runtime.audit();
       if(audit.requiresMigrationReview){
         setTransferApproval(null);
-        setNotice("检测到历史记录分歧或缺失，已停止同步。请在 V2 设置中查看迁移差异并解决冲突。");
+        setSyncIssue("存在需要确认的历史版本差异。");
+        setNotice("请在数据与备份中核对历史版本差异。");
         return;
       }
       const push=audit.actions["push-new"],pull=audit.actions["pull-new"];
@@ -738,11 +714,13 @@ export function V3RealWorkspace() {
       });
       if(currentStorageScope()!==scoped.scope)throw Error("V3_ACCOUNT_SESSION_CHANGED");
       setTransferApproval(null);
+      setSyncIssue(result.deferredIds.length?"部分档案待重试。":"");
       setNotice(`同步完成：上传 ${result.uploadedIds.length} 条、
         下载 ${result.downloadedIds.length} 条，待重试 ${result.deferredIds.length} 条。`);
       setReload(n=>n+1);
     }catch(error){
       const reason=error instanceof Error?error.message:"";
+      setSyncIssue("同步待处理");
       setNotice(reason.includes("V3_SYNC_MIGRATION_REVIEW_REQUIRED")
         ? "云端或本机存在需要审查的历史差异；没有进行覆盖式同步。"
         : "同步未完成：身份变化、网络故障或云端版本冲突。已保留本机记录，请重新检查。");
@@ -822,10 +800,14 @@ export function V3RealWorkspace() {
     toolbar={<div className="v3-real-topbar">
       <div className="v3-real-context">
         <strong>{page==="档案"?"演出档案":page==="数据"?"数据与备份":page}</strong>
-        <small>{canEditLocal?"本机档案可编辑"
+        <small>{canEditLocal?"本机档案"
           : canEditAccount?"当前账户 · 云端同步可用"
           : canEditLegacyAccount?"当前账户 · 本机修改待同步"
           : "正在连接你的档案"}</small></div>
+      {syncIssue&&<details className="v3-sync-status"><summary><CloudAlert size={16}/> 同步待处理</summary>
+        <div><p>{syncIssue}</p><button type="button" onClick={()=>{setPage("数据");setShowLegacyDiagnostics(true);}}>查看同步诊断</button>
+          {canEditAccount&&<button type="button" onClick={()=>void safeSync()} disabled={syncBusy}>重试同步</button>}</div>
+      </details>}
       <div className="v3-real-topbar-stats"><b>{visibleModel.records.length}<small>档案</small></b>
         <b>{visibleModel.watchedCount}<small>已看</small></b>
         <b>{visibleModel.cities.length}<small>城市</small></b></div>
@@ -863,11 +845,24 @@ export function V3RealWorkspace() {
               event.currentTarget.closest("details")?.removeAttribute("open");
               setPage("数据");
             }}>数据与备份</button>
+            <button type="button" onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");backToV2();}}>经典版 V2</button>
           </div>
         </details>
       </div>
     </div>}
-    overlay={importOpen && canEdit
+    overlay={mapEditor&&mapEditor.scope===actualScope
+      ? <div className="v3-real-modal-backdrop"><section className="v3-real-modal v3-map-settings" role="dialog" aria-label="地图设置" aria-modal="true">
+        <header><h2>地图设置</h2><button type="button" aria-label="关闭地图设置" onClick={()=>setMapEditor(null)}>×</button></header>
+        <label>地图来源<select value={mapEditor.map.provider} onChange={e=>setMapEditor({...mapEditor,map:{...mapEditor.map,provider:e.target.value as AppSettings["map"]["provider"]}})}>
+          <option value="offline">离线城市摘要</option><option value="amap">高德地图</option></select></label>
+        {mapEditor.map.provider==="amap"&&<><label>高德 Web API Key<input type="password" autoComplete="off" value={mapEditor.map.amapKey} onChange={e=>setMapEditor({...mapEditor,map:{...mapEditor.map,amapKey:e.target.value}})}/></label>
+          <label>安全密钥<input type="password" autoComplete="off" value={mapEditor.map.amapSecurityCode} onChange={e=>setMapEditor({...mapEditor,map:{...mapEditor.map,amapSecurityCode:e.target.value}})}/></label></>}
+        <footer><button type="button" onClick={()=>setMapEditor(null)}>取消</button><button type="button" onClick={()=>{
+          if(currentStorageScope()!==mapEditor.scope)return;
+          writeSettings({...readSettings(),map:mapEditor.map});setMapRevision(n=>n+1);setMapEditor(null);
+        }}>保存地图设置</button></footer>
+      </section></div>
+      : importOpen && canEdit
       ? <ImportDrawer
           onClose={()=>{
             setImportOpen(false);
@@ -888,7 +883,7 @@ export function V3RealWorkspace() {
           mapSettings={readSettings().map}
           onOpenMapSettings={()=>{
             setSharing(false);
-            setNotice("地图密钥尚未在 V3 中单独配置；请先在 V2 设置页配置，再返回 V3 分享。");
+            setMapEditor({scope:actualScope,map:readSettings().map});
           }}
           onClose={()=>{setSharing(false);setShareRecord(null);}}/>
       : editing && editing.scope===actualScope && canEdit
@@ -960,6 +955,9 @@ export function V3RealWorkspace() {
             onClick={()=>setFeaturedOpen(value=>!value)}>精选现场 {featuredOpen?"收起":"展开"}</button>}
           {filterApplied&&<button type="button" className="v3-real-refine-clear"
             onClick={clearArchiveFilters}>清除筛选</button>}
+          {mode==="海报"&&<label className="v3-poster-size">海报大小<select aria-label="海报大小" value={posterSize} onChange={e=>setPosterSize(e.target.value as typeof posterSize)}>
+            <option value="balanced">标准</option><option value="compact">紧凑</option><option value="large">大图</option>
+          </select></label>}
           <span className="v3-real-results" aria-live="polite">{filterApplied?"筛选结果":"全部演出"} <b>{active.length}</b> / {visibleModel.records.length} 场</span>
         </div>
         </div>
@@ -973,7 +971,7 @@ export function V3RealWorkspace() {
             onEdit={canEdit?startEdit:undefined}
             onShare={record=>{setShareRecord(record);setSelectedId(null);setSharing(true);}}/>:
                 mode==="海报"?<section className="v3-real-panel v3-real-gallery-panel" aria-label="全部演出">
-          <div className="v3-real-poster-grid">
+          <div className="v3-real-poster-grid" data-poster-size={posterSize}>
             {active.map(record=><PosterCard key={record.id} record={record}
               onOpen={setSelectedId} onEdit={canEdit?startEdit:undefined}
               frameRatio={frameRatio} onNaturalRatio={measurePoster}/>)}
@@ -1035,7 +1033,12 @@ export function V3RealWorkspace() {
         </section>
       </>}
 
-      {page==="城市" && <RealCityView records={records} onOpen={setSelectedId}/>}
+      {page==="城市" && <section className="v3-city-workspace" aria-label="城市与场馆">
+        <header><h1>城市与场馆</h1><span><MapPin size={16}/> {describeRealArchive(records).cities.length} 座城市</span></header>
+        <VenueView key={mapRevision} records={describeRealArchive(records).records} mapSettings={readSettings().map}
+          onOpenMapSettings={()=>setMapEditor({scope:actualScope,map:readSettings().map})}
+          onOpen={record=>setSelectedId(record.id)}/>
+      </section>}
     </>}
   </WorkspaceShell>;
 }

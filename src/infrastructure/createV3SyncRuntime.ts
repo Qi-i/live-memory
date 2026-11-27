@@ -180,6 +180,14 @@ export class V3SyncRuntime {
        await this.remote.writerMode()!=="v3"){
       throw Error("V3_ADOPTION_AUTHENTICATED_CUTOVER_REQUIRED");
     }
+    // Once this browser has acknowledged V3 revisions, ordinary additions
+    // and edits belong to the revision ledger, not the one-time V2 migration.
+    // Repeating the strict legacy inventory comparison on every refresh
+    // creates false migration failures for normal V3 changes.
+    if((await this.ledger.snapshot()).size>0){
+      await this.bootstrapMatchingHistory();
+      return 0;
+    }
     const local=await this.local.list();
     if(!local.length)return 0; // A completely fresh browser uses first-device pull.
     const first=await this.remote.list();
