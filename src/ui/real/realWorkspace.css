@@ -34,6 +34,8 @@
   background:#fff;box-shadow:0 12px 34px rgba(32,42,78,.17);
 }
 .v3-real-more-menu button { width:100%;text-align:left;white-space:nowrap; }
+.v3-real-more-menu a {display:block;padding:8px 10px;color:inherit;font-size:13px;text-decoration:none;white-space:nowrap;border-radius:6px;}
+.v3-real-more-menu a:is(:hover,:focus-visible) {background:var(--v3-accent-tint,#e6f0e9);outline-offset:2px;}
 .v3-real-data-heading { gap:8px;padding:clamp(14px,1.6vw,20px); }
 .v3-real-advanced-data {
   display:grid;gap:12px;align-content:start;min-width:0;padding:14px;

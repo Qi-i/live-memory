@@ -878,6 +878,8 @@ export function V3RealWorkspace() {
               setPage("数据");
             }}>数据与备份</button>
             <button type="button" onClick={event=>{event.currentTarget.closest("details")?.removeAttribute("open");backToV2();}}>经典版 V2</button>
+            <a href="https://qiledger.pages.dev/" target="_blank" rel="noopener noreferrer" title="在 Qi-Ledger 中关联场次并记录实际消费">演出消费 · Qi-Ledger</a>
+            <a href="https://qihub.pages.dev/" target="_blank" rel="noopener noreferrer">QiHub 工作台</a>
           </div>
         </details>
       </div>
