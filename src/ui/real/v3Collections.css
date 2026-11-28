@@ -328,6 +328,28 @@
 
 .v3-collection{box-shadow:none;background:var(--v3-card-bg);border-color:var(--v3-card-border)}
 .v3-collection>header>span{display:none}
+.v3-memory-journal-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:14px;align-items:start}
+.v3-memory-journal-grid>article{display:grid;grid-template-columns:minmax(84px,30%) minmax(0,1fr);gap:14px;padding:14px;background:#fcfaf4;border:1px solid #e5dfd1;border-radius:12px;color:#29382e}
+.v3-memory-journal-grid>article>div{min-width:0;display:grid;gap:7px}
+.v3-memory-journal-art{border:0;padding:0;background:transparent;align-self:start;cursor:pointer}
+.v3-memory-journal-grid h3{font-size:18px;line-height:1.35;margin:0;overflow-wrap:anywhere}
+.v3-memory-journal-artists{margin:0;color:#68766d;font-size:13px}
+.v3-memory-journal-note{margin:0;white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.8;font-size:14px}
+.v3-memory-journal-grid details{border-top:1px solid #e5dfd1;padding:8px 0;font-size:13px}
+.v3-memory-journal-grid summary{cursor:pointer;font-weight:600}
+.v3-memory-journal-grid ol{padding-left:20px;line-height:1.7}
+.v3-itinerary-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,440px),1fr));gap:12px;align-items:start}
+.v3-itinerary-list>button{display:grid;grid-template-columns:78px 72px minmax(0,1fr) auto;gap:12px;align-items:center;text-align:left;background:var(--v3-card-bg);color:var(--v3-ink);border:1px solid var(--v3-card-border);border-radius:12px;padding:12px;font:inherit;cursor:pointer}
+.v3-itinerary-date{display:grid;gap:3px;text-align:center;background:var(--v3-accent-tint);padding:9px 4px;border-radius:8px;color:var(--v3-accent)}
+.v3-itinerary-date small,.v3-itinerary-date span{font-size:11px}
+.v3-itinerary-date b{font-size:25px;font-variant-numeric:tabular-nums}
+.v3-itinerary-copy{display:grid;gap:5px;min-width:0;overflow-wrap:anywhere}
+.v3-itinerary-copy>strong{font-size:15px}
+.v3-itinerary-copy>small,.v3-itinerary-copy>span{font-size:12px;color:var(--v3-muted)}
+.v3-itinerary-copy>span{display:flex;align-items:center;gap:5px}
+.v3-itinerary-copy svg{flex-shrink:0}
+.v3-itinerary-price{font-size:13px;color:var(--v3-accent)}
+@container(max-width:570px){.v3-memory-journal-grid>article{padding:10px;gap:10px}.v3-itinerary-list>button{grid-template-columns:60px 46px minmax(0,1fr);gap:8px;padding:8px}.v3-itinerary-price{grid-column:3}}
 .v3-collection>header>h2{letter-spacing:0}
 .v3-collection-wallet{background:color-mix(in srgb,var(--ticket-a,#8caa9b) 6%,var(--v3-card-bg));border-left:3px solid color-mix(in srgb,var(--ticket-a,#8caa9b) 55%,#9cab9f)}
 .v3-collection-wallet-price{color:var(--v3-accent)!important}

@@ -118,7 +118,7 @@ try {
     throw Error("Migration is not a regular destination after V3 release");
   const selectMode=async(mode)=>{
     if(await page.locator(".v3-view-library").isVisible()){
-      if(await page.locator(".v3-view-library button").count()!==10)throw Error("Desktop view library must expose all ten layouts");
+      if(await page.locator(".v3-view-library button").count()!==12)throw Error("Desktop view library must expose all twelve layouts");
       await page.locator(".v3-view-library").getByRole("button",{name:mode,exact:true}).click();
     }else await page.getByLabel("更多档案视图").selectOption(mode);
   };
@@ -132,6 +132,14 @@ try {
   const expectedColumns=available>880?5:available>570?3:2;
   if(columns!==expectedColumns)throw Error("V3 collection columns ignore content width: "+
     JSON.stringify({width,columns,expectedColumns}));
+  await selectMode("回忆");
+  await page.locator(".v3-memory-journal-note").getByText("合成测试备注",{exact:true}).waitFor();
+  if(await page.locator(".v3-memory-journal-grid>article").count()!==1)throw Error("Memories must include only watched records with memories");
+  await selectMode("行程");
+  await page.locator(".v3-itinerary-list").getByText("郑州巡回演出 · 真实本机回归").waitFor();
+  if(await page.locator(".v3-itinerary-list>button").count()!==1)throw Error("Itinerary must not include watched records");
+  await page.getByRole("button",{name:"想看 · 0",exact:true}).click();
+  await page.getByText("暂无想看记录",{exact:true}).waitFor();
   await page.getByRole("button",{name:"海报",exact:true}).click();
   const posterGeometry=await page.locator(".v3-real-poster-card").first().evaluate(card=>{
     const media=card.querySelector(".v3-real-poster-image");
