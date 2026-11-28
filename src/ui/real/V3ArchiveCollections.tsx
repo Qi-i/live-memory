@@ -18,14 +18,17 @@ interface Props {
 }
 
 /** Native V3 experiences own their layout; the old V2 archive is not mounted. */
-function Artwork({record,frameRatio=2/3}:{
-  record:EventRecord;frameRatio?:number;
+function Artwork({record,frameRatio=2/3,natural=false}:{
+  record:EventRecord;frameRatio?:number;natural?:boolean;
 }){
   // Match the V3 archive and share privacy rule: ticket and seat-map photos
   // are never fallback artwork for a public-looking poster card.
-  const src=useCachedMediaSrc(primaryMedia(record, ["poster"]));
+  const asset=primaryMedia(record, ["poster"]);
+  const src=useCachedMediaSrc(asset);
+  const [ratio,setRatio]=useState<number|null>(null);
+  const actual=ratio||(asset?.width&&asset.height?asset.width/asset.height:frameRatio);
   return <AdaptivePoster src={src} alt={record.title+"海报"}
-    frameRatio={frameRatio} className="v3-collection-artwork"/>;
+    frameRatio={natural?Math.max(.48,Math.min(.92,actual)):frameRatio} onNaturalRatio={natural?setRatio:undefined} className="v3-collection-artwork"/>;
 }
 function Meta({record}:{record:EventRecord}){
   return <span className="v3-collection-meta">
@@ -44,11 +47,10 @@ function Showcase({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
     <header><span>THE LIVE EDITION</span><h2>现场画报</h2>
       <p>以海报构成你的现场收藏；每张都可以打开、编辑和分享。</p></header>
     <div className="v3-collection-showcase-grid">
-      {records.map((record,index)=><article key={record.id}
-        className={index===0?"is-featured":""}>
+      {records.map(record=><article key={record.id}>
         <button type="button" className="v3-collection-showcase-image"
           aria-label={"查看 "+record.title} onClick={()=>onOpen(record.id)}>
-          <Artwork record={record} frameRatio={2/3}/>
+          <Artwork record={record} natural/>
         </button>
         <div className="v3-collection-showcase-caption">
           <strong>{record.title}</strong>
@@ -93,20 +95,22 @@ function Stubs({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
         style={{"--ticket-a":record.colors[0],"--ticket-b":record.colors[1]} as CSSProperties}>
         <div className="v3-collection-stub-cover"><Artwork record={record}/></div>
         <div className="v3-collection-stub-main">
-          <span>LIVE MEMORY / ADMIT ONE</span>
+          <span>{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</span>
           <h3>{record.title}</h3><p>{record.artists.join(" · ")||"艺人待补"}</p>
-          <dl><div><dt>DATE</dt><dd>{record.date||"待补"}</dd></div>
-            <div><dt>VENUE</dt><dd>{record.venue||record.city||"待补"}</dd></div>
-            <div><dt>SEAT</dt><dd>{record.seat||"未记录"}</dd></div></dl>
+          <dl><div><dt>日期</dt><dd>{[record.date,record.time].filter(Boolean).join(" · ")||"待补"}</dd></div>
+            <div><dt>场馆</dt><dd>{[record.city,record.venue].filter(Boolean).join(" · ")||"待补"}</dd></div>
+            <div><dt>座位</dt><dd>{record.seat||"未记录"}</dd></div>
+            <div><dt>票价</dt><dd>{typeof record.price==="number"?"¥"+record.price.toLocaleString("zh-CN"):"未记录"}</dd></div></dl>
           <Actions record={record} onOpen={onOpen} onEdit={onEdit} onShare={onShare} records={records} mode="票根"/>
         </div>
-        <span className="v3-collection-stub-number" aria-hidden="true">LM · {record.date.slice(0,4)}</span>
+        <span className="v3-collection-stub-number" aria-hidden="true">LIVE MEMORY · {record.date.slice(0,4)}</span>
       </article>)}
     </div>
   </section>;
 }
 function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
-  const newest=records.find(record=>/^\d{4}-\d{2}/.test(record.date))?.date.slice(0,7);
+  const months=[...new Set(records.filter(r=>/^\d{4}-(0[1-9]|1[0-2])/.test(r.date)).map(r=>r.date.slice(0,7)))].sort().reverse();
+  const newest=months[0];
   const [selectedMonth,setSelectedMonth]=useState(newest||new Date().toISOString().slice(0,7));
   const [year,month]=selectedMonth.split("-").map(Number);
   const start=new Date(year,month-1,1);
@@ -126,10 +130,12 @@ function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
       <p>按月查看实际演出安排，点击场次查看完整档案。</p></header>
     <div className="v3-collection-month-nav">
       <button type="button" onClick={()=>move(-1)} aria-label="上个月">‹</button>
-      <strong>{year} 年 {month} 月</strong>
+      <label className="v3-calendar-month-picker"><input aria-label="选择演出月份" type="month" value={selectedMonth} onChange={e=>{if(e.target.value)setSelectedMonth(e.target.value)}}/></label>
       <button type="button" onClick={()=>move(1)} aria-label="下个月">›</button>
       <button type="button" onClick={()=>setSelectedMonth(new Date().toISOString().slice(0,7))}>本月</button>
+      <span className="v3-calendar-month-count">{agenda.length} 场</span>
     </div>
+    <div className="v3-calendar-spread">
     <div className="v3-collection-calendar-grid" role="grid" aria-label={selectedMonth+" 演出日历"}>
       {["一","二","三","四","五","六","日"].map(day=><span className="v3-collection-calendar-weekday" key={day}>{day}</span>)}
       {Array.from({length:cells},(_,index)=>{
@@ -144,17 +150,20 @@ function Calendar({records,onOpen}:Pick<Props,"records"|"onOpen">){
       })}
     </div>
     <div className="v3-collection-calendar-agenda" aria-label="本月演出列表">
+      <h3>{month}月演出 <small>{agenda.length} 场</small></h3>
       {agenda.length===0?<p className="v3-collection-agenda-empty">本月还没有演出记录</p>:
         agenda.map(record=><button key={record.id} type="button"
           onClick={()=>onOpen(record.id)} className="v3-collection-agenda-item">
           <span className="v3-collection-agenda-date"><b>{Number(record.date.slice(-2))}</b>
             <small>{record.date.slice(0,7)}</small></span>
+          <span className="v3-calendar-poster"><Artwork record={record}/></span>
           <span className="v3-collection-agenda-copy">
             <strong>{record.title}</strong>
             <small>{[record.city,record.venue].filter(Boolean).join(" · ")||"地点待补"}</small>
           </span>
           <ArrowUpRight size={18}/>
         </button>)}
+    </div>
     </div>
   </section>;
 }

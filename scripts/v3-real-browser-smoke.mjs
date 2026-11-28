@@ -124,7 +124,7 @@ try {
   };
   await selectMode("画报");
   const {columns,available}=await page.locator(".v3-collection-showcase-grid").evaluate(element=>({
-    columns:getComputedStyle(element).gridTemplateColumns.split(/\s+/).filter(Boolean).length,
+    columns:Number(getComputedStyle(element).columnCount),
     available:element.closest(".v3-collection").clientWidth-
       parseFloat(getComputedStyle(element.closest(".v3-collection")).paddingLeft)-
       parseFloat(getComputedStyle(element.closest(".v3-collection")).paddingRight),

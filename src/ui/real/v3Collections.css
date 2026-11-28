@@ -340,4 +340,47 @@
 .v3-cost-ranked>button{grid-template-columns:100px minmax(0,1fr) minmax(60px,25%) 100px}
 .v3-price-track{display:block;height:7px;border-radius:7px;background:var(--v3-accent-tint);overflow:hidden}
 .v3-price-track>b{display:block;height:100%;background:var(--v3-accent);border-radius:7px}
+/* The editorial gallery preserves varied poster proportions without a giant
+   featured tile that forces holes into every other grid column. */
+.v3-collection-showcase-grid{display:block;column-count:5;column-gap:16px}
+.v3-collection-showcase-grid>article{display:inline-block;width:100%;break-inside:avoid;margin:0 0 16px;padding:0;background:var(--v3-card-bg);border-radius:12px;overflow:hidden}
+.v3-collection-showcase-image .v3-adaptive-poster{border-radius:0}
+.v3-collection-showcase-caption{padding:10px 12px 12px;gap:5px}
+.v3-collection-showcase-caption>strong{font-size:15px;color:var(--v3-ink)}
+.v3-collection-showcase-caption .v3-collection-actions{margin-top:5px;gap:4px}
+.v3-collection-showcase-caption .v3-collection-actions button{border:0;background:var(--v3-accent-tint);color:var(--v3-accent);min-height:32px;padding:5px 9px;font-weight:500}
+.v3-collection-wallet-info>span{color:var(--v3-accent);font-weight:600}
+.v3-collection-wallet-info>p,.v3-collection-wallet-info>div:not(.v3-collection-actions){color:var(--v3-muted)}
+/* Ticket stock, a perforated edge, and one event-colored stripe. Text stays
+   legible even when the stored artwork colors are very light. */
+.v3-collection-stub{grid-template-columns:minmax(84px,28%) minmax(0,1fr) 27px;min-height:0;border:1px solid #e3dccc;border-left:5px solid var(--ticket-a,#8caa9b);border-radius:10px;background:#fbf8f0;color:#2d352f;box-shadow:0 3px 12px #5146310d}
+.v3-collection-stub-cover{padding:10px 0 10px 10px;align-self:center}
+.v3-collection-stub-cover .v3-adaptive-poster{height:auto;aspect-ratio:2/3;border-radius:5px}
+.v3-collection-stub-main{padding:14px;gap:7px}
+.v3-collection-stub-main>span{color:#536b5b;font-size:12px;letter-spacing:0;opacity:1}
+.v3-collection-stub-main>h3{font-size:18px;font-weight:650}
+.v3-collection-stub-main dt{color:#72776d;font-size:11px;letter-spacing:0;opacity:1}
+.v3-collection-stub-main dd{font-size:13px}
+.v3-collection-stub-main .v3-collection-actions button{color:#355e4c;background:#fffdf8;border-color:#d9ded1}
+.v3-collection-stub-number{background:color-mix(in srgb,var(--ticket-a,#8caa9b) 15%,#f1eee4);border-color:#a4a497;color:#465348;letter-spacing:.06em}
+.v3-calendar-month-picker input{width:160px;min-height:36px;border:1px solid var(--v3-card-border);border-radius:7px;padding:5px 8px;font:inherit;color:var(--v3-ink);background:var(--v3-control-bg)}
+.v3-calendar-month-count{color:var(--v3-muted);font-size:13px}
+.v3-calendar-spread{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(250px,1fr);align-items:start;gap:16px}
+.v3-collection-calendar-agenda{display:grid;gap:8px;min-width:0}
+.v3-collection-calendar-agenda h3{margin:0;font-size:17px}
+.v3-collection-calendar-agenda h3 small{font-size:12px;color:var(--v3-muted);font-weight:500}
+.v3-collection-agenda-item{display:flex;align-items:center;gap:10px;width:100%;min-width:0;padding:8px;border:1px solid var(--v3-card-border);border-radius:9px;background:var(--v3-card-bg);color:var(--v3-ink);text-align:left;font:inherit;cursor:pointer}
+.v3-collection-agenda-date{display:grid;place-items:center;flex:0 0 45px;gap:2px;font-variant-numeric:tabular-nums}
+.v3-collection-agenda-date b{font-size:20px;color:var(--v3-accent)}
+.v3-collection-agenda-date small{font-size:10px;color:var(--v3-muted)}
+.v3-calendar-poster{flex:0 0 42px;min-width:0}
+.v3-calendar-poster .v3-adaptive-poster{border-radius:5px}
+.v3-collection-agenda-copy{display:grid;flex:1;min-width:0;gap:5px}
+.v3-collection-agenda-copy strong{font-size:14px;overflow-wrap:anywhere}
+.v3-collection-agenda-copy small{color:var(--v3-muted);font-size:12px;overflow-wrap:anywhere}
+.v3-collection-agenda-item>svg{flex:0 0 16px;color:var(--v3-accent)}
+.v3-collection-calendar-grid [role=gridcell] button{background:#e2eee6;color:#2d5842;border-left:2px solid #79a28b}
+.v3-collection-calendar-grid [role=gridcell].has-events{background:#f1f7f0}
+@container(max-width:880px){.v3-collection-showcase-grid{column-count:3;column-gap:12px}.v3-calendar-spread{grid-template-columns:minmax(0,1fr)}}
+@container(max-width:570px){.v3-collection-showcase-grid{column-count:2;column-gap:10px}.v3-collection-showcase-grid>article{margin-bottom:10px;padding:0}.v3-collection-showcase-caption{padding:8px}.v3-collection-stub{grid-template-columns:72px minmax(0,1fr) 19px}.v3-collection-stub-main{padding:10px}.v3-collection-stub-main>h3{font-size:15px}.v3-collection-stub-main>dl{grid-template-columns:1fr}.v3-collection-month-nav{gap:6px;flex-wrap:wrap}.v3-collection-calendar-agenda{display:grid}}
 @container(max-width:570px){.v3-collection-cost-totals{grid-template-columns:repeat(2,minmax(0,1fr))}.v3-collection-cost-totals article:first-child{grid-column:auto}.v3-cost-ranked>button{grid-template-columns:minmax(0,1fr) auto}.v3-cost-ranked .v3-price-track{grid-column:1/-1;grid-row:3}}
