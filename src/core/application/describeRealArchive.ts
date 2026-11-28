@@ -20,8 +20,8 @@ export function describeRealArchive(records: readonly EventRecord[], search = ""
   const included = records
     .filter(row => !row.deletedAt)
     .filter(row => !q || [
-      row.title, row.city, row.venue, row.date, row.status, row.recordState,
-      ...row.artists, ...row.tags,
+      row.title, row.city, row.venue, row.date, row.status, effectiveStatus(row,now), row.recordState,
+      row.note, row.seat, ...row.artists, ...row.tags, ...row.setlist,
     ].some(value => String(value || "").toLocaleLowerCase().includes(q)))
     .sort((a,b) => b.date.localeCompare(a.date) || a.id.localeCompare(b.id));
   const byCity = new Map<string,RealArchiveCity>();

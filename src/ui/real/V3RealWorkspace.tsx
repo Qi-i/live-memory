@@ -454,7 +454,7 @@ export function V3RealWorkspace() {
   },[records]);
   const active=useMemo(()=>model.records.filter(row=>
     (filterStatus==="all"||(filterStatus==="watched"
-      ?isWatchedRealRecord(row):row.status===filterStatus))&&
+      ?isWatchedRealRecord(row):effectiveStatus(row)===filterStatus))&&
     (!filterCity||row.city===filterCity)&&
     (!filterYear||row.date.startsWith(filterYear))&&
     (!filterCategory||row.category===filterCategory)&&
@@ -936,12 +936,12 @@ export function V3RealWorkspace() {
         <div id="v3-real-archive-controls" className="v3-real-archive-controls">
           <ActionToolbar
             search={<input aria-label="搜索真实档案" value={search}
-              placeholder="搜索演出、艺人、城市、场馆…" onChange={event=>setSearch(event.target.value)}/>}
+            placeholder="搜索演出、艺人、场馆、歌单、备注…" onChange={event=>setSearch(event.target.value)}/>}
             modes={archiveModes.map(item=><button type="button" key={item}
               aria-pressed={mode===item} onClick={()=>setMode(item)}>{item}</button>)}
             actions={<select className="v3-real-extra-views" aria-label="更多档案视图"
               value={collectionModes.includes(mode as CollectionMode)?mode:""}
-              onChange={event=>setMode(event.target.value as Mode)}>
+              onChange={event=>{if(event.target.value)setMode(event.target.value as Mode)}}>
               <option value="">更多视图</option>
               {collectionModes.map(label=>
                 <option key={label} value={label}>{label}</option>)}
@@ -991,10 +991,10 @@ export function V3RealWorkspace() {
           <label>标签<select aria-label="按标签筛选" value={filterTag} onChange={e=>setFilterTag(e.target.value)}><option value="">全部标签</option>{facets.tags.map(value=><option key={value}>{value}</option>)}</select></label>
         </div>}
         </div>
-        {mode==="海报"&&featuredOpen&&<V3FeaturedHero posters={posters} frameRatio={frameRatio}
+        {mode==="海报"&&featuredOpen&&!filterApplied&&<V3FeaturedHero posters={posters} frameRatio={frameRatio}
           onNaturalRatio={measurePoster} onBrowse={()=>setFeaturedOpen(false)}/>}
-        {!active.length?<div className="v3-real-panel"><h2>没有符合条件的记录</h2>
-          <p>当前筛选下没有演出。</p><button type="button" onClick={clearArchiveFilters}>显示全部档案</button></div>:
+        {!active.length?<div className="v3-real-panel"><h2>{filterApplied?"没有符合条件的记录":"尚无演出档案"}</h2>
+          <p>{filterApplied?"当前筛选下没有演出。":"添加演出后，即可在所有收藏、浏览与分析视图中查看。"}</p>{filterApplied?<button type="button" onClick={clearArchiveFilters}>显示全部档案</button>:canEdit&&<button type="button" onClick={()=>startEdit(null)}>添加演出</button>}</div>:
         collectionModes.includes(mode as CollectionMode)?
           <V3ArchiveCollections mode={mode as CollectionMode} records={active}
             onOpen={setSelectedId}
