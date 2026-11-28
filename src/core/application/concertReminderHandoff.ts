@@ -27,7 +27,11 @@ function knownChinaTimeZone(city:string):boolean{
   const compact=city.replace(/\s/g,"").replace(/(?:市|特别行政区)$/,"");
   return chinaCities.has(compact);
 }
-const validDate=(value:string)=>/^\d{4}-\d{2}-\d{2}$/.test(value);
+const validDate=(value:string)=>{
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(value))return false;
+  const date=new Date(value+"T00:00:00.000Z");
+  return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;
+};
 const validTime=(value:string)=>/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(value);
 const validStamp=(value:string)=>!Number.isNaN(Date.parse(value));
 
@@ -36,9 +40,14 @@ export function createConcertReminderHandoff(
   source:EventRecord[],generatedAt=new Date().toISOString(),
 ):ConcertReminderHandoff{
   if(!validStamp(generatedAt))throw Error("REMINDER_EXPORT_INVALID_TIME");
+  if(source.length>5000)throw Error("REMINDER_EXPORT_TOO_MANY_RECORDS");
   const seen=new Set<string>();
   const rows:ConcertReminderRow[]=source.map(record=>{
-    if(!record.id||!record.title||!validDate(record.date)||!validStamp(record.updatedAt)||
+    if(!record.id.trim()||record.id.length>128||!record.title.trim()||record.title.length>500||
+      (record.city||"").length>120||(record.venue||"").length>250||(record.seat||"").length>250||
+      !["planned","watched","wish"].includes(record.status)||
+      !["normal","rescheduled","cancelled","refunded"].includes(record.recordState)||
+      !validDate(record.date)||!validStamp(record.updatedAt)||record.updatedAt.length>64||
       (record.deletedAt&&!validStamp(record.deletedAt))||seen.has(record.id)){
       throw Error("REMINDER_EXPORT_INVALID_RECORD");
     }
@@ -54,6 +63,8 @@ export function createConcertReminderHandoff(
       updatedAt:record.updatedAt,deletedAt:record.deletedAt||null,
     };
   }).sort((a,b)=>a.id.localeCompare(b.id));
-  return {schemaVersion:1,sourceApp:"live-memory",purpose:"concert-reminders",
+  const result:ConcertReminderHandoff={schemaVersion:1,sourceApp:"live-memory",purpose:"concert-reminders",
     generatedAt,records:rows};
+  if(new TextEncoder().encode(JSON.stringify(result)).length>3*1024*1024)throw Error("REMINDER_EXPORT_TOO_LARGE");
+  return result;
 }

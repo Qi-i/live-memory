@@ -16,6 +16,7 @@ import { blankRecord } from "../../seeds";
 import { ShareStudio, type ShareFormat } from "../../shareStudio";
 import { duplicateRecordForNextShow } from "../../recordActions";
 import { createConcertReminderHandoff } from "../../core/application/concertReminderHandoff";
+import { readConcertCatalogRequest, createConcertCatalogReply } from "../../core/application/concertCatalogHandoff";
 import { hasPersonalCloudConnection } from "../../supabase";
 import { ConfirmDialog, ImageZoom, ImportDrawer } from "../../overlays";
 import { V3MigrationPanel } from "../system/V3MigrationPanel";
@@ -436,6 +437,17 @@ export function V3RealWorkspace() {
   // accounts should clear the status notice from the previous identity.
   useEffect(()=>{setNotice("");setSyncIssue("");setMapEditor(null);setRestorePreview(null);setSharing(false);},[access.mode,access.user?.id]);
   const records=snapshot.scope===actualScope?snapshot.records:[];
+  const catalogReplySent=useRef("");
+  useEffect(()=>{
+    const request=readConcertCatalogRequest(window.location.search);
+    if(!request||!window.opener||access.mode!=="account"||!validScope||snapshot.busy||snapshot.error||
+       snapshot.scope!==actualScope||actualScope!==currentStorageScope()||catalogReplySent.current===request.request)return;
+    // Reply only from a verified account-scoped archive, never device/guest data.
+    const message=createConcertCatalogReply(snapshot.records,request.request);
+    window.opener.postMessage(JSON.stringify(message),request.target);
+    catalogReplySent.current=request.request;
+    window.close();
+  },[access.mode,validScope,snapshot,actualScope]);
   const frameRatio=useMemo(()=>dominantPosterRatio(Object.values(posterRatios)),
     [posterRatios]);
   const measurePoster=(id:string,ratio:number)=>{
@@ -646,9 +658,9 @@ export function V3RealWorkspace() {
       downloadBlob(JSON.stringify(handoff),
         "live-memory-concert-reminders-"+new Date().toISOString().slice(0,10)+".json",
         "application/json");
-      const schedulable=handoff.records.filter(row=>
-        !row.deletedAt&&row.status==="planned"&&row.recordState==="normal"&&row.time).length;
-      setNotice(`已导出 ${handoff.records.length} 条演出日程（可排程 ${schedulable} 条）。含场馆、座位、取消标记，不含票根、订单或媒体；在 Qi Ledger 安卓端「提醒与通知」导入后才会设置本地提醒。`);
+      const candidates=handoff.records.filter(row=>
+        !row.deletedAt&&row.status==="planned"&&["normal","rescheduled"].includes(row.recordState)&&row.time).length;
+      setNotice(`已导出 ${handoff.records.length} 条演出日程（${candidates} 条待看且有开演时间）。含场馆、座位、取消标记，不含票根、订单或媒体；Qi-Ledger 导入时按演出时区、未来时间及通知权限决定实际排程。`);
     }catch(error){
       setNotice("演出提醒导出失败，未改变档案。"+
         (error instanceof Error?" "+error.message:""));
