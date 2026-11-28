@@ -189,18 +189,23 @@
 /* V3 editor: give the rendered artwork the majority of the desktop viewport;
  * distinguish presets and controls with clean surfaces instead of gray haze. */
 .share-studio-stage.is-v3{
-  grid-template-columns:clamp(340px,28vw,396px) minmax(0,1fr);
-  background:linear-gradient(135deg,#ecf6f2 0%,#f6faf8 52%,#f2f5fb 100%);
+  --share-ui-ink:#24352f;
+  --share-ui-muted:#68766d;
+  --share-ui-accent:#356b58;
+  --share-ui-border:#dce4de;
+  --share-ui-soft:#e6f0e9;
+  grid-template-columns:clamp(320px,26vw,370px) minmax(0,1fr);
+  background:#f0f2ed;
 }
 .share-studio-stage.is-v3 .share-studio-panel{
   gap:10px;
   padding:15px 17px 18px;
   background:#fff;
-  box-shadow:8px 0 24px rgba(25,58,58,.065);
+  box-shadow:none;
 }
 .share-studio-stage.is-v3 .share-v3-presets{
   gap:9px;padding:11px 12px;
-  background:linear-gradient(150deg,#e9f5ef,#f5f9ff);
+  background:#f5f7f3;
 }
 .share-studio-stage.is-v3 .share-v3-preset-actions{gap:7px}
 .share-studio-stage.is-v3 .share-v3-preset-actions button{
@@ -213,8 +218,13 @@
 .share-studio-stage.is-v3 .share-intro-copy p{line-height:1.4}
 .share-studio-stage.is-v3 .share-preview-area{
   min-width:0;
-  background:radial-gradient(circle at 50% 24%,rgba(138,201,186,.18),transparent 58%);
+  background:#e9ede7;
 }
+.share-studio-stage.is-v3 .share-intro-copy>span{display:none}
+.share-studio-stage.is-v3 .share-intro-copy h2{font-size:22px;letter-spacing:0}
+.share-studio-stage.is-v3 .share-v3-preset-actions button{font-weight:600;border-radius:8px}
+.share-studio-stage.is-v3 .share-preview-toolbar{background:#fff;border-radius:9px}
+.share-studio-stage.is-v3 :is(.share-category-control,.share-format-control,.share-scope-control,.share-count-control){background:#f4f6f2}
 .share-studio-stage.is-v3 .share-preview-toolbar button{font-size:13px}
 @media(max-width:860px){
   .share-studio-stage.is-v3{
