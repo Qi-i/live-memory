@@ -32,6 +32,7 @@ import { duplicateRecordForNextShow } from "./recordActions";
 import { hasPersonalCloudConnection, isAdmin } from "./supabase";
 import { replaceAllRecords } from "./storage";
 import { KeepsakeStudio, type KeepsakeSubject } from "./keepsakeStudio";
+import { readConcertCatalogRequest,createConcertCatalogReply } from "./core/application/concertCatalogHandoff";
 
 export default function AppRoot() {
   const controller = useAppController();
@@ -102,30 +103,11 @@ export default function AppRoot() {
   // media, private notes or account details leave Live Memory.
   const lastQiLedgerExport = useRef("");
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    if (query.get("qiledger_bridge") !== "1" || !window.opener ||
-        isGuest || !access.user || busy || activeRecords.length === 0) return;
-    const target = query.get("origin") || "";
-    if (target !== "https://qiledger.pages.dev" &&
-        target !== "http://localhost:3000" &&
-        target !== "http://localhost:8080" &&
-        target !== "http://localhost:5000") return;
-    const nonce = query.get("request") || "";
-    if (!/^[A-Za-z0-9_-]{16,100}$/.test(nonce)) return;
-    const eventList = activeRecords
-      .filter((record) => record.category === "concert" && !record.deletedAt)
-      .map((record) => ({
-        id: record.id, title: record.title, date: record.date,
-        city: record.city, venue: record.venue, category: record.category,
-        facePrice: record.price ?? null,
-      }))
-      .sort((a, b) => b.date.localeCompare(a.date));
-    const fingerprint = nonce + ":" + eventList.map((event) => event.id + event.date + event.facePrice).join(",");
-    if (lastQiLedgerExport.current === fingerprint) return;
-    lastQiLedgerExport.current = fingerprint;
-    window.opener.postMessage(JSON.stringify({
-      type: "live-memory:catalog:v1", request: nonce, events: eventList,
-    }), target);
+    const request=readConcertCatalogRequest(window.location.search);
+    if (!request || !window.opener || isGuest || !access.user || busy ||
+        lastQiLedgerExport.current===request.request) return;
+    window.opener.postMessage(JSON.stringify(createConcertCatalogReply(activeRecords,request.request)),request.target);
+    lastQiLedgerExport.current=request.request;
     window.close();
   }, [activeRecords, access.user, isGuest, busy]);
 

@@ -36,6 +36,9 @@ assert.equal(createConcertReminderHandoff([{...base,city:"未知城市"}]).recor
 assert.equal(createConcertReminderHandoff([{...base,time:"待定"}]).records[0].time,"");
 assert.throws(()=>createConcertReminderHandoff([base,base]),/INVALID_RECORD/);
 assert.throws(()=>createConcertReminderHandoff([{...base,updatedAt:""}]),/INVALID_RECORD/);
+assert.throws(()=>createConcertReminderHandoff([{...base,date:"2027-02-30"}]),/INVALID_RECORD/);
+assert.throws(()=>createConcertReminderHandoff([{...base,title:"x".repeat(501)}]),/INVALID_RECORD/);
+assert.throws(()=>createConcertReminderHandoff(Array.from({length:5001},(_,i)=>({...base,id:String(i)}))),/TOO_MANY_RECORDS/);
 const ui=readFileSync(new URL("../src/ui/real/V3RealWorkspace.tsx",import.meta.url),"utf8");
 assert.match(ui,/createConcertReminderHandoff/);
 assert.match(ui,/concert-reminders/);
