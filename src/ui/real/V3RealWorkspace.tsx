@@ -3,7 +3,7 @@ import { Pencil, MapPin, CloudAlert, Images, Sparkles, Ticket, Wallet, CalendarD
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { AppSettings, EventRecord, MediaAsset } from "../../domain";
-import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels } from "../../domain";
+import { primaryMedia, mediaKindLabels, sourceLabels, statusLabels, categoryLabels, effectiveStatus } from "../../domain";
 import { currentStorageScope, listRecords, normalizeRecord, readSettings, writeSettings } from "../../storage";
 import { VenueView } from "../../archive";
 import type { V3SyncRuntime } from "../../infrastructure/createV3SyncRuntime";
@@ -115,8 +115,8 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
     <section ref={detailRef} className="v3-real-modal v3-real-rich-detail" role="dialog"
       aria-modal="true" aria-label={record.title+"（档案详情）"}>
       <header>
-        <div><small>LIVE MEMORY · EVENT ARCHIVE</small><h2>{record.title}</h2>
-          <span>{record.date} · {record.city} · {record.venue}</span></div>
+        <div><small className="v3-detail-event-status">{categoryLabels[record.category]} · {statusLabels[effectiveStatus(record)]}</small><h2>{record.title}</h2>
+          <span>{[record.date,record.city,record.venue].filter(Boolean).join(" · ")}</span></div>
         <div className="v3-real-detail-header-actions">
           {onEdit&&<button type="button" aria-label="编辑本机演出"
             onClick={()=>onEdit(record)}>编辑</button>}
@@ -130,29 +130,32 @@ function RecordDetail({record,onClose,onEdit,onDuplicate,onTrash,onShare,onZoom}
           aria-label={primaryMedia(record)?"放大主海报":"此记录没有可放大的主海报"}>
           {src?<img src={src} alt={record.title+"海报"}/>:<span>此记录暂无可用海报</span>}
         </button>
+        <div className="v3-detail-information">
+          <div className="v3-detail-ticket">
+            <div><small>票价</small><strong>{record.price!=null?"¥"+record.price.toLocaleString("zh-CN"):"未记录"}</strong></div>
+            <div><small>座位</small><strong>{record.seat||"未记录"}</strong></div>
+          </div>
         <dl>
-          <dt>类别</dt><dd>{categoryLabels[record.category]}</dd>
           <dt>艺人</dt><dd>{record.artists.join("、")||"未填写"}</dd>
           <dt>演出时间</dt><dd>{record.date}{record.time?" "+record.time:""}</dd>
           <dt>场馆</dt><dd>{record.venue||"未填写"}{record.address?" · "+record.address:""}</dd>
-          <dt>状态</dt><dd>{statusLabels[record.status]}{record.recordState!=="normal"?" · "+record.recordState:""}</dd>
-          {record.price!=null&&<><dt>票价</dt><dd>¥{record.price}</dd></>}
-          {record.seat&&<><dt>座位</dt><dd>{record.seat}</dd></>}
           {record.sourceChannel&&<><dt>购票渠道</dt><dd>{sourceLabels[record.sourceChannel]}</dd></>}
           {record.companions.length>0&&<><dt>同行</dt><dd>{record.companions.join("、")}</dd></>}
-          <dt>媒体</dt><dd>{record.media.length} 项</dd>
-          <dt>标签</dt><dd>{record.tags.join("、")||"无"}</dd>
-          {record.setlist.length>0&&<><dt>歌单</dt><dd>{record.setlist.join(" / ")}</dd></>}
-          {record.note&&<><dt>备注</dt><dd className="v3-real-detail-note">{record.note}</dd></>}
         </dl>
+        {record.tags.length>0&&<div className="v3-detail-tags" aria-label="演出标签">{record.tags.map((tag,i)=><span key={tag+"-"+i}>{tag}</span>)}</div>}
+        </div>
       </div>
+      {(record.note||record.setlist.length>0)&&<section className="v3-detail-memories">
+        {record.note&&<div><h3>现场回忆</h3><p className="v3-real-detail-note">{record.note}</p></div>}
+        {record.setlist.length>0&&<div><h3>演出歌单 <small>{record.setlist.length} 首</small></h3><ol>{record.setlist.map((song,i)=><li key={i}>{song}</li>)}</ol></div>}
+      </section>}
       {record.media.length>0&&<section className="v3-real-detail-media">
         <h3>现场媒体 <small>· {record.media.length} 项</small></h3>
         <div className="v3-real-media-grid">
           {record.media.map(media=><RecordMediaPreview key={media.id} media={media} onOpen={onZoom}/>)}
         </div>
       </section>}
-      <footer><span>原图始终保留，编辑采用版本校验。</span>
+      <footer>
         <div className="v3-real-detail-actions">
           <button type="button" onClick={()=>onShare(record)}>分享本场</button>
           {onDuplicate&&<button type="button" onClick={()=>onDuplicate(record)}>复制为下一场</button>}
