@@ -6,8 +6,8 @@ import {useCachedMediaSrc} from "../../mediaCache";
 import {AdaptivePoster} from "./AdaptivePoster";
 import {groupByCity,groupByArtist,summarizeRecordedPrices,groupCalendarDays} from "./collectionMetrics";
 
-export type CollectionMode="画报"|"票夹"|"票根"|"日历"|"城市/场馆"|"票价"|"汇总";
-export const collectionModes:CollectionMode[]=["画报","票夹","票根","日历","城市/场馆","票价","汇总"];
+export type CollectionMode="画报"|"票夹"|"票根"|"日历"|"城市/场馆"|"票价"|"汇总"|"回忆"|"行程";
+export const collectionModes:CollectionMode[]=["画报","票夹","票根","日历","城市/场馆","票价","汇总","回忆","行程"];
 
 interface Props {
   mode:CollectionMode;
@@ -233,6 +233,41 @@ function Summary({records,onOpen}:Pick<Props,"records"|"onOpen">){
     </div>
   </section>;
 }
+function Memories({records,onOpen,onEdit,onShare}:Omit<Props,"mode">){
+  const entries=records.filter(r=>effectiveStatus(r)==="watched"&&(r.note?.trim()||r.setlist.length||r.favorite));
+  return <section className="v3-collection v3-memory-journal" aria-label="回忆视图">
+    <header><h2>现场回忆</h2><p>{entries.length} 篇 · 已看演出中的回忆、歌单与收藏</p></header>
+    {!entries.length&&<p className="v3-collection-empty">还没有回忆条目。为已看演出添加备注、歌单或收藏，即可在这里回顾。</p>}
+    <div className="v3-memory-journal-grid">{entries.map(record=><article key={record.id}>
+      <button type="button" className="v3-memory-journal-art" onClick={()=>onOpen(record.id)} aria-label={"查看 "+record.title}><Artwork record={record}/></button>
+      <div><Meta record={record}/><h3>{record.title}</h3><p className="v3-memory-journal-artists">{record.artists.join(" · ")}</p>
+        {record.note&&<p className="v3-memory-journal-note">{record.note}</p>}
+        {!!record.setlist.length&&<details><summary>演出歌单 · {record.setlist.length} 首</summary><ol>{record.setlist.map((song,i)=><li key={i}>{song}</li>)}</ol></details>}
+        <Actions mode="回忆" records={records} record={record} onOpen={onOpen} onEdit={onEdit} onShare={onShare}/>
+      </div>
+    </article>)}</div>
+  </section>;
+}
+function Itinerary({records,onOpen}:Pick<Props,"records"|"onOpen">){
+  const [tab,setTab]=useState<"planned"|"wish">("planned");
+  const today=new Date();const dateKey=[today.getFullYear(),String(today.getMonth()+1).padStart(2,"0"),String(today.getDate()).padStart(2,"0")].join("-");
+  const planned=records.filter(r=>effectiveStatus(r)==="planned").sort((a,b)=>(a.date||"9999").localeCompare(b.date||"9999"));
+  const wishes=records.filter(r=>effectiveStatus(r)==="wish");
+  const list=tab==="planned"?planned:wishes;
+  return <section className="v3-collection v3-itinerary" aria-label="行程视图">
+    <header><h2>下一场现场</h2><p>待看行程与想看清单</p></header>
+    <div className="v3-summary-dimensions" role="group" aria-label="行程分类"><button type="button" aria-pressed={tab==="planned"} onClick={()=>setTab("planned")}>待看 · {planned.length}</button><button type="button" aria-pressed={tab==="wish"} onClick={()=>setTab("wish")}>想看 · {wishes.length}</button></div>
+    {!list.length&&<p className="v3-collection-empty">暂无{tab==="planned"?"待看行程":"想看记录"}</p>}
+    <div className="v3-itinerary-list">{list.map(record=>{
+      const dated=/^\d{4}-\d{2}-\d{2}$/.test(record.date);
+      const days=dated?Math.round((Date.parse(record.date)-Date.parse(dateKey))/86400000):null;
+      return <button type="button" key={record.id} onClick={()=>onOpen(record.id)}>
+        <div className="v3-itinerary-date"><small>{dated?record.date.slice(0,7):"日期待定"}</small><b>{dated?record.date.slice(8):"—"}</b>{days!==null&&<span>{days>0?"还有 "+days+" 天":days===0?"今天":"日期已过"}</span>}</div>
+        <Artwork record={record}/><div className="v3-itinerary-copy"><strong>{record.title}</strong><small>{record.artists.join(" · ")}</small><span><MapPin size={14}/>{[record.city,record.venue].filter(Boolean).join(" · ")||"地点待定"}</span><small>{[record.time,record.seat].filter(Boolean).join(" · ")}</small></div><span className="v3-itinerary-price">{record.price!=null?"¥"+record.price.toLocaleString("zh-CN"):""}</span>
+      </button>
+    })}</div>
+  </section>;
+}
 export function V3ArchiveCollections({mode,records,onOpen,onEdit,onShare}:Props){
   const [presentation,setPresentation]=useState(false);
   useEffect(()=>{
@@ -250,6 +285,8 @@ export function V3ArchiveCollections({mode,records,onOpen,onEdit,onShare}:Props)
     mode==="日历"?<Calendar records={records} onOpen={onOpen}/>:
     mode==="城市/场馆"?<Places records={records} onOpen={onOpen}/>:
     mode==="票价"?<Costs records={records} onOpen={onOpen}/>:
+    mode==="回忆"?<Memories {...props}/>:
+    mode==="行程"?<Itinerary records={records} onOpen={onOpen}/>:
     <Summary records={records} onOpen={onOpen}/>;
   return <div className={`v3-collection-presentation${presentation?" is-presentation":""}`}>
     <div className="v3-collection-presentation-tools">

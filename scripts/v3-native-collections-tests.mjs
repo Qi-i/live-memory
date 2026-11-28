@@ -40,7 +40,7 @@ const share=await readFile(new URL("../src/shareStudio.tsx",import.meta.url),"ut
 const migration=await readFile(new URL("../src/ui/system/V3MigrationPanel.tsx",import.meta.url),"utf8");
 const viewCSS=await readFile(new URL("../src/ui/real/v3Collections.css",import.meta.url),"utf8");
 const shareCSS=await readFile(new URL("../src/ui/real/v3ShareStudio.css",import.meta.url),"utf8");
-for(const mode of ["画报","票夹","票根","日历","城市/场馆","票价"]){
+for(const mode of ["画报","票夹","票根","日历","城市/场馆","票价","回忆","行程"]){
   assert.match(ui,new RegExp('mode==="'+mode.replace("/","\\/")+'"'));
 }
 assert.match(ui,/<Summary records=\{records\} onOpen=\{onOpen\}/,

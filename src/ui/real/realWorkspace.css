@@ -305,7 +305,7 @@
   .v3-real-archive-controls .v3-action-toolbar .v3-toolbar-modes,
   .v3-real-archive-controls .v3-action-toolbar .v3-toolbar-actions{display:none}
   .v3-real-archive-controls>.v3-real-refine-bar{grid-column:1/-1}
-  .v3-view-library{display:flex;gap:8px;min-width:0;align-items:center}
+  .v3-view-library{display:flex;flex-wrap:wrap;gap:6px;min-width:0;align-items:center}
   .v3-view-library>div{display:flex;align-items:center;gap:3px;padding-left:8px;border-left:1px solid var(--v3-card-border)}
   .v3-view-library>div>span{font-size:11px;color:var(--v3-muted);margin-right:2px}
   .v3-view-library button{display:inline-flex;align-items:center;gap:4px;min-height:36px;padding:5px 7px;border:1px solid transparent;border-radius:7px;background:transparent;color:var(--v3-ink);font:inherit;font-size:13px;white-space:nowrap;cursor:pointer}

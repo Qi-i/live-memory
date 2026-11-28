@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Pencil, MapPin, CloudAlert, Images, Sparkles, Ticket, Wallet, CalendarDays, List, Clock3, ChartBar, CircleDollarSign } from "lucide-react";
+import { Pencil, MapPin, CloudAlert, Images, Sparkles, Ticket, Wallet, CalendarDays, List, Clock3, ChartBar, CircleDollarSign, BookOpen, CalendarCheck } from "lucide-react";
 import { BrandMark } from "../../brand";
 import { useAccess } from "../../access";
 import type { AppSettings, EventRecord, MediaAsset } from "../../domain";
@@ -37,7 +37,7 @@ type Page = "档案" | "统计" | "城市" | "数据";
 type Mode = "海报"|"时间线"|"列表"|CollectionMode;
 const navigation: Array<Exclude<Page,"数据">> = ["档案", "统计", "城市"];
 const archiveModes:Mode[]=["海报","时间线","列表"];
-const viewGroups=[{label:"收藏",items:[["海报",Images],["画报",Sparkles],["票夹",Wallet],["票根",Ticket]]},{label:"浏览",items:[["时间线",Clock3],["日历",CalendarDays],["城市/场馆",MapPin],["列表",List]]},{label:"分析",items:[["票价",CircleDollarSign],["汇总",ChartBar]]}] as const;
+const viewGroups=[{label:"收藏",items:[["海报",Images],["画报",Sparkles],["票夹",Wallet],["票根",Ticket],["回忆",BookOpen]]},{label:"浏览",items:[["时间线",Clock3],["日历",CalendarDays],["城市/场馆",MapPin],["行程",CalendarCheck],["列表",List]]},{label:"分析",items:[["票价",CircleDollarSign],["汇总",ChartBar]]}] as const;
 const viewPreferenceKey="live-memory-v3-archive-view";
 const autoSyncPreferenceKey="live-memory-v3-auto-sync";
 function readAutoSyncPreference(){
